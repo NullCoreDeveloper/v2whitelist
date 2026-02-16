@@ -29,7 +29,7 @@ import com.kiktor.v2whitelist.util.Utils
 import java.lang.ref.SoftReference
 
 class V2RayVpnService : VpnService(), ServiceControl {
-    private lateinit var mInterface: ParcelFileDescriptor
+    private var mInterface: ParcelFileDescriptor? = null
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
 
@@ -103,11 +103,12 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun startService() {
-        if (mInterface == null) {
+        val vpnInterface = mInterface
+        if (vpnInterface == null) {
             Log.e(AppConfig.TAG, "Failed to create VPN interface")
             return
         }
-        if (!V2RayServiceManager.startCoreLoop(mInterface)) {
+        if (!V2RayServiceManager.startCoreLoop(vpnInterface)) {
             Log.e(AppConfig.TAG, "Failed to start V2Ray core loop")
             stopAllService()
             return
@@ -165,7 +166,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
         // Close the old interface since the parameters have been changed
         try {
-            mInterface.close()
+            mInterface?.close()
         } catch (ignored: Exception) {
             // ignored
         }
@@ -308,12 +309,18 @@ class V2RayVpnService : VpnService(), ServiceControl {
      */
     private fun runTun2socks() {
         if (SettingsManager.isUsingHevTun()) {
-            tun2SocksService = TProxyService(
-                context = applicationContext,
-                vpnInterface = mInterface,
-                isRunningProvider = { isRunning },
-                restartCallback = { runTun2socks() }
-            )
+            val vpnInterface = mInterface
+            if (vpnInterface != null) {
+                tun2SocksService = TProxyService(
+                    context = applicationContext,
+                    vpnInterface = vpnInterface,
+                    isRunningProvider = { isRunning },
+                    restartCallback = { runTun2socks() }
+                )
+            } else {
+                Log.e(AppConfig.TAG, "VPN interface is null, cannot start tun2socks")
+                tun2SocksService = null
+            }
         } else {
             tun2SocksService = null
         }
@@ -349,7 +356,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
             stopSelf()
 
             try {
-                mInterface.close()
+                mInterface?.close()
+                mInterface = null
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
             }
