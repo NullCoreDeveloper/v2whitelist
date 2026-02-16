@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 
 object SmartConnectManager {
     private var failoverJob: Job? = null
@@ -86,22 +88,44 @@ object SmartConnectManager {
             return@withContext
         }
 
-        val testUrl = AppConfig.DELAY_TEST_URL
+        val testUrls = listOf(
+            AppConfig.DELAY_TEST_URL,
+            "https://www.google.com/generate_204",
+            "https://www.cloudflare.com/cdn-cgi/trace",
+            "https://connectivitycheck.gstatic.com/generate_204"
+        )
         
-        // Parallel testing with concurrency limit
-        val results = coroutineScope {
-            servers.map { (guid, profile) ->
+        // Parallel testing with concurrency limit and early exit
+        val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
+        coroutineScope {
+            val jobs = servers.map { (guid, profile) ->
                 async {
                     testSemaphore.withPermit {
+                        // Check if we already found a "good enough" server
+                        if (resultsList.any { it.third < 300 }) return@withPermit null
+
+                        val randomUrl = testUrls[Random.nextInt(testUrls.size)]
                         val config = V2rayConfigManager.getV2rayConfig(context, guid)
                         val delay = if (config.status) {
-                            V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                            withTimeoutOrNull(3000) {
+                                V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
+                            } ?: -1L
                         } else -1L
-                        Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                        
+                        val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
+                        val result = Triple(guid, profile, finalDelay)
+                        if (finalDelay < 300) {
+                            synchronized(resultsList) { resultsList.add(result) }
+                            // Try to cancel other children if we found a great one
+                            this@coroutineScope.coroutineContext[Job]?.cancelChildren()
+                        }
+                        result
                     }
                 }
-            }.awaitAll()
-        }.sortedBy { it.third }
+            }
+            resultsList.addAll(jobs.awaitAll().filterNotNull())
+        }
+        val results = resultsList.sortedBy { it.third }
 
         val best = results.firstOrNull { it.third < Long.MAX_VALUE }
         if (best != null) {
@@ -136,22 +160,44 @@ object SmartConnectManager {
             if (profile?.subscriptionId == SUBSCRIPTION_ID && guid != currentGuid) guid to profile else null
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
 
-        val testUrl = AppConfig.DELAY_TEST_URL
+        val testUrls = listOf(
+            AppConfig.DELAY_TEST_URL,
+            "https://www.google.com/generate_204",
+            "https://www.cloudflare.com/cdn-cgi/trace",
+            "https://connectivitycheck.gstatic.com/generate_204"
+        )
         
-        // Parallel testing with concurrency limit
-        val results = coroutineScope {
-            servers.map { (guid, profile) ->
+        // Parallel testing with concurrency limit and early exit
+        val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
+        coroutineScope {
+            val jobs = servers.map { (guid, profile) ->
                 async {
                     testSemaphore.withPermit {
+                        // Check if we already found a "good enough" server
+                        if (resultsList.any { it.third < 300 }) return@withPermit null
+
+                        val randomUrl = testUrls[Random.nextInt(testUrls.size)]
                         val config = V2rayConfigManager.getV2rayConfig(context, guid)
                         val delay = if (config.status) {
-                            V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                            withTimeoutOrNull(3000) {
+                                V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
+                            } ?: -1L
                         } else -1L
-                        Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                        
+                        val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
+                        val result = Triple(guid, profile, finalDelay)
+                        if (finalDelay < 300) {
+                            synchronized(resultsList) { resultsList.add(result) }
+                            // Try to cancel other children if we found a great one
+                            this@coroutineScope.coroutineContext[Job]?.cancelChildren()
+                        }
+                        result
                     }
                 }
-            }.awaitAll()
-        }.sortedBy { it.third }
+            }
+            resultsList.addAll(jobs.awaitAll().filterNotNull())
+        }
+        val results = resultsList.sortedBy { it.third }
 
         val nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
         if (nextBest != null) {

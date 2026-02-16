@@ -103,10 +103,12 @@ object V2RayServiceManager {
 //        val result = V2rayConfigUtil.getV2rayConfig(context, guid)
 //        if (!result.status) return
 
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
-            context.toast(R.string.toast_warning_pref_proxysharing_short)
-        } else {
-            context.toast(R.string.toast_services_start)
+        GlobalScope.launch(Dispatchers.Main) {
+            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
+                context.toast(R.string.toast_warning_pref_proxysharing_short)
+            } else {
+                context.toast(R.string.toast_services_start)
+            }
         }
         val intent = if (SettingsManager.isVpnMode()) {
             Intent(context.applicationContext, V2RayVpnService::class.java)
