@@ -14,6 +14,9 @@ import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -83,7 +86,7 @@ object SmartConnectManager {
         val testUrl = AppConfig.DELAY_TEST_URL
         
         // Parallel testing
-        val results = kotlinx.coroutines.coroutineScope {
+        val results = coroutineScope {
             servers.map { (guid, profile) ->
                 async {
                     val config = V2rayConfigManager.getV2rayConfig(context, guid)
@@ -131,7 +134,7 @@ object SmartConnectManager {
         val testUrl = AppConfig.DELAY_TEST_URL
         
         // Parallel testing
-        val results = kotlinx.coroutines.coroutineScope {
+        val results = coroutineScope {
             servers.map { (guid, profile) ->
                 async {
                     val config = V2rayConfigManager.getV2rayConfig(context, guid)
