@@ -72,7 +72,7 @@ object JsonUtil {
         try {
             return JsonParser.parseString(src).getAsJsonObject()
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to parse JSON string", e)
+            Log.d(AppConfig.TAG, "Failed to parse JSON string: ${e.message}")
             return null
         }
     }

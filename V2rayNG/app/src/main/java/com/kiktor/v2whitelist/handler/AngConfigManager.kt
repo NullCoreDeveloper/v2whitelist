@@ -431,14 +431,14 @@ object AngConfigManager {
                 val httpPort = SettingsManager.getHttpPort()
                 HttpUtil.getUrlContentWithUserAgent(url, userAgent, 3000, httpPort)
             } catch (e: Exception) {
-                Log.e(AppConfig.ANG_PACKAGE, "Update subscription: proxy not ready or other error", e)
+                Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
                 ""
             }
             if (configText.isEmpty()) {
                 configText = try {
                     HttpUtil.getUrlContentWithUserAgent(url, userAgent)
                 } catch (e: Exception) {
-                    Log.e(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent", e)
+                    Log.d(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent: ${e.message}")
                     ""
                 }
             }
