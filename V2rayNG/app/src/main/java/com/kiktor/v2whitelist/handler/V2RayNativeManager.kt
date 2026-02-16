@@ -28,11 +28,28 @@ object V2RayNativeManager {
     fun initCoreEnv(context: Context?) {
         if (initialized.compareAndSet(false, true)) {
             try {
-                Seq.setContext(context?.applicationContext)
-                val assetPath = Utils.userAssetPath(context)
+                val appContext = context?.applicationContext
+                Seq.setContext(appContext)
+                val assetPath = Utils.userAssetPath(appContext)
+
+                // Ensure assets are copied in the current process if missing
+                if (appContext != null) {
+                    SettingsManager.initAssets(appContext, appContext.assets)
+                }
+
+                // Explicitly set asset location for Xray/V2Ray core
+                System.setProperty("v2ray.location.asset", assetPath)
+                System.setProperty("xray.location.asset", assetPath)
+
                 val deviceId = Utils.getDeviceIdForXUDPBaseKey()
                 Libv2ray.initCoreEnv(assetPath, deviceId)
-                Log.i(AppConfig.TAG, "V2Ray core environment initialized successfully")
+                Log.i(AppConfig.TAG, "V2Ray core environment initialized successfully at $assetPath")
+
+                // Verification check
+                val geosite = java.io.File(assetPath, "geosite.dat")
+                if (!geosite.exists()) {
+                    Log.e(AppConfig.TAG, "CRITICAL: geosite.dat MISSING after initialization at ${geosite.absolutePath}")
+                }
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to initialize V2Ray core environment", e)
                 initialized.set(false)
