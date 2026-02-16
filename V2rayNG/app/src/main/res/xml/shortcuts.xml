@@ -10,8 +10,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.ScSwitchActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="com.kiktor.v2whitelist.ui.ScSwitchActivity"
+            android:targetPackage="com.kiktor.v2whitelist" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
@@ -24,8 +24,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.ScScannerActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="com.kiktor.v2whitelist.ui.ScScannerActivity"
+            android:targetPackage="com.kiktor.v2whitelist" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>
