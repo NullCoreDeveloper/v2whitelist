@@ -32,6 +32,7 @@ import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SettingsChangeManager
 import com.kiktor.v2whitelist.handler.SettingsManager
+import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.Utils
 import com.kiktor.v2whitelist.viewmodel.MainViewModel
@@ -61,8 +62,9 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         if (SettingsChangeManager.consumeSetupGroupTab()) {
             setupGroupTab()
         }
-    }
-
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(binding.root)
 
         binding.btn_big_connect.setOnClickListener { handleConnectAction() }
         binding.btn_switch_server.setOnClickListener { handleSwitchServer() }
