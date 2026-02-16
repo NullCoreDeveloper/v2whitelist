@@ -140,7 +140,7 @@ object V2RayServiceManager {
             mFilter.addAction(Intent.ACTION_USER_PRESENT)
             ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to register broadcast receiver", e)
+            Log.d(AppConfig.TAG, "Failed to register broadcast receiver", e)
             return false
         }
 
@@ -200,7 +200,7 @@ object V2RayServiceManager {
         try {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to unregister broadcast receiver", e)
+            Log.d(AppConfig.TAG, "Failed to unregister broadcast receiver", e)
         }
 
         return true
@@ -241,7 +241,7 @@ object V2RayServiceManager {
                 try {
                     time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
                 } catch (e: Exception) {
-                    Log.e(AppConfig.TAG, "Failed to measure delay with alternative URL", e)
+                    Log.v(AppConfig.TAG, "Failed to measure delay with alternative URL", e)
                     errorStr = e.message?.substringAfter("\":") ?: "empty message"
                 }
             }

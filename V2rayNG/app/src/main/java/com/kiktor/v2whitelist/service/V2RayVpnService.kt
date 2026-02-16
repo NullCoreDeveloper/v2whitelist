@@ -105,7 +105,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     override fun startService() {
         val vpnInterface = mInterface
         if (vpnInterface == null) {
-            Log.e(AppConfig.TAG, "Failed to create VPN interface")
+            Log.d(AppConfig.TAG, "Failed to create VPN interface")
             return
         }
         if (!V2RayServiceManager.startCoreLoop(vpnInterface)) {
@@ -137,7 +137,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     private fun setupVpnService() {
         val prepare = prepare(this)
         if (prepare != null) {
-            Log.e(AppConfig.TAG, "VPN preparation failed")
+            Log.d(AppConfig.TAG, "VPN preparation failed")
             stopSelf()
             return
         }
@@ -318,7 +318,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
                     restartCallback = { runTun2socks() }
                 )
             } else {
-                Log.e(AppConfig.TAG, "VPN interface is null, cannot start tun2socks")
+                Log.v(AppConfig.TAG, "VPN interface is null, cannot start tun2socks")
                 tun2SocksService = null
             }
         } else {
