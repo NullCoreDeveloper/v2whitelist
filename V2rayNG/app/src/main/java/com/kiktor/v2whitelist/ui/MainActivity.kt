@@ -62,8 +62,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
 
-        binding.btn_big_connect.setOnClickListener { handleConnectAction() }
-        binding.btn_switch_server.setOnClickListener { handleSwitchServer() }
+        binding.btnBigConnect.setOnClickListener { handleConnectAction() }
+        binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
 
         setupViewModel()
         mainViewModel.reloadServerList()
@@ -99,23 +99,23 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun setConnectingState() {
-        binding.btn_big_connect.isEnabled = false
-        binding.btn_big_connect.text = "Updating & Testing..."
-        binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
-        binding.progress_bar.isVisible = true
+        binding.btnBigConnect.isEnabled = false
+        binding.btnBigConnect.text = "Updating & Testing..."
+        binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+        binding.progressBar.isVisible = true
     }
 
     private fun updateUIState(isRunning: Boolean) {
-        binding.btn_big_connect.isEnabled = true
-        binding.progress_bar.isVisible = false
+        binding.btnBigConnect.isEnabled = true
+        binding.progressBar.isVisible = false
         if (isRunning) {
-            binding.btn_big_connect.text = "Protected"
-            binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
-            binding.btn_switch_server.isVisible = true
+            binding.btnBigConnect.text = "Protected"
+            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.btnSwitchServer.isVisible = true
         } else {
-            binding.btn_big_connect.text = "Start v2Whitelist"
-            binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
-            binding.btn_switch_server.isVisible = false
+            binding.btnBigConnect.text = "Start v2Whitelist"
+            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.btnSwitchServer.isVisible = false
         }
     }
 

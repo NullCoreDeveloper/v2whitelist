@@ -14,13 +14,45 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    
+        fetch-depth: 0
+
     - name: set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
+
+    - name: Install NDK
+      run: |
+        NDK_VER="28.2.13676358"
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+          --channel=0 \
+          --install "ndk;$NDK_VER"
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
+        # Set ndkVersion in build.gradle.kts if needed, but it seems it works without it if we set ANDROID_NDK_HOME
+
+    - name: Build libhevtun
+      run: |
+        bash compile-hevtun.sh
+        mkdir -p V2rayNG/app/libs
+        cp -r libs/* V2rayNG/app/libs/
+
+    - name: Fetch AndroidLibXrayLite tag
+      id: xray_tag
+      run: |
+        pushd AndroidLibXrayLite
+        CURRENT_TAG=$(git describe --tags --abbrev=0)
+        echo "tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
+        popd
+
+    - name: Download libv2ray
+      uses: robinraju/release-downloader@v1.12
+      with:
+        repository: '2dust/AndroidLibXrayLite'
+        tag: ${{ steps.xray_tag.outputs.tag }}
+        fileName: 'libv2ray.aar'
+        out-file-path: V2rayNG/app/libs/
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -33,6 +65,7 @@ jobs:
     - name: Create Release and Upload APK
       uses: softprops/action-gh-release@v2
       with:
-        files: V2rayNG/app/build/outputs/apk/release/*.apk
+        files: |
+          V2rayNG/app/build/outputs/apk/*/release/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
