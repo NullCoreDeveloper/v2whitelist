@@ -1,6 +1,7 @@
 package com.kiktor.v2whitelist.contracts
 
 import android.app.Service
+import android.os.ParcelFileDescriptor
 
 interface ServiceControl {
     /**
