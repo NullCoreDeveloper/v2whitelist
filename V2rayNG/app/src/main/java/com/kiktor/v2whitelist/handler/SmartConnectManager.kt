@@ -11,10 +11,15 @@ import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.V2rayConfigManager
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object SmartConnectManager {
+    private var failoverJob: Job? = null
     const val SUBSCRIPTION_URL = "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt"
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
     const val SUBSCRIPTION_REMARKS = "v2Whitelist Official"
@@ -75,8 +80,20 @@ object SmartConnectManager {
             Log.i(AppConfig.TAG, "Connecting to best server: ${best.second.remarks} (${best.third}ms)")
             MmkvManager.setSelectServer(best.first)
             V2RayServiceManager.startVService(context)
+            startFailoverTimer(context)
         } else {
             Log.e(AppConfig.TAG, "No valid servers found after RealPing")
+        }
+    }
+
+    private fun startFailoverTimer(context: Context) {
+        failoverJob?.cancel()
+        failoverJob = CoroutineScope(Dispatchers.Main).launch {
+            delay(5000)
+            if (!V2RayServiceManager.isRunning()) {
+                Log.w(AppConfig.TAG, "Connection failed within 5s, triggering failover")
+                switchServer(context)
+            }
         }
     }
 
@@ -106,6 +123,7 @@ object SmartConnectManager {
             Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
             MmkvManager.setSelectServer(nextBest.first)
             V2RayServiceManager.startVService(context)
+            startFailoverTimer(context)
         }
     }
 }
