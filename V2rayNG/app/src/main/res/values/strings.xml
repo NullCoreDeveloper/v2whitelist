@@ -448,5 +448,4 @@
     <string name="btn_label_settings">Settings</string>
     <string name="btn_label_logs">Logs</string>
     <string name="btn_label_update">Update</string>
-    <string name="status_updating_subscription">Updating Subscription...</string>
 </resources>
