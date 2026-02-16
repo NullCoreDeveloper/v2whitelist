@@ -121,13 +121,11 @@ object Utils {
 
         try {
             return Base64.decode(text, Base64.NO_WRAP).toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to decode standard base64", e)
+        } catch (_: Exception) {
         }
         try {
             return Base64.decode(text, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to decode URL-safe base64", e)
+        } catch (_: Exception) {
         }
         return null
     }
