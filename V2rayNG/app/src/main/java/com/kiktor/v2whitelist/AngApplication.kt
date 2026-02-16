@@ -8,6 +8,7 @@ import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig.ANG_PACKAGE
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
+import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,6 +44,9 @@ class AngApplication : MultiDexApplication() {
         SettingsManager.setNightMode()
         // Initialize WorkManager with the custom configuration
         WorkManager.initialize(this, workManagerConfiguration)
+
+        // Initialize V2Ray core environment globally
+        V2RayNativeManager.initCoreEnv(this)
 
         SettingsManager.initRoutingRulesets(this)
         SettingsManager.migrateHysteria2PinSHA256()

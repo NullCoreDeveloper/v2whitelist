@@ -268,7 +268,7 @@ object SettingsManager {
                             input.copyTo(output)
                         }
                     }
-                    Log.i(AppConfig.TAG, "Copied from apk assets folder to ${target.absolutePath}")
+                    Log.v(AppConfig.TAG, "Copied from apk assets folder to ${target.absolutePath}")
                 }
         } catch (e: Exception) {
             Log.e(ANG_PACKAGE, "asset copy failed", e)

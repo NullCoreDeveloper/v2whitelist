@@ -36,7 +36,7 @@ object SmartConnectManager {
         val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
 
         if (existingSub == null) {
-            Log.i(AppConfig.TAG, "Adding hardcoded subscription")
+            Log.d(AppConfig.TAG, "Adding hardcoded subscription")
             val subItem = SubscriptionItem().apply {
                 remarks = SUBSCRIPTION_REMARKS
                 url = SUBSCRIPTION_URL
@@ -47,7 +47,7 @@ object SmartConnectManager {
         } else {
             val lastUpdated = existingSub.subscription.lastUpdated
             if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                Log.i(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
+                Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
                 AngConfigManager.updateConfigViaSub(existingSub)
             }
         }
@@ -60,7 +60,7 @@ object SmartConnectManager {
         val subscriptions = MmkvManager.decodeSubscriptions()
         val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
         if (existingSub != null) {
-            Log.i(AppConfig.TAG, "Manually updating subscription")
+            Log.d(AppConfig.TAG, "Manually updating subscription")
             AngConfigManager.updateConfigViaSub(existingSub)
         } else {
             checkAndSetupSubscription(context)
@@ -100,7 +100,7 @@ object SmartConnectManager {
 
         val best = results.firstOrNull { it.third < Long.MAX_VALUE }
         if (best != null) {
-            Log.i(AppConfig.TAG, "Connecting to best server: ${best.second.remarks} (${best.third}ms)")
+            Log.d(AppConfig.TAG, "Connecting to best server: ${best.second.remarks} (${best.third}ms)")
             MmkvManager.setSelectServer(best.first)
             V2RayServiceManager.startVService(context)
             startFailoverTimer(context)
@@ -149,7 +149,7 @@ object SmartConnectManager {
         val nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
         if (nextBest != null) {
             V2RayServiceManager.stopVService(context)
-            Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
+            Log.d(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
             MmkvManager.setSelectServer(nextBest.first)
             V2RayServiceManager.startVService(context)
             startFailoverTimer(context)
