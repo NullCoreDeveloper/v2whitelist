@@ -19,10 +19,13 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 object SmartConnectManager {
     private var failoverJob: Job? = null
+    private val testSemaphore = Semaphore(32)
     const val SUBSCRIPTION_URL = "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt"
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
     const val SUBSCRIPTION_REMARKS = "v2Whitelist Official"
@@ -85,15 +88,17 @@ object SmartConnectManager {
 
         val testUrl = AppConfig.DELAY_TEST_URL
         
-        // Parallel testing
+        // Parallel testing with concurrency limit
         val results = coroutineScope {
             servers.map { (guid, profile) ->
                 async {
-                    val config = V2rayConfigManager.getV2rayConfig(context, guid)
-                    val delay = if (config.status) {
-                        V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
-                    } else -1L
-                    Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                    testSemaphore.withPermit {
+                        val config = V2rayConfigManager.getV2rayConfig(context, guid)
+                        val delay = if (config.status) {
+                            V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                        } else -1L
+                        Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                    }
                 }
             }.awaitAll()
         }.sortedBy { it.third }
@@ -133,15 +138,17 @@ object SmartConnectManager {
 
         val testUrl = AppConfig.DELAY_TEST_URL
         
-        // Parallel testing
+        // Parallel testing with concurrency limit
         val results = coroutineScope {
             servers.map { (guid, profile) ->
                 async {
-                    val config = V2rayConfigManager.getV2rayConfig(context, guid)
-                    val delay = if (config.status) {
-                        V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
-                    } else -1L
-                    Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                    testSemaphore.withPermit {
+                        val config = V2rayConfigManager.getV2rayConfig(context, guid)
+                        val delay = if (config.status) {
+                            V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                        } else -1L
+                        Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                    }
                 }
             }.awaitAll()
         }.sortedBy { it.third }

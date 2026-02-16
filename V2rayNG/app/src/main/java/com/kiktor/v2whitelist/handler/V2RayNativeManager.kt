@@ -90,7 +90,7 @@ object V2RayNativeManager {
         return try {
             Libv2ray.measureOutboundDelay(config, testUrl)
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to measure outbound delay", e)
+            Log.d(AppConfig.TAG, "Failed to measure outbound delay: ${e.message}")
             -1L
         }
     }
