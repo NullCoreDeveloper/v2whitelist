@@ -20,6 +20,7 @@ import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController

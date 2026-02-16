@@ -3,6 +3,7 @@ package com.kiktor.v2whitelist.handler
 import android.content.Context
 import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.dto.ProfileItem
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.dto.SubscriptionCache
 import com.kiktor.v2whitelist.enums.EConfigType
@@ -23,6 +24,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.cancelChildren
 import kotlin.random.Random
 
 object SmartConnectManager {
