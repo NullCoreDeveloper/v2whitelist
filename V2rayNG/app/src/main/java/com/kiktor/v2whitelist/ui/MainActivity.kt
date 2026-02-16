@@ -64,39 +64,9 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(binding.root)
-        setupToolbar(binding.toolbar, false, getString(R.string.title_server))
+        binding.btn_big_connect.setOnClickListener { handleConnectAction() }
+        binding.btn_switch_server.setOnClickListener { handleSwitchServer() }
 
-        // setup viewpager and tablayout
-        groupPagerAdapter = GroupPagerAdapter(this, emptyList())
-        binding.viewPager.adapter = groupPagerAdapter
-        binding.viewPager.isUserInputEnabled = true
-
-        // setup navigation drawer
-        val toggle = ActionBarDrawerToggle(
-            this, binding.drawerLayout, binding.toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close
-        )
-        binding.drawerLayout.addDrawerListener(toggle)
-        toggle.syncState()
-        binding.navView.setNavigationItemSelectedListener(this)
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    binding.drawerLayout.closeDrawer(GravityCompat.START)
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
-                }
-            }
-        })
-
-        binding.fab.setOnClickListener { handleFabAction() }
-        binding.layoutTest.setOnClickListener { handleLayoutTestClick() }
-
-        setupGroupTab()
         setupViewModel()
         mainViewModel.reloadServerList()
 
@@ -105,98 +75,49 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun setupViewModel() {
-        mainViewModel.updateTestResultAction.observe(this) { setTestState(it) }
         mainViewModel.isRunning.observe(this) { isRunning ->
-            applyRunningState(false, isRunning)
+            updateUIState(isRunning)
         }
         mainViewModel.startListenBroadcast()
         mainViewModel.initAssets(assets)
     }
 
-    private fun setupGroupTab() {
-        val groups = mainViewModel.getSubscriptions(this)
-        groupPagerAdapter.update(groups)
-
-        tabMediator?.detach()
-        tabMediator = TabLayoutMediator(binding.tabGroup, binding.viewPager) { tab, position ->
-            groupPagerAdapter.groups.getOrNull(position)?.let {
-                tab.text = it.remarks
-                tab.tag = it.id
-            }
-        }.also { it.attach() }
-
-        val targetIndex = groups.indexOfFirst { it.id == mainViewModel.subscriptionId }.takeIf { it >= 0 } ?: (groups.size - 1)
-        binding.viewPager.setCurrentItem(targetIndex, false)
-
-        binding.tabGroup.isVisible = groups.size > 1
-    }
-
-    private fun handleFabAction() {
-        applyRunningState(isLoading = true, isRunning = false)
-
+    private fun handleConnectAction() {
         if (mainViewModel.isRunning.value == true) {
             V2RayServiceManager.stopVService(this)
-        } else if (SettingsManager.isVpnMode()) {
-            val intent = VpnService.prepare(this)
-            if (intent == null) {
-                startV2Ray()
-            } else {
-                requestVpnPermission.launch(intent)
+        } else {
+            lifecycleScope.launch {
+                setConnectingState()
+                SmartConnectManager.smartConnect(this@MainActivity)
             }
-        } else {
-            startV2Ray()
         }
     }
 
-    private fun handleLayoutTestClick() {
-        if (mainViewModel.isRunning.value == true) {
-            setTestState(getString(R.string.connection_test_testing))
-            mainViewModel.testCurrentServerRealPing()
-        } else {
-            // service not running: keep existing no-op (could show a message if desired)
-        }
-    }
-
-    private fun startV2Ray() {
-        if (MmkvManager.getSelectServer().isNullOrEmpty()) {
-            toast(R.string.title_file_chooser)
-            return
-        }
-        V2RayServiceManager.startVService(this)
-    }
-
-    fun restartV2Ray() {
-        if (mainViewModel.isRunning.value == true) {
-            V2RayServiceManager.stopVService(this)
-        }
+    private fun handleSwitchServer() {
         lifecycleScope.launch {
-            delay(500)
-            startV2Ray()
+            setConnectingState()
+            SmartConnectManager.switchServer(this@MainActivity)
         }
     }
 
-    private fun setTestState(content: String?) {
-        binding.tvTestState.text = content
+    private fun setConnectingState() {
+        binding.btn_big_connect.isEnabled = false
+        binding.btn_big_connect.text = "Updating & Testing..."
+        binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+        binding.progress_bar.isVisible = true
     }
 
-    private  fun applyRunningState(isLoading: Boolean, isRunning: Boolean) {
-        if (isLoading) {
-            binding.fab.setImageResource(R.drawable.ic_fab_check)
-            return
-        }
-
+    private fun updateUIState(isRunning: Boolean) {
+        binding.btn_big_connect.isEnabled = true
+        binding.progress_bar.isVisible = false
         if (isRunning) {
-            binding.fab.setImageResource(R.drawable.ic_stop_24dp)
-            binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_active))
-            binding.fab.contentDescription = getString(R.string.action_stop_service)
-            setTestState(getString(R.string.connection_connected))
-            binding.layoutTest.isFocusable = true
+            binding.btn_big_connect.text = "Protected"
+            binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.btn_switch_server.isVisible = true
         } else {
-            binding.fab.setImageResource(R.drawable.ic_play_24dp)
-            binding.fab.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_fab_inactive))
-            binding.fab.contentDescription = getString(R.string.tasker_start_service)
-            setTestState(getString(R.string.connection_not_connected))
-            binding.layoutTest.isFocusable = false
+            binding.btn_big_connect.text = "Start v2Whitelist"
+            binding.btn_big_connect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.btn_switch_server.isVisible = false
         }
     }
 

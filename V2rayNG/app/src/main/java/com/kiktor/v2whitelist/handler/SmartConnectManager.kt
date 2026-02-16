@@ -5,6 +5,12 @@ import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.dto.SubscriptionCache
+import com.kiktor.v2whitelist.enums.EConfigType
+import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.AngConfigManager
+import com.kiktor.v2whitelist.handler.V2rayConfigManager
+import com.kiktor.v2whitelist.handler.V2RayNativeManager
+import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -42,7 +48,64 @@ object SmartConnectManager {
     /**
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
      */
-    suspend fun smartConnect(context: Context) {
-        // This will be implemented in the next steps
+    suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
+        checkAndSetupSubscription(context)
+        val allServers = MmkvManager.decodeServerList()
+        val servers = allServers.mapNotNull { guid ->
+            val profile = MmkvManager.decodeServerConfig(guid)
+            if (profile?.subscriptionId == SUBSCRIPTION_ID) guid to profile else null
+        }.filter { it.second.configType != EConfigType.POLICYGROUP }
+
+        if (servers.isEmpty()) {
+            Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
+            return@withContext
+        }
+
+        val testUrl = AppConfig.DELAY_TEST_URL
+        val results = servers.map { (guid, profile) ->
+            val config = V2rayConfigManager.getV2rayConfig(context, guid)
+            val delay = if (config.status) {
+                V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+            } else -1L
+            Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+        }.sortedBy { it.third }
+
+        val best = results.firstOrNull { it.third < Long.MAX_VALUE }
+        if (best != null) {
+            Log.i(AppConfig.TAG, "Connecting to best server: ${best.second.remarks} (${best.third}ms)")
+            MmkvManager.setSelectServer(best.first)
+            V2RayServiceManager.startVService(context)
+        } else {
+            Log.e(AppConfig.TAG, "No valid servers found after RealPing")
+        }
+    }
+
+    /**
+     * Switches to the next best server.
+     */
+    suspend fun switchServer(context: Context) = withContext(Dispatchers.IO) {
+        val currentGuid = MmkvManager.getSelectServer()
+        val allServers = MmkvManager.decodeServerList()
+        val servers = allServers.mapNotNull { guid ->
+            val profile = MmkvManager.decodeServerConfig(guid)
+            if (profile?.subscriptionId == SUBSCRIPTION_ID && guid != currentGuid) guid to profile else null
+        }.filter { it.second.configType != EConfigType.POLICYGROUP }
+
+        val testUrl = AppConfig.DELAY_TEST_URL
+        val results = servers.map { (guid, profile) ->
+            val config = V2rayConfigManager.getV2rayConfig(context, guid)
+            val delay = if (config.status) {
+                V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+            } else -1L
+            Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+        }.sortedBy { it.third }
+
+        val nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
+        if (nextBest != null) {
+            V2RayServiceManager.stopVService(context)
+            Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
+            MmkvManager.setSelectServer(nextBest.first)
+            V2RayServiceManager.startVService(context)
+        }
     }
 }
