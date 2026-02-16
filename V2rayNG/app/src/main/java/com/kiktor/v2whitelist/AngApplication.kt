@@ -7,6 +7,10 @@ import androidx.work.WorkManager
 import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig.ANG_PACKAGE
 import com.kiktor.v2whitelist.handler.SettingsManager
+import com.kiktor.v2whitelist.handler.SmartConnectManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AngApplication : MultiDexApplication() {
     companion object {
@@ -46,5 +50,9 @@ class AngApplication : MultiDexApplication() {
         es.dmoral.toasty.Toasty.Config.getInstance()
             .setGravity(android.view.Gravity.BOTTOM, 0, 200)
             .apply()
+
+        CoroutineScope(Dispatchers.Main).launch {
+            SmartConnectManager.checkAndSetupSubscription(this@AngApplication)
+        }
     }
 }
