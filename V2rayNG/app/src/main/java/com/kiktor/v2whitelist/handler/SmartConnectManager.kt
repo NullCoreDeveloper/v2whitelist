@@ -51,6 +51,20 @@ object SmartConnectManager {
     }
 
     /**
+     * Force updates the subscription.
+     */
+    suspend fun updateSubscription(context: Context) = withContext(Dispatchers.IO) {
+        val subscriptions = MmkvManager.decodeSubscriptions()
+        val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
+        if (existingSub != null) {
+            Log.i(AppConfig.TAG, "Manually updating subscription")
+            AngConfigManager.updateConfigViaSub(existingSub)
+        } else {
+            checkAndSetupSubscription(context)
+        }
+    }
+
+    /**
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
      */
     suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
@@ -67,12 +81,18 @@ object SmartConnectManager {
         }
 
         val testUrl = AppConfig.DELAY_TEST_URL
-        val results = servers.map { (guid, profile) ->
-            val config = V2rayConfigManager.getV2rayConfig(context, guid)
-            val delay = if (config.status) {
-                V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
-            } else -1L
-            Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+        
+        // Parallel testing
+        val results = kotlinx.coroutines.coroutineScope {
+            servers.map { (guid, profile) ->
+                async {
+                    val config = V2rayConfigManager.getV2rayConfig(context, guid)
+                    val delay = if (config.status) {
+                        V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                    } else -1L
+                    Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                }
+            }.awaitAll()
         }.sortedBy { it.third }
 
         val best = results.firstOrNull { it.third < Long.MAX_VALUE }
@@ -109,12 +129,18 @@ object SmartConnectManager {
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
 
         val testUrl = AppConfig.DELAY_TEST_URL
-        val results = servers.map { (guid, profile) ->
-            val config = V2rayConfigManager.getV2rayConfig(context, guid)
-            val delay = if (config.status) {
-                V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
-            } else -1L
-            Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+        
+        // Parallel testing
+        val results = kotlinx.coroutines.coroutineScope {
+            servers.map { (guid, profile) ->
+                async {
+                    val config = V2rayConfigManager.getV2rayConfig(context, guid)
+                    val delay = if (config.status) {
+                        V2RayNativeManager.measureOutboundDelay(config.content, testUrl)
+                    } else -1L
+                    Triple(guid, profile, if (delay <= 0) Long.MAX_VALUE else delay)
+                }
+            }.awaitAll()
         }.sortedBy { it.third }
 
         val nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }

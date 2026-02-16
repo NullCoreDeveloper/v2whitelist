@@ -64,11 +64,23 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
         binding.btnBigConnect.setOnClickListener { handleConnectAction() }
         binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
+        binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
+        binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
+        binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
 
         setupViewModel()
         mainViewModel.reloadServerList()
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {
+        }
+    }
+
+    private fun handleUpdateSubscription() {
+        lifecycleScope.launch {
+            setConnectingState("Updating Subscription...")
+            SmartConnectManager.updateSubscription(this@MainActivity)
+            mainViewModel.reloadServerList()
+            updateUIState(mainViewModel.isRunning.value == true)
         }
     }
 
@@ -98,22 +110,32 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    private fun setConnectingState() {
+    private fun setConnectingState(message: String = "Updating & Testing...") {
         binding.btnBigConnect.isEnabled = false
-        binding.btnBigConnect.text = "Updating & Testing..."
+        binding.btnBigConnect.text = "..."
         binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
         binding.progressBar.isVisible = true
+        binding.progressBarCircular.isVisible = true
+        binding.tvStatus.text = "Please wait"
+        binding.tvStatusDetail.text = message
     }
 
     private fun updateUIState(isRunning: Boolean) {
         binding.btnBigConnect.isEnabled = true
         binding.progressBar.isVisible = false
+        binding.progressBarCircular.isVisible = false
         if (isRunning) {
-            binding.btnBigConnect.text = "Protected"
+            binding.tvStatus.text = "Protected"
+            binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.tvStatusDetail.text = "Connection is active and secure"
+            binding.btnBigConnect.text = "Stop"
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
             binding.btnSwitchServer.isVisible = true
         } else {
-            binding.btnBigConnect.text = "Start v2Whitelist"
+            binding.tvStatus.text = "Disconnected"
+            binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.tvStatusDetail.text = "Select a server or press start"
+            binding.btnBigConnect.text = "Start"
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
             binding.btnSwitchServer.isVisible = false
         }

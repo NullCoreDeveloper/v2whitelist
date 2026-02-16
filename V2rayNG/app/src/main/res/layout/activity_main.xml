@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -13,74 +14,159 @@
 
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            app:elevation="0dp">
 
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize" />
+                android:layout_height="?attr/actionBarSize"
+                app:title="v2Whitelist" />
 
         </com.google.android.material.appbar.AppBarLayout>
 
-        <RelativeLayout
+        <androidx.coordinatorlayout.widget.CoordinatorLayout
+            android:id="@+id/main_content"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-            <androidx.coordinatorlayout.widget.CoordinatorLayout
-                android:id="@+id/main_content"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="match_parent"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingLeft="@dimen/padding_spacing_dp24"
+                android:paddingRight="@dimen/padding_spacing_dp24">
 
-                <LinearLayout
+                <!-- Status Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/status_card"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="@dimen/padding_spacing_dp32">
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:strokeWidth="0dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:id="@+id/tv_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Disconnected"
+                            android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+                        <TextView
+                            android:id="@+id/tv_status_detail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="Select a server or press start"
+                            android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Big Connect Button Container -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_big_connect"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="220dp"
                         android:layout_height="220dp"
+                        android:layout_gravity="center"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:text="Start v2Whitelist"
-                        android:textSize="18sp"
+                        android:text="Start"
+                        android:textSize="20sp"
                         app:backgroundTint="@color/divider_color_light"
-                        app:cornerRadius="110dp"
-                        app:iconSize="48dp" />
+                        app:cornerRadius="110dp" />
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/progress_bar_circular"
+                        android:layout_width="240dp"
+                        android:layout_height="240dp"
+                        android:layout_gravity="center"
+                        android:indeterminate="true"
+                        android:visibility="invisible"
+                        app:indicatorColor="@color/color_fab_active"
+                        app:indicatorSize="240dp"
+                        app:trackThickness="4dp" />
+                </FrameLayout>
+
+                <!-- Actions Grid -->
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="32dp"
+                    android:alignmentMode="alignMargins"
+                    android:columnCount="2"
+                    android:rowCount="2">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_switch_server"
                         style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/padding_spacing_dp24"
-                        android:text="Switch Server"
-                        android:visibility="gone" />
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        android:text="Switch"
+                        app:icon="@drawable/ic_check_update_24dp" />
 
-                    <TextView
-                        android:id="@+id/tv_status_detail"
-                        android:layout_width="wrap_content"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_settings_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:textAlignment="center"
-                        android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                        android:visibility="gone" />
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        android:text="Settings"
+                        app:icon="@drawable/ic_settings_24dp" />
 
-                </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_logcat_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        android:text="Logs"
+                        app:icon="@drawable/ic_logcat_24dp" />
 
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progress_bar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:indeterminate="true"
-                    android:visibility="invisible"
-                    app:indicatorColor="@color/color_fab_active" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_update_sub_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="4dp"
+                        android:text="Update"
+                        app:icon="@drawable/ic_subscriptions_24dp" />
 
-            </androidx.coordinatorlayout.widget.CoordinatorLayout>
-        </RelativeLayout>
+                </GridLayout>
+
+            </LinearLayout>
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/progress_bar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:indeterminate="true"
+                android:visibility="invisible"
+                app:indicatorColor="@color/color_fab_active" />
+
+        </androidx.coordinatorlayout.widget.CoordinatorLayout>
     </LinearLayout>
 
     <com.google.android.material.navigation.NavigationView
@@ -89,8 +175,6 @@
         android:layout_height="match_parent"
         android:layout_gravity="start"
         app:headerLayout="@layout/nav_header"
-        app:menu="@menu/menu_drawer">
-
-    </com.google.android.material.navigation.NavigationView>
+        app:menu="@menu/menu_drawer" />
 
 </androidx.drawerlayout.widget.DrawerLayout>
