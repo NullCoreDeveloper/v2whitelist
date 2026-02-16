@@ -94,7 +94,13 @@ object SmartConnectManager {
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
-                !remarks.contains("timeweb") && !remarks.contains("selectel") && !remarks.contains("yandex")
+                !remarks.contains("timeweb") && 
+                !remarks.contains("selectel") && 
+                !remarks.contains("yandex") &&
+                !remarks.contains("aeza") &&
+                !remarks.contains("cloud.ru") &&
+                !remarks.contains("vk") &&
+                !remarks.contains("🇷🇺")
             }
 
         if (servers.isEmpty()) {
@@ -196,7 +202,13 @@ object SmartConnectManager {
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
-                !remarks.contains("timeweb") && !remarks.contains("selectel") && !remarks.contains("yandex")
+                !remarks.contains("timeweb") && 
+                !remarks.contains("selectel") && 
+                !remarks.contains("yandex") &&
+                !remarks.contains("aeza") &&
+                !remarks.contains("cloud.ru") &&
+                !remarks.contains("vk") &&
+                !remarks.contains("🇷🇺")
             }
 
         if (servers.isEmpty()) {

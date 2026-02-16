@@ -440,7 +440,7 @@ object V2rayConfigManager {
 
             v2rayConfig.routing.domainStrategy =
                 MmkvManager.decodeSettingsString(AppConfig.PREF_ROUTING_DOMAIN_STRATEGY)
-                    ?: "AsIs"
+                    ?: "IPIfNonMatch"
 
             val rulesetItems = MmkvManager.decodeRoutingRulesets()
             rulesetItems?.forEach { key ->
@@ -627,7 +627,7 @@ object V2rayConfigManager {
             hosts[AppConfig.DNS_DNSPOD_DOMAIN] = AppConfig.DNS_DNSPOD_ADDRESSES
             hosts[AppConfig.DNS_GOOGLE_DOMAIN] = AppConfig.DNS_GOOGLE_ADDRESSES
             hosts[AppConfig.DNS_QUAD9_DOMAIN] = AppConfig.DNS_QUAD9_ADDRESSES
-            hosts[AppConfig.DNS_YANDEX_DOMAIN] = AppConfig.DNS_YANDEX_ADDRESSES
+            hosts[AppConfig.DNS_QUAD9_DOMAIN] = AppConfig.DNS_QUAD9_ADDRESSES
 
             //User DNS hosts
             try {
@@ -778,7 +778,9 @@ object V2rayConfigManager {
                 || protocol.equals(EConfigType.HYSTERIA2.name, true)
             ) {
                 muxEnabled = false
-            } else if (outbound.streamSettings?.network == NetworkType.XHTTP.type) {
+            } else if (outbound.streamSettings?.network == NetworkType.XHTTP.type
+                || outbound.streamSettings?.network == "grpc"
+            ) {
                 muxEnabled = false
             }
 
