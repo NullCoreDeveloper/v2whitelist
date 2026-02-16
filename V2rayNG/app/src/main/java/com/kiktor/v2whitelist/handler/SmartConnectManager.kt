@@ -92,6 +92,10 @@ object SmartConnectManager {
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile?.subscriptionId == SUBSCRIPTION_ID) guid to profile else null
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
+            .filter {
+                val remarks = it.second.remarks.lowercase()
+                !remarks.contains("timeweb") && !remarks.contains("selectel") && !remarks.contains("yandex")
+            }
 
         if (servers.isEmpty()) {
             Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
@@ -190,6 +194,10 @@ object SmartConnectManager {
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile?.subscriptionId == SUBSCRIPTION_ID && guid != currentGuid) guid to profile else null
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
+            .filter {
+                val remarks = it.second.remarks.lowercase()
+                !remarks.contains("timeweb") && !remarks.contains("selectel") && !remarks.contains("yandex")
+            }
 
         if (servers.isEmpty()) {
             return@withContext
