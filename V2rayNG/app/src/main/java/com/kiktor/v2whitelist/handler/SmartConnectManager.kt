@@ -12,6 +12,8 @@ import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.V2rayConfigManager
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
+import com.kiktor.v2whitelist.util.MessageUtil
+import com.kiktor.v2whitelist.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,14 +52,20 @@ object SmartConnectManager {
                 enabled = true
             }
             MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
+            sendStatus(context, context.getString(R.string.status_updating_subscription))
             AngConfigManager.updateConfigViaSub(SubscriptionCache(SUBSCRIPTION_ID, subItem))
         } else {
             val lastUpdated = existingSub.subscription.lastUpdated
             if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
                 Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
+                sendStatus(context, context.getString(R.string.status_updating_subscription))
                 AngConfigManager.updateConfigViaSub(existingSub)
             }
         }
+    }
+
+    private fun sendStatus(context: Context, status: String) {
+        MessageUtil.sendMsg2Activity(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
     }
 
     /**
@@ -87,10 +95,14 @@ object SmartConnectManager {
 
         if (servers.isEmpty()) {
             Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
+            sendStatus(context, context.getString(R.string.status_no_servers))
             return@withContext
         }
 
         Log.i(AppConfig.TAG, "Starting Smart Connect for ${servers.size} servers (10s limit)")
+        sendStatus(context, context.getString(R.string.status_starting_smart_connect))
+        delay(500) // Brief delay so user can read "Starting..."
+        sendStatus(context, context.getString(R.string.status_testing_servers, servers.size))
 
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
@@ -145,11 +157,15 @@ object SmartConnectManager {
 
         if (best != null) {
             Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
+            sendStatus(context, context.getString(R.string.status_found_best))
+            delay(500)
+            sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
             MmkvManager.setSelectServer(best.first)
             V2RayServiceManager.startVService(context)
             startFailoverTimer(context)
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
+            sendStatus(context, context.getString(R.string.status_no_servers))
         }
     }
 
@@ -180,6 +196,9 @@ object SmartConnectManager {
         }
 
         Log.i(AppConfig.TAG, "Switching server: testing ${servers.size} alternatives (10s limit)")
+        sendStatus(context, context.getString(R.string.status_switching_server))
+        delay(500)
+        sendStatus(context, context.getString(R.string.status_testing_servers, servers.size))
 
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
@@ -230,6 +249,9 @@ object SmartConnectManager {
         if (nextBest != null) {
             V2RayServiceManager.stopVService(context)
             Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
+            sendStatus(context, context.getString(R.string.status_found_best))
+            delay(500)
+            sendStatus(context, context.getString(R.string.status_connecting_to, nextBest.second.remarks))
             MmkvManager.setSelectServer(nextBest.first)
             V2RayServiceManager.startVService(context)
             startFailoverTimer(context)

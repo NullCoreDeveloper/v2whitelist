@@ -95,6 +95,11 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         mainViewModel.isRunning.observe(this) { isRunning ->
             updateUIState(isRunning)
         }
+        mainViewModel.uiStatus.observe(this) { status ->
+            if (isTaskRunning) {
+                binding.tvStatusDetail.text = status
+            }
+        }
         mainViewModel.startListenBroadcast()
         mainViewModel.initAssets(assets)
     }

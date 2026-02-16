@@ -44,6 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isRunning by lazy { MutableLiveData<Boolean>() }
     val updateListAction by lazy { MutableLiveData<Int>() }
     val updateTestResultAction by lazy { MutableLiveData<String>() }
+    val uiStatus by lazy { MutableLiveData<String>() }
     private val tcpingTestScope by lazy { CoroutineScope(Dispatchers.IO) }
 
     /**
@@ -471,6 +472,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (content == "0") {
                         onTestsFinished()
                     }
+                }
+
+                AppConfig.MSG_UI_STATUS_UPDATE -> {
+                    uiStatus.value = intent.getStringExtra("content")
                 }
             }
         }
