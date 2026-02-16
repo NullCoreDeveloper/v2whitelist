@@ -23,7 +23,7 @@
     <string name="toast_services_failure">Start Services Failure</string>
 
     <string name="status_starting_smart_connect">Ищем лучший сервер для вас…</string>
-    <string name="status_testing_servers">Проверяем скорость %d серверов…</string>
+    <string name="status_testing_servers">Проверяем скорость серверов…</string>
     <string name="status_found_best">Нашли отличный сервер! Подключаемся…</string>
     <string name="status_connecting_to">Подключаемся к %s…</string>
     <string name="status_switching_server">Выбираем другой сервер…</string>

@@ -102,7 +102,7 @@ object SmartConnectManager {
         Log.i(AppConfig.TAG, "Starting Smart Connect for ${servers.size} servers (10s limit)")
         sendStatus(context, context.getString(R.string.status_starting_smart_connect))
         delay(500) // Brief delay so user can read "Starting..."
-        sendStatus(context, context.getString(R.string.status_testing_servers, servers.size))
+        sendStatus(context, context.getString(R.string.status_testing_servers))
 
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
@@ -198,7 +198,7 @@ object SmartConnectManager {
         Log.i(AppConfig.TAG, "Switching server: testing ${servers.size} alternatives (10s limit)")
         sendStatus(context, context.getString(R.string.status_switching_server))
         delay(500)
-        sendStatus(context, context.getString(R.string.status_testing_servers, servers.size))
+        sendStatus(context, context.getString(R.string.status_testing_servers))
 
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
