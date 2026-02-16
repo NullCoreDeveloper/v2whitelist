@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.v2ray.ang"
+    namespace = "com.kiktor.v2whitelist"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.v2ray.ang"
+        applicationId = "com.kiktor.v2whitelist"
         minSdk = 24
         targetSdk = 36
         versionCode = 709
