@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import com.kiktor.v2whitelist.contracts.ServiceControl
+import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.MyContextWrapper

@@ -65,7 +65,7 @@ object SmartConnectManager {
     }
 
     private fun sendStatus(context: Context, status: String) {
-        MessageUtil.sendMsg2Activity(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
+        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
     }
 
     /**
