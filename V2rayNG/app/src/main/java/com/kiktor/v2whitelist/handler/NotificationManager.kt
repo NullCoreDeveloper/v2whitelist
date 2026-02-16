@@ -95,12 +95,12 @@ object NotificationManager {
         val contentPendingIntent = PendingIntent.getActivity(service, NOTIFICATION_PENDING_INTENT_CONTENT, startMainIntent, flags)
 
         val stopV2RayIntent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
-        stopV2RayIntent.`package` = AppConfig.ANG_PACKAGE
+        stopV2RayIntent.`package` = service.packageName
         stopV2RayIntent.putExtra("key", AppConfig.MSG_STATE_STOP)
         val stopV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_STOP_V2RAY, stopV2RayIntent, flags)
 
         val restartV2RayIntent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
-        restartV2RayIntent.`package` = AppConfig.ANG_PACKAGE
+        restartV2RayIntent.`package` = service.packageName
         restartV2RayIntent.putExtra("key", AppConfig.MSG_STATE_RESTART)
         val restartV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags)
 
@@ -108,14 +108,14 @@ object NotificationManager {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 createNotificationChannel()
             } else {
-                // If earlier version channel ID is not used
-                // https://developer.android.com/reference/android/support/v4/app/NotificationCompat.Builder.html#NotificationCompat.Builder(android.content.Context)
                 ""
             }
 
+        val remarks = currentConfig?.remarks ?: service.getString(R.string.notification_content_connecting)
+
         mBuilder = NotificationCompat.Builder(service, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(currentConfig?.remarks)
+            .setContentTitle(remarks)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setShowWhen(false)
@@ -131,8 +131,6 @@ object NotificationManager {
                 service.getString(R.string.title_service_restart),
                 restartV2RayPendingIntent
             )
-
-        //mBuilder?.setDefaults(NotificationCompat.FLAG_ONLY_ALERT_ONCE)
 
         service.startForeground(NOTIFICATION_ID, mBuilder?.build())
     }

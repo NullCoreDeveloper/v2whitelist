@@ -92,6 +92,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        NotificationManager.showNotification(null)
         setupVpnService()
         startService()
         return START_STICKY
