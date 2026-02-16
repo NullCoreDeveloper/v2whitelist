@@ -72,6 +72,10 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
         return true
     }
 
+    override fun getVpnInterface(): ParcelFileDescriptor? {
+        return null
+    }
+
     /**
      * Binds the service.
      * @param intent The intent.

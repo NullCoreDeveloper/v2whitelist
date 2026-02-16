@@ -354,6 +354,14 @@ object V2RayServiceManager {
                     startVService(serviceControl.getService())
                 }
 
+                AppConfig.MSG_STATE_SWITCH_SERVER -> {
+                    Log.i(AppConfig.TAG, "Switching Server inside Service")
+                    val vpnInterface = serviceControl.getVpnInterface()
+                    stopCoreLoop()
+                    Thread.sleep(1000L) // Wait for core to fully release resources
+                    startCoreLoop(vpnInterface)
+                }
+
                 AppConfig.MSG_MEASURE_DELAY -> {
                     measureV2rayDelay()
                 }

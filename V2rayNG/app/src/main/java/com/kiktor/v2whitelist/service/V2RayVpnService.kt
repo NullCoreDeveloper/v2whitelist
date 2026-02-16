@@ -81,6 +81,10 @@ class V2RayVpnService : VpnService(), ServiceControl {
         stopAllService()
     }
 
+    override fun getVpnInterface(): ParcelFileDescriptor? {
+        return mInterface
+    }
+
 //    override fun onLowMemory() {
 //        stopV2Ray()
 //        super.onLowMemory()

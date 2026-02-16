@@ -25,4 +25,10 @@ interface ServiceControl {
      * @return True if the socket is protected, false otherwise.
      */
     fun vpnProtect(socket: Int): Boolean
+
+    /**
+     * Gets the VPN interface.
+     * @return The VPN interface.
+     */
+    fun getVpnInterface(): ParcelFileDescriptor?
 }

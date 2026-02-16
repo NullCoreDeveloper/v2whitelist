@@ -267,13 +267,17 @@ object SmartConnectManager {
         }
 
         if (nextBest != null) {
-            V2RayServiceManager.stopVService(context)
             Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
             sendStatus(context, context.getString(R.string.status_found_best))
             delay(500)
             sendStatus(context, context.getString(R.string.status_connecting_to, nextBest.second.remarks))
             MmkvManager.setSelectServer(nextBest.first)
-            V2RayServiceManager.startVService(context)
+            
+            if (V2RayServiceManager.isRunning()) {
+                MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+            } else {
+                V2RayServiceManager.startVService(context)
+            }
             startFailoverTimer(context)
         }
     }
