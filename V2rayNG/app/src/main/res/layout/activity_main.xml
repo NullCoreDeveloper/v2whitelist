@@ -59,7 +59,7 @@
                             android:id="@+id/tv_status"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Disconnected"
+                            android:text="@string/connection_not_connected"
                             android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
 
                         <TextView
@@ -67,7 +67,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:text="Select a server or press start"
+                            android:text="@string/tv_status_disconnected_detail"
                             android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
 
                     </LinearLayout>
@@ -88,7 +88,7 @@
                         android:layout_gravity="center"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:text="Start"
+                        android:text="@string/btn_label_start"
                         android:textSize="20sp"
                         app:backgroundTint="@color/divider_color_light"
                         app:cornerRadius="110dp" />
@@ -121,7 +121,7 @@
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
-                        android:text="Switch"
+                        android:text="@string/btn_label_switch"
                         app:icon="@drawable/ic_check_update_24dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -131,7 +131,7 @@
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
-                        android:text="Settings"
+                        android:text="@string/btn_label_settings"
                         app:icon="@drawable/ic_settings_24dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -141,7 +141,7 @@
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
-                        android:text="Logs"
+                        android:text="@string/btn_label_logs"
                         app:icon="@drawable/ic_logcat_24dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -151,7 +151,7 @@
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="4dp"
-                        android:text="Update"
+                        android:text="@string/btn_label_update"
                         app:icon="@drawable/ic_subscriptions_24dp" />
 
                 </GridLayout>

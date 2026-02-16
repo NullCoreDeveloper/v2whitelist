@@ -423,4 +423,15 @@
         <item>WebDAV</item>
     </string-array>
 
+    <string name="tv_status_protected">Защищено</string>
+    <string name="tv_status_protected_detail">Соединение активно и безопасно</string>
+    <string name="tv_status_disconnected_detail">Выберите сервер или нажмите кнопку запуска</string>
+    <string name="btn_label_start">Старт</string>
+    <string name="btn_label_stop">Стоп</string>
+    <string name="btn_label_cancel">Отмена</string>
+    <string name="btn_label_switch">Сменить</string>
+    <string name="btn_label_settings">Настройки</string>
+    <string name="btn_label_logs">Логи</string>
+    <string name="btn_label_update">Обновить</string>
+    <string name="status_updating_subscription">Обновление подписки...</string>
 </resources>

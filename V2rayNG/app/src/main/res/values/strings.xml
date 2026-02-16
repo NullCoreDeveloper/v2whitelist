@@ -429,4 +429,15 @@
         <item>WebDAV</item>
     </string-array>
 
+    <string name="tv_status_protected">Protected</string>
+    <string name="tv_status_protected_detail">Connection is active and secure</string>
+    <string name="tv_status_disconnected_detail">Select a server or press start</string>
+    <string name="btn_label_start">Start</string>
+    <string name="btn_label_stop">Stop</string>
+    <string name="btn_label_cancel">Cancel</string>
+    <string name="btn_label_switch">Switch</string>
+    <string name="btn_label_settings">Settings</string>
+    <string name="btn_label_logs">Logs</string>
+    <string name="btn_label_update">Update</string>
+    <string name="status_updating_subscription">Updating Subscription...</string>
 </resources>

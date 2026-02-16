@@ -38,6 +38,7 @@ import com.kiktor.v2whitelist.util.Utils
 import com.kiktor.v2whitelist.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,6 +48,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     val mainViewModel: MainViewModel by viewModels()
+    private var activeJob: Job? = null
+    private var isTaskRunning = false
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
@@ -76,8 +79,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun handleUpdateSubscription() {
-        lifecycleScope.launch {
-            setConnectingState("Updating Subscription...")
+        if (isTaskRunning) {
+            cancelActiveTask()
+            return
+        }
+        activeJob = lifecycleScope.launch {
+            setConnectingState(getString(R.string.status_updating_subscription))
             SmartConnectManager.updateSubscription(this@MainActivity)
             mainViewModel.reloadServerList()
             updateUIState(mainViewModel.isRunning.value == true)
@@ -93,10 +100,14 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun handleConnectAction() {
+        if (isTaskRunning) {
+            cancelActiveTask()
+            return
+        }
         if (mainViewModel.isRunning.value == true) {
             V2RayServiceManager.stopVService(this)
         } else {
-            lifecycleScope.launch {
+            activeJob = lifecycleScope.launch {
                 setConnectingState()
                 SmartConnectManager.smartConnect(this@MainActivity)
             }
@@ -104,38 +115,52 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun handleSwitchServer() {
-        lifecycleScope.launch {
+        if (isTaskRunning) {
+            cancelActiveTask()
+            return
+        }
+        activeJob = lifecycleScope.launch {
             setConnectingState()
             SmartConnectManager.switchServer(this@MainActivity)
         }
     }
 
-    private fun setConnectingState(message: String = "Updating & Testing...") {
-        binding.btnBigConnect.isEnabled = false
-        binding.btnBigConnect.text = "..."
+    private fun cancelActiveTask() {
+        activeJob?.cancel()
+        activeJob = null
+        isTaskRunning = false
+        updateUIState(mainViewModel.isRunning.value == true)
+    }
+
+    private fun setConnectingState(message: String? = null) {
+        isTaskRunning = true
+        binding.btnBigConnect.isEnabled = true
+        binding.btnBigConnect.text = getString(R.string.btn_label_cancel)
         binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
         binding.progressBar.isVisible = true
         binding.progressBarCircular.isVisible = true
-        binding.tvStatus.text = "Please wait"
-        binding.tvStatusDetail.text = message
+        binding.tvStatus.text = getString(R.string.connection_test_testing)
+        binding.tvStatusDetail.text = message ?: getString(R.string.connection_test_testing)
     }
 
     private fun updateUIState(isRunning: Boolean) {
+        isTaskRunning = false
+        activeJob = null
         binding.btnBigConnect.isEnabled = true
         binding.progressBar.isVisible = false
         binding.progressBarCircular.isVisible = false
         if (isRunning) {
-            binding.tvStatus.text = "Protected"
+            binding.tvStatus.text = getString(R.string.tv_status_protected)
             binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-            binding.tvStatusDetail.text = "Connection is active and secure"
-            binding.btnBigConnect.text = "Stop"
+            binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail)
+            binding.btnBigConnect.text = getString(R.string.btn_label_stop)
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
             binding.btnSwitchServer.isVisible = true
         } else {
-            binding.tvStatus.text = "Disconnected"
+            binding.tvStatus.text = getString(R.string.connection_not_connected)
             binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            binding.tvStatusDetail.text = "Select a server or press start"
-            binding.btnBigConnect.text = "Start"
+            binding.tvStatusDetail.text = getString(R.string.tv_status_disconnected_detail)
+            binding.btnBigConnect.text = getString(R.string.btn_label_start)
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
             binding.btnSwitchServer.isVisible = false
         }
