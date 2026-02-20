@@ -1,4 +1,4 @@
-# v2Whitelist
+# v2Whitelist ![visitors](https://visitor-badge.laobi.icu/badge?page_id=kiktor12358.v2whitelist)
 
 **v2Whitelist** — это упрощенный форк v2rayNG для Android, превращенный в "VPN в один клик".
 
