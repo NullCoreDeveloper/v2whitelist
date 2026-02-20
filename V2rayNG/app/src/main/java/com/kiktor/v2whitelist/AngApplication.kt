@@ -12,6 +12,7 @@ import com.kiktor.v2whitelist.AppConfig.ANG_PACKAGE
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
+import com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,6 +77,9 @@ class AngApplication : MultiDexApplication() {
             CoroutineScope(Dispatchers.Main).launch {
                 SmartConnectManager.checkAndSetupSubscription(this@AngApplication)
             }
+
+            // Регистрируем фоновое обновление подписки раз в час
+            SubscriptionUpdaterWorker.schedule(this)
         } else {
             Log.i(AppConfig.TAG, "AngApplication.onCreate: service process, skipping UI/SmartConnect init")
         }
