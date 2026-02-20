@@ -449,5 +449,6 @@
     <string name="btn_label_logs">Логи</string>
     <string name="btn_label_update">Обновить</string>
     <string name="btn_label_about">О проекте</string>
+    <string name="title_check_update">Проверить обновления</string>
     <string name="tv_server_name">Сервер: %s</string>
 </resources>

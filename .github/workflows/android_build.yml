@@ -59,8 +59,18 @@ jobs:
       run: chmod +x gradlew
       working-directory: V2rayNG
 
+    - name: Generate Release Keystore
+      run: |
+        keytool -genkey -v -keystore release.keystore -alias v2whitelist -keyalg RSA -keysize 2048 -validity 10000 -storepass v2whitelist -keypass v2whitelist -dname "CN=v2whitelist, OU=v2whitelist, O=v2whitelist, L=Unknown, ST=Unknown, C=Unknown"
+      working-directory: V2rayNG
+
     - name: Build with Gradle
-      run: ./gradlew assembleRelease
+      run: |
+        ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=$PWD/release.keystore \
+          -Pandroid.injected.signing.store.password=v2whitelist \
+          -Pandroid.injected.signing.key.alias=v2whitelist \
+          -Pandroid.injected.signing.key.password=v2whitelist
       working-directory: V2rayNG
 
     - name: Create Release and Upload APK

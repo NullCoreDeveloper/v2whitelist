@@ -16,6 +16,10 @@
 
     <group android:id="@+id/group_id2">
         <item
+            android:id="@+id/check_update"
+            android:icon="@drawable/ic_check_update_24dp"
+            android:title="@string/title_check_update" />
+        <item
             android:id="@+id/logcat"
             android:icon="@drawable/ic_logcat_24dp"
             android:title="@string/title_logcat" />
