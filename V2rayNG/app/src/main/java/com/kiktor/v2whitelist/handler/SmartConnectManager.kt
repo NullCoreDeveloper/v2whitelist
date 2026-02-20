@@ -32,7 +32,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object SmartConnectManager {
-    private var failoverJob: Job? = null
     private val testSemaphore = Semaphore(48)
 
     // Ссылка-матрёшка: сначала загружаем этот файл, в нём — реальный URL подписки
@@ -256,21 +255,9 @@ object SmartConnectManager {
             } else {
                 V2RayServiceManager.startVService(context)
             }
-            startFailoverTimer(context)
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
             sendStatus(context, context.getString(R.string.status_no_servers))
-        }
-    }
-
-    private fun startFailoverTimer(context: Context) {
-        failoverJob?.cancel()
-        failoverJob = CoroutineScope(Dispatchers.Main).launch {
-            delay(15000)
-            if (!V2RayServiceManager.isRunning()) {
-                Log.w(AppConfig.TAG, "Connection failed within 15s, triggering failover")
-                switchServer(context)
-            }
         }
     }
 
@@ -307,7 +294,6 @@ object SmartConnectManager {
             } else {
                 V2RayServiceManager.startVService(context)
             }
-            startFailoverTimer(context)
         }
     }
 }
