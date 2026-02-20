@@ -70,6 +70,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
+        binding.btnAboutQuick.setOnClickListener { startActivity(Intent(this, AboutActivity::class.java)) }
 
         setupViewModel()
         mainViewModel.reloadServerList()
@@ -146,6 +147,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.progressBarCircular.isVisible = true
         binding.tvStatus.text = getString(R.string.connection_test_testing)
         binding.tvStatusDetail.text = message ?: getString(R.string.connection_test_testing)
+        binding.tvServerName.isVisible = false
+        binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_orange_light))
     }
 
     private fun updateUIState(isRunning: Boolean) {
@@ -161,6 +164,16 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             binding.btnBigConnect.text = getString(R.string.btn_label_stop)
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
             binding.btnSwitchServer.isVisible = true
+            binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_green_light))
+
+            // Показываем имя текущего сервера
+            val serverName = V2RayServiceManager.getRunningServerName()
+            if (serverName.isNotEmpty()) {
+                binding.tvServerName.text = getString(R.string.tv_server_name, serverName)
+                binding.tvServerName.isVisible = true
+            } else {
+                binding.tvServerName.isVisible = false
+            }
         } else {
             binding.tvStatus.text = getString(R.string.connection_not_connected)
             binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
@@ -168,6 +181,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             binding.btnBigConnect.text = getString(R.string.btn_label_start)
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
             binding.btnSwitchServer.isVisible = false
+            binding.tvServerName.isVisible = false
+            binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.darker_gray))
         }
     }
 

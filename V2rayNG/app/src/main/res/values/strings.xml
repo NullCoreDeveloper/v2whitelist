@@ -438,14 +438,16 @@
         <item>WebDAV</item>
     </string-array>
 
-    <string name="tv_status_protected">Protected</string>
-    <string name="tv_status_protected_detail">Connection is active and secure</string>
-    <string name="tv_status_disconnected_detail">Select a server or press start</string>
+    <string name="tv_status_protected">Защищено</string>
+    <string name="tv_status_protected_detail">Соединение активно и защищено</string>
+    <string name="tv_status_disconnected_detail">Нажмите Start для подключения</string>
     <string name="btn_label_start">Start</string>
     <string name="btn_label_stop">Stop</string>
-    <string name="btn_label_cancel">Cancel</string>
-    <string name="btn_label_switch">Switch</string>
-    <string name="btn_label_settings">Settings</string>
-    <string name="btn_label_logs">Logs</string>
-    <string name="btn_label_update">Update</string>
+    <string name="btn_label_cancel">Отмена</string>
+    <string name="btn_label_switch">Сменить</string>
+    <string name="btn_label_settings">Настройки</string>
+    <string name="btn_label_logs">Логи</string>
+    <string name="btn_label_update">Обновить</string>
+    <string name="btn_label_about">О проекте</string>
+    <string name="tv_server_name">Сервер: %s</string>
 </resources>
