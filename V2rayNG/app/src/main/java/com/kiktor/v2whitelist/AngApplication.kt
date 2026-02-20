@@ -1,6 +1,9 @@
 package com.kiktor.v2whitelist
 
+import android.app.ActivityManager
 import android.content.Context
+import android.os.Process
+import android.util.Log
 import androidx.multidex.MultiDexApplication
 import androidx.work.Configuration
 import androidx.work.WorkManager
@@ -32,31 +35,49 @@ class AngApplication : MultiDexApplication() {
         .build()
 
     /**
+     * Checks if the current process is the main application process.
+     */
+    private fun isMainProcess(): Boolean {
+        val pid = Process.myPid()
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        return am.runningAppProcesses?.any { it.pid == pid && it.processName == packageName } == true
+    }
+
+    /**
      * Initializes the application.
      */
     override fun onCreate() {
         super.onCreate()
 
+        val isMain = isMainProcess()
+        Log.i(AppConfig.TAG, "AngApplication.onCreate: pid=${Process.myPid()}, isMainProcess=$isMain")
+
         MMKV.initialize(this)
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.ensureDefaultSettings()
-        SettingsManager.setNightMode()
-        // Initialize WorkManager with the custom configuration
-        WorkManager.initialize(this, workManagerConfiguration)
 
-        // Initialize V2Ray core environment globally
+        // Initialize V2Ray core environment globally (needed in all processes)
         V2RayNativeManager.initCoreEnv(this)
 
-        SettingsManager.initRoutingRulesets(this)
-        SettingsManager.migrateHysteria2PinSHA256()
+        // The rest only runs in the main process
+        if (isMain) {
+            SettingsManager.setNightMode()
+            // Initialize WorkManager with the custom configuration
+            WorkManager.initialize(this, workManagerConfiguration)
 
-        es.dmoral.toasty.Toasty.Config.getInstance()
-            .setGravity(android.view.Gravity.BOTTOM, 0, 200)
-            .apply()
+            SettingsManager.initRoutingRulesets(this)
+            SettingsManager.migrateHysteria2PinSHA256()
 
-        CoroutineScope(Dispatchers.Main).launch {
-            SmartConnectManager.checkAndSetupSubscription(this@AngApplication)
+            es.dmoral.toasty.Toasty.Config.getInstance()
+                .setGravity(android.view.Gravity.BOTTOM, 0, 200)
+                .apply()
+
+            CoroutineScope(Dispatchers.Main).launch {
+                SmartConnectManager.checkAndSetupSubscription(this@AngApplication)
+            }
+        } else {
+            Log.i(AppConfig.TAG, "AngApplication.onCreate: service process, skipping UI/SmartConnect init")
         }
     }
 }

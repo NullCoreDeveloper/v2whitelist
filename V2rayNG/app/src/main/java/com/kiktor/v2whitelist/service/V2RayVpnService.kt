@@ -96,7 +96,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(AppConfig.TAG, "onStartCommand: VPN service starting")
+        Log.i(AppConfig.TAG, "onStartCommand: VPN service starting (pid=${android.os.Process.myPid()})")
         NotificationManager.showNotification(null)
 
         if (!setupVpnService()) {
@@ -104,7 +104,12 @@ class V2RayVpnService : VpnService(), ServiceControl {
             return START_NOT_STICKY
         }
 
-        startService()
+        try {
+            startService()
+        } catch (t: Throwable) {
+            Log.e(AppConfig.TAG, "onStartCommand: startService() threw exception", t)
+            stopAllService()
+        }
         return START_STICKY
     }
 
@@ -113,20 +118,33 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun startService() {
-        val vpnInterface = mInterface
-        if (vpnInterface == null) {
-            Log.e(AppConfig.TAG, "startService: VPN interface is null — VPN not established, stopping service")
-            // Останавливаем сервис явно, чтобы не оставаться в неопределённом состоянии
+        Log.i(AppConfig.TAG, "startService: entering method (pid=${android.os.Process.myPid()})")
+        try {
+            val vpnInterface = mInterface
+            if (vpnInterface == null) {
+                Log.e(AppConfig.TAG, "startService: VPN interface is null — VPN not established, stopping service")
+                stopAllService()
+                return
+            }
+            Log.i(AppConfig.TAG, "startService: mInterface is not null, about to access fd...")
+            val fd = try { vpnInterface.fd } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "startService: vpnInterface.fd threw exception (fd already closed?)", e)
+                stopAllService()
+                return
+            }
+            Log.i(AppConfig.TAG, "startService: VPN interface OK (fd=$fd), calling startCoreLoop...")
+            val result = V2RayServiceManager.startCoreLoop(vpnInterface)
+            Log.i(AppConfig.TAG, "startService: startCoreLoop returned $result")
+            if (!result) {
+                Log.e(AppConfig.TAG, "startService: startCoreLoop returned false, stopping service")
+                stopAllService()
+                return
+            }
+            Log.i(AppConfig.TAG, "startService: core loop started successfully")
+        } catch (t: Throwable) {
+            Log.e(AppConfig.TAG, "startService: FATAL exception", t)
             stopAllService()
-            return
         }
-        Log.i(AppConfig.TAG, "startService: VPN interface OK (fd=${vpnInterface.fd}), starting core loop")
-        if (!V2RayServiceManager.startCoreLoop(vpnInterface)) {
-            Log.e(AppConfig.TAG, "startService: startCoreLoop returned false, stopping service")
-            stopAllService()
-            return
-        }
-        Log.i(AppConfig.TAG, "startService: core loop started successfully")
     }
 
     override fun stopService() {
