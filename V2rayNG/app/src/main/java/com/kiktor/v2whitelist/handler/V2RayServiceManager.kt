@@ -91,18 +91,26 @@ object V2RayServiceManager {
      * @param context The context from which the service is started.
      */
     private fun startContextService(context: Context) {
-        if (coreController.isRunning) {
+        // Не делаем ранний выход при coreController.isRunning — startCoreLoop сам разберётся.
+        // Ранний выход здесь был причиной бага: сервис стартовал, но startCoreLoop видел
+        // isRunning==true и возвращал false, что вызывало мгновенную остановку VPN.
+        Log.d(AppConfig.TAG, "startContextService: coreController.isRunning=${coreController.isRunning}")
+        val guid = MmkvManager.getSelectServer() ?: run {
+            Log.w(AppConfig.TAG, "startContextService: no selected server, aborting")
             return
         }
-        val guid = MmkvManager.getSelectServer() ?: return
-        val config = MmkvManager.decodeServerConfig(guid) ?: return
+        val config = MmkvManager.decodeServerConfig(guid) ?: run {
+            Log.w(AppConfig.TAG, "startContextService: failed to decode server config for guid=$guid")
+            return
+        }
         if (config.configType != EConfigType.CUSTOM
             && config.configType != EConfigType.POLICYGROUP
             && !Utils.isValidUrl(config.server)
             && !Utils.isPureIpAddress(config.server.orEmpty())
-        ) return
-//        val result = V2rayConfigUtil.getV2rayConfig(context, guid)
-//        if (!result.status) return
+        ) {
+            Log.w(AppConfig.TAG, "startContextService: invalid server address '${config.server}', aborting")
+            return
+        }
 
         GlobalScope.launch(Dispatchers.Main) {
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
@@ -116,6 +124,7 @@ object V2RayServiceManager {
         } else {
             Intent(context.applicationContext, V2RayProxyOnlyService::class.java)
         }
+        Log.i(AppConfig.TAG, "startContextService: launching foreground service for guid=$guid")
         ContextCompat.startForegroundService(context, intent)
     }
 
@@ -125,16 +134,41 @@ object V2RayServiceManager {
      * Starts the V2Ray core service.
      */
     fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
+        Log.i(AppConfig.TAG, "startCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
+
+        // Исправление бага: если ядро считает себя запущенным — принудительно останавливаем его
+        // перед новым стартом. Раньше здесь был `return false`, что вызывало мгновенную остановку
+        // VPN т.к. startService() → stopAllService() при false.
         if (coreController.isRunning) {
-            return false
+            Log.w(AppConfig.TAG, "startCoreLoop: core is already running, stopping it first...")
+            try {
+                coreController.stopLoop()
+                Thread.sleep(300L)
+                Log.i(AppConfig.TAG, "startCoreLoop: old core stopped successfully")
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "startCoreLoop: failed to stop existing core", e)
+                // Продолжаем попытку запуска даже если не смогли остановить
+            }
         }
 
-        val service = getService() ?: return false
-        val guid = MmkvManager.getSelectServer() ?: return false
-        val config = MmkvManager.decodeServerConfig(guid) ?: return false
-        val result = V2rayConfigManager.getV2rayConfig(service, guid)
-        if (!result.status)
+        val service = getService() ?: run {
+            Log.e(AppConfig.TAG, "startCoreLoop: service is null, aborting")
             return false
+        }
+        val guid = MmkvManager.getSelectServer() ?: run {
+            Log.e(AppConfig.TAG, "startCoreLoop: no selected server, aborting")
+            return false
+        }
+        val config = MmkvManager.decodeServerConfig(guid) ?: run {
+            Log.e(AppConfig.TAG, "startCoreLoop: failed to decode config for guid=$guid")
+            return false
+        }
+        Log.d(AppConfig.TAG, "startCoreLoop: building config for '${config.remarks}' (guid=$guid)")
+        val result = V2rayConfigManager.getV2rayConfig(service, guid)
+        if (!result.status) {
+            Log.e(AppConfig.TAG, "startCoreLoop: V2rayConfigManager returned invalid config for guid=$guid")
+            return false
+        }
 
         try {
             val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE)
@@ -143,37 +177,39 @@ object V2RayServiceManager {
             mFilter.addAction(Intent.ACTION_USER_PRESENT)
             ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
         } catch (e: Exception) {
-            Log.d(AppConfig.TAG, "Failed to register broadcast receiver", e)
-            return false
+            Log.d(AppConfig.TAG, "startCoreLoop: Failed to register broadcast receiver (may already be registered)", e)
+            // Не возвращаем false — ресивер мог уже быть зарегистрирован (при switch server)
         }
 
         currentConfig = config
         var tunFd = vpnInterface?.fd ?: 0
+        Log.d(AppConfig.TAG, "startCoreLoop: tunFd=$tunFd, isUsingHevTun=${SettingsManager.isUsingHevTun()}")
         if (SettingsManager.isUsingHevTun()) {
             tunFd = 0
         }
 
         try {
+            Log.i(AppConfig.TAG, "startCoreLoop: calling coreController.startLoop()")
             NotificationManager.showNotification(currentConfig)
             coreController.startLoop(result.content, tunFd)
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to start Core loop", e)
+            Log.e(AppConfig.TAG, "startCoreLoop: Failed to start Core loop", e)
             return false
         }
 
         if (coreController.isRunning == false) {
+            Log.e(AppConfig.TAG, "startCoreLoop: core did not start (isRunning=false after startLoop)")
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
             NotificationManager.cancelNotification()
             return false
         }
 
+        Log.i(AppConfig.TAG, "startCoreLoop: core started successfully for '${config.remarks}'")
         try {
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
-            //NotificationManager.showNotification(currentConfig)
             NotificationManager.startSpeedNotification(currentConfig)
-
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to startup service", e)
+            Log.e(AppConfig.TAG, "startCoreLoop: Failed to send startup notifications", e)
             return false
         }
         return true
@@ -185,16 +221,24 @@ object V2RayServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
-        val service = getService() ?: return false
+        Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
+        val service = getService() ?: run {
+            Log.w(AppConfig.TAG, "stopCoreLoop: service is null")
+            return false
+        }
 
         if (coreController.isRunning) {
+            Log.i(AppConfig.TAG, "stopCoreLoop: stopping V2Ray core loop...")
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     coreController.stopLoop()
+                    Log.i(AppConfig.TAG, "stopCoreLoop: core stopped successfully")
                 } catch (e: Exception) {
-                    Log.e(AppConfig.TAG, "Failed to stop V2Ray loop", e)
+                    Log.e(AppConfig.TAG, "stopCoreLoop: Failed to stop V2Ray loop", e)
                 }
             }
+        } else {
+            Log.d(AppConfig.TAG, "stopCoreLoop: core was not running, skipping stopLoop")
         }
 
         MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
@@ -203,7 +247,7 @@ object V2RayServiceManager {
         try {
             service.unregisterReceiver(mMsgReceive)
         } catch (e: Exception) {
-            Log.d(AppConfig.TAG, "Failed to unregister broadcast receiver", e)
+            Log.d(AppConfig.TAG, "stopCoreLoop: Failed to unregister broadcast receiver (may already be unregistered)", e)
         }
 
         return true
@@ -355,11 +399,16 @@ object V2RayServiceManager {
                 }
 
                 AppConfig.MSG_STATE_SWITCH_SERVER -> {
-                    Log.i(AppConfig.TAG, "Switching Server inside Service")
+                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: switching server, coreRunning=${coreController.isRunning}")
                     val vpnInterface = serviceControl.getVpnInterface()
+                    Log.d(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: vpnInterface=${vpnInterface?.fd}")
+                    val guid = MmkvManager.getSelectServer()
+                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: target guid=$guid")
                     stopCoreLoop()
                     Thread.sleep(1000L) // Wait for core to fully release resources
-                    startCoreLoop(vpnInterface)
+                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: starting core loop after switch")
+                    val success = startCoreLoop(vpnInterface)
+                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop result=$success")
                 }
 
                 AppConfig.MSG_MEASURE_DELAY -> {

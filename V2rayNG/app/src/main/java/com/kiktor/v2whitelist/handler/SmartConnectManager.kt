@@ -250,9 +250,13 @@ object SmartConnectManager {
             MmkvManager.setSelectServer(best.first)
 
             // Если VPN уже запущен — переключаем ядро, а не пытаемся стартовать заново
-            if (V2RayServiceManager.isRunning()) {
+            val isRunning = V2RayServiceManager.isRunning()
+            Log.i(AppConfig.TAG, "smartConnect: V2RayServiceManager.isRunning()=$isRunning")
+            if (isRunning) {
+                Log.i(AppConfig.TAG, "smartConnect: VPN is running, sending SWITCH_SERVER message")
                 MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
             } else {
+                Log.i(AppConfig.TAG, "smartConnect: VPN is not running, calling startV2Ray()")
                 withContext(Dispatchers.Main) {
                     if (context is com.kiktor.v2whitelist.ui.MainActivity) {
                         context.startV2Ray()
@@ -291,13 +295,17 @@ object SmartConnectManager {
         }
 
         if (nextBest != null) {
-            Log.i(AppConfig.TAG, "Switching to next best server: ${nextBest.second.remarks}")
+            Log.i(AppConfig.TAG, "switchServer: Switching to ${nextBest.second.remarks}")
             sendStatus(context, context.getString(R.string.status_connecting_to, nextBest.second.remarks))
             MmkvManager.setSelectServer(nextBest.first)
 
-            if (V2RayServiceManager.isRunning()) {
+            val isRunning = V2RayServiceManager.isRunning()
+            Log.i(AppConfig.TAG, "switchServer: V2RayServiceManager.isRunning()=$isRunning")
+            if (isRunning) {
+                Log.i(AppConfig.TAG, "switchServer: VPN is running, sending SWITCH_SERVER message")
                 MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
             } else {
+                Log.i(AppConfig.TAG, "switchServer: VPN is not running, calling startV2Ray()")
                 withContext(Dispatchers.Main) {
                     if (context is com.kiktor.v2whitelist.ui.MainActivity) {
                         context.startV2Ray()

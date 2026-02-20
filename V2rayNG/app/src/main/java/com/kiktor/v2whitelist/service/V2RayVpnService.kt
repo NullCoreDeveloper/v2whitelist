@@ -110,14 +110,18 @@ class V2RayVpnService : VpnService(), ServiceControl {
     override fun startService() {
         val vpnInterface = mInterface
         if (vpnInterface == null) {
-            Log.d(AppConfig.TAG, "Failed to create VPN interface")
-            return
-        }
-        if (!V2RayServiceManager.startCoreLoop(vpnInterface)) {
-            Log.e(AppConfig.TAG, "Failed to start V2Ray core loop")
+            Log.e(AppConfig.TAG, "startService: VPN interface is null — VPN not established, stopping service")
+            // Останавливаем сервис явно, чтобы не оставаться в неопределённом состоянии
             stopAllService()
             return
         }
+        Log.i(AppConfig.TAG, "startService: VPN interface OK (fd=${vpnInterface.fd}), starting core loop")
+        if (!V2RayServiceManager.startCoreLoop(vpnInterface)) {
+            Log.e(AppConfig.TAG, "startService: startCoreLoop returned false, stopping service")
+            stopAllService()
+            return
+        }
+        Log.i(AppConfig.TAG, "startService: core loop started successfully")
     }
 
     override fun stopService() {
