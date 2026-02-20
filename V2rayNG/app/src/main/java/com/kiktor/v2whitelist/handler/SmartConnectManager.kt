@@ -224,7 +224,7 @@ object SmartConnectManager {
     suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
         checkAndSetupSubscription(context)
         val allServers = MmkvManager.decodeServerList()
-        val servers = filterServers(allServers)
+        val servers = filterServers(allServers).shuffled().take(20)
 
         if (servers.isEmpty()) {
             Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
@@ -253,7 +253,13 @@ object SmartConnectManager {
             if (V2RayServiceManager.isRunning()) {
                 MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
             } else {
-                V2RayServiceManager.startVService(context)
+                withContext(Dispatchers.Main) {
+                    if (context is com.kiktor.v2whitelist.ui.MainActivity) {
+                        context.startV2Ray()
+                    } else {
+                        V2RayServiceManager.startVService(context)
+                    }
+                }
             }
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
@@ -267,7 +273,7 @@ object SmartConnectManager {
     suspend fun switchServer(context: Context) = withContext(Dispatchers.IO) {
         val currentGuid = MmkvManager.getSelectServer()
         val allServers = MmkvManager.decodeServerList()
-        val servers = filterServers(allServers, excludeGuid = currentGuid)
+        val servers = filterServers(allServers, excludeGuid = currentGuid).shuffled().take(20)
 
         if (servers.isEmpty()) {
             return@withContext
@@ -292,7 +298,13 @@ object SmartConnectManager {
             if (V2RayServiceManager.isRunning()) {
                 MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
             } else {
-                V2RayServiceManager.startVService(context)
+                withContext(Dispatchers.Main) {
+                    if (context is com.kiktor.v2whitelist.ui.MainActivity) {
+                        context.startV2Ray()
+                    } else {
+                        V2RayServiceManager.startVService(context)
+                    }
+                }
             }
         }
     }
