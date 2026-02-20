@@ -194,7 +194,7 @@ object SmartConnectManager {
                             if (resultsList.any { it.third < 500 }) return@withPermit null
 
                             val randomUrl = testUrls[Random.nextInt(testUrls.size)]
-                            val config = V2rayConfigManager.getV2rayConfig(context, guid)
+                            val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
                             val delay = if (config.status) {
                                 withTimeoutOrNull(perServerTimeoutMs) {
                                     V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)

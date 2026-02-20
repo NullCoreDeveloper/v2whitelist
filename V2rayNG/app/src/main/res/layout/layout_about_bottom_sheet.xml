@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="?android:attr/colorBackground">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/btn_label_about"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="?android:attr/textColorPrimary"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Приложение представляет собой минималистичный и оптимизированный клиент. Главная цель проекта — обеспечить надежный обход ТСПУ (технических средств противодействия угрозам) и глушилок мобильной связи, предоставляя быстрый и бесперебойный доступ."
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:lineSpacingExtra="4dp"
+        android:layout_marginBottom="16dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Создатель: "
+            android:textSize="14sp"
+            android:textColor="?android:attr/textColorSecondary" />
+            
+        <TextView
+            android:id="@+id/tv_developer_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="kiktor12358"
+            android:textSize="14sp"
+            android:textColor="?android:attr/textColorLink"
+            android:textStyle="bold"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+</LinearLayout>

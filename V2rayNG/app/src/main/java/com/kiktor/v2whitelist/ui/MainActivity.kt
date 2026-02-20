@@ -70,7 +70,16 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
-        binding.btnAboutQuick.setOnClickListener { startActivity(Intent(this, AboutActivity::class.java)) }
+        binding.btnAboutQuick.setOnClickListener {
+            val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+            val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
+            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_developer_link)?.setOnClickListener {
+                com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/kiktor12358/v2whitelist")
+                bottomSheetDialog.dismiss()
+            }
+            bottomSheetDialog.setContentView(bottomSheetView)
+            bottomSheetDialog.show()
+        }
 
         setupViewModel()
         mainViewModel.reloadServerList()
