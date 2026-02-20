@@ -96,11 +96,16 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(AppConfig.TAG, "onStartCommand: VPN service starting")
         NotificationManager.showNotification(null)
-        setupVpnService()
+
+        if (!setupVpnService()) {
+            Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, service will stop")
+            return START_NOT_STICKY
+        }
+
         startService()
         return START_STICKY
-        //return super.onStartCommand(intent, flags, startId)
     }
 
     override fun getService(): Service {
@@ -142,22 +147,26 @@ class V2RayVpnService : VpnService(), ServiceControl {
     /**
      * Sets up the VPN service.
      * Prepares the VPN and configures it if preparation is successful.
+     * @return True if setup was successful, false otherwise.
      */
-    private fun setupVpnService() {
+    private fun setupVpnService(): Boolean {
         val prepare = prepare(this)
         if (prepare != null) {
-            Log.d(AppConfig.TAG, "VPN preparation failed")
+            Log.e(AppConfig.TAG, "setupVpnService: VPN prepare() returned non-null (permission not granted), stopping")
             stopSelf()
-            return
+            return false
         }
+        Log.i(AppConfig.TAG, "setupVpnService: VPN permission OK, configuring interface...")
 
         if (configureVpnService() != true) {
-            Log.e(AppConfig.TAG, "VPN configuration failed")
+            Log.e(AppConfig.TAG, "setupVpnService: configureVpnService failed, stopping")
             stopSelf()
-            return
+            return false
         }
+        Log.i(AppConfig.TAG, "setupVpnService: VPN interface configured, mInterface=${mInterface?.fd}")
 
         runTun2socks()
+        return true
     }
 
     /**
@@ -185,11 +194,17 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
         // Create a new interface using the builder and save the parameters
         try {
-            mInterface = builder.establish()!!
+            val vpnInterface = builder.establish()
+            if (vpnInterface == null) {
+                Log.e(AppConfig.TAG, "configureVpnService: builder.establish() returned null (VPN revoked?)")
+                return false
+            }
+            mInterface = vpnInterface
             isRunning = true
+            Log.i(AppConfig.TAG, "configureVpnService: VPN interface established, fd=${vpnInterface.fd}")
             return true
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to establish VPN interface", e)
+            Log.e(AppConfig.TAG, "configureVpnService: Failed to establish VPN interface", e)
             stopAllService()
         }
         return false
