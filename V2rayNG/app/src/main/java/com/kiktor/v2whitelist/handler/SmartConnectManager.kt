@@ -266,9 +266,9 @@ object SmartConnectManager {
     private fun startFailoverTimer(context: Context) {
         failoverJob?.cancel()
         failoverJob = CoroutineScope(Dispatchers.Main).launch {
-            delay(8000)
+            delay(15000)
             if (!V2RayServiceManager.isRunning()) {
-                Log.w(AppConfig.TAG, "Connection failed within 8s, triggering failover")
+                Log.w(AppConfig.TAG, "Connection failed within 15s, triggering failover")
                 switchServer(context)
             }
         }

@@ -444,7 +444,7 @@
     <string name="btn_label_start">Start</string>
     <string name="btn_label_stop">Stop</string>
     <string name="btn_label_cancel">Отмена</string>
-    <string name="btn_label_switch">Сменить</string>
+    <string name="btn_label_switch">Следующий профиль</string>
     <string name="btn_label_settings">Настройки</string>
     <string name="btn_label_logs">Логи</string>
     <string name="btn_label_update">Обновить</string>

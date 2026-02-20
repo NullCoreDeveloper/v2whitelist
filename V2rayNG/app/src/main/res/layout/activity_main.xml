@@ -130,25 +130,29 @@
                         app:trackThickness="4dp" />
                 </FrameLayout>
 
+                <!-- Switch Server Button (Visible only when connected) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_switch_server"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp"
+                    android:text="@string/btn_label_switch"
+                    android:visibility="gone"
+                    app:cornerRadius="12dp"
+                    app:icon="@drawable/ic_check_update_24dp"
+                    app:iconGravity="textStart" />
+
                 <!-- Actions Grid -->
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
                     android:alignmentMode="alignMargins"
-                    android:columnCount="3"
-                    android:rowCount="2">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_switch_server"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:layout_margin="2dp"
-                        android:text="@string/btn_label_switch"
-                        android:textSize="11sp"
-                        app:icon="@drawable/ic_check_update_24dp" />
+                    android:columnCount="4"
+                    android:rowCount="1">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_settings_quick"
