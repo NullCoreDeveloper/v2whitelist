@@ -382,10 +382,13 @@ object SettingsManager {
 
     /**
      * Check if HEV TUN is being used.
+     * Default: false — используем встроенный Xray/V2Ray tun вместо hev-socks5-tunnel.
+     * hev-socks5-tunnel — нативная JNI библиотека, которая может вызывать SIGSEGV
+     * и убивать процесс VPN сервиса.
      * @return True if HEV TUN is used, false otherwise.
      */
     fun isUsingHevTun(): Boolean {
-        return MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_HEV_TUNNEL, true)
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_HEV_TUNNEL, false)
     }
 
     /**
@@ -416,6 +419,10 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_MUX_XUDP_CONCURRENCY, "8")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_LENGTH, "50-100")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
+
+        // Принудительно отключаем hev-socks5-tunnel: нативная JNI библиотека вызывает SIGSEGV
+        // и убивает процесс VPN. Используем встроенный Xray tun вместо этого.
+        MmkvManager.encodeSettings(AppConfig.PREF_USE_HEV_TUNNEL, false)
     }
 
     private fun ensureDefaultValue(key: String, default: String) {
