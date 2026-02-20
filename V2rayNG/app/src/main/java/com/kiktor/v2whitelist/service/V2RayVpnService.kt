@@ -140,7 +140,18 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 stopAllService()
                 return
             }
-            Log.i(AppConfig.TAG, "startService: core loop started successfully")
+            Log.i(AppConfig.TAG, "startService: core loop started, now starting tun2socks...")
+
+            // tun2socks запускается DOPO старта V2Ray core, чтобы SOCKS5 порт уже слушал
+            try {
+                runTun2socks()
+                Log.i(AppConfig.TAG, "startService: tun2socks started successfully")
+            } catch (t: Throwable) {
+                Log.e(AppConfig.TAG, "startService: runTun2socks() crashed", t)
+                // Не останавливаем сервис: V2Ray core уже работает, tun2socks опционален
+            }
+
+            Log.i(AppConfig.TAG, "startService: fully started")
         } catch (t: Throwable) {
             Log.e(AppConfig.TAG, "startService: FATAL exception", t)
             stopAllService()
@@ -183,7 +194,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
         }
         Log.i(AppConfig.TAG, "setupVpnService: VPN interface configured, mInterface=${mInterface?.fd}")
 
-        runTun2socks()
+        // ВАЖНО: runTun2socks() теперь вызывается в startService() ПОСЛЕ startCoreLoop,
+        // чтобы V2Ray core был запущен и SOCKS5 порт слушал к моменту старта tun2socks.
         return true
     }
 
