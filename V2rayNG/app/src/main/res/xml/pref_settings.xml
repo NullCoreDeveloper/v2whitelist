@@ -252,6 +252,15 @@
             android:key="pref_auto_update_interval"
             android:summary="1440"
             android:title="@string/title_pref_auto_update_interval" />
+        <CheckBoxPreference
+            android:key="pref_use_builtin_sub"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_use_builtin_sub"
+            android:title="@string/title_pref_use_builtin_sub" />
+        <Preference
+            android:key="pref_manage_custom_subs"
+            android:summary="@string/summary_pref_manage_subs"
+            android:title="@string/title_pref_manage_subs" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_advanced">

@@ -112,6 +112,12 @@ class SettingsActivity : BaseActivity() {
                 updateHevTunSettings(newValue as Boolean)
                 true
             }
+
+            // Управление кастомными подписками
+            findPreference<androidx.preference.Preference>("pref_manage_custom_subs")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), CustomSubscriptionsActivity::class.java))
+                true
+            }
         }
 
         private fun initPreferenceSummaries() {
