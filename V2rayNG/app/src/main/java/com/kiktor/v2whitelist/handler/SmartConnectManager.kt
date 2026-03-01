@@ -86,64 +86,151 @@ object SmartConnectManager {
 
     /**
      * Ensures the hardcoded subscription is present and updated.
+     * Also sets up custom subscriptions.
      */
     suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
-        val subscriptions = MmkvManager.decodeSubscriptions()
-        val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
+        val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
 
-        // Разрешаем URL через матрёшку
-        val realUrl = resolveSubscriptionUrl()
+        if (useBuiltin) {
+            val subscriptions = MmkvManager.decodeSubscriptions()
+            val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
 
-        if (existingSub == null) {
-            Log.d(AppConfig.TAG, "Adding hardcoded subscription")
-            val subItem = SubscriptionItem().apply {
-                remarks = SUBSCRIPTION_REMARKS
-                url = realUrl
-                enabled = true
-            }
-            MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
-            sendStatus(context, context.getString(R.string.status_updating_subscription))
-            AngConfigManager.updateConfigViaSub(SubscriptionCache(SUBSCRIPTION_ID, subItem))
-        } else {
-            // Обновляем URL на случай если он изменился в whitelist.txt
-            val subItem = existingSub.subscription
-            if (subItem.url != realUrl) {
-                Log.d(AppConfig.TAG, "Subscription URL changed, updating: $realUrl")
-                subItem.url = realUrl
+            // Разрешаем URL через матрёшку
+            val realUrl = resolveSubscriptionUrl()
+
+            if (existingSub == null) {
+                Log.d(AppConfig.TAG, "Adding hardcoded subscription")
+                val subItem = SubscriptionItem().apply {
+                    remarks = SUBSCRIPTION_REMARKS
+                    url = realUrl
+                    enabled = true
+                }
                 MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
-            }
-
-            val lastUpdated = subItem.lastUpdated
-            if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
                 sendStatus(context, context.getString(R.string.status_updating_subscription))
-                AngConfigManager.updateConfigViaSub(existingSub)
+                AngConfigManager.updateConfigViaSub(SubscriptionCache(SUBSCRIPTION_ID, subItem))
+            } else {
+                // Обновляем URL на случай если он изменился в whitelist.txt
+                val subItem = existingSub.subscription
+                if (subItem.url != realUrl) {
+                    Log.d(AppConfig.TAG, "Subscription URL changed, updating: $realUrl")
+                    subItem.url = realUrl
+                    MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
+                }
+
+                val lastUpdated = subItem.lastUpdated
+                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
+                    Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
+                    sendStatus(context, context.getString(R.string.status_updating_subscription))
+                    AngConfigManager.updateConfigViaSub(existingSub)
+                }
+            }
+        }
+
+        // Обработка кастомных подписок
+        setupCustomSubscriptions(context)
+    }
+
+    /**
+     * Настраивает кастомные подписки из MMKV.
+     */
+    private suspend fun setupCustomSubscriptions(context: Context) {
+        val customSubs = loadCustomSubs()
+        for (sub in customSubs.filter { it.enabled }) {
+            val subId = "custom_sub_${sub.id}"
+            val subscriptions = MmkvManager.decodeSubscriptions()
+            val existing = subscriptions.find { it.guid == subId }
+
+            if (existing == null) {
+                val subItem = SubscriptionItem().apply {
+                    remarks = sub.name
+                    url = sub.url
+                    enabled = true
+                }
+                MmkvManager.encodeSubscription(subId, subItem)
+                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
+            } else {
+                val subItem = existing.subscription
+                if (subItem.url != sub.url) {
+                    subItem.url = sub.url
+                    subItem.remarks = sub.name
+                    MmkvManager.encodeSubscription(subId, subItem)
+                }
+                val lastUpdated = subItem.lastUpdated
+                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
+                    AngConfigManager.updateConfigViaSub(existing)
+                }
             }
         }
     }
+
+    /**
+     * Загружает кастомные подписки из MMKV.
+     */
+    private fun loadCustomSubs(): List<CustomSubData> {
+        val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Дата-класс для JSON-десериализации кастомных подписок */
+    data class CustomSubData(
+        val id: String = "",
+        val name: String = "",
+        val url: String = "",
+        val enabled: Boolean = true
+    )
 
     private fun sendStatus(context: Context, status: String) {
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
     }
 
     /**
-     * Force updates the subscription.
+     * Force updates all active subscriptions.
      */
     suspend fun updateSubscription(context: Context) = withContext(Dispatchers.IO) {
-        val subscriptions = MmkvManager.decodeSubscriptions()
-        val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
-        if (existingSub != null) {
-            // Обновляем URL перед загрузкой
-            val realUrl = resolveSubscriptionUrl()
-            val subItem = existingSub.subscription
-            if (subItem.url != realUrl) {
-                subItem.url = realUrl
-                MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
+        val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
+
+        if (useBuiltin) {
+            val subscriptions = MmkvManager.decodeSubscriptions()
+            val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
+            if (existingSub != null) {
+                // Обновляем URL перед загрузкой
+                val realUrl = resolveSubscriptionUrl()
+                val subItem = existingSub.subscription
+                if (subItem.url != realUrl) {
+                    subItem.url = realUrl
+                    MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
+                }
+                Log.d(AppConfig.TAG, "Manually updating builtin subscription")
+                AngConfigManager.updateConfigViaSub(existingSub)
+            } else {
+                checkAndSetupSubscription(context)
             }
-            Log.d(AppConfig.TAG, "Manually updating subscription")
-            AngConfigManager.updateConfigViaSub(existingSub)
-        } else {
-            checkAndSetupSubscription(context)
+        }
+
+        // Обновляем кастомные подписки
+        val customSubs = loadCustomSubs()
+        for (sub in customSubs.filter { it.enabled }) {
+            val subId = "custom_sub_${sub.id}"
+            val subscriptions = MmkvManager.decodeSubscriptions()
+            val existing = subscriptions.find { it.guid == subId }
+            if (existing != null) {
+                Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
+                AngConfigManager.updateConfigViaSub(existing)
+            } else {
+                // Создаём если нет
+                val subItem = SubscriptionItem().apply {
+                    remarks = sub.name
+                    url = sub.url
+                    enabled = true
+                }
+                MmkvManager.encodeSubscription(subId, subItem)
+                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
+            }
         }
     }
 
