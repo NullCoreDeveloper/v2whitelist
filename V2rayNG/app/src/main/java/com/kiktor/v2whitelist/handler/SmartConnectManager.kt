@@ -245,6 +245,73 @@ object SmartConnectManager {
     }
 
     /**
+     * Проверяет профиль (бета): пингует google.com + cloudflare.com и замеряет скорость.
+     * Возвращает true если профиль прошёл проверку.
+     */
+    private suspend fun verifyProfile(context: Context, guid: String): Boolean {
+        val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
+        if (!config.status) {
+            Log.w(AppConfig.TAG, "verifyProfile: failed to generate speedtest config for $guid")
+            return false
+        }
+
+        sendStatus(context, context.getString(R.string.status_verifying_profile))
+
+        // Пинг google.com
+        val pingGoogle = withTimeoutOrNull(5000L) {
+            V2RayNativeManager.measureOutboundDelay(config.content, "https://www.google.com/generate_204")
+        } ?: -1L
+        Log.i(AppConfig.TAG, "verifyProfile: ping google.com = ${pingGoogle}ms")
+
+        if (pingGoogle <= 0) {
+            Log.w(AppConfig.TAG, "verifyProfile: google.com ping failed")
+            return false
+        }
+
+        // Пинг cloudflare.com
+        val pingCf = withTimeoutOrNull(5000L) {
+            V2RayNativeManager.measureOutboundDelay(config.content, "https://www.cloudflare.com/cdn-cgi/trace")
+        } ?: -1L
+        Log.i(AppConfig.TAG, "verifyProfile: ping cloudflare.com = ${pingCf}ms")
+
+        if (pingCf <= 0) {
+            Log.w(AppConfig.TAG, "verifyProfile: cloudflare.com ping failed")
+            return false
+        }
+
+        // Speedtest: загрузка 100KB файла через v2ray прокси
+        try {
+            val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
+            if (speedtestConfig.status) {
+                val startTime = System.currentTimeMillis()
+                val speedDelay = withTimeoutOrNull(10000L) {
+                    V2RayNativeManager.measureOutboundDelay(
+                        speedtestConfig.content,
+                        "https://speed.cloudflare.com/__down?bytes=102400"
+                    )
+                } ?: -1L
+                val elapsed = System.currentTimeMillis() - startTime
+
+                if (speedDelay <= 0) {
+                    Log.w(AppConfig.TAG, "verifyProfile: speedtest failed")
+                    return false
+                }
+
+                // Приблизительная скорость (100KB / время в секундах)
+                val speedKBs = if (elapsed > 0) 100.0 / (elapsed / 1000.0) else 0.0
+                Log.i(AppConfig.TAG, "verifyProfile: speedtest ${speedKBs} KB/s (${elapsed}ms)")
+                sendStatus(context, context.getString(R.string.status_speed_test, speedKBs.toFloat()))
+            }
+        } catch (e: Exception) {
+            Log.w(AppConfig.TAG, "verifyProfile: speedtest exception: ${e.message}")
+            // Speedtest fail не блокирует — пинги прошли
+        }
+
+        sendStatus(context, context.getString(R.string.status_profile_check_passed))
+        return true
+    }
+
+    /**
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
      */
     suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
@@ -262,7 +329,22 @@ object SmartConnectManager {
         sendStatus(context, context.getString(R.string.status_testing_servers))
 
         val results = testServers(context, servers)
-        var best = results.firstOrNull { it.third < Long.MAX_VALUE }
+        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, false)
+
+        // Если включена проверка профиля — проверяем кандидатов по порядку
+        var best: Triple<String, ProfileItem, Long>? = null
+        if (profileCheckEnabled) {
+            for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+                if (verifyProfile(context, candidate.first)) {
+                    best = candidate
+                    break
+                } else {
+                    sendStatus(context, context.getString(R.string.status_profile_check_failed))
+                }
+            }
+        } else {
+            best = results.firstOrNull { it.third < Long.MAX_VALUE }
+        }
 
         // Fallback: if no server found in time, just pick the first one from list
         if (best == null && servers.isNotEmpty()) {

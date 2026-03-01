@@ -257,6 +257,12 @@
     <PreferenceCategory android:title="@string/title_advanced">
 
         <CheckBoxPreference
+            android:key="pref_profile_check_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_profile_check"
+            android:title="@string/title_pref_profile_check" />
+
+        <CheckBoxPreference
             android:key="pref_is_booted"
             android:summary="@string/summary_pref_is_booted"
             android:title="@string/title_pref_is_booted" />
