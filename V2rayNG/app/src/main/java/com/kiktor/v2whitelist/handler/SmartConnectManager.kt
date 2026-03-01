@@ -14,6 +14,7 @@ import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.ui.LocationFilterActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -147,24 +148,49 @@ object SmartConnectManager {
     }
 
     /**
-     * Фильтрует серверы: убирает российские и не поддерживаемые.
+     * Фильтрует серверы: убирает не поддерживаемые и применяет фильтр локаций из настроек.
      */
     private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+        // Загружаем настройки фильтра
+        val filterMode = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_LOCATION_FILTER_MODE,
+            AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+        ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+
+        val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
+            ?: LocationFilterActivity.getDefaultFilterSet()
+
         return allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
-            if (profile?.subscriptionId == SUBSCRIPTION_ID && (excludeGuid == null || guid != excludeGuid)) {
+            if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
                 guid to profile
             } else null
         }.filter { it.second.configType != EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
+                // Фильтр российских хостеров (всегда активен)
                 !remarks.contains("timeweb") &&
                 !remarks.contains("selectel") &&
                 !remarks.contains("yandex") &&
                 !remarks.contains("aeza") &&
                 !remarks.contains("cloud.ru") &&
-                !remarks.contains("vk") &&
-                !remarks.contains("🇷🇺")
+                !remarks.contains("vk")
+            }
+            .filter {
+                // Фильтр по локациям (эмодзи-флаги)
+                if (filterSet.isEmpty()) return@filter true
+                val emoji = LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+                when (filterMode) {
+                    AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
+                        // Режим исключения: если флаг в наборе — исключаем
+                        emoji == null || !filterSet.contains(emoji)
+                    }
+                    AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
+                        // Режим белого списка: если флаг в наборе — разрешаем
+                        emoji != null && filterSet.contains(emoji)
+                    }
+                    else -> true
+                }
             }
     }
 

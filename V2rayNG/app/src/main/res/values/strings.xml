@@ -451,4 +451,37 @@
     <string name="btn_label_about">О проекте</string>
     <string name="title_check_update">Проверить обновления</string>
     <string name="tv_server_name">Сервер: %s</string>
+
+    <!-- Location Filter -->
+    <string name="title_location_filter">Фильтр локаций</string>
+    <string name="btn_label_filter">Фильтр</string>
+    <string name="location_filter_mode_title">Режим фильтра</string>
+    <string name="location_filter_mode_exclude">Исключение</string>
+    <string name="location_filter_mode_whitelist">Белый список</string>
+    <string name="location_filter_mode_exclude_hint">Выбранные локации НЕ будут использоваться</string>
+    <string name="location_filter_mode_whitelist_hint">Только выбранные локации будут использоваться</string>
+    <string name="location_filter_locations_title">Локации</string>
+    <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
+    <string name="location_filter_server_count">Серверов: %d</string>
+
+    <!-- Profile Check (Beta) -->
+    <string name="title_pref_profile_check">Проверка профиля (бета)</string>
+    <string name="summary_pref_profile_check">Проверяет пинг и скорость профиля перед подключением</string>
+    <string name="status_verifying_profile">Проверяем профиль\u2026</string>
+    <string name="status_profile_check_failed">Профиль не прошёл проверку, пробуем другой\u2026</string>
+    <string name="status_profile_check_passed">Профиль прошёл проверку ✔</string>
+    <string name="status_speed_test">Тест скорости: %.1f KB/s</string>
+
+    <!-- Custom Subscriptions -->
+    <string name="title_custom_subscriptions">Управление подписками</string>
+    <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>
+    <string name="summary_pref_use_builtin_sub">Встроенная подписка v2Whitelist Official</string>
+    <string name="title_pref_manage_subs">Управление подписками</string>
+    <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
+    <string name="custom_sub_add">Добавить подписку</string>
+    <string name="custom_sub_name_hint">Название подписки</string>
+    <string name="custom_sub_url_hint">URL подписки</string>
+    <string name="custom_sub_empty">Нет пользовательских подписок</string>
+    <string name="custom_sub_added">Подписка добавлена</string>
+    <string name="custom_sub_removed">Подписка удалена</string>
 </resources>
