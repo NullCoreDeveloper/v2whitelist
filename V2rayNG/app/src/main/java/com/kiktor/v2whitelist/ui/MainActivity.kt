@@ -75,7 +75,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
             bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_developer_link)?.setOnClickListener {
-                com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/kiktor12358/v2whitelist")
+                com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/NullCoreDeveloper/v2whitelist")
                 bottomSheetDialog.dismiss()
             }
             bottomSheetDialog.setContentView(bottomSheetView)
