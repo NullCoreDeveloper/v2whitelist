@@ -71,6 +71,19 @@ object AppConfig {
     const val PREF_AUTO_REMOVE_INVALID_AFTER_TEST = "pref_auto_remove_invalid_after_test"
     const val PREF_AUTO_SORT_AFTER_TEST = "pref_auto_sort_after_test"
 
+    /** Location filter settings */
+    const val PREF_LOCATION_FILTER_MODE = "pref_location_filter_mode" // "exclude" or "whitelist"
+    const val PREF_LOCATION_FILTER_SET = "pref_location_filter_set"  // Set<String> of emoji flags
+    const val LOCATION_FILTER_MODE_EXCLUDE = "exclude"
+    const val LOCATION_FILTER_MODE_WHITELIST = "whitelist"
+
+    /** Profile verification (beta) */
+    const val PREF_PROFILE_CHECK_ENABLED = "pref_profile_check_enabled"
+
+    /** Custom subscriptions */
+    const val PREF_USE_BUILTIN_SUB = "pref_use_builtin_sub"
+    const val PREF_CUSTOM_SUB_URLS = "pref_custom_sub_urls" // JSON array of custom sub configs
+
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
     const val CACHE_KEYWORD_FILTER = "cache_keyword_filter"

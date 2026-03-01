@@ -151,7 +151,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
                     android:alignmentMode="alignMargins"
-                    android:columnCount="4"
+                    android:columnCount="5"
                     android:rowCount="1">
 
                     <com.google.android.material.button.MaterialButton
@@ -197,6 +197,17 @@
                         android:text="@string/btn_label_about"
                         android:textSize="11sp"
                         app:icon="@drawable/ic_about_24dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_filter_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="2dp"
+                        android:text="@string/btn_label_filter"
+                        android:textSize="11sp"
+                        app:icon="@drawable/ic_filter_24dp" />
 
                 </GridLayout>
 

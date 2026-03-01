@@ -70,6 +70,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
+        binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)

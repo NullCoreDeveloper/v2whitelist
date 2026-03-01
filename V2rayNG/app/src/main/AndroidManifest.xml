@@ -148,6 +148,12 @@
         <activity
             android:name=".ui.BackupActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.LocationFilterActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.CustomSubscriptionsActivity"
+            android:exported="false" />
 
 
         <service
