@@ -36,7 +36,7 @@ object SmartConnectManager {
     private val testSemaphore = Semaphore(48)
 
     // Ссылка-матрёшка: сначала загружаем этот файл, в нём — реальный URL подписки
-    const val WHITELIST_URL = "https://raw.githubusercontent.com/kiktor12358/v2whitelist/master/whitelist.txt"
+    const val WHITELIST_URL = "https://raw.githubusercontent.com/NullCoreDeveloper/v2whitelist/master/whitelist.txt"
     // Fallback если whitelist.txt недоступен
     const val FALLBACK_SUBSCRIPTION_URL = "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt"
 
