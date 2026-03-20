@@ -87,10 +87,12 @@ class RealPingWorkerService(
         var coreController: CoreController? = null
         try {
             coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                override fun startup(): Long = 0
+                override fun shutdown(): Long = 0
                 override fun onEmitStatus(p0: Long, p1: String?): Long = 0
             })
 
-            coreController.startLoop(configResult.content)
+            coreController.startLoop(configResult.content, 0)
             
             // Give it a bit of time to start
             Thread.sleep(300)
