@@ -15,6 +15,10 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.net.ServerSocket
+import libv2ray.CoreCallbackHandler
+import libv2ray.CoreController
+import com.kiktor.v2whitelist.handler.SpeedtestManager
 
 /**
  * Worker that runs a batch of real-ping tests independently.
@@ -27,7 +31,7 @@ class RealPingWorkerService(
 ) {
     private val job = SupervisorJob()
     private val cpu = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
-    private val dispatcher = Executors.newFixedThreadPool(cpu * 4).asCoroutineDispatcher()
+    private val dispatcher = Executors.newFixedThreadPool(cpu).asCoroutineDispatcher()
     private val scope = CoroutineScope(job + dispatcher + CoroutineName("RealPingBatchWorker"))
 
     private val runningCount = AtomicInteger(0)
@@ -74,12 +78,40 @@ class RealPingWorkerService(
     }
 
     private fun startRealPing(guid: String): Long {
-        val retFailure = -1L
-        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
-        if (!configResult.status) {
-            return retFailure
+        val port = getFreePort()
+        if (port == -1) return -1L
+
+        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
+        if (!configResult.status) return -1L
+
+        var coreController: CoreController? = null
+        try {
+            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+            })
+
+            coreController.startLoop(configResult.content)
+            
+            // Give it a bit of time to start
+            Thread.sleep(300)
+            
+            val (delay, _) = SpeedtestManager.testConnection(context, port)
+            return delay
+        } catch (e: Exception) {
+            return -1L
+        } finally {
+            try {
+                coreController?.stopLoop()
+            } catch (_: Exception) {}
         }
-        return V2RayNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+    }
+
+    private fun getFreePort(): Int {
+        return try {
+            ServerSocket(0).use { it.localPort }
+        } catch (e: Exception) {
+            -1
+        }
     }
 }
 

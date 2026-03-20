@@ -65,16 +65,15 @@ object V2rayConfigManager {
      * @param guid The unique identifier for the V2ray configuration.
      * @return A ConfigResult object containing the configuration details or indicating failure.
      */
-    fun getV2rayConfig4Speedtest(context: Context, guid: String): ConfigResult {
+    fun getV2rayConfig4Speedtest(context: Context, guid: String, port: Int = 0): ConfigResult {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ConfigResult(false)
             return if (config.configType == EConfigType.CUSTOM) {
-                getV2rayCustomConfig(context, guid, config)
+                getV2rayCustomConfig(context, guid, config, port)
             } else if (config.configType == EConfigType.POLICYGROUP) {
-                // The number of policy groups will not be very large, so no special handling is needed.
-                getV2rayGroupConfig(context, guid, config)
+                getV2rayGroupConfig(context, guid, config, port)
             } else {
-                getV2rayNormalConfig4Speedtest(context, guid, config)
+                getV2rayNormalConfig4Speedtest(context, guid, config, port)
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to get V2ray config for speedtest", e)
@@ -89,8 +88,41 @@ object V2rayConfigManager {
      * @param config The profile item containing the configuration details.
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
-    private fun getV2rayCustomConfig(context: Context, guid: String, config: ProfileItem): ConfigResult {
+    private fun getV2rayCustomConfig(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
         val raw = MmkvManager.decodeServerRaw(guid) ?: return ConfigResult(false)
+        
+        // If it's for speedtest (port > 0), we need to inject our SOCKS inbound
+        if (port > 0) {
+            val element = JsonUtil.parseString(raw) ?: return ConfigResult(true, guid, raw)
+            if (element.isJsonObject) {
+                val json = element.asJsonObject
+                val inboundsJson = JsonArray()
+                val inbound = V2rayConfig.InboundBean(
+                    protocol = "socks",
+                    port = port,
+                    listen = AppConfig.LOOPBACK,
+                    tag = "socks-in",
+                    settings = V2rayConfig.InboundBean.InSettingsBean(
+                        auth = "noauth",
+                        udp = true
+                    ),
+                    sniffing = V2rayConfig.InboundBean.SniffingBean(
+                        enabled = true,
+                        destOverride = arrayListOf("http", "tls")
+                    )
+                )
+                inboundsJson.add(JsonUtil.parseString(JsonUtil.toJson(inbound)))
+                json.add("inbounds", inboundsJson)
+
+                // Also clear routing/dns for speedtest to avoid interference
+                json.remove("routing")
+                json.remove("dns")
+                json.remove("fakedns")
+
+                return ConfigResult(true, guid, JsonUtil.toJsonPretty(json) ?: raw)
+            }
+        }
+
         val result = ConfigResult(true, guid, raw)
         if (!needTun()) {
             return result
@@ -136,7 +168,7 @@ object V2rayConfigManager {
      * @param config The profile item containing the configuration details.
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
-    private fun getV2rayGroupConfig(context: Context, guid: String, config: ProfileItem): ConfigResult {
+    private fun getV2rayGroupConfig(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
         val result = ConfigResult(false)
 
         val serverList = MmkvManager.decodeServerList()
@@ -164,6 +196,29 @@ object V2rayConfigManager {
             }
 
         val v2rayConfig = getV2rayMultipleConfig(context, config, configList) ?: return result
+
+        if (port > 0) {
+            v2rayConfig.inbounds.clear()
+            v2rayConfig.routing.rules.clear()
+            v2rayConfig.dns = null
+            v2rayConfig.fakedns = null
+            
+            val inbound = V2rayConfig.InboundBean(
+                protocol = "socks",
+                port = port,
+                listen = AppConfig.LOOPBACK,
+                tag = "socks-in",
+                settings = V2rayConfig.InboundBean.InSettingsBean(
+                    auth = "noauth",
+                    udp = true
+                ),
+                sniffing = V2rayConfig.InboundBean.SniffingBean(
+                    enabled = true,
+                    destOverride = arrayListOf("http", "tls")
+                )
+            )
+            v2rayConfig.inbounds.add(inbound)
+        }
 
         result.status = true
         result.content = JsonUtil.toJsonPretty(v2rayConfig) ?: ""
@@ -289,7 +344,7 @@ object V2rayConfigManager {
      * @param config The profile item containing the configuration details.
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
-    private fun getV2rayNormalConfig4Speedtest(context: Context, guid: String, config: ProfileItem): ConfigResult {
+    private fun getV2rayNormalConfig4Speedtest(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
         val result = ConfigResult(false)
 
         val address = config.server ?: return result
@@ -312,6 +367,24 @@ object V2rayConfigManager {
         v2rayConfig.fakedns = null
         v2rayConfig.stats = null
         v2rayConfig.policy = null
+
+        if (port > 0) {
+            val inbound = V2rayConfig.InboundBean(
+                protocol = "socks",
+                port = port,
+                listen = AppConfig.LOOPBACK,
+                tag = "socks-in",
+                settings = V2rayConfig.InboundBean.InSettingsBean(
+                    auth = "noauth",
+                    udp = true
+                ),
+                sniffing = V2rayConfig.InboundBean.SniffingBean(
+                    enabled = true,
+                    destOverride = arrayListOf("http", "tls")
+                )
+            )
+            v2rayConfig.inbounds.add(inbound)
+        }
 
         v2rayConfig.outbounds.forEach { key ->
             key.mux = null
