@@ -444,39 +444,48 @@ object SmartConnectManager {
 
         checkAndSetupSubscription(context)
         val allServers = MmkvManager.decodeServerList()
-        val servers = filterServers(allServers).shuffled().take(20)
+        val filteredServers = filterServers(allServers).shuffled()
 
-        if (servers.isEmpty()) {
+        if (filteredServers.isEmpty()) {
             Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
             sendStatus(context, context.getString(R.string.status_no_servers))
             return@withContext
         }
 
-        Log.i(AppConfig.TAG, "Starting Smart Connect for ${servers.size} servers (6s limit)")
-        sendStatus(context, context.getString(R.string.status_testing_servers))
-
-        val results = testServers(context, servers)
+        val chunkedServers = filteredServers.chunked(20)
+        var best: Triple<String, ProfileItem, Long>? = null
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
-        // Если включена проверка профиля — проверяем кандидатов по порядку
-        var best: Triple<String, ProfileItem, Long>? = null
-        if (profileCheckEnabled) {
-            for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                if (verifyProfile(context, candidate.first)) {
-                    best = candidate
-                    break
-                } else {
-                    sendStatus(context, context.getString(R.string.status_profile_check_failed))
+        for ((index, chunk) in chunkedServers.withIndex()) {
+            Log.i(AppConfig.TAG, "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+            sendStatus(context, context.getString(R.string.status_testing_servers))
+
+            val results = testServers(context, chunk)
+
+            // Если включена проверка профиля — проверяем кандидатов по порядку
+            if (profileCheckEnabled) {
+                for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+                    if (verifyProfile(context, candidate.first)) {
+                        best = candidate
+                        break
+                    } else {
+                        sendStatus(context, context.getString(R.string.status_profile_check_failed))
+                    }
                 }
+            } else {
+                best = results.firstOrNull { it.third < Long.MAX_VALUE }
             }
-        } else {
-            best = results.firstOrNull { it.third < Long.MAX_VALUE }
+
+            if (best != null) {
+                break // Found a working server, stop testing other chunks
+            }
+            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
         }
 
         // Fallback: if no server found in time, just pick the first one from list
-        if (best == null && servers.isNotEmpty()) {
+        if (best == null && filteredServers.isNotEmpty()) {
             Log.w(AppConfig.TAG, "No servers found within timeout, picking first available")
-            best = Triple(servers[0].first, servers[0].second, Long.MAX_VALUE)
+            best = Triple(filteredServers[0].first, filteredServers[0].second, Long.MAX_VALUE)
         }
 
         if (best != null) {
@@ -516,21 +525,43 @@ object SmartConnectManager {
     suspend fun switchServer(context: Context) = withContext(Dispatchers.IO) {
         val currentGuid = MmkvManager.getSelectServer()
         val allServers = MmkvManager.decodeServerList()
-        val servers = filterServers(allServers, excludeGuid = currentGuid).shuffled().take(20)
+        val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
 
-        if (servers.isEmpty()) {
+        if (filteredServers.isEmpty()) {
             return@withContext
         }
 
-        Log.i(AppConfig.TAG, "Switching server: testing ${servers.size} alternatives (6s limit)")
         sendStatus(context, context.getString(R.string.status_switching_server))
-        sendStatus(context, context.getString(R.string.status_testing_servers))
 
-        val results = testServers(context, servers)
+        val chunkedServers = filteredServers.chunked(20)
+        var nextBest: Triple<String, ProfileItem, Long>? = null
+        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
-        var nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
-        if (nextBest == null && servers.isNotEmpty()) {
-            nextBest = Triple(servers[Random.nextInt(servers.size)].first, servers[0].second, Long.MAX_VALUE)
+        for ((index, chunk) in chunkedServers.withIndex()) {
+            Log.i(AppConfig.TAG, "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+            sendStatus(context, context.getString(R.string.status_testing_servers))
+
+            val results = testServers(context, chunk)
+
+            if (profileCheckEnabled) {
+                for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+                    if (verifyProfile(context, candidate.first)) {
+                        nextBest = candidate
+                        break
+                    }
+                }
+            } else {
+                nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
+            }
+
+            if (nextBest != null) {
+                break
+            }
+            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
+        }
+
+        if (nextBest == null && filteredServers.isNotEmpty()) {
+            nextBest = Triple(filteredServers[Random.nextInt(filteredServers.size)].first, filteredServers[0].second, Long.MAX_VALUE)
         }
 
         if (nextBest != null) {
