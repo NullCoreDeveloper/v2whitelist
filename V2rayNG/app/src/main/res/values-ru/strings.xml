@@ -444,5 +444,4 @@
     <string name="status_verifying_profile">Проверяем профиль…</string>
     <string name="status_profile_check_passed">Профиль рабочий</string>
     <string name="status_profile_check_failed">Профиль не прошёл проверку, пробуем следующий…</string>
-    <string name="status_switching_server_search">Ищем другой сервер…</string>
 </resources>
