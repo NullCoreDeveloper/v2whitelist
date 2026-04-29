@@ -14,6 +14,7 @@ import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.VPN
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.extension.toLongEx
+import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
@@ -109,7 +110,7 @@ class SettingsActivity : BaseActivity() {
             }
             findPreference<androidx.preference.Preference>("pref_check_update_now")?.setOnPreferenceClickListener {
                 com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.runOnce(requireContext())
-                com.kiktor.v2whitelist.extension.toast(getString(R.string.status_updating_subscription))
+                requireContext().toast(getString(R.string.status_updating_subscription))
                 true
             }
             mode?.setOnPreferenceChangeListener { pref, newValue ->
