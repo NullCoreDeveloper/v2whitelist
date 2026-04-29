@@ -74,6 +74,18 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
+            
+            // Находим время последнего обновления
+            val subs = MmkvManager.decodeSubscriptions()
+            val lastUpdateTime = subs.maxOfOrNull { it.subscription.lastUpdated } ?: 0L
+            val tvLastUpdate = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_last_update)
+            if (lastUpdateTime > 0) {
+                val dateStr = Utils.formatTime(lastUpdateTime)
+                tvLastUpdate.text = getString(R.string.title_last_update, dateStr)
+            } else {
+                tvLastUpdate.text = getString(R.string.title_last_update_never)
+            }
+
             bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_developer_link)?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/NullCoreDeveloper/v2whitelist")
                 bottomSheetDialog.dismiss()

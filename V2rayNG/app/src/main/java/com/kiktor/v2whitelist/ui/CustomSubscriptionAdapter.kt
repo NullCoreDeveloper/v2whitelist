@@ -18,6 +18,7 @@ class CustomSubscriptionAdapter(
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvName: TextView = view.findViewById(R.id.tv_sub_name)
         val tvUrl: TextView = view.findViewById(R.id.tv_sub_url)
+        val tvLastUpdate: TextView = view.findViewById(R.id.tv_sub_last_update)
         val switchEnabled: MaterialSwitch = view.findViewById(R.id.switch_sub_enabled)
         val btnDelete: ImageButton = view.findViewById(R.id.btn_delete)
     }
@@ -32,6 +33,15 @@ class CustomSubscriptionAdapter(
         val item = items[position]
         holder.tvName.text = item.name
         holder.tvUrl.text = item.url
+        
+        if (item.lastUpdated > 0) {
+            val dateStr = com.kiktor.v2whitelist.util.Utils.formatTime(item.lastUpdated)
+            holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update, dateStr)
+            holder.tvLastUpdate.visibility = View.VISIBLE
+        } else {
+            holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update_never)
+            holder.tvLastUpdate.visibility = View.VISIBLE
+        }
 
         holder.switchEnabled.setOnCheckedChangeListener(null)
         holder.switchEnabled.isChecked = item.enabled

@@ -481,8 +481,10 @@
     <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
     <string name="custom_sub_add">Добавить подписку</string>
     <string name="custom_sub_name_hint">Название подписки</string>
-    <string name="custom_sub_url_hint">URL подписки</string>
-    <string name="custom_sub_empty">Нет пользовательских подписок</string>
-    <string name="custom_sub_added">Подписка добавлена</string>
-    <string name="custom_sub_removed">Подписка удалена</string>
+    <string name="custom_sub_url_hint">Subscription URL</string>
+    <string name="custom_sub_empty">No custom subscriptions</string>
+    <string name="custom_sub_added">Subscription added</string>
+    <string name="custom_sub_removed">Subscription removed</string>
+    <string name="title_last_update">Last updated: %s</string>
+    <string name="title_last_update_never">Never</string>
 </resources>

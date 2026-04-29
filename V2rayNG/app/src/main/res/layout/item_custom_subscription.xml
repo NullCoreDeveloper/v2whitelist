@@ -39,6 +39,14 @@
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?android:attr/textColorSecondary" />
 
+            <TextView
+                android:id="@+id/tv_sub_last_update"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/title_last_update_never"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?android:attr/textColorSecondary" />
+
         </LinearLayout>
 
         <com.google.android.material.materialswitch.MaterialSwitch

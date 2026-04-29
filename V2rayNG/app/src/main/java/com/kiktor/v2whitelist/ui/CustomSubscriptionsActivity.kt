@@ -19,6 +19,7 @@ import com.kiktor.v2whitelist.util.Utils
 class CustomSubscriptionsActivity : BaseActivity() {
 
     private lateinit var switchBuiltin: MaterialSwitch
+    private lateinit var tvBuiltinLastUpdate: TextView
     private lateinit var tvEmpty: TextView
     private lateinit var rvSubscriptions: RecyclerView
     private lateinit var adapter: CustomSubscriptionAdapter
@@ -30,6 +31,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         setContentViewWithToolbar(R.layout.activity_custom_subscriptions, showHomeAsUp = true, title = getString(R.string.title_custom_subscriptions))
 
         switchBuiltin = findViewById(R.id.switch_builtin)
+        tvBuiltinLastUpdate = findViewById(R.id.tv_builtin_last_update)
         tvEmpty = findViewById(R.id.tv_empty)
         rvSubscriptions = findViewById(R.id.rv_subscriptions)
 
@@ -37,6 +39,18 @@ class CustomSubscriptionsActivity : BaseActivity() {
         setupAddButton()
         loadCustomSubs()
         setupRecyclerView()
+        updateBuiltinLastUpdateTime()
+    }
+
+    private fun updateBuiltinLastUpdateTime() {
+        val subscriptions = MmkvManager.decodeSubscriptions()
+        val builtin = subscriptions.find { it.guid == SmartConnectManager.SUBSCRIPTION_ID }
+        val lastUpdated = builtin?.subscription?.lastUpdated ?: 0L
+        if (lastUpdated > 0) {
+            tvBuiltinLastUpdate.text = getString(R.string.title_last_update, Utils.formatTime(lastUpdated))
+        } else {
+            tvBuiltinLastUpdate.text = getString(R.string.title_last_update_never)
+        }
     }
 
     private fun setupBuiltinSwitch() {
@@ -96,6 +110,13 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 val items = JsonUtil.fromJson(json, Array<CustomSubItem>::class.java)
                 if (items != null) {
                     customSubs = items.toMutableList()
+                    
+                    // Обогащаем данными о последнем обновлении из реальных подписок
+                    val allSubs = MmkvManager.decodeSubscriptions()
+                    customSubs.forEach { sub ->
+                        val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" }
+                        sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
+                    }
                 }
             } catch (e: Exception) {
                 customSubs = mutableListOf()
@@ -143,6 +164,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val id: String,
         var name: String,
         var url: String,
-        var enabled: Boolean = true
+        var enabled: Boolean = true,
+        var lastUpdated: Long = 0L
     )
 }
