@@ -30,7 +30,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelChildren
 import kotlin.random.Random
 import java.net.HttpURLConnection
+import java.net.ServerSocket
 import java.net.URL
+import libv2ray.CoreCallbackHandler
+import libv2ray.CoreController
 
 object SmartConnectManager {
     private val testSemaphore = Semaphore(48)
@@ -332,70 +335,65 @@ object SmartConnectManager {
     }
 
     /**
-     * Проверяет профиль (бета): пингует google.com + cloudflare.com и замеряет скорость.
-     * Возвращает true если профиль прошёл проверку.
+     * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
+     * и делает реальный HTTP-запрос через него.
+     * Только так можно достоверно убедиться, что сервер рабочий — проверка протокольного
+     * рукопожатия, авторизации и прохождения трафика, а не просто TCP-доступности.
      */
     private suspend fun verifyProfile(context: Context, guid: String): Boolean {
-        val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
-        if (!config.status) {
-            Log.w(AppConfig.TAG, "verifyProfile: failed to generate speedtest config for $guid")
+        // Выделяем свободный локальный порт для SOCKS-прокси
+        val port = try {
+            ServerSocket(0).use { it.localPort }
+        } catch (e: Exception) {
+            Log.w(AppConfig.TAG, "verifyProfile: не удалось выделить порт для $guid")
+            return false
+        }
+
+        // Получаем конфиг с реальным SOCKS inbound на выделенном порту
+        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
+        if (!configResult.status) {
+            Log.w(AppConfig.TAG, "verifyProfile: не удалось создать конфиг speedtest для $guid")
             return false
         }
 
         sendStatus(context, context.getString(R.string.status_verifying_profile))
 
-        // Пинг google.com
-        val pingGoogle = withTimeoutOrNull(5000L) {
-            V2RayNativeManager.measureOutboundDelay(config.content, "https://www.google.com/generate_204")
-        } ?: -1L
-        Log.i(AppConfig.TAG, "verifyProfile: ping google.com = ${pingGoogle}ms")
+        var coreController: CoreController? = null
+        return try {
+            // Запускаем отдельный экземпляр ядра V2Ray
+            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                override fun startup(): Long = 0
+                override fun shutdown(): Long = 0
+                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+            })
 
-        if (pingGoogle <= 0) {
-            Log.w(AppConfig.TAG, "verifyProfile: google.com ping failed")
-            return false
-        }
+            // fd=0: запуск без TUN (только SOCKS прокси на локальном порту)
+            coreController.startLoop(configResult.content, 0)
 
-        // Пинг cloudflare.com
-        val pingCf = withTimeoutOrNull(5000L) {
-            V2RayNativeManager.measureOutboundDelay(config.content, "https://www.cloudflare.com/cdn-cgi/trace")
-        } ?: -1L
-        Log.i(AppConfig.TAG, "verifyProfile: ping cloudflare.com = ${pingCf}ms")
+            // Ждём пока ядро поднимется и установит соединение с сервером
+            delay(500L)
 
-        if (pingCf <= 0) {
-            Log.w(AppConfig.TAG, "verifyProfile: cloudflare.com ping failed")
-            return false
-        }
+            // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
+            // testConnection делает запрос к gstatic.com/generate_204 и ожидает HTTP 204
+            val (elapsed, _) = SpeedtestManager.testConnection(context, port)
 
-        // Speedtest: загрузка 100KB файла через v2ray прокси
-        try {
-            val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
-            if (speedtestConfig.status) {
-                val startTime = System.currentTimeMillis()
-                val speedDelay = withTimeoutOrNull(10000L) {
-                    V2RayNativeManager.measureOutboundDelay(
-                        speedtestConfig.content,
-                        "https://speed.cloudflare.com/__down?bytes=102400"
-                    )
-                } ?: -1L
-                val elapsed = System.currentTimeMillis() - startTime
-
-                if (speedDelay <= 0) {
-                    Log.w(AppConfig.TAG, "verifyProfile: speedtest failed")
-                    return false
-                }
-
-                // Приблизительная скорость (100KB / время в секундах)
-                val speedKBs = if (elapsed > 0) 100.0 / (elapsed / 1000.0) else 0.0
-                Log.i(AppConfig.TAG, "verifyProfile: speedtest ${speedKBs} KB/s (${elapsed}ms)")
-                sendStatus(context, context.getString(R.string.status_speed_test, speedKBs.toFloat()))
+            if (elapsed <= 0) {
+                Log.w(AppConfig.TAG, "verifyProfile: трафик через сервер не прошёл для $guid")
+                false
+            } else {
+                Log.i(AppConfig.TAG, "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                sendStatus(context, context.getString(R.string.status_profile_check_passed))
+                true
             }
         } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "verifyProfile: speedtest exception: ${e.message}")
-            // Speedtest fail не блокирует — пинги прошли
+            Log.w(AppConfig.TAG, "verifyProfile: исключение для $guid: ${e.message}")
+            false
+        } finally {
+            // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
+            try {
+                coreController?.stopLoop()
+            } catch (_: Exception) {}
         }
-
-        sendStatus(context, context.getString(R.string.status_profile_check_passed))
-        return true
     }
 
     /**
