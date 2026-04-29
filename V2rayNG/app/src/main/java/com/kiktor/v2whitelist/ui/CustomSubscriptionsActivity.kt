@@ -18,7 +18,6 @@ import com.kiktor.v2whitelist.util.Utils
 
 class CustomSubscriptionsActivity : BaseActivity() {
 
-    private lateinit var switchBuiltin: MaterialSwitch
     private lateinit var tvEmpty: TextView
     private lateinit var rvSubscriptions: RecyclerView
     private lateinit var adapter: CustomSubscriptionAdapter
@@ -29,22 +28,15 @@ class CustomSubscriptionsActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentViewWithToolbar(R.layout.activity_custom_subscriptions, showHomeAsUp = true, title = getString(R.string.title_custom_subscriptions))
 
-        switchBuiltin = findViewById(R.id.switch_builtin)
         tvEmpty = findViewById(R.id.tv_empty)
         rvSubscriptions = findViewById(R.id.rv_subscriptions)
 
-        setupBuiltinSwitch()
         setupAddButton()
         loadCustomSubs()
         setupRecyclerView()
     }
 
-    private fun setupBuiltinSwitch() {
-        switchBuiltin.isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
-        switchBuiltin.setOnCheckedChangeListener { _, isChecked ->
-            MmkvManager.encodeSettings(AppConfig.PREF_USE_BUILTIN_SUB, isChecked)
-        }
-    }
+
 
     private fun setupAddButton() {
         findViewById<View>(R.id.btn_add_sub).setOnClickListener {
