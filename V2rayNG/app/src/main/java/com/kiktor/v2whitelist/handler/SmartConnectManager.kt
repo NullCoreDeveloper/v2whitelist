@@ -199,6 +199,11 @@ object SmartConnectManager {
         // Сбрасываем кэш: после обновления список серверов изменится
         MmkvManager.clearLastConnectedServer()
         Log.i(AppConfig.TAG, "updateSubscription: кэш последнего сервера сброшен")
+
+        // Если VPN активен — используем SOCKS прокси для загрузки подписок через VPN
+        val socksPort = if (V2RayServiceManager.isRunning()) SettingsManager.getSocksPort() else 0
+        Log.i(AppConfig.TAG, "updateSubscription: VPN=${V2RayServiceManager.isRunning()}, socksPort=$socksPort")
+
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
 
         if (useBuiltin) {
@@ -213,7 +218,7 @@ object SmartConnectManager {
                     MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
                 }
                 Log.d(AppConfig.TAG, "Manually updating builtin subscription")
-                AngConfigManager.updateConfigViaSub(existingSub)
+                AngConfigManager.updateConfigViaSub(existingSub, socksPort)
             } else {
                 checkAndSetupSubscription(context)
             }
@@ -227,7 +232,7 @@ object SmartConnectManager {
             val existing = subscriptions.find { it.guid == subId }
             if (existing != null) {
                 Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
-                AngConfigManager.updateConfigViaSub(existing)
+                AngConfigManager.updateConfigViaSub(existing, socksPort)
             } else {
                 // Создаём если нет
                 val subItem = SubscriptionItem().apply {
@@ -236,7 +241,7 @@ object SmartConnectManager {
                     enabled = true
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
+                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort)
             }
         }
     }
@@ -451,7 +456,7 @@ object SmartConnectManager {
         sendStatus(context, context.getString(R.string.status_testing_servers))
 
         val results = testServers(context, servers)
-        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, false)
+        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
         // Если включена проверка профиля — проверяем кандидатов по порядку
         var best: Triple<String, ProfileItem, Long>? = null

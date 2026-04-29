@@ -402,9 +402,10 @@ object AngConfigManager {
      * Updates the configuration via a subscription.
      *
      * @param it The subscription item.
+     * @param socksPort SOCKS5 порт для загрузки через VPN (0 = не использовать).
      * @return The number of configurations updated.
      */
-    fun updateConfigViaSub(it: SubscriptionCache): Int {
+    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0): Int {
         try {
             if (TextUtils.isEmpty(it.guid)
                 || TextUtils.isEmpty(it.subscription.remarks)
@@ -427,13 +428,30 @@ object AngConfigManager {
             Log.i(AppConfig.TAG, url)
             val userAgent = it.subscription.userAgent
 
-            var configText = try {
-                val httpPort = SettingsManager.getHttpPort()
-                HttpUtil.getUrlContentWithUserAgent(url, userAgent, 3000, httpPort)
-            } catch (e: Exception) {
-                Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
-                ""
+            // 1. Приоритет: SOCKS5 прокси (VPN активен, порт 10808 всегда работает)
+            var configText = if (socksPort > 0) {
+                try {
+                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 8000, socksPort)
+                    Log.i(AppConfig.TAG, "Update subscription via SOCKS proxy: success")
+                    result
+                } catch (e: Exception) {
+                    Log.d(AppConfig.TAG, "Update subscription via SOCKS: ${e.message}, trying HTTP proxy...")
+                    ""
+                }
+            } else ""
+
+            // 2. HTTP прокси (если SOCKS недоступен или не указан)
+            if (configText.isEmpty()) {
+                configText = try {
+                    val httpPort = SettingsManager.getHttpPort()
+                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 5000, httpPort)
+                } catch (e: Exception) {
+                    Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
+                    ""
+                }
             }
+
+            // 3. Прямое соединение (в TUN режиме VPN захватит трафик автоматически)
             if (configText.isEmpty()) {
                 configText = try {
                     HttpUtil.getUrlContentWithUserAgent(url, userAgent)

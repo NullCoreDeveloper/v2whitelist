@@ -174,6 +174,7 @@ object HttpUtil {
      * @param connectTimeout The connection timeout in milliseconds (default is 15000 ms).
      * @param readTimeout The read timeout in milliseconds (default is 15000 ms).
      * @param needStream Whether the connection needs to support streaming.
+     * @param proxyType The type of proxy to use (HTTP or SOCKS). Default is HTTP.
      * @return Returns a configured HttpURLConnection object, or null if it fails.
      */
     fun createProxyConnection(
@@ -181,7 +182,8 @@ object HttpUtil {
         port: Int,
         connectTimeout: Int = 15000,
         readTimeout: Int = 15000,
-        needStream: Boolean = false
+        needStream: Boolean = false,
+        proxyType: Proxy.Type = Proxy.Type.HTTP
     ): HttpURLConnection? {
 
         var conn: HttpURLConnection? = null
@@ -193,7 +195,7 @@ object HttpUtil {
             } else {
                 url.openConnection(
                     Proxy(
-                        Proxy.Type.HTTP,
+                        proxyType,
                         InetSocketAddress(LOOPBACK, port)
                     )
                 )
@@ -225,6 +227,57 @@ object HttpUtil {
             return null
         }
         return conn
+    }
+
+    /**
+     * Загружает содержимое URL через SOCKS5 прокси.
+     * Используется для обновления подписок когда VPN активен.
+     *
+     * @param url URL для загрузки.
+     * @param userAgent User-Agent заголовок.
+     * @param timeout Таймаут в миллисекундах.
+     * @param socksPort Порт SOCKS5 прокси (обычно 10808).
+     */
+    @Throws(IOException::class)
+    fun getUrlContentViaSocks(url: String?, userAgent: String?, timeout: Int = 10000, socksPort: Int): String {
+        var currentUrl = url
+        var redirects = 0
+        val maxRedirects = 3
+
+        while (redirects++ < maxRedirects) {
+            if (currentUrl == null) continue
+            val conn = createProxyConnection(
+                currentUrl, socksPort, timeout, timeout,
+                proxyType = Proxy.Type.SOCKS
+            ) ?: continue
+            val finalUserAgent = if (userAgent.isNullOrBlank()) {
+                "v2rayNG/${BuildConfig.VERSION_NAME}"
+            } else {
+                userAgent
+            }
+            conn.setRequestProperty("User-agent", finalUserAgent)
+            conn.connect()
+
+            val responseCode = conn.responseCode
+            when (responseCode) {
+                in 300..399 -> {
+                    val location = resolveLocation(conn)
+                    conn.disconnect()
+                    if (location.isNullOrEmpty()) {
+                        throw IOException("Redirect location not found")
+                    }
+                    currentUrl = location
+                    continue
+                }
+
+                else -> try {
+                    return conn.inputStream.use { it.bufferedReader().readText() }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+        }
+        throw IOException("Too many redirects")
     }
 
     // Returns absolute URL string location header sets

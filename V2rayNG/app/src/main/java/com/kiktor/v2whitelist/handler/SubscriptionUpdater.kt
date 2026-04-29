@@ -12,6 +12,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.handler.SettingsManager
+import com.kiktor.v2whitelist.handler.V2RayServiceManager
 
 object SubscriptionUpdater {
 
@@ -26,7 +28,8 @@ object SubscriptionUpdater {
                 .setContentTitle(context.getString(R.string.title_pref_auto_update_subscription))
                 .setSmallIcon(R.drawable.ic_stat_name)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setSilent(true)
 
         /**
          * Performs the subscription update work.
@@ -35,6 +38,9 @@ object SubscriptionUpdater {
         @SuppressLint("MissingPermission")
         override suspend fun doWork(): Result {
             Log.i(AppConfig.TAG, "subscription automatic update starting")
+
+            // Если VPN активен — используем SOCKS прокси для загрузки через VPN
+            val socksPort = if (V2RayServiceManager.isRunning()) SettingsManager.getSocksPort() else 0
 
             val subs = MmkvManager.decodeSubscriptions().filter { it.subscription.autoUpdate }
 
@@ -53,7 +59,7 @@ object SubscriptionUpdater {
                 }
                 notificationManager.notify(3, notification.build())
                 Log.i(AppConfig.TAG, "subscription automatic update: ---${subItem.remarks}")
-                AngConfigManager.updateConfigViaSub(sub)
+                AngConfigManager.updateConfigViaSub(sub, socksPort)
                 notification.setContentText("Updating ${subItem.remarks}")
             }
             notificationManager.cancel(3)
