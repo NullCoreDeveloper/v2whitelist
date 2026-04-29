@@ -75,20 +75,45 @@ class SubscriptionUpdaterWorker(
 
     companion object {
         /**
-         * Регистрирует периодическое задание на обновление подписки раз в час.
-         * Вызывать из AngApplication.onCreate() только в главном процессе.
+         * Регистрирует периодическое задание на обновление подписки.
+         * Учитывает настройки пользователя (вкл/выкл и интервал).
          */
         fun schedule(context: Context) {
+            val workManager = WorkManager.getInstance(context)
+            
+            // Проверяем, включено ли автообновление
+            val isEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
+            if (!isEnabled) {
+                workManager.cancelUniqueWork(AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME)
+                Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: cancelled (disabled in settings)")
+                return
+            }
+
+            // Читаем интервал (в минутах)
+            val intervalStr = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
+            val intervalMinutes = intervalStr?.toLongOrNull() ?: 60L
+            val finalInterval = if (intervalMinutes < 15) 15L else intervalMinutes // WorkManager min interval is 15m
+
             val request = PeriodicWorkRequestBuilder<SubscriptionUpdaterWorker>(
-                1, TimeUnit.HOURS
+                finalInterval, TimeUnit.MINUTES
             ).build()
 
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            // Используем REPLACE вместо KEEP, чтобы новые настройки интервала применились сразу
+            workManager.enqueueUniquePeriodicWork(
                 AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP, // не перезапускаем если уже запланировано
+                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
-            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: scheduled (every 1 hour)")
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: scheduled (every $finalInterval minutes)")
+        }
+
+        /**
+         * Запускает обновление подписки немедленно (один раз).
+         */
+        fun runOnce(context: Context) {
+            val request = androidx.work.OneTimeWorkRequestBuilder<SubscriptionUpdaterWorker>().build()
+            WorkManager.getInstance(context).enqueue(request)
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: one-time update triggered manually")
         }
     }
 }

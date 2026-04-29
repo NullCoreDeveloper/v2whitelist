@@ -250,8 +250,12 @@
         <EditTextPreference
             android:inputType="number"
             android:key="pref_auto_update_interval"
-            android:summary="1440"
+            android:summary="60"
             android:title="@string/title_pref_auto_update_interval" />
+        <Preference
+            android:key="pref_check_update_now"
+            android:summary="@string/summary_pref_check_update_now"
+            android:title="@string/title_pref_check_update_now" />
         <Preference
             android:key="pref_manage_custom_subs"
             android:summary="@string/summary_pref_manage_subs"

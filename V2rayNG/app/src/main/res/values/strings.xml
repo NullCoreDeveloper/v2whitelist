@@ -487,4 +487,6 @@
     <string name="custom_sub_removed">Subscription removed</string>
     <string name="title_last_update">Last updated: %s</string>
     <string name="title_last_update_never">Never</string>
+    <string name="title_pref_check_update_now">Check for updates now</string>
+    <string name="summary_pref_check_update_now">Manually trigger the background subscription update process</string>
 </resources>

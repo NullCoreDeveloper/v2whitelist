@@ -16,7 +16,6 @@ import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.extension.toLongEx
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
-import com.kiktor.v2whitelist.handler.SubscriptionUpdater
 import com.kiktor.v2whitelist.util.Utils
 import java.util.concurrent.TimeUnit
 
@@ -92,9 +91,25 @@ class SettingsActivity : BaseActivity() {
                 val value = newValue as Boolean
                 autoUpdateCheck?.isChecked = value
                 autoUpdateInterval?.isEnabled = value
-                autoUpdateInterval?.text?.toLongEx()?.let {
-                    if (newValue) configureUpdateTask(it) else cancelUpdateTask()
+                // Перепланируем задачу с новыми настройками
+                com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
+                true
+            }
+            autoUpdateInterval?.setOnPreferenceChangeListener { _, newValue ->
+                // Сначала даем MMKV сохранить новое значение (через PreferenceDataStore)
+                // Но так как setOnPreferenceChangeListener срабатывает ДО сохранения, 
+                // нам нужно вручную обновить summary и потом перепланировать.
+                autoUpdateInterval?.summary = newValue as String
+                
+                // Используем post, чтобы дать системе сохранить значение в MMKV
+                view?.post {
+                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
                 }
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_check_update_now")?.setOnPreferenceClickListener {
+                com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.runOnce(requireContext())
+                com.kiktor.v2whitelist.extension.toast(getString(R.string.status_updating_subscription))
                 true
             }
             mode?.setOnPreferenceChangeListener { pref, newValue ->
@@ -207,29 +222,6 @@ class SettingsActivity : BaseActivity() {
             fakeDns?.isEnabled = enabled
 //            localDnsPort?.isEnabled = enabled
             vpnDns?.isEnabled = !enabled
-        }
-
-        private fun configureUpdateTask(interval: Long) {
-            val rw = RemoteWorkManager.getInstance(AngApplication.application)
-            rw.cancelUniqueWork(AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME)
-            rw.enqueueUniquePeriodicWork(
-                AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                PeriodicWorkRequest.Builder(
-                    SubscriptionUpdater.UpdateTask::class.java,
-                    interval,
-                    TimeUnit.MINUTES
-                )
-                    .apply {
-                        setInitialDelay(interval, TimeUnit.MINUTES)
-                    }
-                    .build()
-            )
-        }
-
-        private fun cancelUpdateTask() {
-            val rw = RemoteWorkManager.getInstance(AngApplication.application)
-            rw.cancelUniqueWork(AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME)
         }
 
         private fun updateMux(enabled: Boolean) {
