@@ -35,7 +35,7 @@ class CustomSubscriptionAdapter(
         holder.tvUrl.text = item.url
         
         if (item.lastUpdated > 0) {
-            val dateStr = com.kiktor.v2whitelist.util.Utils.formatTime(item.lastUpdated)
+            val dateStr = com.kiktor.v2whitelist.util.Utils.formatTimestamp(item.lastUpdated)
             holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update, dateStr)
             holder.tvLastUpdate.visibility = View.VISIBLE
         } else {

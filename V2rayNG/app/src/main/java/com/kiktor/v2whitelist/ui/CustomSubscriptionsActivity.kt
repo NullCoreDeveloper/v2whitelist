@@ -13,6 +13,7 @@ import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.JsonUtil
 import com.kiktor.v2whitelist.util.Utils
 
@@ -47,7 +48,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val builtin = subscriptions.find { it.guid == SmartConnectManager.SUBSCRIPTION_ID }
         val lastUpdated = builtin?.subscription?.lastUpdated ?: 0L
         if (lastUpdated > 0) {
-            tvBuiltinLastUpdate.text = getString(R.string.title_last_update, Utils.formatTime(lastUpdated))
+            tvBuiltinLastUpdate.text = getString(R.string.title_last_update, Utils.formatTimestamp(lastUpdated))
         } else {
             tvBuiltinLastUpdate.text = getString(R.string.title_last_update_never)
         }

@@ -80,7 +80,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             val lastUpdateTime = subs.maxOfOrNull { it.subscription.lastUpdated } ?: 0L
             val tvLastUpdate = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_last_update)
             if (lastUpdateTime > 0) {
-                val dateStr = Utils.formatTime(lastUpdateTime)
+                val dateStr = Utils.formatTimestamp(lastUpdateTime)
                 tvLastUpdate.text = getString(R.string.title_last_update, dateStr)
             } else {
                 tvLastUpdate.text = getString(R.string.title_last_update_never)
