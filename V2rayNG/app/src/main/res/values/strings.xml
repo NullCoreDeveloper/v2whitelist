@@ -26,6 +26,7 @@
     <string name="status_testing_servers">Проверяем скорость серверов…</string>
     <string name="status_found_best">Нашли отличный сервер! Подключаемся…</string>
     <string name="status_connecting_to">Подключаемся к %s…</string>
+    <string name="status_using_cached_server">Быстрое подключение к %s…</string>
     <string name="status_switching_server">Выбираем другой сервер…</string>
     <string name="status_updating_subscription">Обновляем список серверов…</string>
     <string name="status_no_servers">Серверы не найдены. Попробуйте обновить список.</string>

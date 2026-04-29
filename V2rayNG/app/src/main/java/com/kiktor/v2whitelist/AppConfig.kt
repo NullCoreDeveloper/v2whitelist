@@ -88,6 +88,13 @@ object AppConfig {
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
     const val CACHE_KEYWORD_FILTER = "cache_keyword_filter"
 
+    /** Кэш последнего подключённого сервера.
+     *  Если с последнего включения VPN прошло меньше LAST_SERVER_CACHE_TTL_MS,
+     *  повторное нажатие «Подключить» сразу использует этот сервер без SmartConnect. */
+    const val PREF_LAST_CONNECTED_SERVER = "pref_last_connected_server"
+    const val PREF_LAST_CONNECT_TIME = "pref_last_connect_time"
+    const val LAST_SERVER_CACHE_TTL_MS = 60 * 60 * 1000L // 1 час
+
     /** Protocol identifiers. */
     const val PROTOCOL_FREEDOM = "freedom"
 

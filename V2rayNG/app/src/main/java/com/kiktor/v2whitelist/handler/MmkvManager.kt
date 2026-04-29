@@ -643,6 +643,61 @@ object MmkvManager {
 
     //endregion
 
+    //region Last Server Cache
+
+    /**
+     * Сохраняет GUID последнего успешно подключённого сервера
+     * и текущий timestamp (момент включения VPN).
+     */
+    fun saveLastConnectedServer(guid: String) {
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECTED_SERVER, guid)
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECT_TIME, System.currentTimeMillis())
+    }
+
+    /**
+     * Возвращает GUID кэшированного сервера, если он ещё валиден
+     * (с момента последнего включения VPN прошло меньше LAST_SERVER_CACHE_TTL_MS),
+     * И если этот сервер всё ещё существует в списке.
+     * Иначе возвращает null — нужен полный SmartConnect.
+     */
+    fun getValidLastServer(): String? {
+        val guid = settingsStorage.decodeString(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECTED_SERVER)
+        if (guid.isNullOrBlank()) return null
+
+        val savedTime = settingsStorage.decodeLong(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECT_TIME, 0L)
+        val elapsed = System.currentTimeMillis() - savedTime
+        if (elapsed > com.kiktor.v2whitelist.AppConfig.LAST_SERVER_CACHE_TTL_MS) {
+            android.util.Log.i(
+                com.kiktor.v2whitelist.AppConfig.TAG,
+                "LastServerCache: кэш устарел (${elapsed / 1000 / 60} мин), нужен SmartConnect"
+            )
+            return null
+        }
+
+        // Проверяем, что сервер ещё существует
+        val profile = decodeServerConfig(guid)
+        if (profile == null) {
+            android.util.Log.w(com.kiktor.v2whitelist.AppConfig.TAG, "LastServerCache: сервер $guid не найден, кэш невалиден")
+            return null
+        }
+
+        android.util.Log.i(
+            com.kiktor.v2whitelist.AppConfig.TAG,
+            "LastServerCache: кэш валиден (${elapsed / 1000}с назад) → ${profile.remarks}"
+        )
+        return guid
+    }
+
+    /**
+     * Сбрасывает кэш последнего сервера (например, при обновлении подписки).
+     */
+    fun clearLastConnectedServer() {
+        settingsStorage.remove(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECTED_SERVER)
+        settingsStorage.remove(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECT_TIME)
+    }
+
+    //endregion
+
     //region WebDAV
 
     /**

@@ -193,8 +193,12 @@ object SmartConnectManager {
 
     /**
      * Force updates all active subscriptions.
+     * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
      */
     suspend fun updateSubscription(context: Context) = withContext(Dispatchers.IO) {
+        // Сбрасываем кэш: после обновления список серверов изменится
+        MmkvManager.clearLastConnectedServer()
+        Log.i(AppConfig.TAG, "updateSubscription: кэш последнего сервера сброшен")
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
 
         if (useBuiltin) {
@@ -398,8 +402,41 @@ object SmartConnectManager {
 
     /**
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
+     *
+     * Если с момента последнего включения VPN прошло менее [AppConfig.LAST_SERVER_CACHE_TTL_MS],
+     * сразу переиспользует последний сервер без тестирования (быстрый путь).
+     * Иначе — полный SmartConnect с тестированием.
      */
     suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
+
+        // ── Быстрый путь: кэш последнего сервера ──────────────────────────────
+        val cachedGuid = MmkvManager.getValidLastServer()
+        if (cachedGuid != null) {
+            val cachedProfile = MmkvManager.decodeServerConfig(cachedGuid)
+            if (cachedProfile != null) {
+                Log.i(AppConfig.TAG, "SmartConnect: используем кэшированный сервер → ${cachedProfile.remarks}")
+                sendStatus(context, context.getString(R.string.status_using_cached_server, cachedProfile.remarks))
+                MmkvManager.setSelectServer(cachedGuid)
+                // Обновляем timestamp — часовой таймер сбрасывается с нового включения
+                MmkvManager.saveLastConnectedServer(cachedGuid)
+
+                val isRunning = V2RayServiceManager.isRunning()
+                if (isRunning) {
+                    MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                } else {
+                    withContext(Dispatchers.Main) {
+                        if (context is com.kiktor.v2whitelist.ui.MainActivity) {
+                            context.startV2Ray()
+                        } else {
+                            V2RayServiceManager.startVService(context)
+                        }
+                    }
+                }
+                return@withContext
+            }
+        }
+        // ── Полный SmartConnect ────────────────────────────────────────────────
+
         checkAndSetupSubscription(context)
         val allServers = MmkvManager.decodeServerList()
         val servers = filterServers(allServers).shuffled().take(20)
@@ -441,6 +478,10 @@ object SmartConnectManager {
             Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
             sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
             MmkvManager.setSelectServer(best.first)
+
+            // Сохраняем сервер в кэш для быстрого повторного подключения
+            MmkvManager.saveLastConnectedServer(best.first)
+            Log.i(AppConfig.TAG, "SmartConnect: сервер ${best.second.remarks} сохранён в кэш")
 
             // Если VPN уже запущен — переключаем ядро, а не пытаемся стартовать заново
             val isRunning = V2RayServiceManager.isRunning()
@@ -491,6 +532,10 @@ object SmartConnectManager {
             Log.i(AppConfig.TAG, "switchServer: Switching to ${nextBest.second.remarks}")
             sendStatus(context, context.getString(R.string.status_connecting_to, nextBest.second.remarks))
             MmkvManager.setSelectServer(nextBest.first)
+
+            // Обновляем кэш — при ручном переключении запоминаем новый сервер
+            MmkvManager.saveLastConnectedServer(nextBest.first)
+            Log.i(AppConfig.TAG, "switchServer: кэш обновлён → ${nextBest.second.remarks}")
 
             val isRunning = V2RayServiceManager.isRunning()
             Log.i(AppConfig.TAG, "switchServer: V2RayServiceManager.isRunning()=$isRunning")
