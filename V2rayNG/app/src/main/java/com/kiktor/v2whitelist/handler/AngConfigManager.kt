@@ -494,6 +494,7 @@ object AngConfigManager {
             if (configText.isEmpty()) {
                 return 0
             }
+            val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
@@ -534,7 +535,7 @@ object AngConfigManager {
      */
     private fun importUrlAsSubscription(url: String): Int {
         val subscriptions = MmkvManager.decodeSubscriptions()
-        subscriptions.forEach {
+        for (it in subscriptions) {
             if (it.subscription.url == url) {
                 return 0
             }

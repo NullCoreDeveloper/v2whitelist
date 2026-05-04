@@ -169,7 +169,7 @@ object MmkvManager {
      */
     fun removeDuplicateServer(): Int {
         val serverList = decodeServerList()
-        val uniqueServers = mutableSetOf<String>() // key = address:port:remarks
+        val uniqueServers = mutableSetOf<String>() // key = address:port:id
         val toDelete = mutableListOf<String>()
         val newList = mutableListOf<String>()
         
@@ -180,7 +180,8 @@ object MmkvManager {
                 continue
             }
             
-            val key = "${profile.server}:${profile.serverPort}:${profile.remarks}"
+            // Уникальность определяем по техническим параметрам: Адрес + Порт + Пароль (ключ)
+            val key = "${profile.server}:${profile.serverPort}:${profile.password}"
             if (uniqueServers.contains(key)) {
                 toDelete.add(guid)
             } else {
@@ -191,6 +192,7 @@ object MmkvManager {
         
         for (guid in toDelete) {
             profileFullStorage.remove(guid)
+            serverRawStorage.remove(guid)
             serverAffStorage.remove(guid)
         }
         
