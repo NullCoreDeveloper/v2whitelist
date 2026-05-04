@@ -12,8 +12,8 @@ android {
         applicationId = "com.kiktor.v2whitelist"
         minSdk = 24
         targetSdk = 36
-        versionCode = 710
-        versionName = "2.1.0"
+        versionCode = 711
+        versionName = "1.0.3"
         multiDexEnabled = true
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
