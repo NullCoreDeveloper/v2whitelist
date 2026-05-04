@@ -51,23 +51,22 @@ object SmartConnectManager {
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
 
     /**
-     * Проверяет наличие прямого доступа в интернет (без VPN).
-     * Пытается TCP-подключиться к нескольким хостам (DNS-порт 53).
-     * Возвращает true если хотя бы один хост доступен напрямую.
+     * Проверяет состояние интернета.
+     * @return 0 - OK (всё доступно), 1 - JAMMED (только Яндекс), 2 - NO_INTERNET (ничего не доступно)
      */
-    fun checkDirectInternet(): Boolean {
-        val hosts = listOf(
-            "8.8.8.8" to 53,    // Google DNS
-            "1.1.1.1" to 53,    // Cloudflare DNS
-            "77.88.8.8" to 53   // Yandex DNS (может работать в РФ)
-        )
-        return hosts.any { (host, port) ->
-            try {
-                Socket().use { socket ->
-                    socket.connect(InetSocketAddress(host, port), 2000)
-                    true
-                }
-            } catch (_: Exception) { false }
+    fun checkInternetStatus(): Int {
+        val googleOk = try {
+            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 1500); true }
+        } catch (_: Exception) { false }
+
+        val yandexOk = try {
+            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 53), 1500); true }
+        } catch (_: Exception) { false }
+
+        return when {
+            googleOk && yandexOk -> 0   // Все отлично
+            !googleOk && yandexOk -> 1  // Глушат (Яндекс жив, Гугл нет)
+            else -> 2                   // Интернета нет совсем
         }
     }
 
@@ -155,7 +154,10 @@ object SmartConnectManager {
                 if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
                     Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
                     sendStatus(context, context.getString(R.string.status_updating_subscription))
-                    AngConfigManager.updateConfigViaSub(existingSub)
+                    // Ограничиваем время ожидания обновления 6 секундами
+                    kotlinx.coroutines.withTimeoutOrNull(6000) {
+                        AngConfigManager.updateConfigViaSub(existingSub)
+                    }
                 }
             }
         }
@@ -191,7 +193,10 @@ object SmartConnectManager {
                 }
                 val lastUpdated = subItem.lastUpdated
                 if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                    AngConfigManager.updateConfigViaSub(existing)
+                    // Ограничиваем время ожидания обновления 6 секундами
+                    kotlinx.coroutines.withTimeoutOrNull(6000) {
+                        AngConfigManager.updateConfigViaSub(existing)
+                    }
                 }
             }
         }
@@ -474,19 +479,39 @@ object SmartConnectManager {
                         }
                     }
                 }
+
+                // Логика 'выживания': если интернет глушат и подписка старая, обновляем её через VPN сразу после коннекта
+                val status = checkInternetStatus()
+                if (status == 1) { // JAMMED
+                    coroutineScope {
+                        launch(Dispatchers.IO) {
+                            delay(5000) // Ждем пока VPN разгонится
+                            Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
+                            updateSubscription(context)
+                        }
+                    }
+                }
                 return@withContext
             }
         }
         // ── Полный SmartConnect ────────────────────────────────────────────────
 
-        // Проверяем наличие прямого доступа в интернет
-        val hasDirectInternet = checkDirectInternet()
-        if (hasDirectInternet) {
-            Log.i(AppConfig.TAG, "SmartConnect: прямой интернет доступен, ищем лучший сервер")
-            sendStatus(context, context.getString(R.string.status_testing_servers))
-        } else {
-            Log.w(AppConfig.TAG, "SmartConnect: прямой интернет недоступен — возможно глушат")
-            sendStatus(context, context.getString(R.string.status_jamming_detected))
+        // ── Полный SmartConnect ────────────────────────────────────────────────
+        
+        // Проверяем состояние интернета
+        when (checkInternetStatus()) {
+            0 -> {
+                Log.i(AppConfig.TAG, "SmartConnect: интернет доступен")
+                sendStatus(context, context.getString(R.string.status_testing_servers))
+            }
+            1 -> {
+                Log.w(AppConfig.TAG, "SmartConnect: интернет глушат (только Яндекс доступен)")
+                sendStatus(context, context.getString(R.string.status_jamming_detected))
+            }
+            else -> {
+                Log.w(AppConfig.TAG, "SmartConnect: интернета нет совсем")
+                sendStatus(context, context.getString(R.string.status_no_internet))
+            }
         }
 
         checkAndSetupSubscription(context)

@@ -461,7 +461,7 @@ object AngConfigManager {
             // 1. Приоритет: SOCKS5 прокси (VPN активен, порт 10808 всегда работает)
             var configText = if (socksPort > 0) {
                 try {
-                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 8000, socksPort)
+                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 6000, socksPort)
                     Log.i(AppConfig.TAG, "Update subscription via SOCKS proxy: success")
                     result
                 } catch (e: Exception) {
@@ -474,7 +474,7 @@ object AngConfigManager {
             if (configText.isEmpty()) {
                 configText = try {
                     val httpPort = AppConfig.PORT_SOCKS.toInt() // Используем стандартный порт
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 5000, httpPort)
+                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000, httpPort)
                 } catch (e: Exception) {
                     Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
                     ""
@@ -484,7 +484,7 @@ object AngConfigManager {
             // 3. Прямое соединение (в TUN режиме VPN захватит трафик автоматически)
             if (configText.isEmpty()) {
                 configText = try {
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent)
+                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000)
                 } catch (e: Exception) {
                     Log.d(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent: ${e.message}")
                     ""
