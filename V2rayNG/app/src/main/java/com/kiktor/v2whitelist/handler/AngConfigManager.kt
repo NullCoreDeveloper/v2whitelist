@@ -369,7 +369,9 @@ object AngConfigManager {
             config.description = generateDescription(config)
             val guid = MmkvManager.encodeServerConfig("", config)
             if (removedSelectedServer != null &&
-                config.server == removedSelectedServer.server && config.serverPort == removedSelectedServer.serverPort
+                config.server == removedSelectedServer.server &&
+                config.serverPort == removedSelectedServer.serverPort &&
+                config.remarks == removedSelectedServer.remarks
             ) {
                 MmkvManager.setSelectServer(guid)
             }
