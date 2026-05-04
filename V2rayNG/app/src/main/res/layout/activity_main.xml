@@ -136,7 +136,7 @@
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
+                    android:layout_marginBottom="8dp"
                     android:paddingTop="12dp"
                     android:paddingBottom="12dp"
                     android:text="@string/btn_label_switch"
@@ -144,6 +144,44 @@
                     app:cornerRadius="12dp"
                     app:icon="@drawable/ic_check_update_24dp"
                     app:iconGravity="textStart" />
+
+                <!-- QR / Scan button (right-aligned above bottom panel) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="end"
+                    android:orientation="horizontal">
+
+                    <!-- Показывается когда подключён: показать QR текущего сервера -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_show_qr"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="@string/btn_show_qr"
+                        android:visibility="gone"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_qu_scan_24dp"
+                        app:iconGravity="textStart" />
+
+                    <!-- Показывается когда отключён: сканировать QR для добавления -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_scan_add"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="@string/btn_scan_add"
+                        android:visibility="visible"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_scan_24dp"
+                        app:iconGravity="textStart" />
+
+                </LinearLayout>
 
                 <!-- Actions Grid -->
                 <GridLayout

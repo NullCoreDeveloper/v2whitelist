@@ -30,6 +30,9 @@
     <string name="status_switching_server">Выбираем другой сервер…</string>
     <string name="status_updating_subscription">Обновляем список серверов…</string>
     <string name="status_no_servers">Серверы не найдены. Попробуйте обновить список.</string>
+    <string name="status_no_internet">Нет прямого интернета. Ищем серверы для обхода…</string>
+    <string name="status_jamming_detected">Возможно глушат интернет, ищем быстрые сервера для обхода…</string>
+    <string name="status_updating_via_vpn">Обновляем подписку через активный VPN…</string>
 
     <!--ServerActivity-->
     <string name="title_server">Config</string>
@@ -452,6 +455,9 @@
     <string name="btn_label_about">О проекте</string>
     <string name="title_check_update">Проверить обновления</string>
     <string name="tv_server_name">Сервер: %s</string>
+    <string name="btn_show_qr">QR</string>
+    <string name="btn_scan_add">Скан</string>
+    <string name="title_qr_current_server">QR-код текущего сервера</string>
 
     <!-- Location Filter -->
     <string name="title_location_filter">Фильтр локаций</string>
