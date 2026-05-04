@@ -1,7 +1,11 @@
 package com.kiktor.v2whitelist.ui
 
+import android.app.Dialog
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.net.VpnService
 import android.os.Bundle
@@ -9,6 +13,8 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.Window
+import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -61,6 +67,20 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             restartV2Ray()
         }
     }
+    // Лаунчер для сканирования QR-кода (добавление сервера)
+    private val scannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val scanResult = result.data?.getStringExtra("SCAN_RESULT") ?: return@registerForActivityResult
+            val (count, _) = com.kiktor.v2whitelist.handler.AngConfigManager.importBatchConfig(scanResult, "", true)
+            if (count > 0) {
+                toast(getString(R.string.title_import_config_count, count))
+                mainViewModel.reloadServerList()
+            } else {
+                toast(R.string.toast_incorrect_protocol)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
@@ -71,6 +91,15 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
+
+        // QR-код текущего подключённого сервера
+        binding.btnShowQr.setOnClickListener { showCurrentServerQr() }
+
+        // Сканирование QR для добавления сервера (когда отключён)
+        binding.btnScanAdd.setOnClickListener {
+            scannerLauncher.launch(Intent(this, ScannerActivity::class.java))
+        }
+
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
@@ -173,6 +202,39 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_orange_light))
     }
 
+    private fun showCurrentServerQr() {
+        val guid = MmkvManager.getSelectServer() ?: run {
+            toast(R.string.toast_none_data)
+            return
+        }
+        val serverName = V2RayServiceManager.getRunningServerName()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bitmap: Bitmap? = AngConfigManager.share2QRCode(guid)
+            withContext(Dispatchers.Main) {
+                if (bitmap == null) {
+                    toast(R.string.toast_failure)
+                    return@withContext
+                }
+                // Показываем диалог с QR-кодом
+                val dialog = Dialog(this@MainActivity)
+                dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+                dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                val imageView = ImageView(this@MainActivity).apply {
+                    setImageBitmap(bitmap)
+                    val pad = (16 * resources.displayMetrics.density).toInt()
+                    setPadding(pad, pad, pad, pad)
+                    setBackgroundColor(Color.WHITE)
+                }
+                dialog.setContentView(imageView)
+                dialog.setTitle(getString(R.string.title_qr_current_server))
+                if (!serverName.isNullOrEmpty()) {
+                    imageView.contentDescription = serverName
+                }
+                dialog.show()
+            }
+        }
+    }
+
     private fun updateUIState(isRunning: Boolean) {
         isTaskRunning = false
         activeJob = null
@@ -196,6 +258,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             } else {
                 binding.tvServerName.isVisible = false
             }
+
+            // Подключён: показываем QR кнопку, скрываем кнопку сканирования
+            binding.btnShowQr.isVisible = true
+            binding.btnScanAdd.isVisible = false
         } else {
             binding.tvStatus.text = getString(R.string.connection_not_connected)
             binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
@@ -205,6 +271,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             binding.btnSwitchServer.isVisible = false
             binding.tvServerName.isVisible = false
             binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.darker_gray))
+
+            // Отключён: скрываем QR кнопку, показываем кнопку сканирования
+            binding.btnShowQr.isVisible = false
+            binding.btnScanAdd.isVisible = true
         }
     }
 
