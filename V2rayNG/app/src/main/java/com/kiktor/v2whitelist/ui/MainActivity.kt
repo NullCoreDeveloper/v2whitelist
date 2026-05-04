@@ -77,6 +77,21 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             if (count > 0) {
                 toast(getString(R.string.title_import_config_count, count))
                 mainViewModel.reloadServerList()
+                
+                // Авто-подключение после сканирования
+                handleConnectAction()
+                
+                // Умный догруз подписок: если серверов почти нет, обновляем их через новый туннель
+                val totalServers = MmkvManager.decodeServerList().size
+                if (totalServers <= count + 1) { // Если были пустыми или только этот сервер
+                    lifecycleScope.launch {
+                        delay(5000) // Ждем 5 сек, пока VPN поднимется
+                        if (mainViewModel.isRunning.value == true) {
+                            com.kiktor.v2whitelist.handler.SmartConnectManager.updateSubscription(this@MainActivity)
+                            mainViewModel.reloadServerList()
+                        }
+                    }
+                }
             } else {
                 toast(R.string.toast_incorrect_protocol)
             }
