@@ -30,6 +30,7 @@ object MmkvManager {
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
     private const val KEY_SUB_IDS = "SUB_IDS"
     private const val KEY_WEBDAV_CONFIG = "WEBDAV_CONFIG"
+    private const val KEY_BATTERY_ASKED = "BATTERY_ASKED"
 
     //private val profileStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_CONFIG, MMKV.MULTI_PROCESS_MODE) }
     private val mainStorage by lazy { MMKV.mmkvWithID(ID_MAIN, MMKV.MULTI_PROCESS_MODE) }
@@ -716,4 +717,12 @@ object MmkvManager {
     }
 
     //endregion
+
+    fun setBatteryOptimizationAsked(asked: Boolean) {
+        settingsStorage.encode(KEY_BATTERY_ASKED, asked)
+    }
+
+    fun getBatteryOptimizationAsked(): Boolean {
+        return settingsStorage.decodeBool(KEY_BATTERY_ASKED, false)
+    }
 }

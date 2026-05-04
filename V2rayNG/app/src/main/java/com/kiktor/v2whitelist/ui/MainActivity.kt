@@ -9,6 +9,8 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.net.VpnService
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.Menu
@@ -128,6 +130,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {
         }
+        
+        checkBatteryOptimization()
     }
 
     private fun handleUpdateSubscription() {
@@ -326,5 +330,29 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             V2RayServiceManager.stopVService(this)
         }
         startV2Ray()
+    }
+
+    private fun checkBatteryOptimization() {
+        if (MmkvManager.getBatteryOptimizationAsked()) return
+
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.dialog_battery_optimization_title)
+                .setMessage(R.string.dialog_battery_optimization_message)
+                .setPositiveButton(R.string.dialog_battery_optimization_ok) { _, _ ->
+                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    try {
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        toast("Could not open battery settings")
+                    }
+                }
+                .setNegativeButton(R.string.dialog_battery_optimization_no_remind) { _, _ ->
+                    MmkvManager.setBatteryOptimizationAsked(true)
+                }
+                .setNeutralButton(R.string.btn_label_cancel, null)
+                .show()
+        }
     }
 }

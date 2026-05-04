@@ -30,9 +30,14 @@
     <string name="status_switching_server">Выбираем другой сервер…</string>
     <string name="status_updating_subscription">Обновляем список серверов…</string>
     <string name="status_no_servers">Серверы не найдены. Попробуйте обновить список.</string>
-    <string name="status_no_internet">Нет прямого интернета. Ищем серверы для обхода…</string>
+    <string name="status_no_internet">Нет прямого интернета. Ищем серверы для обхода… (может занять длительное время)</string>
     <string name="status_jamming_detected">Возможно глушат интернет, ищем быстрые сервера для обхода…</string>
     <string name="status_updating_via_vpn">Обновляем подписку через активный VPN…</string>
+    
+    <string name="dialog_battery_optimization_title">Фоновая активность</string>
+    <string name="dialog_battery_optimization_message">Чтобы подписки обновлялись вовремя, приложению нужно разрешить работу в фоне без ограничений.\n\nВ открывшихся настройках выберите \"Без ограничений\" (или \"Не экономить заряд\").</string>
+    <string name="dialog_battery_optimization_ok">Настроить</string>
+    <string name="dialog_battery_optimization_no_remind">Больше не спрашивать</string>
 
     <!--ServerActivity-->
     <string name="title_server">Config</string>
