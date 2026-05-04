@@ -143,7 +143,7 @@ object AngConfigManager {
                 EConfigType.WIREGUARD -> WireguardFmt.toUri(config)
                 EConfigType.HYSTERIA2 -> Hysteria2Fmt.toUri(config)
                 EConfigType.POLICYGROUP -> ""
-                else -> {}
+                else -> ""
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to share config for GUID: $guid", e)
@@ -206,7 +206,6 @@ object AngConfigManager {
         return 0
     }
 
-    /**
     /**
      * Parses a batch of configurations.
      *
@@ -474,7 +473,7 @@ object AngConfigManager {
             // 2. HTTP прокси (если SOCKS недоступен или не указан)
             if (configText.isEmpty()) {
                 configText = try {
-                    val httpPort = SettingsManager.getHttpPort()
+                    val httpPort = AppConfig.PORT_SOCKS.toInt() // Используем стандартный порт
                     HttpUtil.getUrlContentWithUserAgent(url, userAgent, 5000, httpPort)
                 } catch (e: Exception) {
                     Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
