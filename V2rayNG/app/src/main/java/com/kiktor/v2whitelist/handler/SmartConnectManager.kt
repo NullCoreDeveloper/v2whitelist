@@ -30,7 +30,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelChildren
 import kotlin.random.Random
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.ServerSocket
+import java.net.Socket
 import java.net.URL
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
@@ -48,14 +51,43 @@ object SmartConnectManager {
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
 
     /**
+     * Проверяет наличие прямого доступа в интернет (без VPN).
+     * Пытается TCP-подключиться к нескольким хостам (DNS-порт 53).
+     * Возвращает true если хотя бы один хост доступен напрямую.
+     */
+    fun checkDirectInternet(): Boolean {
+        val hosts = listOf(
+            "8.8.8.8" to 53,    // Google DNS
+            "1.1.1.1" to 53,    // Cloudflare DNS
+            "77.88.8.8" to 53   // Yandex DNS (может работать в РФ)
+        )
+        return hosts.any { (host, port) ->
+            try {
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress(host, port), 2000)
+                    true
+                }
+            } catch (_: Exception) { false }
+        }
+    }
+
+    /**
      * Загружает whitelist.txt и извлекает реальный URL подписки.
      * Если не удалось — возвращает fallback URL.
+     * @param socksPort SOCKS5 порт (>0 = использовать VPN прокси).
      */
-    private fun resolveSubscriptionUrl(): String {
+    private fun resolveSubscriptionUrl(socksPort: Int = 0): String {
         return try {
-            val connection = URL(WHITELIST_URL).openConnection() as HttpURLConnection
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
+            val url = URL(WHITELIST_URL)
+            val connection = if (socksPort > 0) {
+                url.openConnection(
+                    Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+                ) as HttpURLConnection
+            } else {
+                url.openConnection() as HttpURLConnection
+            }
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
             connection.requestMethod = "GET"
             connection.setRequestProperty("User-Agent", "v2Whitelist/1.0")
 
@@ -64,7 +96,6 @@ object SmartConnectManager {
                 val body = connection.inputStream.bufferedReader().readText().trim()
                 connection.disconnect()
 
-                // Берём первую непустую строку как URL подписки
                 val resolvedUrl = body.lines()
                     .map { it.trim() }
                     .firstOrNull { it.startsWith("http") }
@@ -210,14 +241,20 @@ object SmartConnectManager {
             val subscriptions = MmkvManager.decodeSubscriptions()
             val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
             if (existingSub != null) {
-                // Обновляем URL перед загрузкой
-                val realUrl = resolveSubscriptionUrl()
+                // Обновляем URL через VPN-прокси если он активен
+                val realUrl = resolveSubscriptionUrl(socksPort)
                 val subItem = existingSub.subscription
                 if (subItem.url != realUrl) {
+                    Log.d(AppConfig.TAG, "updateSubscription: URL изменился, обновляем")
                     subItem.url = realUrl
                     MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
                 }
-                Log.d(AppConfig.TAG, "Manually updating builtin subscription")
+                Log.d(AppConfig.TAG, "Manually updating builtin subscription via socksPort=$socksPort")
+                sendStatus(context, if (socksPort > 0)
+                    context.getString(R.string.status_updating_via_vpn)
+                else
+                    context.getString(R.string.status_updating_subscription)
+                )
                 AngConfigManager.updateConfigViaSub(existingSub, socksPort)
             } else {
                 checkAndSetupSubscription(context)
@@ -441,6 +478,16 @@ object SmartConnectManager {
             }
         }
         // ── Полный SmartConnect ────────────────────────────────────────────────
+
+        // Проверяем наличие прямого доступа в интернет
+        val hasDirectInternet = checkDirectInternet()
+        if (hasDirectInternet) {
+            Log.i(AppConfig.TAG, "SmartConnect: прямой интернет доступен, ищем лучший сервер")
+            sendStatus(context, context.getString(R.string.status_testing_servers))
+        } else {
+            Log.w(AppConfig.TAG, "SmartConnect: прямой интернет недоступен — возможно глушат")
+            sendStatus(context, context.getString(R.string.status_jamming_detected))
+        }
 
         checkAndSetupSubscription(context)
         val allServers = MmkvManager.decodeServerList()
