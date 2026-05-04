@@ -207,6 +207,7 @@ object AngConfigManager {
     }
 
     /**
+    /**
      * Parses a batch of configurations.
      *
      * @param servers The servers string.
@@ -219,6 +220,30 @@ object AngConfigManager {
             if (servers == null) {
                 return 0
             }
+
+            val subItem = MmkvManager.decodeSubscription(subid)
+            val lines = servers.lines().distinct().reversed()
+            val newConfigs = mutableListOf<ProfileItem>()
+
+            // Предварительный парсинг всех строк
+            for (line in lines) {
+                val config = identifyConfigType(line) ?: continue
+                
+                // Применяем фильтр подписки если есть
+                if (subItem?.filter != null && subItem.filter?.isNotEmpty() == true && config.remarks.isNotEmpty()) {
+                    val matched = Regex(pattern = subItem.filter ?: "")
+                        .containsMatchIn(input = config.remarks)
+                    if (!matched) continue
+                }
+                newConfigs.add(config)
+            }
+
+            // Если не удалось распарсить ни одного конфига — не трогаем старые!
+            if (newConfigs.isEmpty() && !append) {
+                Log.w(AppConfig.TAG, "No valid configs found in subscription update for $subid, keeping old configs.")
+                return 0
+            }
+
             val removedSelectedServer =
                 if (!TextUtils.isEmpty(subid) && !append) {
                     MmkvManager.decodeServerConfig(
@@ -232,26 +257,53 @@ object AngConfigManager {
                 } else {
                     null
                 }
+
             if (!append) {
                 MmkvManager.removeServerViaSubid(subid)
             }
 
-            val subItem = MmkvManager.decodeSubscription(subid)
             var count = 0
-            servers.lines()
-                .distinct()
-                .reversed()
-                .forEach {
-                    val resId = parseConfig(it, subid, subItem, removedSelectedServer)
-                    if (resId == 0) {
-                        count++
-                    }
+            for (config in newConfigs) {
+                config.subscriptionId = subid
+                config.description = generateDescription(config)
+                val guid = MmkvManager.encodeServerConfig("", config)
+                
+                // Восстановление выбора сервера
+                if (removedSelectedServer != null &&
+                    config.server == removedSelectedServer.server &&
+                    config.serverPort == removedSelectedServer.serverPort &&
+                    config.remarks == removedSelectedServer.remarks
+                ) {
+                    MmkvManager.setSelectServer(guid)
                 }
+                count++
+            }
             return count
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to parse batch config", e)
         }
         return 0
+    }
+
+    private fun identifyConfigType(str: String?): ProfileItem? {
+        if (str == null || TextUtils.isEmpty(str)) return null
+        return if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
+            VmessFmt.parse(str)
+        } else if (str.startsWith(EConfigType.SHADOWSOCKS.protocolScheme)) {
+            ShadowsocksFmt.parse(str)
+        } else if (str.startsWith(EConfigType.SOCKS.protocolScheme)) {
+            SocksFmt.parse(str)
+        } else if (str.startsWith(EConfigType.TROJAN.protocolScheme)) {
+            TrojanFmt.parse(str)
+        } else if (str.startsWith(EConfigType.VLESS.protocolScheme)) {
+            VlessFmt.parse(str)
+        } else if (str.startsWith(EConfigType.WIREGUARD.protocolScheme)) {
+            WireguardFmt.parse(str)
+        } else if (str.startsWith(EConfigType.HYSTERIA2.protocolScheme) || str.startsWith(HY2)) {
+            Hysteria2Fmt.parse(str)
+        } else {
+            null
+        }
     }
 
     /**
@@ -333,31 +385,8 @@ object AngConfigManager {
         removedSelectedServer: ProfileItem?
     ): Int {
         try {
-            if (str == null || TextUtils.isEmpty(str)) {
-                return R.string.toast_none_data
-            }
+            val config = identifyConfigType(str) ?: return R.string.toast_incorrect_protocol
 
-            val config = if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
-                VmessFmt.parse(str)
-            } else if (str.startsWith(EConfigType.SHADOWSOCKS.protocolScheme)) {
-                ShadowsocksFmt.parse(str)
-            } else if (str.startsWith(EConfigType.SOCKS.protocolScheme)) {
-                SocksFmt.parse(str)
-            } else if (str.startsWith(EConfigType.TROJAN.protocolScheme)) {
-                TrojanFmt.parse(str)
-            } else if (str.startsWith(EConfigType.VLESS.protocolScheme)) {
-                VlessFmt.parse(str)
-            } else if (str.startsWith(EConfigType.WIREGUARD.protocolScheme)) {
-                WireguardFmt.parse(str)
-            } else if (str.startsWith(EConfigType.HYSTERIA2.protocolScheme) || str.startsWith(HY2)) {
-                Hysteria2Fmt.parse(str)
-            } else {
-                null
-            }
-
-            if (config == null) {
-                return R.string.toast_incorrect_protocol
-            }
             //filter
             if (subItem?.filter != null && subItem.filter?.isNotEmpty() == true && config.remarks.isNotEmpty()) {
                 val matched = Regex(pattern = subItem.filter ?: "")
