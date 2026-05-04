@@ -164,6 +164,44 @@ object MmkvManager {
     }
 
     /**
+     * Removes duplicate servers based on address, port and remarks.
+     * @return The number of removed servers.
+     */
+    fun removeDuplicateServer(): Int {
+        val serverList = decodeServerList()
+        val uniqueServers = mutableSetOf<String>() // key = address:port:remarks
+        val toDelete = mutableListOf<String>()
+        val newList = mutableListOf<String>()
+        
+        for (guid in serverList) {
+            val profile = decodeServerConfig(guid)
+            if (profile == null) {
+                toDelete.add(guid)
+                continue
+            }
+            
+            val key = "${profile.server}:${profile.serverPort}:${profile.remarks}"
+            if (uniqueServers.contains(key)) {
+                toDelete.add(guid)
+            } else {
+                uniqueServers.add(key)
+                newList.add(guid)
+            }
+        }
+        
+        for (guid in toDelete) {
+            profileFullStorage.remove(guid)
+            serverAffStorage.remove(guid)
+        }
+        
+        if (toDelete.isNotEmpty()) {
+            encodeServerList(newList)
+        }
+        
+        return toDelete.size
+    }
+
+    /**
      * Removes the server configurations via subscription ID.
      *
      * @param subid The subscription ID.

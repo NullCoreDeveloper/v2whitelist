@@ -494,11 +494,11 @@ object AngConfigManager {
             if (configText.isEmpty()) {
                 return 0
             }
-            val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
-                Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs")
+                MmkvManager.removeDuplicateServer() // Авто-очистка дубликатов
+                Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs (duplicates cleaned)")
             }
             return count
         } catch (e: Exception) {
