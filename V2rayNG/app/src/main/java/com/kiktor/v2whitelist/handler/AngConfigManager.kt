@@ -458,39 +458,39 @@ object AngConfigManager {
             Log.i(AppConfig.TAG, url)
             val userAgent = it.subscription.userAgent
 
-            // 1. Приоритет: SOCKS5 прокси (VPN активен, порт 10808 всегда работает)
-            var configText = if (socksPort > 0) {
-                try {
-                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 6000, socksPort)
-                    Log.i(AppConfig.TAG, "Update subscription via SOCKS proxy: success")
+            // 1. Прямое соединение (Приоритет: в TUN режиме VPN захватит трафик автоматически, это быстрее всего)
+            var configText = try {
+                HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000)
+            } catch (e: Exception) {
+                Log.d(AppConfig.TAG, "Update sub (Direct) failed: ${e.message}")
+                ""
+            }
+
+            // 2. SOCKS5 прокси (Если VPN активен, локальный порт 10808 всегда работает)
+            if (configText.isEmpty() && socksPort > 0) {
+                configText = try {
+                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 4000, socksPort)
+                    Log.i(AppConfig.TAG, "Update sub (SOCKS) success")
                     result
                 } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update subscription via SOCKS: ${e.message}, trying HTTP proxy...")
-                    ""
-                }
-            } else ""
-
-            // 2. HTTP прокси (если SOCKS недоступен или не указан)
-            if (configText.isEmpty()) {
-                configText = try {
-                    val httpPort = AppConfig.PORT_SOCKS.toInt() // Используем стандартный порт
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000, httpPort)
-                } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update subscription: proxy not ready or other error: ${e.message}")
+                    Log.d(AppConfig.TAG, "Update sub (SOCKS) failed: ${e.message}")
                     ""
                 }
             }
 
-            // 3. Прямое соединение (в TUN режиме VPN захватит трафик автоматически)
+            // 3. HTTP прокси (Порт 10809 для Xray/V2ray)
             if (configText.isEmpty()) {
                 configText = try {
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000)
+                    val httpPort = AppConfig.PORT_SOCKS.toInt() + 1 // 10809
+                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000, httpPort)
                 } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent: ${e.message}")
+                    Log.d(AppConfig.TAG, "Update sub (HTTP) failed: ${e.message}")
                     ""
                 }
             }
+
             if (configText.isEmpty()) {
+                Log.w(AppConfig.TAG, "Update subscription: all methods failed for $url")
                 return 0
             }
             val count = parseConfigViaSub(configText, it.guid, false)
