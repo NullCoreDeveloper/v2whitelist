@@ -88,9 +88,11 @@ object MmkvManager {
 
     /**
      * Decodes the server configuration.
+     * Returns null if the entry is missing OR if JSON is corrupted.
+     * In both cases the server is NOT automatically removed — caller decides.
      *
      * @param guid The server GUID.
-     * @return The server configuration.
+     * @return The server configuration, or null if missing/corrupted.
      */
     fun decodeServerConfig(guid: String): ProfileItem? {
         if (guid.isBlank()) {
@@ -101,6 +103,19 @@ object MmkvManager {
             return null
         }
         return JsonUtil.fromJson(json, ProfileItem::class.java)
+    }
+
+    /**
+     * Проверяет, существует ли запись о сервере в MMKV (не важно, валидный JSON или нет).
+     * Используется чтобы отличить "нет записи" от "запись есть, но JSON повреждён".
+     *
+     * @param guid The server GUID.
+     * @return true если запись присутствует в хранилище (даже если JSON битый).
+     */
+    private fun serverRawJsonExists(guid: String): Boolean {
+        if (guid.isBlank()) return false
+        val json = profileFullStorage.decodeString(guid)
+        return !json.isNullOrBlank()
     }
 
 //    fun decodeProfileConfig(guid: String): ProfileLiteItem? {
@@ -165,21 +180,42 @@ object MmkvManager {
 
     /**
      * Removes duplicate servers based on address, port and remarks.
+     *
+     * ВАЖНО: серверы с повреждённым JSON (profile == null, но запись есть в MMKV)
+     * НЕ удаляются — они просто пропускаются. Это защищает от потери серверов
+     * при обрыве интернета/записи (MalformedJsonException).
+     * Удаляются только GUID-ы у которых запись реально отсутствует в MMKV.
+     *
      * @return The number of removed servers.
      */
     fun removeDuplicateServer(): Int {
         val serverList = decodeServerList()
-        val uniqueServers = mutableSetOf<String>() // key = address:port:id
+        val uniqueServers = mutableSetOf<String>() // key = address:port:password
         val toDelete = mutableListOf<String>()
         val newList = mutableListOf<String>()
-        
+
         for (guid in serverList) {
             val profile = decodeServerConfig(guid)
             if (profile == null) {
-                toDelete.add(guid)
+                // Различаем: JSON отсутствует VS JSON повреждён
+                if (serverRawJsonExists(guid)) {
+                    // Запись в MMKV есть, но JSON битый — СОХРАНЯЕМ сервер, не трогаем
+                    android.util.Log.w(
+                        com.kiktor.v2whitelist.AppConfig.TAG,
+                        "removeDuplicateServer: GUID $guid — JSON повреждён, пропускаем (сервер сохранён)"
+                    )
+                    newList.add(guid)
+                } else {
+                    // Записи нет вообще — сиротский GUID, удаляем
+                    android.util.Log.w(
+                        com.kiktor.v2whitelist.AppConfig.TAG,
+                        "removeDuplicateServer: GUID $guid — запись отсутствует в MMKV, удаляем"
+                    )
+                    toDelete.add(guid)
+                }
                 continue
             }
-            
+
             // Уникальность определяем по техническим параметрам: Адрес + Порт + Пароль (ключ)
             val key = "${profile.server}:${profile.serverPort}:${profile.password}"
             if (uniqueServers.contains(key)) {
@@ -189,17 +225,17 @@ object MmkvManager {
                 newList.add(guid)
             }
         }
-        
+
         for (guid in toDelete) {
             profileFullStorage.remove(guid)
             serverRawStorage.remove(guid)
             serverAffStorage.remove(guid)
         }
-        
+
         if (toDelete.isNotEmpty()) {
             encodeServerList(newList)
         }
-        
+
         return toDelete.size
     }
 

@@ -65,3 +65,5 @@ V2rayNG/app/google-services.json
 Thumbs.db
 .DS_Store
 CONTRIBUTING.md
+my-release-key.jks
+key_base64.txt

@@ -8,6 +8,7 @@ import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
+import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import com.kiktor.v2whitelist.AppConfig
 import java.lang.reflect.Type
@@ -26,14 +27,23 @@ object JsonUtil {
     }
 
     /**
-     * Parses a JSON string into an object of the specified class.
+     * Парсит JSON строку в объект указанного класса.
+     * При повреждённом JSON (например, из-за обрыва записи) возвращает null вместо краша.
      *
-     * @param src The JSON string to parse.
-     * @param cls The class of the object to parse into.
-     * @return The parsed object.
+     * @param src Строка JSON для парсинга.
+     * @param cls Класс объекта для парсинга.
+     * @return Распарсенный объект, или null если JSON повреждён.
      */
     fun <T> fromJson(src: String, cls: Class<T>): T? {
-        return gson.fromJson(src, cls)
+        return try {
+            gson.fromJson(src, cls)
+        } catch (e: JsonSyntaxException) {
+            Log.e(AppConfig.TAG, "JsonUtil.fromJson: повреждённый JSON для ${cls.simpleName}: ${e.message}")
+            null
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "JsonUtil.fromJson: ошибка парсинга для ${cls.simpleName}: ${e.message}")
+            null
+        }
     }
 
     /**
