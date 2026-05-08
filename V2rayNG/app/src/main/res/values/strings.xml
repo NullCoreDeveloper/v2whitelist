@@ -495,4 +495,9 @@
     <string name="title_last_update_never">Never</string>
     <string name="title_pref_check_update_now">Check for updates now</string>
     <string name="summary_pref_check_update_now">Manually trigger the background subscription update process</string>
+
+    <string name="dialog_battery_optimization_title">Background activity</string>
+    <string name="dialog_battery_optimization_message">To ensure subscriptions are updated on time, the app needs permission to run in the background without restrictions.\n\nIn the settings that open, select \"Unrestricted\" (or \"Don\'t optimize battery\").</string>
+    <string name="dialog_battery_optimization_ok">Configure</string>
+    <string name="dialog_battery_optimization_no_remind">Don\'t ask again</string>
 </resources>
