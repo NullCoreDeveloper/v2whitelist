@@ -69,17 +69,30 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             restartV2Ray()
         }
     }
-    // Лаунчер для сканирования QR-кода (добавление сервера)
     private val scannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val scanResult = result.data?.getStringExtra("SCAN_RESULT") ?: return@registerForActivityResult
+            val oldServers = MmkvManager.decodeServerList()
             val (count, _) = com.kiktor.v2whitelist.handler.AngConfigManager.importBatchConfig(scanResult, "", true)
             if (count > 0) {
                 toast(getString(R.string.title_import_config_count, count))
                 mainViewModel.reloadServerList()
                 
                 // Авто-подключение после сканирования
-                handleConnectAction()
+                val newServers = MmkvManager.decodeServerList()
+                val addedGuid = newServers.firstOrNull { !oldServers.contains(it) }
+
+                if (addedGuid != null) {
+                    MmkvManager.setSelectServer(addedGuid)
+                    MmkvManager.saveLastConnectedServer(addedGuid)
+                    if (mainViewModel.isRunning.value == true) {
+                        com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                    } else {
+                        startV2Ray()
+                    }
+                } else {
+                    handleConnectAction()
+                }
                 
                 // Умный догруз подписок: если серверов почти нет, обновляем их через новый туннель
                 val totalServers = MmkvManager.decodeServerList().size
