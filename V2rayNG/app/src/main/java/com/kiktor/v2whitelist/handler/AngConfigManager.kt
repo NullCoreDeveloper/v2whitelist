@@ -458,16 +458,9 @@ object AngConfigManager {
             Log.i(AppConfig.TAG, url)
             val userAgent = it.subscription.userAgent
 
-            // 1. Прямое соединение (Приоритет: в TUN режиме VPN захватит трафик автоматически, это быстрее всего)
-            var configText = try {
-                HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000)
-            } catch (e: Exception) {
-                Log.d(AppConfig.TAG, "Update sub (Direct) failed: ${e.message}")
-                ""
-            }
-
-            // 2. SOCKS5 прокси (Если VPN активен, локальный порт 10808 всегда работает)
-            if (configText.isEmpty() && socksPort > 0) {
+            // 1. SOCKS5 прокси (Если VPN активен, локальный порт 10808)
+            var configText = ""
+            if (socksPort > 0) {
                 configText = try {
                     val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 4000, socksPort)
                     Log.i(AppConfig.TAG, "Update sub (SOCKS) success")
@@ -478,13 +471,23 @@ object AngConfigManager {
                 }
             }
 
-            // 3. HTTP прокси (Порт 10809 для Xray/V2ray)
-            if (configText.isEmpty()) {
+            // 2. HTTP прокси (Порт 10809 для Xray/V2ray)
+            if (configText.isEmpty() && socksPort > 0) {
                 configText = try {
                     val httpPort = AppConfig.PORT_SOCKS.toInt() + 1 // 10809
                     HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000, httpPort)
                 } catch (e: Exception) {
                     Log.d(AppConfig.TAG, "Update sub (HTTP) failed: ${e.message}")
+                    ""
+                }
+            }
+
+            // 3. Прямое соединение (Fallback, или если VPN не активен)
+            if (configText.isEmpty()) {
+                configText = try {
+                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000)
+                } catch (e: Exception) {
+                    Log.d(AppConfig.TAG, "Update sub (Direct) failed: ${e.message}")
                     ""
                 }
             }
