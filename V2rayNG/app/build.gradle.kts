@@ -4,6 +4,26 @@ plugins {
     id("com.jaredsburrows.license")
 }
 
+fun getVersionNameFromGit(): String {
+    return try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
+        val version = process.inputStream.bufferedReader().readText().trim().removePrefix("v")
+        if (version.isEmpty()) "1.0.4" else version
+    } catch (e: Exception) {
+        "1.0.4"
+    }
+}
+
+fun getVersionCodeFromGit(): Int {
+    return try {
+        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD").start()
+        val count = process.inputStream.bufferedReader().readText().trim().toIntOrNull()
+        count ?: 712
+    } catch (e: Exception) {
+        712
+    }
+}
+
 android {
     namespace = "com.kiktor.v2whitelist"
     compileSdk = 36
@@ -12,8 +32,8 @@ android {
         applicationId = "com.kiktor.v2whitelist"
         minSdk = 24
         targetSdk = 36
-        versionCode = 712
-        versionName = "1.0.4"
+        versionCode = getVersionCodeFromGit()
+        versionName = getVersionNameFromGit()
         multiDexEnabled = true
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
