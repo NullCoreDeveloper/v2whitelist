@@ -458,26 +458,29 @@ object AngConfigManager {
             Log.i(AppConfig.TAG, url)
             val userAgent = it.subscription.userAgent
 
-            // 1. SOCKS5 прокси (Если VPN активен, локальный порт 10808)
             var configText = ""
-            if (socksPort > 0) {
+            val httpPort = if (socksPort > 0) AppConfig.PORT_SOCKS.toInt() + 1 else 0
+
+            // 1. HTTP прокси (Порт 10809) - приоритет, так как он резолвит DNS через прокси, а не локально!
+            if (httpPort > 0) {
+                configText = try {
+                    val result = HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000, httpPort)
+                    Log.i(AppConfig.TAG, "Update sub (HTTP) success")
+                    result
+                } catch (e: Exception) {
+                    Log.d(AppConfig.TAG, "Update sub (HTTP) failed: ${e.message}")
+                    ""
+                }
+            }
+
+            // 2. SOCKS5 прокси (Порт 10808) - fallback, если HTTP по какой-то причине недоступен
+            if (configText.isEmpty() && socksPort > 0) {
                 configText = try {
                     val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 4000, socksPort)
                     Log.i(AppConfig.TAG, "Update sub (SOCKS) success")
                     result
                 } catch (e: Exception) {
                     Log.d(AppConfig.TAG, "Update sub (SOCKS) failed: ${e.message}")
-                    ""
-                }
-            }
-
-            // 2. HTTP прокси (Порт 10809 для Xray/V2ray)
-            if (configText.isEmpty() && socksPort > 0) {
-                configText = try {
-                    val httpPort = AppConfig.PORT_SOCKS.toInt() + 1 // 10809
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000, httpPort)
-                } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update sub (HTTP) failed: ${e.message}")
                     ""
                 }
             }

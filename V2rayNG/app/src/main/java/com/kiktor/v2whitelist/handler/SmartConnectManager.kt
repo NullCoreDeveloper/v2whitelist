@@ -79,8 +79,9 @@ object SmartConnectManager {
         return try {
             val url = URL(WHITELIST_URL)
             val connection = if (socksPort > 0) {
+                val httpPort = socksPort + 1
                 url.openConnection(
-                    Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+                    Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
                 ) as HttpURLConnection
             } else {
                 url.openConnection() as HttpURLConnection
@@ -123,13 +124,20 @@ object SmartConnectManager {
      */
     suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
+        
+        // Получаем socksPort, если VPN активен
+        val socksPort = if (com.kiktor.v2whitelist.service.V2RayServiceManager.isRunning()) {
+            com.kiktor.v2whitelist.util.SettingsManager.getSocksPort()
+        } else {
+            0
+        }
 
         if (useBuiltin) {
             val subscriptions = MmkvManager.decodeSubscriptions()
             val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
 
-            // Разрешаем URL через матрёшку
-            val realUrl = resolveSubscriptionUrl()
+            // Разрешаем URL через матрёшку с учетом VPN
+            val realUrl = resolveSubscriptionUrl(socksPort)
 
             if (existingSub == null) {
                 Log.d(AppConfig.TAG, "Adding hardcoded subscription")
@@ -156,7 +164,7 @@ object SmartConnectManager {
                     sendStatus(context, context.getString(R.string.status_updating_subscription))
                     // Ограничиваем время ожидания обновления 6 секундами
                     kotlinx.coroutines.withTimeoutOrNull(6000) {
-                        AngConfigManager.updateConfigViaSub(existingSub)
+                        AngConfigManager.updateConfigViaSub(existingSub, socksPort)
                     }
                 }
             }
