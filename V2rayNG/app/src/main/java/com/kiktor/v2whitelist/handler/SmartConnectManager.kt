@@ -126,8 +126,8 @@ object SmartConnectManager {
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
         
         // Получаем socksPort, если VPN активен
-        val socksPort = if (com.kiktor.v2whitelist.service.V2RayServiceManager.isRunning()) {
-            com.kiktor.v2whitelist.util.SettingsManager.getSocksPort()
+        val socksPort = if (com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()) {
+            com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
         } else {
             0
         }
