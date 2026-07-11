@@ -264,6 +264,9 @@
 
     <string name="title_pref_promotion">Promotion</string>
 
+    <string name="title_pref_auto_check_update">Auto check for app updates</string>
+    <string name="summary_pref_auto_check_update">Check for new versions on GitHub when the app starts</string>
+
     <string name="title_pref_auto_update_subscription">Automatic update subscriptions</string>
     <string name="summary_pref_auto_update_subscription">Update your subscriptions automatically at set intervals in the background. Depending on the device, this feature may not always work</string>
     <string name="title_pref_auto_update_interval">Auto Update Interval (Minutes, Min value 15)</string>

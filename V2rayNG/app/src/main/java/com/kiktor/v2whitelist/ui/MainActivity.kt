@@ -160,6 +160,42 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
         
         checkBatteryOptimization()
+        checkAppUpdate()
+    }
+
+    private fun checkAppUpdate() {
+        val shouldCheck = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_CHECK_UPDATE, true)
+        if (!shouldCheck) return
+        
+        lifecycleScope.launch {
+            try {
+                val result = com.kiktor.v2whitelist.handler.UpdateCheckerManager.checkForUpdate(false)
+                if (result.hasUpdate && !result.downloadUrl.isNullOrEmpty()) {
+                    showUpdateNotification(result)
+                }
+            } catch (e: Exception) {
+                Log.d(AppConfig.TAG, "Auto update check failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun showUpdateNotification(result: com.kiktor.v2whitelist.dto.CheckUpdateResult) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.downloadUrl))
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            this, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = androidx.core.app.NotificationCompat.Builder(this, AppConfig.RAY_NG_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_name)
+            .setContentTitle(getString(R.string.update_new_version_found, result.latestVersion))
+            .setContentText(getString(R.string.update_now))
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        val notificationManager = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.notify(1001, builder.build())
     }
 
     private fun handleUpdateSubscription() {

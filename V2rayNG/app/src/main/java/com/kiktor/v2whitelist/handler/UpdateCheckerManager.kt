@@ -107,18 +107,10 @@ object UpdateCheckerManager {
     }
 
     private fun getDownloadUrl(release: GitHubRelease, abi: String): String {
-        val fDroid = "fdroid"
-
-        val assetsByAbi = release.assets.filter {
-            (it.name.contains(abi, true))
+        // Ищем конкретно универсальную сборку, исключая fdroid
+        val asset = release.assets.firstOrNull { 
+            it.name.contains("universal", ignoreCase = true) && !it.name.contains("fdroid", ignoreCase = true) 
         }
-
-        val asset = if (BuildConfig.APPLICATION_ID.contains(fDroid, ignoreCase = true)) {
-            assetsByAbi.firstOrNull { it.name.contains(fDroid) }
-        } else {
-            assetsByAbi.firstOrNull { !it.name.contains(fDroid) }
-        }
-
         return asset?.browserDownloadUrl
             ?: throw IllegalStateException("No compatible APK found")
     }
