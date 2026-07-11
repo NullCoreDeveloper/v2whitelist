@@ -125,9 +125,10 @@ object SmartConnectManager {
     suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
         
-        // Получаем socksPort, если VPN активен
-        val socksPort = if (com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()) {
-            com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
+        // Надежная проверка работы прокси (независимо от процесса VPN)
+        val candidateSocksPort = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
+        val socksPort = if (isProxyRunning(candidateSocksPort)) {
+            candidateSocksPort
         } else {
             0
         }
@@ -156,16 +157,6 @@ object SmartConnectManager {
                     Log.d(AppConfig.TAG, "Subscription URL changed, updating: $realUrl")
                     subItem.url = realUrl
                     MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
-                }
-
-                val lastUpdated = subItem.lastUpdated
-                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                    Log.d(AppConfig.TAG, "Updating hardcoded subscription (time passed)")
-                    sendStatus(context, context.getString(R.string.status_updating_subscription))
-                    // Ограничиваем время ожидания обновления 6 секундами
-                    kotlinx.coroutines.withTimeoutOrNull(6000) {
-                        AngConfigManager.updateConfigViaSub(existingSub, socksPort)
-                    }
                 }
             }
         }
@@ -198,13 +189,6 @@ object SmartConnectManager {
                     subItem.url = sub.url
                     subItem.remarks = sub.name
                     MmkvManager.encodeSubscription(subId, subItem)
-                }
-                val lastUpdated = subItem.lastUpdated
-                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                    // Ограничиваем время ожидания обновления 6 секундами
-                    kotlinx.coroutines.withTimeoutOrNull(6000) {
-                        AngConfigManager.updateConfigViaSub(existing)
-                    }
                 }
             }
         }
@@ -239,14 +223,27 @@ object SmartConnectManager {
      * Force updates all active subscriptions.
      * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
      */
-    suspend fun updateSubscription(context: Context) = withContext(Dispatchers.IO) {
+    suspend fun updateSubscription(context: Context, isStartup: Boolean = false) = withContext(Dispatchers.IO) {
         // Сбрасываем кэш: после обновления список серверов изменится
         MmkvManager.clearLastConnectedServer()
         Log.i(AppConfig.TAG, "updateSubscription: кэш последнего сервера сброшен")
 
-        // Если VPN активен — используем SOCKS прокси для загрузки подписок через VPN
-        val socksPort = if (V2RayServiceManager.isRunning()) SettingsManager.getSocksPort() else 0
-        Log.i(AppConfig.TAG, "updateSubscription: VPN=${V2RayServiceManager.isRunning()}, socksPort=$socksPort")
+        val candidateSocksPort = SettingsManager.getSocksPort()
+        var socksPort = 0
+        var vpnStarted = false
+        
+        // Ожидаем запуска прокси (дольше при старте приложения, так как он может запускаться SmartConnect'ом)
+        val waitLoops = if (isStartup) 8 else 1
+        for (i in 0 until waitLoops) {
+            if (isProxyRunning(candidateSocksPort)) {
+                socksPort = candidateSocksPort
+                vpnStarted = true
+                break
+            }
+            if (i < waitLoops - 1) delay(1000)
+        }
+        
+        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort")
 
         val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
 
@@ -593,6 +590,20 @@ object SmartConnectManager {
                     }
                 }
             }
+
+            // Фоновое авто-обновление подписки после установки соединения
+            val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_UPDATE_SUBSCRIPTION, true)
+            if (isAutoUpdateEnabled) {
+                val existingSub = MmkvManager.decodeSubscriptions().find { it.guid == SUBSCRIPTION_ID }
+                val lastUpdated = existingSub?.subscription?.lastUpdated ?: 0L
+                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
+                    Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
+                    GlobalScope.launch(Dispatchers.IO) {
+                        updateSubscription(context, isStartup = true)
+                    }
+                }
+            }
+
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
             sendStatus(context, context.getString(R.string.status_no_servers))
