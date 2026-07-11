@@ -6,7 +6,7 @@ plugins {
 
 fun getVersionNameFromGit(): String {
     return try {
-        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0").start()
+        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0", "--match", "v*").start()
         val version = process.inputStream.bufferedReader().readText().trim().removePrefix("v")
         if (version.isEmpty()) "1.0.4" else version
     } catch (e: Exception) {
