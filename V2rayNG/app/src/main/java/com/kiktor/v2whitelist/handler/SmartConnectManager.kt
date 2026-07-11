@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.GlobalScope
 import kotlin.random.Random
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
@@ -590,9 +591,9 @@ object SmartConnectManager {
                     }
                 }
             }
-
+            
             // Фоновое авто-обновление подписки после установки соединения
-            val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_UPDATE_SUBSCRIPTION, true)
+            val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
             if (isAutoUpdateEnabled) {
                 val existingSub = MmkvManager.decodeSubscriptions().find { it.guid == SUBSCRIPTION_ID }
                 val lastUpdated = existingSub?.subscription?.lastUpdated ?: 0L
@@ -679,6 +680,21 @@ object SmartConnectManager {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Надежно проверяет, работает ли прокси на локальном порту (межпроцессная проверка)
+     */
+    private fun isProxyRunning(port: Int): Boolean {
+        if (port <= 0) return false
+        return try {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("127.0.0.1", port), 500)
+                true
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 }
