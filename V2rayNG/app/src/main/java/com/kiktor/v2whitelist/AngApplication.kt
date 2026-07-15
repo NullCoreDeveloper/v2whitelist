@@ -60,12 +60,13 @@ class AngApplication : MultiDexApplication() {
 
         // Initialize V2Ray core environment globally (needed in all processes)
         V2RayNativeManager.initCoreEnv(this)
+        
+        // Initialize WorkManager globally (needed for background processes too)
+        WorkManager.initialize(this, workManagerConfiguration)
 
         // The rest only runs in the main process
         if (isMain) {
             SettingsManager.setNightMode()
-            // Initialize WorkManager with the custom configuration
-            WorkManager.initialize(this, workManagerConfiguration)
 
             SettingsManager.initRoutingRulesets(this)
             SettingsManager.migrateHysteria2PinSHA256()

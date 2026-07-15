@@ -93,7 +93,9 @@ class SettingsActivity : BaseActivity() {
                 autoUpdateCheck?.isChecked = value
                 autoUpdateInterval?.isEnabled = value
                 // Перепланируем задачу с новыми настройками
-                com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
+                view?.post {
+                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
+                }
                 true
             }
             autoUpdateInterval?.setOnPreferenceChangeListener { _, newValue ->
