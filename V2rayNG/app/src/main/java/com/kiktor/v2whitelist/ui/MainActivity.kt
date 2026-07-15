@@ -133,17 +133,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
-            
-            // Находим время последнего обновления
-            val subs = MmkvManager.decodeSubscriptions()
-            val lastUpdateTime = subs.maxOfOrNull { it.subscription.lastUpdated } ?: 0L
-            val tvLastUpdate = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_last_update)
-            if (lastUpdateTime > 0) {
-                val dateStr = Utils.formatTimestamp(lastUpdateTime)
-                tvLastUpdate.text = getString(R.string.title_last_update, dateStr)
-            } else {
-                tvLastUpdate.text = getString(R.string.title_last_update_never)
-            }
 
             bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_developer_link)?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/NullCoreDeveloper/v2whitelist")
@@ -208,6 +197,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             SmartConnectManager.updateSubscription(this@MainActivity)
             mainViewModel.reloadServerList()
             updateUIState(mainViewModel.isRunning.value == true)
+            updateSubscriptionStatusUI()
         }
     }
 
@@ -348,6 +338,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     override fun onResume() {
         super.onResume()
+        updateSubscriptionStatusUI()
     }
 
     override fun onPause() {
@@ -394,6 +385,52 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             V2RayServiceManager.stopVService(this)
         }
         startV2Ray()
+    }
+
+    private fun updateSubscriptionStatusUI() {
+        val subs = MmkvManager.decodeSubscriptions()
+        val lastUpdateTime = subs.maxOfOrNull { it.subscription.lastUpdated } ?: 0L
+
+        val tvStatus = findViewById<android.widget.TextView>(R.id.tv_update_status) ?: return
+        val tvTime = findViewById<android.widget.TextView>(R.id.tv_update_time) ?: return
+
+        if (lastUpdateTime <= 0) {
+            tvStatus.text = "Нет подписки"
+            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            tvTime.text = ""
+            return
+        }
+
+        val updateCal = java.util.Calendar.getInstance().apply { timeInMillis = lastUpdateTime }
+        val currentCal = java.util.Calendar.getInstance()
+
+        val isActual = updateCal.get(java.util.Calendar.YEAR) == currentCal.get(java.util.Calendar.YEAR) &&
+                updateCal.get(java.util.Calendar.DAY_OF_YEAR) == currentCal.get(java.util.Calendar.DAY_OF_YEAR) &&
+                updateCal.get(java.util.Calendar.HOUR_OF_DAY) == currentCal.get(java.util.Calendar.HOUR_OF_DAY)
+
+        val elapsedMs = currentCal.timeInMillis - lastUpdateTime
+        val elapsedMins = elapsedMs / (60 * 1000)
+
+        val timeStr = if (elapsedMins < 60) {
+            "${elapsedMins} мин"
+        } else {
+            val h = elapsedMins / 60
+            val m = elapsedMins % 60
+            "${h} ч ${m} мин"
+        }
+
+        val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
+
+        if (isActual) {
+            tvStatus.text = "Актуальна"
+            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+        } else {
+            tvStatus.text = "Устарела"
+            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+        }
+
+        tvTime.text = "$updateTimeStr (прошло $timeStr)"
     }
 
     private fun checkBatteryOptimization() {
