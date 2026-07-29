@@ -488,4 +488,10 @@
     <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
     <string name="custom_sub_add">Добавить подписку</string>
     <string name="custom_sub_name_hint">Название подписки</string>
+    <string name="status_no_subscription">Нет подписки</string>
+    <string name="time_min">%1$s мин</string>
+    <string name="time_h_m">%1$s ч %2$s мин</string>
+    <string name="status_actual">Актуальна</string>
+    <string name="status_stale">Устарела</string>
+    <string name="status_passed_time">%1$s (прошло %2$s)</string>
 </resources>

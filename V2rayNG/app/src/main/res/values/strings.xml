@@ -509,4 +509,10 @@
     <string name="dialog_battery_optimization_message">To ensure subscriptions are updated on time, the app needs permission to run in the background without restrictions.\n\nIn the settings that open, select \"Unrestricted\" (or \"Don\'t optimize battery\").</string>
     <string name="dialog_battery_optimization_ok">Configure</string>
     <string name="dialog_battery_optimization_no_remind">Don\'t ask again</string>
+    <string name="status_no_subscription">No subscription</string>
+    <string name="time_min">%1$s m</string>
+    <string name="time_h_m">%1$s h %2$s m</string>
+    <string name="status_actual">Up to date</string>
+    <string name="status_stale">Stale</string>
+    <string name="status_passed_time">%1$s (updated %2$s ago)</string>
 </resources>

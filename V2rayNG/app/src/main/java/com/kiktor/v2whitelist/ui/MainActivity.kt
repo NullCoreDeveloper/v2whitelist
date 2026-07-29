@@ -395,7 +395,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val tvTime = findViewById<android.widget.TextView>(R.id.tv_update_time) ?: return
 
         if (lastUpdateTime <= 0) {
-            tvStatus.text = "Нет подписки"
+            tvStatus.text = getString(R.string.status_no_subscription)
             tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
             tvTime.text = ""
             return
@@ -412,25 +412,25 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val elapsedMins = elapsedMs / (60 * 1000)
 
         val timeStr = if (elapsedMins < 60) {
-            "${elapsedMins} мин"
+            getString(R.string.time_min, elapsedMins.toString())
         } else {
             val h = elapsedMins / 60
             val m = elapsedMins % 60
-            "${h} ч ${m} мин"
+            getString(R.string.time_h_m, h.toString(), m.toString())
         }
 
         val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
         val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
 
         if (isActual) {
-            tvStatus.text = "Актуальна"
+            tvStatus.text = getString(R.string.status_actual)
             tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
         } else {
-            tvStatus.text = "Устарела"
+            tvStatus.text = getString(R.string.status_stale)
             tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_light))
         }
 
-        tvTime.text = "$updateTimeStr (прошло $timeStr)"
+        tvTime.text = getString(R.string.status_passed_time, updateTimeStr, timeStr)
     }
 
     private fun checkBatteryOptimization() {
