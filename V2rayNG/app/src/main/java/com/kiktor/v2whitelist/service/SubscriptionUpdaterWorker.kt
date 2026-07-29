@@ -94,9 +94,20 @@ class SubscriptionUpdaterWorker(
             val intervalMinutes = intervalStr?.toLongOrNull() ?: 60L
             val finalInterval = if (intervalMinutes < 15) 15L else intervalMinutes // WorkManager min interval is 15m
 
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                .build()
+
             val request = PeriodicWorkRequestBuilder<SubscriptionUpdaterWorker>(
                 finalInterval, TimeUnit.MINUTES
-            ).build()
+            )
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.LINEAR,
+                15,
+                TimeUnit.MINUTES
+            )
+            .build()
 
             // Используем REPLACE вместо KEEP, чтобы новые настройки интервала применились сразу
             workManager.enqueueUniquePeriodicWork(
