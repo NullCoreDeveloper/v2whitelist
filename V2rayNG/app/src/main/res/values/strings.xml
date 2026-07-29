@@ -482,6 +482,12 @@
     <string name="status_profile_check_passed">Профиль прошёл проверку ✔</string>
     <string name="status_speed_test">Тест скорости: %.1f KB/s</string>
 
+    <!-- Custom Endpoint (Proxy Chain) -->
+    <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
+    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect</string>
+    <string name="title_pref_custom_endpoint_url">Конфиг конечного узла</string>
+    <string name="summary_pref_custom_endpoint_url">Вставьте ссылку (vless://, vmess://, и т.д.)</string>
+
     <!-- Custom Subscriptions -->
     <string name="title_custom_subscriptions">Управление подписками</string>
     <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>

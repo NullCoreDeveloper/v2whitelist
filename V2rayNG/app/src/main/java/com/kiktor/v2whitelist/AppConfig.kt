@@ -81,6 +81,10 @@ object AppConfig {
     /** Profile verification (beta) */
     const val PREF_PROFILE_CHECK_ENABLED = "pref_profile_check_enabled"
 
+    /** Custom Endpoint (Proxy Chain) */
+    const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"
+    const val PREF_CUSTOM_ENDPOINT_URL = "pref_custom_endpoint_url"
+
     /** Custom subscriptions */
     const val PREF_USE_BUILTIN_SUB = "pref_use_builtin_sub"
     const val PREF_CUSTOM_SUB_URLS = "pref_custom_sub_urls" // JSON array of custom sub configs

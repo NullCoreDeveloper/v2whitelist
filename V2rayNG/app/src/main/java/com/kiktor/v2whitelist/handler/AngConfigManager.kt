@@ -284,7 +284,7 @@ object AngConfigManager {
         return 0
     }
 
-    private fun identifyConfigType(str: String?): ProfileItem? {
+    fun identifyConfigType(str: String?): ProfileItem? {
         if (str == null || TextUtils.isEmpty(str)) return null
         return if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
             VmessFmt.parse(str)

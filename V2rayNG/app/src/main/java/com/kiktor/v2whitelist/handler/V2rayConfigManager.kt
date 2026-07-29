@@ -254,6 +254,7 @@ object V2rayConfigManager {
 
         getOutbounds(v2rayConfig, config) ?: return result
         getMoreOutbounds(v2rayConfig, config.subscriptionId)
+        getCustomEndpointOutbound(v2rayConfig)
 
         getRouting(v2rayConfig)
 
@@ -319,6 +320,7 @@ object V2rayConfigManager {
         getDns(v2rayConfig)
 
         getBalance(v2rayConfig, config)
+        getCustomEndpointOutbound(v2rayConfig)
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED)) {
             getCustomLocalDns(v2rayConfig)
@@ -829,6 +831,41 @@ object V2rayConfigManager {
         }
 
         return true
+    }
+
+    /**
+     * Configures a custom user endpoint proxy to form a proxy chain.
+     * Local -> Smart Connect Node -> Custom Endpoint -> Internet
+     */
+    private fun getCustomEndpointOutbound(v2rayConfig: V2rayConfig): Boolean {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED) != true) {
+            return false
+        }
+
+        val url = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+        if (url.isNullOrBlank()) {
+            return false
+        }
+
+        try {
+            val customProfile = AngConfigManager.identifyConfigType(url) ?: return false
+            val customOutbound = convertProfile2Outbound(customProfile) ?: return false
+            updateOutboundWithGlobalSettings(customOutbound)
+            
+            // The first outbound is currently the Smart Connect node.
+            // We want traffic to go: Local -> Smart Connect (proxy1) -> Custom Node (proxy)
+            val currentFirstOutbound = v2rayConfig.outbounds[0]
+            currentFirstOutbound.tag = AppConfig.TAG_PROXY + "1"
+            
+            customOutbound.tag = AppConfig.TAG_PROXY
+            customOutbound.ensureSockopt().dialerProxy = currentFirstOutbound.tag
+            
+            v2rayConfig.outbounds.add(0, customOutbound)
+            return true
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to configure custom endpoint outbound", e)
+            return false
+        }
     }
 
     /**

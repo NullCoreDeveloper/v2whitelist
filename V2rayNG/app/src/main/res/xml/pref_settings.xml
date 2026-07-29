@@ -48,6 +48,17 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_vpn_settings">
+        <!-- Custom Endpoint (Proxy Chain) -->
+        <CheckBoxPreference
+            android:key="pref_custom_endpoint_enabled"
+            android:summary="@string/summary_pref_custom_endpoint_enabled"
+            android:title="@string/title_pref_custom_endpoint_enabled" />
+
+        <EditTextPreference
+            android:key="pref_custom_endpoint_url"
+            android:summary="@string/summary_pref_custom_endpoint_url"
+            android:title="@string/title_pref_custom_endpoint_url" />
+
         <CheckBoxPreference
             android:key="pref_prefer_ipv6"
             android:summary="@string/summary_pref_prefer_ipv6"
