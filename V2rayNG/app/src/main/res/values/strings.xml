@@ -22,17 +22,17 @@
     <string name="toast_services_success">Start Services Success</string>
     <string name="toast_services_failure">Start Services Failure</string>
 
-    <string name="status_starting_smart_connect">Ищем лучший сервер для вас…</string>
-    <string name="status_testing_servers">Проверяем скорость серверов…</string>
-    <string name="status_found_best">Нашли отличный сервер! Подключаемся…</string>
-    <string name="status_connecting_to">Подключаемся к %s…</string>
-    <string name="status_using_cached_server">Быстрое подключение к %s…</string>
-    <string name="status_switching_server">Выбираем другой сервер…</string>
-    <string name="status_updating_subscription">Обновляем список серверов…</string>
-    <string name="status_no_servers">Серверы не найдены. Попробуйте обновить список.</string>
-    <string name="status_no_internet">Нет прямого интернета. Ищем серверы для обхода… (может занять время)</string>
-    <string name="status_jamming_detected">Возможно глушат интернет, ищем быстрые сервера для обхода… (может занять время)</string>
-    <string name="status_updating_via_vpn">Обновляем подписку через активный VPN…</string>
+    <string name="status_starting_smart_connect">Looking for the best server…</string>
+    <string name="status_testing_servers">Testing server speeds…</string>
+    <string name="status_found_best">Found a great server! Connecting…</string>
+    <string name="status_connecting_to">Connecting to %s…</string>
+    <string name="status_using_cached_server">Fast connecting to %s…</string>
+    <string name="status_switching_server">Selecting another server…</string>
+    <string name="status_updating_subscription">Updating server list…</string>
+    <string name="status_no_servers">No servers found. Try updating the list.</string>
+    <string name="status_no_internet">No direct internet. Looking for bypass servers… (may take a while)</string>
+    <string name="status_jamming_detected">Possible internet jamming, looking for fast bypass servers… (may take a while)</string>
+    <string name="status_updating_via_vpn">Updating subscription via active VPN…</string>
 
     <!--ServerActivity-->
     <string name="title_server">Config</string>
@@ -445,57 +445,57 @@
         <item>WebDAV</item>
     </string-array>
 
-    <string name="tv_status_protected">Защищено</string>
-    <string name="tv_status_protected_detail">Соединение активно и защищено</string>
-    <string name="tv_status_disconnected_detail">Нажмите Start для подключения</string>
+    <string name="tv_status_protected">Protected</string>
+    <string name="tv_status_protected_detail">Connection is active and protected</string>
+    <string name="tv_status_disconnected_detail">Tap Start to connect</string>
     <string name="btn_label_start">Start</string>
     <string name="btn_label_stop">Stop</string>
-    <string name="btn_label_cancel">Отмена</string>
-    <string name="btn_label_switch">Следующий профиль</string>
-    <string name="btn_label_settings">Настройки</string>
-    <string name="btn_label_logs">Логи</string>
-    <string name="btn_label_update">Обновить</string>
-    <string name="btn_label_about">О проекте</string>
-    <string name="title_check_update">Проверить обновления</string>
-    <string name="tv_server_name">Сервер: %s</string>
+    <string name="btn_label_cancel">Cancel</string>
+    <string name="btn_label_switch">Next Profile</string>
+    <string name="btn_label_settings">Settings</string>
+    <string name="btn_label_logs">Logs</string>
+    <string name="btn_label_update">Update</string>
+    <string name="btn_label_about">About</string>
+    <string name="title_check_update">Check for updates</string>
+    <string name="tv_server_name">Server: %s</string>
     <string name="btn_show_qr">QR</string>
-    <string name="btn_scan_add">Скан</string>
-    <string name="title_qr_current_server">QR-код текущего сервера</string>
+    <string name="btn_scan_add">Scan</string>
+    <string name="title_qr_current_server">Current server QR Code</string>
 
     <!-- Location Filter -->
-    <string name="title_location_filter">Фильтр локаций</string>
-    <string name="btn_label_filter">Фильтр</string>
-    <string name="location_filter_mode_title">Режим фильтра</string>
-    <string name="location_filter_mode_exclude">Исключение</string>
-    <string name="location_filter_mode_whitelist">Белый список</string>
-    <string name="location_filter_mode_exclude_hint">Выбранные локации НЕ будут использоваться</string>
-    <string name="location_filter_mode_whitelist_hint">Только выбранные локации будут использоваться</string>
-    <string name="location_filter_locations_title">Локации</string>
-    <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
-    <string name="location_filter_server_count">Серверов: %d</string>
+    <string name="title_location_filter">Location Filter</string>
+    <string name="btn_label_filter">Filter</string>
+    <string name="location_filter_mode_title">Filter Mode</string>
+    <string name="location_filter_mode_exclude">Exclude</string>
+    <string name="location_filter_mode_whitelist">Whitelist</string>
+    <string name="location_filter_mode_exclude_hint">Selected locations will NOT be used</string>
+    <string name="location_filter_mode_whitelist_hint">Only selected locations will be used</string>
+    <string name="location_filter_locations_title">Locations</string>
+    <string name="location_filter_empty">No available locations. Update subscription.</string>
+    <string name="location_filter_server_count">Servers: %d</string>
 
     <!-- Profile Check (Beta) -->
-    <string name="title_pref_profile_check">Проверка профиля (бета)</string>
-    <string name="summary_pref_profile_check">Проверяет пинг и скорость профиля перед подключением</string>
-    <string name="status_verifying_profile">Проверяем профиль\u2026</string>
-    <string name="status_profile_check_failed">Профиль не прошёл проверку, пробуем другой\u2026</string>
-    <string name="status_profile_check_passed">Профиль прошёл проверку ✔</string>
-    <string name="status_speed_test">Тест скорости: %.1f KB/s</string>
+    <string name="title_pref_profile_check">Profile Check (beta)</string>
+    <string name="summary_pref_profile_check">Checks profile ping and speed before connecting</string>
+    <string name="status_verifying_profile">Verifying profile\u2026</string>
+    <string name="status_profile_check_failed">Profile check failed, trying another\u2026</string>
+    <string name="status_profile_check_passed">Profile passed check ✔</string>
+    <string name="status_speed_test">Speed test: %.1f KB/s</string>
 
     <!-- Custom Endpoint (Proxy Chain) -->
-    <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
-    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect</string>
-    <string name="title_pref_custom_endpoint_url">Конфиг конечного узла</string>
-    <string name="summary_pref_custom_endpoint_url">Вставьте ссылку (vless://, vmess://, и т.д.)</string>
+    <string name="title_pref_custom_endpoint_enabled">Use custom proxy as final endpoint</string>
+    <string name="summary_pref_custom_endpoint_enabled">Route traffic through your personal proxy after connecting to Smart Connect server</string>
+    <string name="title_pref_custom_endpoint_url">Final endpoint config</string>
+    <string name="summary_pref_custom_endpoint_url">Paste URL (vless://, vmess://, etc.)</string>
 
     <!-- Custom Subscriptions -->
-    <string name="title_custom_subscriptions">Управление подписками</string>
-    <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>
-    <string name="summary_pref_use_builtin_sub">Встроенная подписка v2Whitelist Official</string>
-    <string name="title_pref_manage_subs">Управление подписками</string>
-    <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
-    <string name="custom_sub_add">Добавить подписку</string>
-    <string name="custom_sub_name_hint">Название подписки</string>
+    <string name="title_custom_subscriptions">Manage Subscriptions</string>
+    <string name="title_pref_use_builtin_sub">Use built-in subscription</string>
+    <string name="summary_pref_use_builtin_sub">v2Whitelist Official built-in subscription</string>
+    <string name="title_pref_manage_subs">Manage Subscriptions</string>
+    <string name="summary_pref_manage_subs">Add or remove custom subscriptions</string>
+    <string name="custom_sub_add">Add subscription</string>
+    <string name="custom_sub_name_hint">Subscription name</string>
     <string name="custom_sub_url_hint">Subscription URL</string>
     <string name="custom_sub_empty">No custom subscriptions</string>
     <string name="custom_sub_added">Subscription added</string>
