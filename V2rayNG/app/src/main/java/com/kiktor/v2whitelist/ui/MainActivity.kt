@@ -219,7 +219,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             val intent = Intent(Intent.ACTION_VIEW)
             val apkUri = androidx.core.content.FileProvider.getUriForFile(
                 this,
-                "${BuildConfig.APPLICATION_ID}.cache",
+                "${com.kiktor.v2whitelist.BuildConfig.APPLICATION_ID}.cache",
                 apkFile
             )
             intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
