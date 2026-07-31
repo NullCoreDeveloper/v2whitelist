@@ -285,6 +285,19 @@
                         android:textSize="11sp"
                         app:icon="@drawable/ic_settings_24dp" />
 
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_share_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:layout_margin="2dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:text="@string/btn_label_share"
+                        android:textSize="11sp"
+                        app:icon="@drawable/ic_share_24dp" />
+
                 </GridLayout>
 
             </LinearLayout>

@@ -121,6 +121,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
+        binding.btnShareQuick.setOnClickListener { handleShareApp() }
 
         // QR-код текущего подключённого сервера
         binding.btnShowQr.setOnClickListener { showCurrentServerQr() }
@@ -169,22 +170,65 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun showUpdateNotification(result: com.kiktor.v2whitelist.dto.CheckUpdateResult) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.downloadUrl))
-        val pendingIntent = android.app.PendingIntent.getActivity(
-            this, 0, intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
+        val dialogView = layoutInflater.inflate(R.layout.layout_update_dialog, null)
+        val tvTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_title)
+        val tvToggle = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_changelog_toggle)
+        val scrollChangelog = dialogView.findViewById<android.view.View>(R.id.scroll_changelog)
+        val tvChangelog = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_changelog)
 
-        val builder = androidx.core.app.NotificationCompat.Builder(this, AppConfig.RAY_NG_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(getString(R.string.update_new_version_found, result.latestVersion))
-            .setContentText(getString(R.string.update_now))
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+        tvTitle.text = getString(R.string.update_new_version_found, result.latestVersion)
+        tvChangelog.text = result.releaseNotes
 
-        val notificationManager = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        notificationManager.notify(1001, builder.build())
+        var isExpanded = false
+        tvToggle.setOnClickListener {
+            isExpanded = !isExpanded
+            scrollChangelog.visibility = if (isExpanded) android.view.View.VISIBLE else android.view.View.GONE
+            tvToggle.text = if (isExpanded) "▲ Hide Changelog" else "▼ Show Changelog"
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton(R.string.update_now) { _, _ ->
+                result.downloadUrl?.let { url ->
+                    downloadAndInstall(url)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun downloadAndInstall(url: String) {
+        toast("Downloading update...")
+        lifecycleScope.launch {
+            try {
+                val apkFile = com.kiktor.v2whitelist.handler.UpdateCheckerManager.downloadApk(this@MainActivity, url)
+                if (apkFile != null && apkFile.exists()) {
+                    installApk(apkFile)
+                } else {
+                    toast("Failed to download APK")
+                }
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "Update failed: ${e.message}")
+                toast(e.message ?: "Download failed")
+            }
+        }
+    }
+
+    private fun installApk(apkFile: java.io.File) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW)
+            val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "${BuildConfig.APPLICATION_ID}.cache",
+                apkFile
+            )
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive")
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to start install intent: ${e.message}")
+            toast("Failed to start installer")
+        }
     }
 
     private fun handleUpdateSubscription() {
@@ -455,5 +499,26 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 .setNeutralButton(R.string.btn_label_cancel, null)
                 .show()
         }
+    }
+
+
+    private fun handleShareApp() {
+        val isFdroid = com.kiktor.v2whitelist.BuildConfig.APPLICATION_ID.endsWith(".fdroid")
+        val version = com.kiktor.v2whitelist.BuildConfig.VERSION_NAME
+
+        val apkName = if (isFdroid) {
+            "v2whitelist_${version}-fdroid_universal.apk"
+        } else {
+            "v2whitelist_${version}_universal.apk"
+        }
+        val directUrl = "https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v$version/$apkName"
+        
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            val shareText = getString(com.kiktor.v2whitelist.R.string.share_app_text, directUrl)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, getString(com.kiktor.v2whitelist.R.string.app_name))
+            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+        }
+        startActivity(android.content.Intent.createChooser(shareIntent, getString(com.kiktor.v2whitelist.R.string.btn_label_share)))
     }
 }

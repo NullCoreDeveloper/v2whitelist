@@ -465,6 +465,8 @@
     <!-- Location Filter -->
     <string name="title_location_filter">Location Filter</string>
     <string name="btn_label_filter">Filter</string>
+    <string name="btn_label_share">Share</string>
+    <string name="share_app_text">v2Whitelist — a client for bypassing blocks and mobile internet whitelists. Free, no ads, and no tracking! Direct download link:\n%1$s</string>
     <string name="location_filter_mode_title">Filter Mode</string>
     <string name="location_filter_mode_exclude">Exclude</string>
     <string name="location_filter_mode_whitelist">Whitelist</string>

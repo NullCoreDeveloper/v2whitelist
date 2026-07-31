@@ -68,7 +68,8 @@ object UpdateCheckerManager {
                 ?: throw IllegalStateException("Failed to create connection")
 
             try {
-                val apkFile = File(context.cacheDir, "update.apk")
+                val cacheFolder = context.externalCacheDir ?: context.cacheDir
+                val apkFile = File(cacheFolder, "update.apk")
                 Log.i(AppConfig.TAG, "Downloading APK to: ${apkFile.absolutePath}")
 
                 FileOutputStream(apkFile).use { outputStream ->
@@ -108,17 +109,25 @@ object UpdateCheckerManager {
 
     private fun getDownloadUrl(release: GitHubRelease, abi: String): String {
         val isFdroid = BuildConfig.APPLICATION_ID.endsWith(".fdroid")
-        val flavorStr = if (isFdroid) "-fdroid" else ""
         
-        // Search specific ABI first
-        var asset = release.assets.firstOrNull { 
-            it.name.contains(flavorStr, ignoreCase = true) && it.name.contains(abi, ignoreCase = true) 
+        // Filter assets by flavor first
+        val flavorAssets = release.assets.filter { asset ->
+            if (isFdroid) {
+                asset.name.contains("fdroid", ignoreCase = true)
+            } else {
+                !asset.name.contains("fdroid", ignoreCase = true)
+            }
         }
         
-        // Fallback to universal for this flavor
+        // Search specific ABI first
+        var asset = flavorAssets.firstOrNull { 
+            it.name.contains(abi, ignoreCase = true) 
+        }
+        
+        // Fallback to universal
         if (asset == null) {
-            asset = release.assets.firstOrNull {
-                it.name.contains(flavorStr, ignoreCase = true) && it.name.contains("universal", ignoreCase = true)
+            asset = flavorAssets.firstOrNull {
+                it.name.contains("universal", ignoreCase = true)
             }
         }
         

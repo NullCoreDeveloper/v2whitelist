@@ -466,6 +466,8 @@
     <string name="title_qr_current_server">QR-код текущего сервера</string>
     <string name="title_location_filter">Фильтр локаций</string>
     <string name="btn_label_filter">Фильтр</string>
+    <string name="btn_label_share">Поделиться</string>
+    <string name="share_app_text">v2Whitelist — клиент для обхода блокировок и белых списков на мобильном интернете. Бесплатно, без рекламы и слежки! Прямая ссылка на скачивание:\n%1$s</string>
     <string name="location_filter_mode_title">Режим фильтра</string>
     <string name="location_filter_mode_exclude">Исключение</string>
     <string name="location_filter_mode_whitelist">Белый список</string>
