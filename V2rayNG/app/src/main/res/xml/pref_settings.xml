@@ -2,6 +2,55 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory android:title="@string/title_v2whitelist_settings">
+        <!-- Profile Check -->
+        <CheckBoxPreference
+            android:key="pref_profile_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_profile_check"
+            android:title="@string/title_pref_profile_check" />
+
+        <!-- Auto failover -->
+        <CheckBoxPreference
+            android:key="pref_auto_failover"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_auto_failover"
+            android:title="@string/title_pref_auto_failover" />
+
+        <!-- Custom Endpoint (Proxy Chain) -->
+        <CheckBoxPreference
+            android:key="pref_custom_endpoint_enabled"
+            android:summary="@string/summary_pref_custom_endpoint_enabled"
+            android:title="@string/title_pref_custom_endpoint_enabled" />
+
+        <EditTextPreference
+            android:key="pref_custom_endpoint_url"
+            android:summary="@string/summary_pref_custom_endpoint_url"
+            android:title="@string/title_pref_custom_endpoint_url" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/title_sub_setting"
+        app:initialExpandedChildrenCount="0">
+        <CheckBoxPreference
+            android:key="pref_auto_update_subscription"
+            android:summary="@string/summary_pref_auto_update_subscription"
+            android:title="@string/title_pref_auto_update_subscription" />
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_auto_update_interval"
+            android:summary="60"
+            android:title="@string/title_pref_auto_update_interval" />
+        <Preference
+            android:key="pref_check_update_now"
+            android:summary="@string/summary_pref_check_update_now"
+            android:title="@string/title_pref_check_update_now" />
+        <Preference
+            android:key="pref_manage_custom_subs"
+            android:summary="@string/summary_pref_manage_subs"
+            android:title="@string/title_pref_manage_subs" />
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/title_ui_settings">
         <CheckBoxPreference
             android:key="pref_speed_enabled"
@@ -48,17 +97,6 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_vpn_settings">
-        <!-- Custom Endpoint (Proxy Chain) -->
-        <CheckBoxPreference
-            android:key="pref_custom_endpoint_enabled"
-            android:summary="@string/summary_pref_custom_endpoint_enabled"
-            android:title="@string/title_pref_custom_endpoint_enabled" />
-
-        <EditTextPreference
-            android:key="pref_custom_endpoint_url"
-            android:summary="@string/summary_pref_custom_endpoint_url"
-            android:title="@string/title_pref_custom_endpoint_url" />
-
         <CheckBoxPreference
             android:key="pref_prefer_ipv6"
             android:summary="@string/summary_pref_prefer_ipv6"
@@ -135,12 +173,6 @@
             android:key="pref_hev_tunnel_rw_timeout_v2"
             android:summary="300,60"
             android:title="@string/title_pref_hev_tunnel_rw_timeout" />
-
-        <CheckBoxPreference
-            android:key="pref_auto_failover"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_auto_failover"
-            android:title="@string/title_pref_auto_failover" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_core_settings">
@@ -263,35 +295,7 @@
             android:title="@string/title_pref_fragment_packets" />
     </PreferenceCategory>
 
-    <PreferenceCategory
-        android:title="@string/title_sub_setting"
-        app:initialExpandedChildrenCount="0">
-        <CheckBoxPreference
-            android:key="pref_auto_update_subscription"
-            android:summary="@string/summary_pref_auto_update_subscription"
-            android:title="@string/title_pref_auto_update_subscription" />
-        <EditTextPreference
-            android:inputType="number"
-            android:key="pref_auto_update_interval"
-            android:summary="60"
-            android:title="@string/title_pref_auto_update_interval" />
-        <Preference
-            android:key="pref_check_update_now"
-            android:summary="@string/summary_pref_check_update_now"
-            android:title="@string/title_pref_check_update_now" />
-        <Preference
-            android:key="pref_manage_custom_subs"
-            android:summary="@string/summary_pref_manage_subs"
-            android:title="@string/title_pref_manage_subs" />
-    </PreferenceCategory>
-
     <PreferenceCategory android:title="@string/title_advanced">
-
-        <CheckBoxPreference
-            android:key="pref_profile_check_enabled"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_profile_check"
-            android:title="@string/title_pref_profile_check" />
 
         <CheckBoxPreference
             android:key="pref_is_booted"

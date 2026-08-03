@@ -286,6 +286,7 @@
     <string name="summary_pref_auto_failover">Automatically switch to next server if current does not respond</string>
     <string name="failover_notification_title">Server connection lost</string>
     <string name="failover_notification_content">Searching for a new server...</string>
+    <string name="title_v2whitelist_settings">v2Whitelist Features</string>
 
     <string name="title_logcat">Logcat</string>
     <string name="logcat_copy">Copy</string>

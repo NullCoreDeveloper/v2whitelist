@@ -268,6 +268,7 @@
     <string name="summary_pref_auto_failover">Автоматически переключаться на следующий сервер, если текущий не отвечает</string>
     <string name="failover_notification_title">Связь с сервером потеряна</string>
     <string name="failover_notification_content">Ищем новый сервер и переподключаемся...</string>
+    <string name="title_v2whitelist_settings">Фишки v2Whitelist</string>
 
     <string name="title_logcat">Журнал</string>
     <string name="logcat_copy">Копировать</string>
