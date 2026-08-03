@@ -21,7 +21,10 @@ import com.kiktor.v2whitelist.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import java.lang.ref.SoftReference
@@ -31,6 +34,7 @@ object V2RayServiceManager {
     private val coreController: CoreController = V2RayNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
+    private var failoverMonitorJob: Job? = null
 
     var serviceControl: SoftReference<ServiceControl>? = null
         set(value) {
@@ -208,6 +212,7 @@ object V2RayServiceManager {
         try {
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
             NotificationManager.startSpeedNotification(currentConfig)
+            startFailoverMonitor()
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "startCoreLoop: Failed to send startup notifications", e)
             return false
@@ -222,6 +227,10 @@ object V2RayServiceManager {
      */
     fun stopCoreLoop(): Boolean {
         Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
+        
+        failoverMonitorJob?.cancel()
+        failoverMonitorJob = null
+        
         val service = getService() ?: run {
             Log.w(AppConfig.TAG, "stopCoreLoop: service is null")
             return false
@@ -304,6 +313,48 @@ object V2RayServiceManager {
             if (time >= 0) {
                 SpeedtestManager.getRemoteIPInfo()?.let { ip ->
                     MessageUtil.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_SUCCESS, "$result\n$ip")
+                }
+            }
+        }
+    }
+
+    /**
+     * Starts a background job that periodically checks the server connection.
+     * If the server is unresponsive (timeout > 5s or error), it triggers a failover.
+     */
+    private fun startFailoverMonitor() {
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER)) return
+
+        failoverMonitorJob?.cancel()
+        failoverMonitorJob = CoroutineScope(Dispatchers.IO).launch {
+            delay(10000) // Wait 10 seconds before starting checks
+            while (isActive && coreController.isRunning) {
+                delay(30000) // 30 seconds interval
+                val service = getService() ?: break
+                var time = -1L
+                try {
+                    time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
+                } catch (e: Exception) {
+                    Log.e(AppConfig.TAG, "Failover monitor: delay test failed", e)
+                }
+
+                if (time == -1L || time > 5000L) {
+                    Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, initiating failover...")
+                    NotificationManager.showFailoverNotification()
+                    
+                    val serverList = MmkvManager.decodeServerList()
+                    val currentGuid = MmkvManager.getSelectServer()
+                    if (serverList.size > 1 && currentGuid != null) {
+                        val currentIndex = serverList.indexOf(currentGuid)
+                        if (currentIndex != -1) {
+                            val nextIndex = (currentIndex + 1) % serverList.size
+                            val nextGuid = serverList[nextIndex]
+                            Log.i(AppConfig.TAG, "Failover monitor: Switching from $currentGuid to $nextGuid")
+                            MmkvManager.setSelectServer(nextGuid)
+                            MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                            break // Stop monitoring for the old server, a new loop will be started by the switch
+                        }
+                    }
                 }
             }
         }

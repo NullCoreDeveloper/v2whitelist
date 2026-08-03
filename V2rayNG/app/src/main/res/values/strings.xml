@@ -282,6 +282,10 @@
     <string name="summary_pref_use_hev_tunnel">When enabled, TUN will use hev-socks5-tunnel; otherwise, it will use xray-core.</string>
     <string name="title_pref_hev_tunnel_loglevel">Hev Tun Log Level</string>
     <string name="title_pref_hev_tunnel_rw_timeout">Hev Tun read/write timeout (seconds) (tcp,udp default 300,60)</string>
+    <string name="title_pref_auto_failover">Auto Failover</string>
+    <string name="summary_pref_auto_failover">Automatically switch to next server if current does not respond</string>
+    <string name="failover_notification_title">Server connection lost</string>
+    <string name="failover_notification_content">Searching for a new server...</string>
 
     <string name="title_logcat">Logcat</string>
     <string name="logcat_copy">Copy</string>

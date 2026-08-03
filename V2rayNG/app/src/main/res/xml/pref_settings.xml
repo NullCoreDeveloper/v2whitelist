@@ -135,6 +135,12 @@
             android:key="pref_hev_tunnel_rw_timeout_v2"
             android:summary="300,60"
             android:title="@string/title_pref_hev_tunnel_rw_timeout" />
+
+        <CheckBoxPreference
+            android:key="pref_auto_failover"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_auto_failover"
+            android:title="@string/title_pref_auto_failover" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_core_settings">

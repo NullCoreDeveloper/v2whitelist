@@ -236,4 +236,28 @@ object NotificationManager {
     private fun getService(): Service? {
         return V2RayServiceManager.serviceControl?.get()?.getService()
     }
+
+    /**
+     * Shows a failover notification with sound.
+     */
+    fun showFailoverNotification() {
+        val service = getService() ?: return
+        val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val id = "failover_channel_id"
+            val chan = NotificationChannel(id, "Failover Alerts", NotificationManager.IMPORTANCE_DEFAULT)
+            getNotificationManager()?.createNotificationChannel(chan)
+            id
+        } else {
+            ""
+        }
+
+        val builder = NotificationCompat.Builder(service, channelId)
+            .setSmallIcon(R.drawable.ic_stat_name)
+            .setContentTitle(service.getString(R.string.failover_notification_title))
+            .setContentText(service.getString(R.string.failover_notification_content))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+
+        getNotificationManager()?.notify(NOTIFICATION_ID + 1, builder.build())
+    }
 }
