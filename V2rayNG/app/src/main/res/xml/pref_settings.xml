@@ -27,6 +27,13 @@
             android:key="pref_custom_endpoint_url"
             android:summary="@string/summary_pref_custom_endpoint_url"
             android:title="@string/title_pref_custom_endpoint_url" />
+
+        <!-- Auto Check App Updates -->
+        <CheckBoxPreference
+            android:key="pref_auto_check_update"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_auto_check_update"
+            android:title="@string/title_pref_auto_check_update" />
     </PreferenceCategory>
 
     <PreferenceCategory
@@ -71,12 +78,6 @@
             android:key="pref_double_column_display"
             android:summary="@string/summary_pref_double_column_display"
             android:title="@string/title_pref_double_column_display" />
-
-        <CheckBoxPreference
-            android:key="pref_auto_check_update"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_auto_check_update"
-            android:title="@string/title_pref_auto_check_update" />
 
         <ListPreference
             android:defaultValue="auto"
