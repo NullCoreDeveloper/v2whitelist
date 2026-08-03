@@ -160,6 +160,14 @@ object SmartConnectManager {
                     MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
                 }
             }
+        } else {
+            // Если выключено — проверяем нет ли "остатков" и вычищаем
+            val subscriptions = MmkvManager.decodeSubscriptions()
+            if (subscriptions.any { it.guid == SUBSCRIPTION_ID }) {
+                Log.d(AppConfig.TAG, "Built-in subscription is disabled, removing cache")
+                MmkvManager.removeSubscription(SUBSCRIPTION_ID)
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+            }
         }
 
         // Обработка кастомных подписок

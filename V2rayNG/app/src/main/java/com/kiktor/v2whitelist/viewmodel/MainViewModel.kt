@@ -462,6 +462,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 AppConfig.MSG_UI_STATUS_UPDATE -> {
                     uiStatus.value = intent.getStringExtra("content")
                 }
+                
+                AppConfig.MSG_STATE_RELOAD_SERVER_LIST -> {
+                    reloadServerList()
+                }
             }
         }
     }

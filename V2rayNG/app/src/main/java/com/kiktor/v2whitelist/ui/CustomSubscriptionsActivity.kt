@@ -58,6 +58,19 @@ class CustomSubscriptionsActivity : BaseActivity() {
         switchBuiltin.isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
         switchBuiltin.setOnCheckedChangeListener { _, isChecked ->
             MmkvManager.encodeSettings(AppConfig.PREF_USE_BUILTIN_SUB, isChecked)
+            if (!isChecked) {
+                // Полностью удаляем встроенную подписку и её серверы, если пользователь её выключил
+                MmkvManager.removeSubscription(SmartConnectManager.SUBSCRIPTION_ID)
+                com.kiktor.v2whitelist.util.MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+                updateBuiltinLastUpdateTime()
+            } else {
+                // Запускаем обновление подписки при включении
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    com.kiktor.v2whitelist.handler.SmartConnectManager.checkAndSetupSubscription(this@CustomSubscriptionsActivity)
+                    com.kiktor.v2whitelist.util.MessageUtil.sendMsg2UI(this@CustomSubscriptionsActivity, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+                    updateBuiltinLastUpdateTime()
+                }
+            }
         }
     }
 
