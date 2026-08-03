@@ -16,6 +16,9 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.JsonUtil
 import com.kiktor.v2whitelist.util.Utils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 class CustomSubscriptionsActivity : BaseActivity() {
 
