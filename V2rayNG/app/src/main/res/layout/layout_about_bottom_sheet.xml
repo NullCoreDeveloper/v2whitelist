@@ -36,7 +36,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Наш Telegram-канал:"
+        android:text="Telegram-канал"
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary" />
         
