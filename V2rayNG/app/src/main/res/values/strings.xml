@@ -482,7 +482,7 @@
     <string name="location_filter_server_count">Servers: %d</string>
 
     <!-- Profile Check (Beta) -->
-    <string name="title_pref_profile_check">Profile Check (beta)</string>
+    <string name="title_pref_profile_check">Profile Check</string>
     <string name="summary_pref_profile_check">Checks profile ping and speed before connecting</string>
     <string name="status_verifying_profile">Verifying profile\u2026</string>
     <string name="status_profile_check_failed">Profile check failed, trying another\u2026</string>

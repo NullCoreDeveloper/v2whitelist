@@ -481,7 +481,7 @@
     <string name="location_filter_locations_title">Локации</string>
     <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
     <string name="location_filter_server_count">Серверов: %d</string>
-    <string name="title_pref_profile_check">Проверка профиля (бета)</string>
+    <string name="title_pref_profile_check">Проверка профиля</string>
     <string name="summary_pref_profile_check">Проверяет пинг и скорость профиля перед подключением</string>
     <string name="status_speed_test">Тест скорости: %.1f KB/s</string>
     <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
