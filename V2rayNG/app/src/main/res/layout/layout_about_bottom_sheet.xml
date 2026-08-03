@@ -24,29 +24,70 @@
         android:lineSpacingExtra="4dp"
         android:layout_marginBottom="16dp" />
 
-    <LinearLayout
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:text="Лицензия проекта: GNU GPLv3"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="?android:attr/textColorSecondary"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Наш Telegram-канал:"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
         
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Создатель: "
-            android:textSize="14sp"
-            android:textColor="?android:attr/textColorSecondary" />
-            
-        <TextView
-            android:id="@+id/tv_developer_link"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="NullCoreDeveloper"
-            android:textSize="14sp"
-            android:textColor="?android:attr/textColorLink"
-            android:textStyle="bold"
-            android:background="?android:attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/tv_link_tg"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="https://t.me/NullCoreDeveloper"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorLink"
+        android:background="?android:attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Исходный код (GitHub):"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
+        
+    <TextView
+        android:id="@+id/tv_link_repo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="https://github.com/NullCoreDeveloper/v2whitelist"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorLink"
+        android:background="?android:attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Профиль разработчика:"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
+        
+    <TextView
+        android:id="@+id/tv_link_profile"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="https://github.com/NullCoreDeveloper"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorLink"
+        android:background="?android:attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="12dp" />
 
 </LinearLayout>
