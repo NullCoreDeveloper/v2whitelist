@@ -12,7 +12,8 @@ import com.kiktor.v2whitelist.R
 class CustomSubscriptionAdapter(
     private val items: List<CustomSubscriptionsActivity.CustomSubItem>,
     private val onToggle: (position: Int, isEnabled: Boolean) -> Unit,
-    private val onDelete: (position: Int) -> Unit
+    private val onDelete: (position: Int) -> Unit,
+    private val onEdit: (position: Int) -> Unit
 ) : RecyclerView.Adapter<CustomSubscriptionAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -51,6 +52,10 @@ class CustomSubscriptionAdapter(
 
         holder.btnDelete.setOnClickListener {
             onDelete(holder.adapterPosition)
+        }
+
+        holder.itemView.setOnClickListener {
+            onEdit(holder.adapterPosition)
         }
     }
 
