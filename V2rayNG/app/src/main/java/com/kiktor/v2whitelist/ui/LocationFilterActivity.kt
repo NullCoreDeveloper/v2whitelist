@@ -60,18 +60,7 @@ class LocationFilterActivity : BaseActivity() {
     }
 
     private fun setupLocationList() {
-        val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
-        val customSubs = if (!customSubsJson.isNullOrEmpty()) {
-            try {
-                com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SmartConnectManager.CustomSubData>::class.java)?.toList() ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-        val groupRegexMap = customSubs.filter { it.groupRegex.isNotEmpty() }
-            .associate { "custom_sub_${it.id}" to it.groupRegex }
+        val groupRegexMap = getGroupRegexMap()
 
         val allServers = MmkvManager.decodeServerList()
         val emojiCountMap = mutableMapOf<String, Int>()
@@ -139,6 +128,21 @@ class LocationFilterActivity : BaseActivity() {
     }
 
     companion object {
+        fun getGroupRegexMap(): Map<String, String> {
+            val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+            val customSubs = if (!customSubsJson.isNullOrEmpty()) {
+                try {
+                    com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SmartConnectManager.CustomSubData>::class.java)?.toList() ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+            return customSubs.filter { it.groupRegex.isNotEmpty() }
+                .associate { "custom_sub_${it.id}" to it.groupRegex }
+        }
+
         /** Дефолтный набор фильтруемых флагов (Россия + Украина) */
         fun getDefaultFilterSet(): Set<String> = setOf("🇷🇺", "🇺🇦")
 

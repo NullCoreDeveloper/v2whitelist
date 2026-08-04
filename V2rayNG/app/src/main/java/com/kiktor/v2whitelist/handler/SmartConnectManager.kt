@@ -317,14 +317,16 @@ object SmartConnectManager {
         ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
 
         val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
-            ?: LocationFilterActivity.getDefaultFilterSet()
+            ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
+            
+        val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
 
         return allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
                 guid to profile
             } else null
-        }.filter { it.second.configType != EConfigType.POLICYGROUP }
+        }.filter { it.second.configType != com.kiktor.v2whitelist.dto.EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
                 // Фильтр российских хостеров (всегда активен)
@@ -336,17 +338,31 @@ object SmartConnectManager {
                 !remarks.contains("vk")
             }
             .filter {
-                // Фильтр по локациям (эмодзи-флаги)
+                // Фильтр по локациям (эмодзи-флаги или кастомные группы)
                 if (filterSet.isEmpty()) return@filter true
-                val emoji = LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+                
+                var tag: String? = null
+                val regexStr = groupRegexMap[it.second.subscriptionId]
+                if (!regexStr.isNullOrEmpty()) {
+                    try {
+                        val match = Regex(regexStr).find(it.second.remarks)
+                        if (match != null && match.groupValues.size > 1) {
+                            tag = match.groupValues[1]
+                        }
+                    } catch (e: Exception) {}
+                }
+                if (tag == null) {
+                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+                }
+                
                 when (filterMode) {
                     AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
-                        // Режим исключения: если флаг в наборе — исключаем
-                        emoji == null || !filterSet.contains(emoji)
+                        // Режим исключения: если тег в наборе — исключаем
+                        tag == null || !filterSet.contains(tag)
                     }
                     AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
-                        // Режим белого списка: если флаг в наборе — разрешаем
-                        emoji != null && filterSet.contains(emoji)
+                        // Режим белого списка: если тег в наборе — разрешаем
+                        tag != null && filterSet.contains(tag)
                     }
                     else -> true
                 }
