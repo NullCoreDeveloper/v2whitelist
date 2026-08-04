@@ -326,7 +326,7 @@ object SmartConnectManager {
             if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
                 guid to profile
             } else null
-        }.filter { it.second.configType != com.kiktor.v2whitelist.dto.EConfigType.POLICYGROUP }
+        }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
                 // Фильтр российских хостеров (всегда активен)
