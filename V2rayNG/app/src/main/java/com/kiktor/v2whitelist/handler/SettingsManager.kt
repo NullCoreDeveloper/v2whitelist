@@ -410,7 +410,14 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_VPN_MTU, AppConfig.VPN_MTU.toString())
         ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE, "true")
         ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
-        ensureDefaultValue(AppConfig.PREF_SOCKS_PORT, AppConfig.PORT_SOCKS)
+        
+        // Randomize SOCKS port once per installation/update to protect against local proxy scanning
+        val currentSocksPort = MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PORT)
+        if (currentSocksPort.isNullOrEmpty() || currentSocksPort == AppConfig.PORT_SOCKS) {
+            val randomPort = kotlin.random.Random.nextInt(20000, 60000)
+            MmkvManager.encodeSettings(AppConfig.PREF_SOCKS_PORT, randomPort.toString())
+        }
+        
         ensureDefaultValue(AppConfig.PREF_REMOTE_DNS, AppConfig.DNS_PROXY)
         ensureDefaultValue(AppConfig.PREF_DOMESTIC_DNS, AppConfig.DNS_DIRECT)
         ensureDefaultValue(AppConfig.PREF_DELAY_TEST_URL, AppConfig.DELAY_TEST_URL)
