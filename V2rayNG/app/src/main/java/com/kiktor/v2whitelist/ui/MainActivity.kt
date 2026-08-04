@@ -246,16 +246,22 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
         activeJob = lifecycleScope.launch {
             setConnectingState(getString(R.string.status_updating_subscription))
-            SmartConnectManager.updateSubscription(this@MainActivity)
-            mainViewModel.reloadServerList()
-            updateUIState(mainViewModel.isRunning.value == true)
-            updateSubscriptionStatusUI()
+            try {
+                SmartConnectManager.updateSubscription(this@MainActivity)
+                mainViewModel.reloadServerList()
+            } finally {
+                isTaskRunning = false
+                updateUIState(mainViewModel.isRunning.value == true)
+                updateSubscriptionStatusUI()
+            }
         }
     }
 
     private fun setupViewModel() {
         mainViewModel.isRunning.observe(this) { isRunning ->
-            updateUIState(isRunning)
+            if (!isTaskRunning) {
+                updateUIState(isRunning)
+            }
         }
         mainViewModel.uiStatus.observe(this) { status ->
             if (isTaskRunning) {
@@ -276,7 +282,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         } else {
             activeJob = lifecycleScope.launch {
                 setConnectingState()
-                SmartConnectManager.smartConnect(this@MainActivity)
+                try {
+                    SmartConnectManager.smartConnect(this@MainActivity)
+                } finally {
+                    isTaskRunning = false
+                    updateUIState(mainViewModel.isRunning.value == true)
+                }
             }
         }
     }
@@ -288,7 +299,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
         activeJob = lifecycleScope.launch {
             setConnectingState()
-            SmartConnectManager.switchServer(this@MainActivity)
+            try {
+                SmartConnectManager.switchServer(this@MainActivity)
+            } finally {
+                isTaskRunning = false
+                updateUIState(mainViewModel.isRunning.value == true)
+            }
         }
     }
 
