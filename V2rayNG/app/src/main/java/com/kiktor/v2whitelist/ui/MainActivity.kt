@@ -206,18 +206,35 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun downloadAndInstall(url: String) {
-        toast("Downloading update...")
+        val progressBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            val pad = (24 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.status_updating_subscription) // "Обновление..."
+            .setView(progressBar)
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
         lifecycleScope.launch {
             try {
-                val apkFile = com.kiktor.v2whitelist.handler.UpdateCheckerManager.downloadApk(this@MainActivity, url)
+                val apkFile = com.kiktor.v2whitelist.handler.UpdateCheckerManager.downloadApk(this@MainActivity, url) { progress ->
+                    runOnUiThread {
+                        progressBar.progress = progress
+                    }
+                }
+                progressDialog.dismiss()
                 if (apkFile != null && apkFile.exists()) {
                     installApk(apkFile)
                 } else {
-                    toast("Failed to download APK")
+                    toast(R.string.toast_failure)
                 }
             } catch (e: Exception) {
+                progressDialog.dismiss()
                 Log.e(AppConfig.TAG, "Update failed: ${e.message}")
-                toast(e.message ?: "Download failed")
+                toast(e.message ?: getString(R.string.toast_failure))
             }
         }
     }

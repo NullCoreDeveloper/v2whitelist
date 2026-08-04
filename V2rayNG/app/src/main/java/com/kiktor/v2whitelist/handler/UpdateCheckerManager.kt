@@ -61,7 +61,7 @@ object UpdateCheckerManager {
         }
     }
 
-    suspend fun downloadApk(context: Context, downloadUrl: String): File? = withContext(Dispatchers.IO) {
+    suspend fun downloadApk(context: Context, downloadUrl: String, onProgress: ((Int) -> Unit)? = null): File? = withContext(Dispatchers.IO) {
         try {
             val httpPort = SettingsManager.getHttpPort()
             val connection = HttpUtil.createProxyConnection(downloadUrl, httpPort, 10000, 10000, true)
@@ -72,9 +72,25 @@ object UpdateCheckerManager {
                 val apkFile = File(cacheFolder, "update.apk")
                 Log.i(AppConfig.TAG, "Downloading APK to: ${apkFile.absolutePath}")
 
+                val fileLength = connection.contentLength
+                var lastProgress = 0
+                
                 FileOutputStream(apkFile).use { outputStream ->
                     connection.inputStream.use { inputStream ->
-                        inputStream.copyTo(outputStream)
+                        val buffer = ByteArray(8 * 1024)
+                        var bytesRead: Int
+                        var totalRead = 0L
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            if (fileLength > 0) {
+                                val progress = (totalRead * 100 / fileLength).toInt()
+                                if (progress > lastProgress) {
+                                    lastProgress = progress
+                                    onProgress?.invoke(progress)
+                                }
+                            }
+                        }
                     }
                 }
                 Log.i(AppConfig.TAG, "APK download completed")
