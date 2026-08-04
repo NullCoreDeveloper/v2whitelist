@@ -119,12 +119,14 @@ object Utils {
     fun tryDecodeBase64(text: String?): String? {
         if (text.isNullOrEmpty()) return null
 
+        val cleanText = text.replace(Regex("\\s+"), "")
+
         try {
-            return Base64.decode(text, Base64.NO_WRAP).toString(Charsets.UTF_8)
+            return Base64.decode(cleanText, Base64.NO_WRAP).toString(Charsets.UTF_8)
         } catch (_: Exception) {
         }
         try {
-            return Base64.decode(text, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
+            return Base64.decode(cleanText, Base64.NO_WRAP.or(Base64.URL_SAFE)).toString(Charsets.UTF_8)
         } catch (_: Exception) {
         }
         return null
@@ -462,8 +464,13 @@ object Utils {
      * @return The URL string with illegal characters replaced.
      */
     fun fixIllegalUrl(str: String): String {
-        return str.replace(" ", "%20")
-            .replace("|", "%7C")
+        val parts = str.split("#", limit = 2)
+        if (parts.size == 2) {
+            val base = parts[0].replace(" ", "%20").replace("|", "%7C")
+            val fragment = android.net.Uri.encode(parts[1])
+            return "$base#$fragment"
+        }
+        return str.replace(" ", "%20").replace("|", "%7C")
     }
 
     /**
