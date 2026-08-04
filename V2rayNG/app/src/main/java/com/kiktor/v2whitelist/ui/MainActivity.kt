@@ -165,9 +165,11 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         val shouldCheck = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_CHECK_UPDATE, true)
         if (!shouldCheck) return
         
+        val includePreRelease = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_CHECK_UPDATE_PRE_RELEASE, false)
+        
         lifecycleScope.launch {
             try {
-                val result = com.kiktor.v2whitelist.handler.UpdateCheckerManager.checkForUpdate(false)
+                val result = com.kiktor.v2whitelist.handler.UpdateCheckerManager.checkForUpdate(includePreRelease)
                 if (result.hasUpdate && !result.downloadUrl.isNullOrEmpty()) {
                     showUpdateNotification(result)
                 }

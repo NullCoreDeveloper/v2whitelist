@@ -34,6 +34,12 @@
             android:defaultValue="true"
             android:summary="@string/summary_pref_auto_check_update"
             android:title="@string/title_pref_auto_check_update" />
+            
+        <CheckBoxPreference
+            android:key="pref_check_update_pre_release"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_check_update_pre_release"
+            android:title="@string/title_pref_check_update_pre_release" />
     </PreferenceCategory>
 
     <PreferenceCategory
