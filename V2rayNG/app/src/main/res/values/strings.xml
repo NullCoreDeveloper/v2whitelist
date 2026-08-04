@@ -504,6 +504,10 @@
     <string name="custom_sub_add">Add subscription</string>
     <string name="custom_sub_name_hint">Subscription name</string>
     <string name="custom_sub_url_hint">Subscription URL</string>
+    <string name="custom_sub_filter_hint">Regex filter (optional)</string>
+    <string name="custom_sub_filter_helper">Empty = all. Examples: RU|US or ^(?!.*(TEST)).*</string>
+    <string name="custom_sub_group_regex_hint">Group/Location regex</string>
+    <string name="custom_sub_group_regex_helper">Extract tags from name. Example: \\[(.*?)\\]</string>
     <string name="custom_sub_empty">No custom subscriptions</string>
     <string name="custom_sub_added">Subscription added</string>
     <string name="custom_sub_removed">Subscription removed</string>

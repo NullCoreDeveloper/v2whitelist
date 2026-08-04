@@ -495,6 +495,11 @@
     <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
     <string name="custom_sub_add">Добавить подписку</string>
     <string name="custom_sub_name_hint">Название подписки</string>
+    <string name="custom_sub_url_hint">Ссылка на подписку (URL)</string>
+    <string name="custom_sub_filter_hint">Фильтр Regex (необязательно)</string>
+    <string name="custom_sub_filter_helper">Пусто = все. Примеры: RU|US или ^(?!.*(TEST)).*</string>
+    <string name="custom_sub_group_regex_hint">Regex для групп/локаций</string>
+    <string name="custom_sub_group_regex_helper">Парсинг тегов из названия. Пример: \\[(.*?)\\]</string>
     <string name="status_no_subscription">Нет подписки</string>
     <string name="time_min">%1$s мин</string>
     <string name="time_h_m">%1$s ч %2$s мин</string>

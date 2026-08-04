@@ -83,10 +83,19 @@ class CustomSubscriptionsActivity : BaseActivity() {
         }
     }
 
-    private fun showAddDialog() {
+    private fun showAddDialog(existingItem: CustomSubItem? = null) {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_subscription, null)
         val etName = dialogView.findViewById<EditText>(R.id.et_sub_name)
         val etUrl = dialogView.findViewById<EditText>(R.id.et_sub_url)
+        val etFilter = dialogView.findViewById<EditText>(R.id.et_sub_filter)
+        val etGroupRegex = dialogView.findViewById<EditText>(R.id.et_sub_group_regex)
+
+        if (existingItem != null) {
+            etName.setText(existingItem.name)
+            etUrl.setText(existingItem.url)
+            etFilter.setText(existingItem.filter)
+            etGroupRegex.setText(existingItem.groupRegex)
+        }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.custom_sub_add)
@@ -94,6 +103,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val name = etName.text.toString().trim()
                 val url = etUrl.text.toString().trim()
+                val filter = etFilter.text.toString().trim()
+                val groupRegex = etGroupRegex.text.toString().trim()
 
                 if (name.isEmpty()) {
                     toast(R.string.sub_setting_remarks)
@@ -104,17 +115,28 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     return@setPositiveButton
                 }
 
-                val sub = CustomSubItem(
-                    id = System.currentTimeMillis().toString(),
-                    name = name,
-                    url = url,
-                    enabled = true
-                )
-                customSubs.add(sub)
+                if (existingItem != null) {
+                    existingItem.name = name
+                    existingItem.url = url
+                    existingItem.filter = filter
+                    existingItem.groupRegex = groupRegex
+                    adapter.notifyDataSetChanged()
+                } else {
+                    val sub = CustomSubItem(
+                        id = System.currentTimeMillis().toString(),
+                        name = name,
+                        url = url,
+                        filter = filter,
+                        groupRegex = groupRegex,
+                        enabled = true
+                    )
+                    customSubs.add(sub)
+                    adapter.notifyItemInserted(customSubs.size - 1)
+                    toast(R.string.custom_sub_added)
+                }
+                
                 saveCustomSubs()
-                adapter.notifyItemInserted(customSubs.size - 1)
                 updateEmptyState()
-                toast(R.string.custom_sub_added)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -159,6 +181,9 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 adapter.notifyItemRemoved(position)
                 updateEmptyState()
                 toast(R.string.custom_sub_removed)
+            },
+            onEdit = { position ->
+                showAddDialog(customSubs[position])
             }
         )
 
@@ -181,6 +206,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val id: String,
         var name: String,
         var url: String,
+        var filter: String = "",
+        var groupRegex: String = "",
         var enabled: Boolean = true,
         var lastUpdated: Long = 0L
     )

@@ -188,15 +188,17 @@ object SmartConnectManager {
                 val subItem = SubscriptionItem().apply {
                     remarks = sub.name
                     url = sub.url
+                    filter = sub.filter
                     enabled = true
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
                 AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
             } else {
                 val subItem = existing.subscription
-                if (subItem.url != sub.url) {
+                if (subItem.url != sub.url || subItem.filter != sub.filter) {
                     subItem.url = sub.url
                     subItem.remarks = sub.name
+                    subItem.filter = sub.filter
                     MmkvManager.encodeSubscription(subId, subItem)
                 }
             }
@@ -221,6 +223,8 @@ object SmartConnectManager {
         val id: String = "",
         val name: String = "",
         val url: String = "",
+        val filter: String = "",
+        val groupRegex: String = "",
         val enabled: Boolean = true
     )
 

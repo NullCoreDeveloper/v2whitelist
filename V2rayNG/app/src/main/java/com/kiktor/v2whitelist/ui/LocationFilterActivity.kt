@@ -60,15 +60,44 @@ class LocationFilterActivity : BaseActivity() {
     }
 
     private fun setupLocationList() {
-        // Собрать все уникальные эмодзи-флаги из профилей серверов
+        val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+        val customSubs = if (!customSubsJson.isNullOrEmpty()) {
+            try {
+                com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SmartConnectManager.CustomSubData>::class.java)?.toList() ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        val groupRegexMap = customSubs.filter { it.groupRegex.isNotEmpty() }
+            .associate { "custom_sub_${it.id}" to it.groupRegex }
+
         val allServers = MmkvManager.decodeServerList()
         val emojiCountMap = mutableMapOf<String, Int>()
 
         for (guid in allServers) {
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            val emoji = extractFirstFlagEmoji(profile.remarks)
-            if (emoji != null) {
-                emojiCountMap[emoji] = (emojiCountMap[emoji] ?: 0) + 1
+            var tag: String? = null
+            
+            val regexStr = groupRegexMap[profile.subscriptionId]
+            if (!regexStr.isNullOrEmpty()) {
+                try {
+                    val match = Regex(regexStr).find(profile.remarks)
+                    if (match != null && match.groupValues.size > 1) {
+                        tag = match.groupValues[1].trim()
+                    }
+                } catch (e: Exception) {
+                    // Ignore regex error
+                }
+            }
+
+            if (tag.isNullOrEmpty()) {
+                tag = extractFirstFlagEmoji(profile.remarks)
+            }
+
+            if (!tag.isNullOrEmpty()) {
+                emojiCountMap[tag] = (emojiCountMap[tag] ?: 0) + 1
             }
         }
 
