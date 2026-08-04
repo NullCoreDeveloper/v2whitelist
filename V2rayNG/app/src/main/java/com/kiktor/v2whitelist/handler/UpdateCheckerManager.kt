@@ -63,7 +63,8 @@ object UpdateCheckerManager {
 
     suspend fun downloadApk(context: Context, downloadUrl: String, onProgress: ((Int) -> Unit)? = null): File? = withContext(Dispatchers.IO) {
         try {
-            val httpPort = SettingsManager.getHttpPort()
+            val isRunning = com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()
+            val httpPort = if (isRunning) SettingsManager.getHttpPort() else 0
             val connection = HttpUtil.createProxyConnection(downloadUrl, httpPort, 10000, 10000, true)
                 ?: throw IllegalStateException("Failed to create connection")
 
