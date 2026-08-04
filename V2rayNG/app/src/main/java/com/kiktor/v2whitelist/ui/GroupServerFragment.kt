@@ -224,6 +224,9 @@ class GroupServerFragment : BaseFragment<FragmentGroupServerBinding>() {
         val selected = MmkvManager.getSelectServer()
         if (guid != selected) {
             MmkvManager.setSelectServer(guid)
+            // Save to SmartConnect cache so the giant connect button respects manual selection
+            MmkvManager.saveLastConnectedServer(guid)
+            
             val fromPosition = mainViewModel.getPosition(selected.orEmpty())
             val toPosition = mainViewModel.getPosition(guid)
             adapter.setSelectServer(fromPosition, toPosition)
