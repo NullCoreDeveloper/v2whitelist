@@ -459,7 +459,7 @@ object AngConfigManager {
             val userAgent = it.subscription.userAgent
 
             var configText = ""
-            val httpPort = if (socksPort > 0) AppConfig.PORT_SOCKS.toInt() + 1 else 0
+            val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
 
             // 1. HTTP прокси (Порт 10809) - приоритет, так как он резолвит DNS через прокси, а не локально!
             if (httpPort > 0) {
