@@ -118,7 +118,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 toast("Ссылка скопирована в буфер!")
                 
                 // Optionally we could show a QR code dialog, but for now we copy to clipboard.
-                val qrBitmap = com.kiktor.v2whitelist.util.Utils.createQRCode(link)
+                val qrBitmap = com.kiktor.v2whitelist.util.QRCodeDecoder.createQRCode(link)
                 if (qrBitmap != null) {
                     val iv = ImageView(this).apply {
                         setImageBitmap(qrBitmap)

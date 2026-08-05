@@ -343,9 +343,9 @@ class V2RayVpnService : VpnService(), ServiceControl {
         
         if (!skipCustomPerApp) {
             // Handle the VPN service's own package according to the mode
-            if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
+            if (bypassApps) apps?.add(selfPackageName) else apps?.remove(selfPackageName)
 
-            apps.forEach {
+            apps?.forEach {
                 try {
                     if (bypassApps) {
                         // In bypass mode, disallow the selected apps

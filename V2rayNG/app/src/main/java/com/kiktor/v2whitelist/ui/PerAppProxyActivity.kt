@@ -241,7 +241,7 @@ class PerAppProxyActivity : BaseActivity() {
         
         Utils.setClipboard(applicationContext, link)
         
-        val qrBitmap = Utils.createQRCode(link)
+        val qrBitmap = com.kiktor.v2whitelist.util.QRCodeDecoder.createQRCode(link)
         if (qrBitmap != null) {
             val iv = android.widget.ImageView(this).apply {
                 setImageBitmap(qrBitmap)

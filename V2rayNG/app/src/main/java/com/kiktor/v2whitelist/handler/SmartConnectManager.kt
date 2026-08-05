@@ -651,7 +651,6 @@ object SmartConnectManager {
                     }
                 }
             }
-            }
             return@withContext true
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
@@ -729,7 +728,10 @@ object SmartConnectManager {
                     }
                 }
             }
+            }
+            return@withContext true
         }
+        return@withContext false
     }
 
     /**

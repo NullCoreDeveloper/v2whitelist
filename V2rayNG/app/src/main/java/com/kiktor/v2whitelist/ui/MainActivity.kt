@@ -610,7 +610,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         processDeepLink(intent)
     }
@@ -672,7 +672,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY, true)
                             MmkvManager.encodeSettings(AppConfig.PREF_BYPASS_APPS, split.bypassMode)
-                            MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, split.packages.toSet())
+                            MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, split.packages.toMutableSet())
                             toast("Пресет применен! Перезапустите VPN")
                         }
                         .setNegativeButton(android.R.string.cancel, null)
