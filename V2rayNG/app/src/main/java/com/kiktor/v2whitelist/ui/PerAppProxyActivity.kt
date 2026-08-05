@@ -203,8 +203,29 @@ class PerAppProxyActivity : BaseActivity() {
     }
 
     private fun importProxyApp() {
-        val content = Utils.getClipboard(applicationContext)
-        if (TextUtils.isEmpty(content)) return
+        val content = Utils.getClipboard(applicationContext) ?: return
+        if (content.isEmpty()) return
+        
+        if (content.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SPLIT) || content.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME)) {
+            try {
+                val uri = android.net.Uri.parse(content)
+                val data = uri.getQueryParameter("data")
+                if (data != null) {
+                    val split = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling::class.java)
+                    if (split != null) {
+                        viewModel.clear()
+                        viewModel.addAll(split.packages)
+                        binding.switchBypassApps.isChecked = split.bypassMode
+                        refreshData()
+                        toastSuccess(R.string.toast_success)
+                        return
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
         selectProxyApp(content, false)
         toastSuccess(R.string.toast_success)
     }

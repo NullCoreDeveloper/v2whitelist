@@ -136,6 +136,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         binding.btnScanAdd.setOnClickListener {
             scannerLauncher.launch(Intent(this, ScannerActivity::class.java))
         }
+        
+        // Вставка из буфера обмена (по долгому нажатию на сканер)
+        binding.btnScanAdd.setOnLongClickListener {
+            importConfigViaClipboard()
+            true
+        }
 
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
@@ -564,6 +570,43 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             putExtra(android.content.Intent.EXTRA_TEXT, shareText)
         }
         startActivity(android.content.Intent.createChooser(shareIntent, getString(com.kiktor.v2whitelist.R.string.btn_label_share)))
+    }
+
+    private fun importConfigViaClipboard() {
+        try {
+            val content = com.kiktor.v2whitelist.util.Utils.getClipboard(this)
+            if (content.isNullOrEmpty()) {
+                toast(R.string.toast_none_data_clipboard)
+                return
+            }
+            if (processDeepLinkString(content)) return
+
+            val oldServers = MmkvManager.decodeServerList()
+            val (count, _) = com.kiktor.v2whitelist.handler.AngConfigManager.importBatchConfig(content, "", true)
+            if (count > 0) {
+                toast(getString(R.string.title_import_config_count, count))
+                mainViewModel.reloadServerList()
+                
+                // Авто-подключение
+                val newServers = MmkvManager.decodeServerList()
+                val addedGuid = newServers.firstOrNull { !oldServers.contains(it) }
+                if (addedGuid != null) {
+                    MmkvManager.setSelectServer(addedGuid)
+                    MmkvManager.saveLastConnectedServer(addedGuid)
+                    if (mainViewModel.isRunning.value == true) {
+                        com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                    } else {
+                        startV2Ray()
+                    }
+                } else {
+                    handleConnectAction()
+                }
+            } else {
+                toast(R.string.toast_incorrect_protocol)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
