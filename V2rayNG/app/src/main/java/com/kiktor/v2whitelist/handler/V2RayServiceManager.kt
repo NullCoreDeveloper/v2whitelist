@@ -376,6 +376,8 @@ object V2RayServiceManager {
             }
         }
     }
+}
+
 
     /**
      * Checks if there is a working direct internet connection bypassing the VPN.
