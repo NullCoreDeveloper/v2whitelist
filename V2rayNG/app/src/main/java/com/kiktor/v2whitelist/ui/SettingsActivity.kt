@@ -92,21 +92,16 @@ class SettingsActivity : BaseActivity() {
                 val value = newValue as Boolean
                 autoUpdateCheck?.isChecked = value
                 autoUpdateInterval?.isEnabled = value
-                // Перепланируем задачу с новыми настройками
+                // Пересоздаём задачу с новыми настройками
                 view?.post {
-                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
+                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.reschedule(requireContext())
                 }
                 true
             }
             autoUpdateInterval?.setOnPreferenceChangeListener { _, newValue ->
-                // Сначала даем MMKV сохранить новое значение (через PreferenceDataStore)
-                // Но так как setOnPreferenceChangeListener срабатывает ДО сохранения, 
-                // нам нужно вручную обновить summary и потом перепланировать.
                 autoUpdateInterval?.summary = newValue as String
-                
-                // Используем post, чтобы дать системе сохранить значение в MMKV
                 view?.post {
-                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.schedule(requireContext())
+                    com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.reschedule(requireContext())
                 }
                 true
             }

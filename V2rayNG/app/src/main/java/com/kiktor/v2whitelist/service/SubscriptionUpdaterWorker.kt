@@ -40,8 +40,12 @@ class SubscriptionUpdaterWorker(
             Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
             Result.success()
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "SubscriptionUpdaterWorker: failed to update subscription", e)
-            Result.retry()
+            // ВАЖНО: используем success() а не retry()!
+            // У PeriodicWork retry накапливается и после N попыток WorkManager переводит задачу
+            // в состояние FAILED — и она больше никогда не запустится.
+            // Для фонового обновления подписки ошибка не критична: попробуем в следующий раз.
+            Log.e(AppConfig.TAG, "SubscriptionUpdaterWorker: update failed, will retry on next schedule", e)
+            Result.success()
         } finally {
             notifManager.cancel(notifId)
         }
@@ -75,13 +79,13 @@ class SubscriptionUpdaterWorker(
 
     companion object {
         /**
-         * Регистрирует периодическое задание на обновление подписки.
-         * Учитывает настройки пользователя (вкл/выкл и интервал).
+         * Регистрирует периодическое задание при старте приложения.
+         * Использует KEEP: не трогает уже живую задачу, чтобы не сбивать таймер.
+         * Если задача умерла (FAILED/CANCELLED) — WorkManager сам её пересоздаст.
          */
         fun schedule(context: Context) {
             val workManager = WorkManager.getInstance(context)
-            
-            // Проверяем, включено ли автообновление
+
             val isEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
             if (!isEnabled) {
                 workManager.cancelUniqueWork(AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME)
@@ -89,33 +93,63 @@ class SubscriptionUpdaterWorker(
                 return
             }
 
-            // Читаем интервал (в минутах)
-            val intervalStr = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
+            val request = buildRequest(context)
+
+            // KEEP: если задача уже работает — не трогаем её (не сбиваем таймер!).
+            // Задача пересоздаётся только при первом запуске или после смерти.
+            workManager.enqueueUniquePeriodicWork(
+                AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            )
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: schedule() called (KEEP policy)")
+        }
+
+        /**
+         * Принудительно пересоздаёт задачу с новыми параметрами.
+         * Вызывать когда пользователь изменил настройки (интервал, вкл/выкл).
+         */
+        fun reschedule(context: Context) {
+            val workManager = WorkManager.getInstance(context)
+
+            val isEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
+            if (!isEnabled) {
+                workManager.cancelUniqueWork(AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME)
+                Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: cancelled (disabled in settings)")
+                return
+            }
+
+            val request = buildRequest(context)
+
+            // CANCEL_AND_REENQUEUE: применяем новые настройки немедленно.
+            workManager.enqueueUniquePeriodicWork(
+                AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
+                ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE,
+                request
+            )
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: rescheduled with new settings")
+        }
+
+        private fun buildRequest(context: Context): androidx.work.PeriodicWorkRequest {
+            val intervalStr = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(
+                AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL,
+                AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL
+            )
             val intervalMinutes = intervalStr?.toLongOrNull() ?: 60L
-            val finalInterval = if (intervalMinutes < 15) 15L else intervalMinutes // WorkManager min interval is 15m
+            val finalInterval = if (intervalMinutes < 15) 15L else intervalMinutes
 
             val constraints = androidx.work.Constraints.Builder()
                 .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                 .build()
 
-            val request = PeriodicWorkRequestBuilder<SubscriptionUpdaterWorker>(
-                finalInterval, TimeUnit.MINUTES
+            return PeriodicWorkRequestBuilder<SubscriptionUpdaterWorker>(
+                finalInterval, TimeUnit.MINUTES,
+                // Flex-период: задача может запуститься в любой момент внутри последних 5 минут интервала.
+                // Это помогает Android планировать задачу батарейно-эффективно.
+                5, TimeUnit.MINUTES
             )
-            .setConstraints(constraints)
-            .setBackoffCriteria(
-                androidx.work.BackoffPolicy.LINEAR,
-                15,
-                TimeUnit.MINUTES
-            )
-            .build()
-
-            // Используем REPLACE вместо KEEP, чтобы новые настройки интервала применились сразу
-            workManager.enqueueUniquePeriodicWork(
-                AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
-                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
-                request
-            )
-            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: scheduled (every $finalInterval minutes)")
+                .setConstraints(constraints)
+                .build() // Убираем setBackoffCriteria — retry больше не используется
         }
 
         /**
