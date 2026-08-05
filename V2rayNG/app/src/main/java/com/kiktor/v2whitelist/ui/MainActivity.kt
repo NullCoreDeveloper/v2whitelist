@@ -304,8 +304,13 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 try {
                     SmartConnectManager.smartConnect(this@MainActivity)
                 } finally {
+                    // ВАЖНО: сначала обновляем UI, потом снимаем флаг isTaskRunning.
+                    // Если сделать наоборот — observer isRunning может успеть сработать
+                    // раньше finally и вызвать updateUIState с устаревшим значением (мигание!).
+                    val running = mainViewModel.isRunning.value == true
                     isTaskRunning = false
-                    updateUIState(mainViewModel.isRunning.value == true)
+                    activeJob = null
+                    updateUIState(running)
                 }
             }
         }
@@ -321,8 +326,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             try {
                 SmartConnectManager.switchServer(this@MainActivity)
             } finally {
+                val running = mainViewModel.isRunning.value == true
                 isTaskRunning = false
-                updateUIState(mainViewModel.isRunning.value == true)
+                activeJob = null
+                updateUIState(running)
             }
         }
     }
@@ -381,7 +388,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun updateUIState(isRunning: Boolean) {
-        isTaskRunning = false
+        // Не сбрасываем isTaskRunning здесь — это делает caller (finally-блок).
+        // Иначе observer может вызвать updateUIState пока корутина ещё работает.
         activeJob = null
         binding.btnBigConnect.isEnabled = true
         binding.progressBar.isVisible = false
