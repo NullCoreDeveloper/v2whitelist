@@ -339,7 +339,13 @@ object V2RayServiceManager {
                 }
 
                 if (time == -1L || time > 5000L) {
-                    Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, initiating failover...")
+                    val hasInternet = checkDirectInternet(service)
+                    if (!hasInternet) {
+                        Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, but direct internet is also down. Ignoring failover.")
+                        continue
+                    }
+
+                    Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive and internet is UP, initiating failover...")
                     NotificationManager.showFailoverNotification()
                     
                     val serverList = MmkvManager.decodeServerList()
@@ -357,6 +363,45 @@ object V2RayServiceManager {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Checks if there is a working direct internet connection bypassing the VPN.
+     * @param context Context to access ConnectivityManager
+     * @return True if direct connection to yandex is successful, false otherwise.
+     */
+    private fun checkDirectInternet(context: Context): Boolean {
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val networks = cm.allNetworks
+            for (network in networks) {
+                val caps = cm.getNetworkCapabilities(network)
+                if (caps != null && 
+                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
+                    !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
+                    
+                    try {
+                        val url = java.net.URL("https://ya.ru")
+                        val connection = network.openConnection(url) as java.net.HttpURLConnection
+                        connection.connectTimeout = 3000
+                        connection.readTimeout = 3000
+                        connection.requestMethod = "HEAD"
+                        val responseCode = connection.responseCode
+                        connection.disconnect()
+                        if (responseCode in 200..399) {
+                            return true
+                        }
+                    } catch (e: Exception) {
+                        Log.d(AppConfig.TAG, "Direct internet check failed on a network", e)
+                    }
+                }
+            }
+            return false
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "checkDirectInternet error", e)
+            return false
         }
     }
 
