@@ -476,7 +476,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun updateSubscriptionStatusUI() {
         val subs = MmkvManager.decodeSubscriptions()
-        val lastUpdateTime = subs.maxOfOrNull { it.subscription.lastUpdated } ?: 0L
+        // minOf по подпискам, которые хоть раз обновлялись — показываем самую старую.
+        // Так таймер честно сигнализирует если хотя бы одна подписка протухла.
+        val lastUpdateTime = subs.filter { it.subscription.lastUpdated > 0 }
+            .minOfOrNull { it.subscription.lastUpdated } ?: 0L
 
         val tvStatus = findViewById<android.widget.TextView>(R.id.tv_update_status) ?: return
         val tvTime = findViewById<android.widget.TextView>(R.id.tv_update_time) ?: return
