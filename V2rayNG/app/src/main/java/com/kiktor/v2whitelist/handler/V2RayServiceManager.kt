@@ -339,14 +339,24 @@ object V2RayServiceManager {
                 }
 
                 if (time == -1L || time > 5000L) {
-                    val hasInternet = checkDirectInternet(service)
-                    if (!hasInternet) {
-                        Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, but direct internet is also down. Ignoring failover.")
-                        continue
+                    // Дополнительная проверка через 3 секунды от случайных потерь пакетов
+                    Log.w(AppConfig.TAG, "Failover monitor: Server ping failed, waiting 3s for a double check...")
+                    kotlinx.coroutines.delay(3000)
+                    try {
+                        time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
+                    } catch (e: Exception) {
+                        Log.e(AppConfig.TAG, "Failover monitor: second delay test failed", e)
                     }
 
-                    Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive and internet is UP, initiating failover...")
-                    NotificationManager.showFailoverNotification()
+                    if (time == -1L || time > 5000L) {
+                        val hasInternet = checkDirectInternet(service)
+                        if (!hasInternet) {
+                            Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, but direct internet is also down. Ignoring failover.")
+                            continue
+                        }
+
+                        Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive and internet is UP, initiating failover...")
+                        NotificationManager.showFailoverNotification()
                     
                     val serverList = MmkvManager.decodeServerList()
                     val currentGuid = MmkvManager.getSelectServer()
@@ -357,6 +367,7 @@ object V2RayServiceManager {
                             val nextGuid = serverList[nextIndex]
                             Log.i(AppConfig.TAG, "Failover monitor: Switching from $currentGuid to $nextGuid")
                             MmkvManager.setSelectServer(nextGuid)
+                            MmkvManager.saveLastConnectedServer(nextGuid) // ВАЖНО: обновляем кэш Fast Path!
                             MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
                             break // Stop monitoring for the old server, a new loop will be started by the switch
                         }
