@@ -409,21 +409,26 @@ object SmartConnectManager {
                         testSemaphore.withPermit {
                             if (resultsList.any { it.third < 500 }) return@withPermit null
 
-                            val randomUrl = testUrls[Random.nextInt(testUrls.size)]
-                            val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
-                            val delay = if (config.status) {
-                                withTimeoutOrNull(perServerTimeoutMs) {
-                                    V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
-                                } ?: -1L
-                            } else -1L
+                            try {
+                                val randomUrl = testUrls[Random.nextInt(testUrls.size)]
+                                val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
+                                val delay = if (config.status) {
+                                    withTimeoutOrNull(perServerTimeoutMs) {
+                                        V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
+                                    } ?: -1L
+                                } else -1L
 
-                            val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
-                            val result = Triple(guid, profile, finalDelay)
-                            if (finalDelay < 500) {
-                                synchronized(resultsList) { resultsList.add(result) }
-                                this@coroutineScope.coroutineContext[Job]?.cancelChildren()
+                                val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
+                                val result = Triple(guid, profile, finalDelay)
+                                if (finalDelay < 500) {
+                                    synchronized(resultsList) { resultsList.add(result) }
+                                    this@coroutineScope.coroutineContext[Job]?.cancelChildren()
+                                }
+                                result
+                            } catch (e: Exception) {
+                                Log.e(AppConfig.TAG, "testServers error for $guid", e)
+                                null
                             }
-                            result
                         }
                     }
                 }
@@ -503,7 +508,7 @@ object SmartConnectManager {
      * сразу переиспользует последний сервер без тестирования (быстрый путь).
      * Иначе — полный SmartConnect с тестированием.
      */
-    suspend fun smartConnect(context: Context) = withContext(Dispatchers.IO) {
+    suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
 
         // ── Быстрый путь: кэш последнего сервера ──────────────────────────────
         val cachedGuid = MmkvManager.getValidLastServer()
@@ -540,7 +545,7 @@ object SmartConnectManager {
                         }
                     }
                 }
-                return@withContext
+                return@withContext true
             }
         }
         // ── Полный SmartConnect ────────────────────────────────────────────────
@@ -569,7 +574,7 @@ object SmartConnectManager {
         if (filteredServers.isEmpty()) {
             Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
             sendStatus(context, context.getString(R.string.status_no_servers))
-            return@withContext
+            return@withContext false
         }
 
         val chunkedServers = filteredServers.chunked(20)
@@ -646,23 +651,25 @@ object SmartConnectManager {
                     }
                 }
             }
-
+            }
+            return@withContext true
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
             sendStatus(context, context.getString(R.string.status_no_servers))
+            return@withContext false
         }
     }
 
     /**
      * Switches to the next best server.
      */
-    suspend fun switchServer(context: Context) = withContext(Dispatchers.IO) {
+    suspend fun switchServer(context: Context): Boolean = withContext(Dispatchers.IO) {
         val currentGuid = MmkvManager.getSelectServer()
         val allServers = MmkvManager.decodeServerList()
         val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
 
         if (filteredServers.isEmpty()) {
-            return@withContext
+            return@withContext false
         }
 
         sendStatus(context, context.getString(R.string.status_switching_server))

@@ -313,16 +313,15 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         } else {
             activeJob = lifecycleScope.launch {
                 setConnectingState()
+                var success = false
                 try {
-                    SmartConnectManager.smartConnect(this@MainActivity)
+                    success = SmartConnectManager.smartConnect(this@MainActivity)
                 } finally {
-                    // ВАЖНО: сначала обновляем UI, потом снимаем флаг isTaskRunning.
-                    // Если сделать наоборот — observer isRunning может успеть сработать
-                    // раньше finally и вызвать updateUIState с устаревшим значением (мигание!).
-                    val running = mainViewModel.isRunning.value == true
                     isTaskRunning = false
                     activeJob = null
-                    updateUIState(running)
+                    if (!success) {
+                        updateUIState(mainViewModel.isRunning.value == true)
+                    }
                 }
             }
         }
@@ -335,13 +334,15 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         }
         activeJob = lifecycleScope.launch {
             setConnectingState()
+            var success = false
             try {
-                SmartConnectManager.switchServer(this@MainActivity)
+                success = SmartConnectManager.switchServer(this@MainActivity)
             } finally {
-                val running = mainViewModel.isRunning.value == true
                 isTaskRunning = false
                 activeJob = null
-                updateUIState(running)
+                if (!success) {
+                    updateUIState(mainViewModel.isRunning.value == true)
+                }
             }
         }
     }
