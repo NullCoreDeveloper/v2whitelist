@@ -110,6 +110,10 @@ class SettingsActivity : BaseActivity() {
                 requireContext().toast(getString(R.string.status_updating_subscription))
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_per_app_proxy_settings")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), PerAppProxyActivity::class.java))
+                true
+            }
             mode?.setOnPreferenceChangeListener { pref, newValue ->
                 val valueStr = newValue.toString()
                 (pref as? ListPreference)?.let { lp ->
