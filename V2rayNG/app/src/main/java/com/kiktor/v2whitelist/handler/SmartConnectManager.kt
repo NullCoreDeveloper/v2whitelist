@@ -237,9 +237,9 @@ object SmartConnectManager {
      * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
      */
     suspend fun updateSubscription(context: Context, isStartup: Boolean = false) = withContext(Dispatchers.IO) {
-        // Сбрасываем кэш: после обновления список серверов изменится
-        MmkvManager.clearLastConnectedServer()
-        Log.i(AppConfig.TAG, "updateSubscription: кэш последнего сервера сброшен")
+        // Запоминаем текущий закэшированный GUID ДО обновления
+        // Сбрасывать кэш заранее не нужно — это ломает Fast Path для пользователя!
+        val cachedGuidBeforeUpdate = MmkvManager.getValidLastServer()
 
         val candidateSocksPort = SettingsManager.getSocksPort()
         var socksPort = 0
@@ -302,6 +302,19 @@ object SmartConnectManager {
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
                 AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort)
+            }
+        }
+
+        // ПОСЛЕ обновления: проверяем, существует ли ещё закэшированный сервер.
+        // Если GUID исчез из нового списка — только тогда сбрасываем кэш.
+        // Так Fast Path не ломается при каждом фоновом обновлении!
+        if (cachedGuidBeforeUpdate != null) {
+            val updatedServers = MmkvManager.decodeServerList()
+            if (!updatedServers.contains(cachedGuidBeforeUpdate)) {
+                MmkvManager.clearLastConnectedServer()
+                Log.i(AppConfig.TAG, "updateSubscription: кэшированный сервер $cachedGuidBeforeUpdate исчез из списка, кэш сброшен")
+            } else {
+                Log.i(AppConfig.TAG, "updateSubscription: кэшированный сервер всё ещё существует, Fast Path сохранён")
             }
         }
     }
