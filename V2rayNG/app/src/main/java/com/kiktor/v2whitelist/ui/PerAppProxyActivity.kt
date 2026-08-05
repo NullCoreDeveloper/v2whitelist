@@ -210,12 +210,28 @@ class PerAppProxyActivity : BaseActivity() {
     }
 
     private fun exportProxyApp() {
-        var lst = binding.switchBypassApps.isChecked.toString()
-
-        viewModel.getAll().forEach { pkg ->
-            lst = lst + System.lineSeparator() + pkg
+        val sharedSplit = com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling(
+            name = "Свой пресет",
+            bypassMode = binding.switchBypassApps.isChecked,
+            packages = viewModel.getAll().toList()
+        )
+        val base64 = com.kiktor.v2whitelist.handler.DeepLinkManager.encodeToDeepLinkData(sharedSplit)
+        val link = "${com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SPLIT}://?data=$base64"
+        
+        Utils.setClipboard(applicationContext, link)
+        
+        val qrBitmap = Utils.createQRCode(link)
+        if (qrBitmap != null) {
+            val iv = android.widget.ImageView(this).apply {
+                setImageBitmap(qrBitmap)
+                setPadding(32, 32, 32, 32)
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("QR код пресета")
+                .setView(iv)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
         }
-        Utils.setClipboard(applicationContext, lst)
         toastSuccess(R.string.toast_success)
     }
 

@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.TextView
 import android.widget.EditText
+import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -97,10 +98,42 @@ class CustomSubscriptionsActivity : BaseActivity() {
             etGroupRegex.setText(existingItem.groupRegex)
         }
 
-        AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this)
             .setTitle(R.string.custom_sub_add)
             .setView(dialogView)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            
+        if (existingItem != null) {
+            builder.setNeutralButton("Поделиться") { _, _ ->
+                val sharedSub = com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSubscription(
+                    name = existingItem.name,
+                    url = existingItem.url,
+                    filter = existingItem.filter,
+                    groupRegex = existingItem.groupRegex
+                )
+                val base64 = com.kiktor.v2whitelist.handler.DeepLinkManager.encodeToDeepLinkData(sharedSub)
+                val link = "${com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SUB}://?data=$base64"
+                
+                // Show QR and Link
+                com.kiktor.v2whitelist.util.Utils.setClipboard(this, link)
+                toast("Ссылка скопирована в буфер!")
+                
+                // Optionally we could show a QR code dialog, but for now we copy to clipboard.
+                val qrBitmap = com.kiktor.v2whitelist.util.Utils.createQRCode(link)
+                if (qrBitmap != null) {
+                    val iv = ImageView(this).apply {
+                        setImageBitmap(qrBitmap)
+                        setPadding(32, 32, 32, 32)
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle("QR код подписки")
+                        .setView(iv)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        }
+
+        builder.setPositiveButton(android.R.string.ok) { _, _ ->
                 val name = etName.text.toString().trim()
                 val url = etUrl.text.toString().trim()
                 val filter = etFilter.text.toString().trim()

@@ -72,6 +72,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     private val scannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val scanResult = result.data?.getStringExtra("SCAN_RESULT") ?: return@registerForActivityResult
+            
+            // Если это наш диплинк на подписку или пресет
+            if (processDeepLinkString(scanResult)) return@registerForActivityResult
+            
             val oldServers = MmkvManager.decodeServerList()
             val (count, _) = com.kiktor.v2whitelist.handler.AngConfigManager.importBatchConfig(scanResult, "", true)
             if (count > 0) {
@@ -114,6 +118,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+
+        processDeepLink(intent)
 
         binding.btnBigConnect.setOnClickListener { handleConnectAction() }
         binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
@@ -558,5 +564,81 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             putExtra(android.content.Intent.EXTRA_TEXT, shareText)
         }
         startActivity(android.content.Intent.createChooser(shareIntent, getString(com.kiktor.v2whitelist.R.string.btn_label_share)))
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        processDeepLink(intent)
+    }
+
+    private fun processDeepLink(intent: Intent?) {
+        val dataString = intent?.dataString ?: return
+        processDeepLinkString(dataString)
+    }
+
+    private fun processDeepLinkString(dataString: String): Boolean {
+        if (!dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME) &&
+            !dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SUB) &&
+            !dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SPLIT)
+        ) {
+            return false
+        }
+
+        try {
+            val uri = android.net.Uri.parse(dataString)
+            val data = uri.getQueryParameter("data") ?: return false
+            val host = uri.host
+
+            if (dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SUB) || host == com.kiktor.v2whitelist.handler.DeepLinkManager.HOST_SUB) {
+                val sub = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSubscription::class.java)
+                if (sub != null) {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("Добавить кастомную подписку?")
+                        .setMessage("Название: ${sub.name}\nURL: ${sub.url}")
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            val newItem = com.kiktor.v2whitelist.ui.CustomSubscriptionsActivity.CustomSubItem(
+                                id = System.currentTimeMillis().toString(),
+                                name = sub.name,
+                                url = sub.url,
+                                filter = sub.filter,
+                                groupRegex = sub.groupRegex,
+                                enabled = true
+                            )
+                            // Читаем текущие подписки
+                            val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+                            val customSubs = if (!json.isNullOrEmpty()) {
+                                com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<com.kiktor.v2whitelist.ui.CustomSubscriptionsActivity.CustomSubItem>::class.java)?.toMutableList() ?: mutableListOf()
+                            } else {
+                                mutableListOf()
+                            }
+                            customSubs.add(newItem)
+                            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+                            toast("Подписка добавлена! Зайдите в меню 'Мои подписки'")
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    return true
+                }
+            } else if (dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SPLIT) || host == com.kiktor.v2whitelist.handler.DeepLinkManager.HOST_SPLIT) {
+                val split = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling::class.java)
+                if (split != null) {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("Применить пресет маршрутизации?")
+                        .setMessage("Пакет: ${split.name}\nПриложений: ${split.packages.size}")
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY, true)
+                            MmkvManager.encodeSettings(AppConfig.PREF_BYPASS_APPS, split.bypassMode)
+                            MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, split.packages.toSet())
+                            toast("Пресет применен! Перезапустите VPN")
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                    return true
+                }
+            }
+        } catch(e: Exception) {
+            e.printStackTrace()
+        }
+        return false
     }
 }
