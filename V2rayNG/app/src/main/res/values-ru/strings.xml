@@ -148,6 +148,7 @@
     <string name="title_advanced">Расширенные настройки</string>
     <string name="title_core_settings">Настройки ядра</string>
     <string name="title_vpn_settings">Настройки VPN</string>
+    <string name="title_split_tunneling">Сплит-тоннелинг</string>
     <string name="title_pref_per_app_proxy">Сплит-тоннелинг (прокси для приложений)</string>
     <string name="summary_pref_per_app_proxy">Основной: выбранные приложения идут через VPN; Режим обхода: выбранные приложения обходят VPN</string>
     <string name="title_pref_per_app_proxy_settings">Настроить список приложений</string>

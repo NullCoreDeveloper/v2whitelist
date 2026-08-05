@@ -103,12 +103,7 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_vpn_settings">
-        <CheckBoxPreference
-            android:key="pref_prefer_ipv6"
-            android:summary="@string/summary_pref_prefer_ipv6"
-            android:title="@string/title_pref_prefer_ipv6" />
-
+    <PreferenceCategory android:title="@string/title_split_tunneling">
 
         <CheckBoxPreference
             android:key="pref_per_app_proxy"
@@ -119,6 +114,15 @@
             android:key="pref_per_app_proxy_settings"
             android:summary="@string/summary_pref_per_app_proxy_settings"
             android:title="@string/title_pref_per_app_proxy_settings" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/title_vpn_settings">
+        <CheckBoxPreference
+            android:key="pref_prefer_ipv6"
+            android:summary="@string/summary_pref_prefer_ipv6"
+            android:title="@string/title_pref_prefer_ipv6" />
+
 
         <CheckBoxPreference
             android:key="pref_local_dns_enabled"
