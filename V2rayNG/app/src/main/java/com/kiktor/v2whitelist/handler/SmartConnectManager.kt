@@ -728,7 +728,6 @@ object SmartConnectManager {
                     }
                 }
             }
-            }
             return@withContext true
         }
         return@withContext false
