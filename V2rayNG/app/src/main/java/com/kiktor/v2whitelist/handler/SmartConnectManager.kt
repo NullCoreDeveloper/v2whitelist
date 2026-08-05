@@ -200,6 +200,8 @@ object SmartConnectManager {
                     subItem.remarks = sub.name
                     subItem.filter = sub.filter
                     MmkvManager.encodeSubscription(subId, subItem)
+                    // URL или фильтр изменились — перезагружаем серверы немедленно
+                    AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
                 }
             }
         }
