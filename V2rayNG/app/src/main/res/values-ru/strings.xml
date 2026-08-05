@@ -488,9 +488,11 @@
     <string name="location_filter_locations_title">Локации</string>
     <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
     <string name="location_filter_server_count">Серверов: %d</string>
-    <string name="title_pref_profile_check">Проверка профиля</string>
-    <string name="summary_pref_profile_check">Проверяет пинг и скорость профиля перед подключением</string>
-    <string name="status_speed_test">Тест скорости: %.1f KB/s</string>
+    <string name="title_pref_profile_check">Проверка профиля перед подключением</string>
+    <string name="summary_pref_profile_check">Обеспечивает 100% стабильность. Без нее вы можете попасть на "мертвый" сервер.</string>
+    <string name="title_pref_bypass_ru_apps">Банки, Госуслуги, Ozon и WB вне VPN</string>
+    <string name="summary_pref_bypass_ru_apps">Сбер, Тинькофф, Госуслуги, Озон, Wildberries, Авито и др. не будут маршрутизироваться через VPN. Включено по умолчанию.</string>
+    <string name="title_pref_auto_failover">Умный Auto-Failover (Анти-ТСПУ)</string>
     <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
     <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect</string>
     <string name="title_pref_custom_endpoint_url">Конфиг конечного узла</string>

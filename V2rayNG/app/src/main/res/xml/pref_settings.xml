@@ -17,6 +17,13 @@
             android:summary="@string/summary_pref_auto_failover"
             android:title="@string/title_pref_auto_failover" />
 
+        <!-- Bypass RU Apps -->
+        <CheckBoxPreference
+            android:key="pref_bypass_ru_apps"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_bypass_ru_apps"
+            android:title="@string/title_pref_bypass_ru_apps" />
+
         <!-- Custom Endpoint (Proxy Chain) -->
         <CheckBoxPreference
             android:key="pref_custom_endpoint_enabled"

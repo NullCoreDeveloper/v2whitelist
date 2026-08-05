@@ -325,34 +325,73 @@ class V2RayVpnService : VpnService(), ServiceControl {
     private fun configurePerAppProxy(builder: Builder) {
         val selfPackageName = BuildConfig.APPLICATION_ID
 
-        // If per-app proxy is not enabled, disallow the VPN service's own package and return
+        // If per-app proxy is not enabled, or no apps are selected, we just disallow the self package
+        // We DO NOT return here, because we still need to apply the bypassRuApps logic below!
+        var skipCustomPerApp = false
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == false) {
             builder.addDisallowedApplication(selfPackageName)
-            return
+            skipCustomPerApp = true
         }
 
-        // If no apps are selected, disallow the VPN service's own package and return
         val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)
-        if (apps.isNullOrEmpty()) {
+        if (!skipCustomPerApp && apps.isNullOrEmpty()) {
             builder.addDisallowedApplication(selfPackageName)
-            return
+            skipCustomPerApp = true
         }
 
         val bypassApps = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_APPS)
-        // Handle the VPN service's own package according to the mode
-        if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
+        
+        if (!skipCustomPerApp) {
+            // Handle the VPN service's own package according to the mode
+            if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
 
-        apps.forEach {
-            try {
-                if (bypassApps) {
-                    // In bypass mode, disallow the selected apps
-                    builder.addDisallowedApplication(it)
-                } else {
-                    // In proxy mode, only allow the selected apps
-                    builder.addAllowedApplication(it)
+            apps.forEach {
+                try {
+                    if (bypassApps) {
+                        // In bypass mode, disallow the selected apps
+                        builder.addDisallowedApplication(it)
+                    } else {
+                        // In proxy mode, only allow the selected apps
+                        builder.addAllowedApplication(it)
+                    }
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.e(AppConfig.TAG, "Failed to configure app in VPN: ${e.localizedMessage}", e)
                 }
-            } catch (e: PackageManager.NameNotFoundException) {
-                Log.e(AppConfig.TAG, "Failed to configure app in VPN: ${e.localizedMessage}", e)
+            }
+        }
+
+        // Apply RU apps bypass if enabled (and if we are in Bypass mode or Per-App Proxy is entirely disabled)
+        // If Per-App Proxy is in Proxy mode (bypassApps = false), all non-selected apps are already bypassed,
+        // so we don't need to explicitly disallow them (and Android doesn't allow mixing allowed/disallowed).
+        val bypassRuApps = MmkvManager.decodeSettingsBool("pref_bypass_ru_apps", true)
+        val isProxyMode = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == true && !bypassApps
+        
+        if (bypassRuApps && !isProxyMode) {
+            val ruApps = listOf(
+                "ru.sberbankmobile", // Сбербанк
+                "com.idamob.tinkoff.android", // Т-Банк
+                "ru.rostel", // Госуслуги
+                "ru.ozon.app.android", // Ozon
+                "com.wildberries.ru", // Wildberries
+                "com.avito.android", // Авито
+                "ru.vtb.invest", // ВТБ Инвестиции
+                "ru.vtb.msa", // ВТБ
+                "ru.alfabank.mobile.android", // Альфа-Банк
+                "ru.yoo.money", // ЮMoney
+                "ru.yandex.taxi", // Яндекс Go
+                "ru.kinopoisk", // Кинопоиск
+                "ru.vk.store" // RuStore
+            )
+            ruApps.forEach {
+                try {
+                    // Also make sure the user didn't explicitly put it in the "proxy" list (apps list) 
+                    // although in Bypass mode, they are explicitly disallowed anyway.
+                    builder.addDisallowedApplication(it)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    // Ignore if not installed
+                } catch (e: IllegalArgumentException) {
+                    // Already added to disallowed
+                }
             }
         }
     }
