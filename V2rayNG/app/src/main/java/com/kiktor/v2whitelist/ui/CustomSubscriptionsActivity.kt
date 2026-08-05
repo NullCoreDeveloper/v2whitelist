@@ -156,6 +156,16 @@ class CustomSubscriptionsActivity : BaseActivity() {
                         val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" }
                         sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
                     }
+
+                    // Авто-очистка призрачных подписок (удаленных до фикса бага)
+                    allSubs.forEach { sub ->
+                        if (sub.guid.startsWith("custom_sub_")) {
+                            val id = sub.guid.removePrefix("custom_sub_")
+                            if (customSubs.none { it.id == id }) {
+                                MmkvManager.removeSubscription(sub.guid)
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 customSubs = mutableListOf()
@@ -176,6 +186,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 saveCustomSubs()
             },
             onDelete = { position ->
+                val subId = customSubs[position].id
+                MmkvManager.removeSubscription("custom_sub_$subId")
                 customSubs.removeAt(position)
                 saveCustomSubs()
                 adapter.notifyItemRemoved(position)
