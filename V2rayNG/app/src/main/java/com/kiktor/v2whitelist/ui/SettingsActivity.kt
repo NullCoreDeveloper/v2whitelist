@@ -6,9 +6,6 @@ import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequest
-import androidx.work.multiprocess.RemoteWorkManager
 import com.kiktor.v2whitelist.AngApplication
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.VPN
@@ -18,7 +15,6 @@ import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
-import java.util.concurrent.TimeUnit
 
 class SettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

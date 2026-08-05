@@ -163,6 +163,8 @@
     <string name="title_core_settings">Core Settings</string>
     <string name="title_vpn_settings">VPN Settings</string>
     <string name="title_split_tunneling">Split Tunneling</string>
+    <string name="changelog_hide">▲ Hide Changelog</string>
+    <string name="changelog_show">▼ Show Changelog</string>
     <string name="title_pref_per_app_proxy">Per-app proxy (split tunneling)</string>
     <string name="summary_pref_per_app_proxy">General: checked apps use proxy; Bypass mode: checked apps connect directly</string>
     <string name="title_pref_per_app_proxy_settings">Configure app list</string>

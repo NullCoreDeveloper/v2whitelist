@@ -193,7 +193,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         tvToggle.setOnClickListener {
             isExpanded = !isExpanded
             scrollChangelog.visibility = if (isExpanded) android.view.View.VISIBLE else android.view.View.GONE
-            tvToggle.text = if (isExpanded) "▲ Hide Changelog" else "▼ Show Changelog"
+            tvToggle.text = if (isExpanded) getString(R.string.changelog_hide) else getString(R.string.changelog_show)
         }
 
         androidx.appcompat.app.AlertDialog.Builder(this)
@@ -436,18 +436,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         updateSubscriptionStatusUI()
     }
 
-    override fun onPause() {
-        super.onPause()
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        return super.onCreateOptionsMenu(menu)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        else -> super.onOptionsItemSelected(item)
-    }
-
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.per_app_proxy_settings -> requestActivityLauncher.launch(Intent(this, PerAppProxyActivity::class.java))
@@ -458,10 +446,6 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
         binding.drawerLayout.closeDrawer(GravityCompat.START)
         return true
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
     }
 
     fun startV2Ray() {
