@@ -1,4 +1,5 @@
 # ЧАВО (Часто Задаваемые Вопросы) — v2Whitelist
+![visitors](https://visitor-badge.laobi.icu/badge?page_id=kiktor12358.v2whitelist.faq)
 
 Добро пожаловать в FAQ по **v2Whitelist**. Здесь собраны ответы на самые популярные вопросы по работе клиента, его архитектуре и фишках.
 
