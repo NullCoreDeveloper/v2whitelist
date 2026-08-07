@@ -24,13 +24,6 @@
             android:summary="@string/summary_pref_bypass_ru_apps"
             android:title="@string/title_pref_bypass_ru_apps" />
 
-        <!-- Filter RU Hosters -->
-        <CheckBoxPreference
-            android:key="pref_filter_ru_hosters"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_filter_ru_hosters"
-            android:title="@string/title_pref_filter_ru_hosters" />
-
         <!-- Custom Endpoint (Proxy Chain) -->
         <CheckBoxPreference
             android:key="pref_custom_endpoint_enabled"
