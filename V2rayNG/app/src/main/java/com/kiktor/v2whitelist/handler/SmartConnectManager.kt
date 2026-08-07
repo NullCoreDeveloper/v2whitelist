@@ -344,13 +344,18 @@ object SmartConnectManager {
         }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
             .filter {
                 val remarks = it.second.remarks.lowercase()
-                // Фильтр российских хостеров (всегда активен)
-                !remarks.contains("timeweb") &&
-                !remarks.contains("selectel") &&
-                !remarks.contains("yandex") &&
-                !remarks.contains("aeza") &&
-                !remarks.contains("cloud.ru") &&
-                !remarks.contains("vk")
+                val filterRuHosters = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_RU_HOSTERS, true)
+                
+                if (filterRuHosters) {
+                    !remarks.contains("timeweb") &&
+                    !remarks.contains("selectel") &&
+                    !remarks.contains("yandex") &&
+                    !remarks.contains("aeza") &&
+                    !remarks.contains("cloud.ru") &&
+                    !remarks.contains("vk")
+                } else {
+                    true
+                }
             }
             .filter {
                 // Фильтр по локациям (эмодзи-флаги или кастомные группы)

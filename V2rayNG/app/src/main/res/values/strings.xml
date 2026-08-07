@@ -493,6 +493,9 @@
     <string name="summary_pref_profile_check">Ensures safe and successful connection</string>
     <string name="title_pref_bypass_ru_apps">Banks, Gosuslugi, Marketplaces outside VPN</string>
     <string name="summary_pref_bypass_ru_apps">Sberbank, Tinkoff, Ozon, WB, Avito and other RU services will work directly. Enabled by default.</string>
+
+    <string name="title_pref_filter_ru_hosters">Filter RU Hosters</string>
+    <string name="summary_pref_filter_ru_hosters">Ignore servers from Timeweb, Selectel, etc. (recommended for bypassing DPI)</string>
     <!-- Smart Auto-Failover string removed as it was duplicate -->
     <string name="status_verifying_profile">Verifying profile stability\u2026</string>
     <string name="status_profile_check_failed">Profile check failed, trying another\u2026</string>
