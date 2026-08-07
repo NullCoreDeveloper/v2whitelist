@@ -380,7 +380,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 "ru.yoo.money", // ЮMoney
                 "ru.yandex.taxi", // Яндекс Go
                 "ru.kinopoisk", // Кинопоиск
-                "ru.vk.store" // RuStore
+                "ru.vk.store", // RuStore
+                "com.vkontakte.android" // ВКонтакте
             )
             ruApps.forEach {
                 try {
