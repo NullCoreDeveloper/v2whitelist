@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 
 object UpdateCheckerManager {
     suspend fun checkForUpdate(includePreRelease: Boolean = false): CheckUpdateResult = withContext(Dispatchers.IO) {
@@ -70,17 +71,51 @@ object UpdateCheckerManager {
 
             try {
                 val cacheFolder = context.externalCacheDir ?: context.cacheDir
-                val apkFile = File(cacheFolder, "update.apk")
+                val fileName = downloadUrl.substringAfterLast("/", "update.apk")
+                
+                // Clean up old APKs to prevent space leaks and corrupted resumes
+                cacheFolder.listFiles { file -> file.name.endsWith(".apk") && file.name != fileName }?.forEach { it.delete() }
+                
+                val apkFile = File(cacheFolder, fileName)
                 Log.i(AppConfig.TAG, "Downloading APK to: ${apkFile.absolutePath}")
 
-                val fileLength = connection.contentLength
+                var downloadedBytes = 0L
+                if (apkFile.exists()) {
+                    downloadedBytes = apkFile.length()
+                    if (downloadedBytes > 0) {
+                        connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
+                        Log.i(AppConfig.TAG, "Requesting range: bytes=$downloadedBytes-")
+                    }
+                }
+
+                connection.connect()
+                val responseCode = connection.responseCode
+                Log.i(AppConfig.TAG, "Response code: $responseCode")
+
+                if (responseCode == 416) {
+                    Log.i(AppConfig.TAG, "Range not satisfiable, assuming file is fully downloaded.")
+                    return@withContext apkFile
+                }
+
+                val append = responseCode == HttpURLConnection.HTTP_PARTIAL
+                if (!append) {
+                    Log.i(AppConfig.TAG, "Server doesn't support range or full file requested, starting from scratch")
+                    downloadedBytes = 0L
+                    if (apkFile.exists()) {
+                        apkFile.delete()
+                    }
+                }
+
+                val contentLength = connection.contentLength
+                val fileLength = if (append) downloadedBytes + contentLength else contentLength.toLong()
+                
                 var lastProgress = 0
                 
-                FileOutputStream(apkFile).use { outputStream ->
+                FileOutputStream(apkFile, append).use { outputStream ->
                     connection.inputStream.use { inputStream ->
                         val buffer = ByteArray(8 * 1024)
                         var bytesRead: Int
-                        var totalRead = 0L
+                        var totalRead = downloadedBytes
                         while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             totalRead += bytesRead
