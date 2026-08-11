@@ -86,7 +86,7 @@ class LocationFilterActivity : BaseActivity() {
             }
             
             if (tag.isNullOrEmpty()) {
-                tag = "🌐" // Fallback tag for UI grouping
+                tag = "🌐 Неизвестные" // Fallback tag for UI grouping
             }
 
             if (!tag.isNullOrEmpty()) {
