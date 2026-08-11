@@ -266,11 +266,17 @@ object AngConfigManager {
             }
 
             var count = 0
+            val processedConfigs = mutableListOf<ProfileItem>()
             for (config in newConfigs) {
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
-                val guid = MmkvManager.encodeServerConfig("", config)
-                
+                processedConfigs.add(config)
+            }
+            
+            val guids = MmkvManager.encodeServerConfigs(processedConfigs)
+            for (i in processedConfigs.indices) {
+                val guid = guids[i]
+                val config = processedConfigs[i]
                 // Восстановление выбора сервера
                 if (removedSelectedServer != null &&
                     config.server == removedSelectedServer.server &&

@@ -179,6 +179,23 @@ class CustomSubscriptionsActivity : BaseActivity() {
             items = customSubs,
             onToggle = { position, isEnabled ->
                 customSubs[position].enabled = isEnabled
+                if (!isEnabled) {
+                    val subId = customSubs[position].id
+                    val guid = "custom_sub_$subId"
+                    MmkvManager.removeServerViaSubid(guid)
+                    customSubs[position].lastUpdated = 0L
+                    
+                    val allSubs = MmkvManager.decodeSubscriptions()
+                    allSubs.find { it.guid == guid }?.let {
+                        it.subscription.lastUpdated = 0L
+                        MmkvManager.encodeSubscription(it.guid, it.subscription)
+                    }
+                    
+                    // Обновляем UI, чтобы сразу сбросить "Обновлено N минут назад"
+                    rvSubscriptions.post {
+                        adapter.notifyItemChanged(position)
+                    }
+                }
                 saveCustomSubs()
             },
             onDelete = { position ->

@@ -147,15 +147,42 @@ object MmkvManager {
                 mainStorage.encode(KEY_SELECTED_SERVER, key)
             }
         }
-//        val profile = ProfileLiteItem(
-//            configType = config.configType,
-//            subscriptionId = config.subscriptionId,
-//            remarks = config.remarks,
-//            server = config.getProxyOutbound()?.getServerAddress(),
-//            serverPort = config.getProxyOutbound()?.getServerPort(),
-//        )
-//        profileStorage.encode(key, JsonUtil.toJson(profile))
         return key
+    }
+
+    /**
+     * Encodes multiple server configurations efficiently.
+     *
+     * @param configs The list of server configurations.
+     * @return The list of generated GUIDs.
+     */
+    fun encodeServerConfigs(configs: List<ProfileItem>): List<String> {
+        val serverList = decodeServerList()
+        var changed = false
+        val guids = mutableListOf<String>()
+        
+        for (config in configs) {
+            val key = Utils.getUuid()
+            profileFullStorage.encode(key, JsonUtil.toJson(config))
+            guids.add(key)
+        }
+        
+        // Reverse because each add(0) prepends, preserving original list order
+        for (key in guids.reversed()) {
+            if (!serverList.contains(key)) {
+                serverList.add(0, key)
+                changed = true
+                if (getSelectServer().isNullOrBlank()) {
+                    mainStorage.encode(KEY_SELECTED_SERVER, key)
+                }
+            }
+        }
+        
+        if (changed) {
+            encodeServerList(serverList)
+        }
+        
+        return guids
     }
 
     /**
@@ -248,12 +275,29 @@ object MmkvManager {
         if (subid.isBlank()) {
             return
         }
+        val serverList = decodeServerList()
+        var changed = false
+        val keysToRemove = mutableListOf<String>()
+        
         profileFullStorage.allKeys()?.forEach { key ->
             decodeServerConfig(key)?.let { config ->
                 if (config.subscriptionId == subid) {
-                    removeServer(key)
+                    keysToRemove.add(key)
                 }
             }
+        }
+        
+        keysToRemove.forEach { key ->
+            if (getSelectServer() == key) {
+                mainStorage.remove(KEY_SELECTED_SERVER)
+            }
+            if (serverList.remove(key)) changed = true
+            profileFullStorage.remove(key)
+            serverAffStorage.remove(key)
+        }
+        
+        if (changed) {
+            encodeServerList(serverList)
         }
     }
 

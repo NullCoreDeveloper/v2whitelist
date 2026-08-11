@@ -53,7 +53,7 @@ object DefaultSubscriptions {
         ),
         SmartConnectManager.CustomSubData(
             id = "def_avencores_goida_bypass",
-            name = "AvenCores/goida (Сборник обхода черных списков SNI/CIDR)",
+            name = "AvenCores/goida (Сборник обхода белых списков SNI/CIDR)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
             groupRegex = "\\[OpenRay\\]\\s*(Dynamic)",
             enabled = false
