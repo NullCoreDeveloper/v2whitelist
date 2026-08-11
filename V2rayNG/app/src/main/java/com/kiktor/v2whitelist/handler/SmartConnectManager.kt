@@ -42,13 +42,7 @@ import libv2ray.CoreController
 object SmartConnectManager {
     private val testSemaphore = Semaphore(48)
 
-    // Ссылка-матрёшка: сначала загружаем этот файл, в нём — реальный URL подписки
-    const val WHITELIST_URL = "https://raw.githubusercontent.com/NullCoreDeveloper/v2whitelist/master/whitelist.txt"
-    // Fallback если whitelist.txt недоступен
-    const val FALLBACK_SUBSCRIPTION_URL = "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt"
-
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
-    const val SUBSCRIPTION_REMARKS = "v2Whitelist Official"
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
 
     /**
@@ -72,105 +66,49 @@ object SmartConnectManager {
     }
 
     /**
-     * Загружает whitelist.txt и извлекает реальный URL подписки.
-     * Если не удалось — возвращает fallback URL.
-     * @param socksPort SOCKS5 порт (>0 = использовать VPN прокси).
-     */
-    private fun resolveSubscriptionUrl(socksPort: Int = 0): String {
-        return try {
-            val url = URL(WHITELIST_URL)
-            val connection = if (socksPort > 0) {
-                val httpPort = socksPort + 1
-                url.openConnection(
-                    Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
-                ) as HttpURLConnection
-            } else {
-                url.openConnection() as HttpURLConnection
-            }
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("User-Agent", "v2Whitelist/1.0")
-
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val body = connection.inputStream.bufferedReader().readText().trim()
-                connection.disconnect()
-
-                val resolvedUrl = body.lines()
-                    .map { it.trim() }
-                    .firstOrNull { it.startsWith("http") }
-
-                if (!resolvedUrl.isNullOrEmpty()) {
-                    Log.i(AppConfig.TAG, "Resolved subscription URL from whitelist: $resolvedUrl")
-                    resolvedUrl
-                } else {
-                    Log.w(AppConfig.TAG, "Whitelist file is empty or has no valid URL, using fallback")
-                    FALLBACK_SUBSCRIPTION_URL
-                }
-            } else {
-                connection.disconnect()
-                Log.w(AppConfig.TAG, "Failed to fetch whitelist (HTTP $responseCode), using fallback")
-                FALLBACK_SUBSCRIPTION_URL
-            }
-        } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "Failed to resolve subscription URL: ${e.message}, using fallback")
-            FALLBACK_SUBSCRIPTION_URL
-        }
-    }
-
-    /**
-     * Ensures the hardcoded subscription is present and updated.
-     * Also sets up custom subscriptions.
+     * Pre-populates the zieng2/wl subscription with mirrors on first launch,
+     * and sets up all custom subscriptions.
      */
     suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
-        val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
-        
-        // Надежная проверка работы прокси (независимо от процесса VPN)
-        val candidateSocksPort = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
-        val socksPort = if (isProxyRunning(candidateSocksPort)) {
-            candidateSocksPort
-        } else {
-            0
-        }
-
-        if (useBuiltin) {
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
-
-            // Разрешаем URL через матрёшку с учетом VPN
-            val realUrl = resolveSubscriptionUrl(socksPort)
-
-            if (existingSub == null) {
-                Log.d(AppConfig.TAG, "Adding hardcoded subscription")
-                val subItem = SubscriptionItem().apply {
-                    remarks = SUBSCRIPTION_REMARKS
-                    url = realUrl
-                    enabled = true
-                }
-                MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
-                sendStatus(context, context.getString(R.string.status_updating_subscription))
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(SUBSCRIPTION_ID, subItem))
-            } else {
-                // Обновляем URL на случай если он изменился в whitelist.txt
-                val subItem = existingSub.subscription
-                if (subItem.url != realUrl) {
-                    Log.d(AppConfig.TAG, "Subscription URL changed, updating: $realUrl")
-                    subItem.url = realUrl
-                    MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
+        // Мигрируем серверы из старой хардкод-подписки (матрешки), чтобы не оставить пользователя без связи
+        val subscriptions = MmkvManager.decodeSubscriptions()
+        if (subscriptions.any { it.guid == SUBSCRIPTION_ID }) {
+            Log.d(AppConfig.TAG, "Migrating old hardcoded subscription servers to the new custom sub")
+            val newSubId = "custom_sub_def_zieng2"
+            val serverList = MmkvManager.decodeServerList()
+            var migratedCount = 0
+            for (guid in serverList) {
+                val profile = MmkvManager.decodeServerConfig(guid)
+                if (profile != null && profile.subscriptionId == SUBSCRIPTION_ID) {
+                    profile.subscriptionId = newSubId
+                    MmkvManager.encodeServerConfig(guid, profile)
+                    migratedCount++
                 }
             }
-        } else {
-            // Если выключено — проверяем нет ли "остатков" и вычищаем
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            if (subscriptions.any { it.guid == SUBSCRIPTION_ID }) {
-                Log.d(AppConfig.TAG, "Built-in subscription is disabled, removing cache")
-                MmkvManager.removeSubscription(SUBSCRIPTION_ID)
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
-            }
+            Log.d(AppConfig.TAG, "Migrated $migratedCount servers. Removing old subscription object.")
+            
+            MmkvManager.removeSubscription(SUBSCRIPTION_ID)
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
         }
 
-        // Обработка кастомных подписок
+        val defaultsAdded = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
+        if (!defaultsAdded) {
+            val customSubs = loadCustomSubs().toMutableList()
+            var changed = false
+            for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+                if (customSubs.none { it.name == defaultSub.name }) {
+                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
+                    customSubs.add(defaultSub)
+                    changed = true
+                }
+            }
+            if (changed) {
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+            }
+            MmkvManager.encodeSettings("pref_defaults_added_v1", true)
+        }
+
+        // Обработка кастомных подписок (zieng2/wl теперь обычная кастомная подписка)
         setupCustomSubscriptions(context)
     }
 
@@ -195,7 +133,7 @@ object SmartConnectManager {
                 AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
             } else {
                 val subItem = existing.subscription
-                if (subItem.url != sub.url || subItem.filter != sub.filter) {
+                if (subItem.url != sub.url || subItem.filter != sub.filter || subItem.remarks != sub.name) {
                     subItem.url = sub.url
                     subItem.remarks = sub.name
                     subItem.filter = sub.filter
@@ -260,31 +198,8 @@ object SmartConnectManager {
         
         Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort")
 
-        val useBuiltin = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
-
-        if (useBuiltin) {
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            val existingSub = subscriptions.find { it.guid == SUBSCRIPTION_ID }
-            if (existingSub != null) {
-                // Обновляем URL через VPN-прокси если он активен
-                val realUrl = resolveSubscriptionUrl(socksPort)
-                val subItem = existingSub.subscription
-                if (subItem.url != realUrl) {
-                    Log.d(AppConfig.TAG, "updateSubscription: URL изменился, обновляем")
-                    subItem.url = realUrl
-                    MmkvManager.encodeSubscription(SUBSCRIPTION_ID, subItem)
-                }
-                Log.d(AppConfig.TAG, "Manually updating builtin subscription via socksPort=$socksPort")
-                sendStatus(context, if (socksPort > 0)
-                    context.getString(R.string.status_updating_via_vpn)
-                else
-                    context.getString(R.string.status_updating_subscription)
-                )
-                AngConfigManager.updateConfigViaSub(existingSub, socksPort)
-            } else {
-                checkAndSetupSubscription(context)
-            }
-        }
+        // Ensure base subscriptions are initialized if this is the first launch
+        checkAndSetupSubscription(context)
 
         // Обновляем кастомные подписки
         val customSubs = loadCustomSubs()
@@ -356,8 +271,11 @@ object SmartConnectManager {
                         }
                     } catch (e: Exception) {}
                 }
-                if (tag == null) {
+                if (tag.isNullOrEmpty()) {
                     tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+                }
+                if (tag.isNullOrEmpty()) {
+                    tag = "🌐" // Fallback tag for servers without any emojis or regex match
                 }
                 
                 when (filterMode) {

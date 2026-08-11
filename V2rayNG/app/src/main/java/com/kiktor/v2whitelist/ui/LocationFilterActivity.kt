@@ -84,6 +84,10 @@ class LocationFilterActivity : BaseActivity() {
             if (tag.isNullOrEmpty()) {
                 tag = extractFirstFlagEmoji(profile.remarks)
             }
+            
+            if (tag.isNullOrEmpty()) {
+                tag = "🌐" // Fallback tag for UI grouping
+            }
 
             if (!tag.isNullOrEmpty()) {
                 emojiCountMap[tag] = (emojiCountMap[tag] ?: 0) + 1

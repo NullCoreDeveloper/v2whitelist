@@ -437,68 +437,73 @@ object AngConfigManager {
      */
     fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0): Int {
         try {
-            if (TextUtils.isEmpty(it.guid)
-                || TextUtils.isEmpty(it.subscription.remarks)
-                || TextUtils.isEmpty(it.subscription.url)
-            ) {
+            if (TextUtils.isEmpty(it.guid) || TextUtils.isEmpty(it.subscription.remarks) || TextUtils.isEmpty(it.subscription.url)) {
                 return 0
             }
             if (!it.subscription.enabled) {
                 return 0
             }
-            val url = HttpUtil.toIdnUrl(it.subscription.url)
-            if (!Utils.isValidUrl(url)) {
-                return 0
-            }
-            if (!it.subscription.allowInsecureUrl) {
-                if (!Utils.isValidSubUrl(url)) {
-                    return 0
-                }
-            }
-            Log.i(AppConfig.TAG, url)
+            
+            val urls = it.subscription.url.split("|").map { url -> url.trim() }.filter { url -> url.isNotEmpty() }
+            if (urls.isEmpty()) return 0
+            
+            Log.i(AppConfig.TAG, "Updating sub via ${urls.size} mirrors: ${it.subscription.remarks}")
             val userAgent = it.subscription.userAgent
-
-            var configText = ""
             val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
+            var configText = ""
 
-            // 1. HTTP прокси (Порт 10809) - приоритет, так как он резолвит DNS через прокси, а не локально!
-            if (httpPort > 0) {
-                configText = try {
-                    val result = HttpUtil.getUrlContentWithUserAgent(url, userAgent, 6000, httpPort)
-                    Log.i(AppConfig.TAG, "Update sub (HTTP) success")
-                    result
-                } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update sub (HTTP) failed: ${e.message}")
-                    ""
+            kotlinx.coroutines.runBlocking {
+                val channel = kotlinx.coroutines.channels.Channel<String>(urls.size)
+                var activeJobs = urls.size
+                val lock = Any()
+                
+                val jobs = urls.map { singleUrl ->
+                    kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        var result = ""
+                        try {
+                            val urlFixed = HttpUtil.toIdnUrl(singleUrl)
+                            if (!Utils.isValidUrl(urlFixed)) {
+                                if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) return@launch
+                            }
+                            
+                            // 1. HTTP Proxy
+                            if (httpPort > 0) {
+                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
+                            }
+                            // 2. SOCKS5 Proxy
+                            if (result.isEmpty() && socksPort > 0) {
+                                try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 4000, socksPort) } catch (_: Exception) {}
+                            }
+                            // 3. Direct
+                            if (result.isEmpty()) {
+                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 4000) } catch (_: Exception) {}
+                            }
+                            
+                            if (result.isNotEmpty()) {
+                                Log.i(AppConfig.TAG, "Mirror WON the race: $singleUrl")
+                                channel.trySend(result)
+                            }
+                        } catch (e: Exception) {
+                            Log.d(AppConfig.TAG, "Mirror failed: $singleUrl")
+                        } finally {
+                            synchronized(lock) {
+                                activeJobs--
+                                if (activeJobs == 0) channel.trySend("")
+                            }
+                        }
+                    }
                 }
+                
+                // Wait for the first successful result or all failing
+                configText = channel.receive()
+                jobs.forEach { job -> job.cancel() }
             }
 
-            // 2. SOCKS5 прокси (Порт 10808) - fallback, если HTTP по какой-то причине недоступен
-            if (configText.isEmpty() && socksPort > 0) {
-                configText = try {
-                    val result = HttpUtil.getUrlContentViaSocks(url, userAgent, 4000, socksPort)
-                    Log.i(AppConfig.TAG, "Update sub (SOCKS) success")
-                    result
-                } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update sub (SOCKS) failed: ${e.message}")
-                    ""
-                }
-            }
-
-            // 3. Прямое соединение (Fallback, или если VPN не активен)
             if (configText.isEmpty()) {
-                configText = try {
-                    HttpUtil.getUrlContentWithUserAgent(url, userAgent, 4000)
-                } catch (e: Exception) {
-                    Log.d(AppConfig.TAG, "Update sub (Direct) failed: ${e.message}")
-                    ""
-                }
-            }
-
-            if (configText.isEmpty()) {
-                Log.w(AppConfig.TAG, "Update subscription: all methods failed for $url")
+                Log.w(AppConfig.TAG, "Update subscription: all mirrors failed for ${it.subscription.remarks}")
                 return 0
             }
+            
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()

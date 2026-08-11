@@ -48,34 +48,14 @@ class CustomSubscriptionsActivity : BaseActivity() {
     }
 
     private fun updateBuiltinLastUpdateTime() {
-        val subscriptions = MmkvManager.decodeSubscriptions()
-        val builtin = subscriptions.find { it.guid == SmartConnectManager.SUBSCRIPTION_ID }
-        val lastUpdated = builtin?.subscription?.lastUpdated ?: 0L
-        if (lastUpdated > 0) {
-            tvBuiltinLastUpdate.text = getString(R.string.title_last_update, Utils.formatTimestamp(lastUpdated))
-        } else {
-            tvBuiltinLastUpdate.text = getString(R.string.title_last_update_never)
-        }
+        // Obsolete: zieng2/wl is now a custom subscription
+        tvBuiltinLastUpdate.visibility = View.GONE
     }
 
     private fun setupBuiltinSwitch() {
-        switchBuiltin.isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_BUILTIN_SUB, true)
-        switchBuiltin.setOnCheckedChangeListener { _, isChecked ->
-            MmkvManager.encodeSettings(AppConfig.PREF_USE_BUILTIN_SUB, isChecked)
-            if (!isChecked) {
-                // Полностью удаляем встроенную подписку и её серверы, если пользователь её выключил
-                MmkvManager.removeSubscription(SmartConnectManager.SUBSCRIPTION_ID)
-                com.kiktor.v2whitelist.util.MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
-                updateBuiltinLastUpdateTime()
-            } else {
-                // Запускаем обновление подписки при включении
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    com.kiktor.v2whitelist.handler.SmartConnectManager.checkAndSetupSubscription(this@CustomSubscriptionsActivity)
-                    com.kiktor.v2whitelist.util.MessageUtil.sendMsg2UI(this@CustomSubscriptionsActivity, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
-                    updateBuiltinLastUpdateTime()
-                }
-            }
-        }
+        // Obsolete: zieng2/wl is now a custom subscription
+        switchBuiltin.visibility = View.GONE
+        findViewById<View>(R.id.layout_builtin_sub)?.visibility = View.GONE
     }
 
     private fun setupAddButton() {
