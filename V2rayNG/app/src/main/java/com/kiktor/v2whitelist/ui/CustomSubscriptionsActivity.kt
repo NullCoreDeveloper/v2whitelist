@@ -55,7 +55,6 @@ class CustomSubscriptionsActivity : BaseActivity() {
     private fun setupBuiltinSwitch() {
         // Obsolete: zieng2/wl is now a custom subscription
         switchBuiltin.visibility = View.GONE
-        findViewById<View>(R.id.layout_builtin_sub)?.visibility = View.GONE
     }
 
     private fun setupAddButton() {

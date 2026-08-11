@@ -458,7 +458,7 @@ object AngConfigManager {
                 val lock = Any()
                 
                 val jobs = urls.map { singleUrl ->
-                    kotlinx.coroutines.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         var result = ""
                         try {
                             val urlFixed = HttpUtil.toIdnUrl(singleUrl)
