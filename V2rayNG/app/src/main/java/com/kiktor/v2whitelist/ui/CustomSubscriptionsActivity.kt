@@ -23,8 +23,6 @@ import kotlinx.coroutines.launch
 
 class CustomSubscriptionsActivity : BaseActivity() {
 
-    private lateinit var switchBuiltin: MaterialSwitch
-    private lateinit var tvBuiltinLastUpdate: TextView
     private lateinit var tvEmpty: TextView
     private lateinit var rvSubscriptions: RecyclerView
     private lateinit var adapter: CustomSubscriptionAdapter
@@ -35,26 +33,12 @@ class CustomSubscriptionsActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentViewWithToolbar(R.layout.activity_custom_subscriptions, showHomeAsUp = true, title = getString(R.string.title_custom_subscriptions))
 
-        switchBuiltin = findViewById(R.id.switch_builtin)
-        tvBuiltinLastUpdate = findViewById(R.id.tv_builtin_last_update)
         tvEmpty = findViewById(R.id.tv_empty)
         rvSubscriptions = findViewById(R.id.rv_subscriptions)
 
-        setupBuiltinSwitch()
         setupAddButton()
         loadCustomSubs()
         setupRecyclerView()
-        updateBuiltinLastUpdateTime()
-    }
-
-    private fun updateBuiltinLastUpdateTime() {
-        // Obsolete: zieng2/wl is now a custom subscription
-        tvBuiltinLastUpdate.visibility = View.GONE
-    }
-
-    private fun setupBuiltinSwitch() {
-        // Obsolete: zieng2/wl is now a custom subscription
-        switchBuiltin.visibility = View.GONE
     }
 
     private fun setupAddButton() {

@@ -225,9 +225,12 @@ object AngConfigManager {
             val lines = servers.lines().distinct().reversed()
             val newConfigs = mutableListOf<ProfileItem>()
 
-            // Предварительный парсинг всех строк
             for (line in lines) {
-                val config = identifyConfigType(line) ?: continue
+                val config = try {
+                    identifyConfigType(line) ?: continue
+                } catch (e: Exception) {
+                    continue
+                }
                 
                 // Применяем фильтр подписки если есть
                 if (subItem?.filter != null && subItem.filter?.isNotEmpty() == true && config.remarks.isNotEmpty()) {
