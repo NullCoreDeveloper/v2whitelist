@@ -10,7 +10,7 @@ object DefaultSubscriptions {
     val PREPOPULATED_SUBS = listOf(
         SmartConnectManager.CustomSubData(
             id = "def_zieng2",
-            name = "zieng2 (Универсальные сервера)",
+            name = "zieng2 (Для обхода белых списков)",
             url = listOf(
                 "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
                 "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt",
@@ -46,14 +46,14 @@ object DefaultSubscriptions {
         ),
         SmartConnectManager.CustomSubData(
             id = "def_avencores_goida",
-            name = "AvenCores/goida (Рекомендованные стабильные)",
+            name = "AvenCores/goida (Сборник обхода черных списков)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
             groupRegex = "\\[OpenRay\\]\\s*(Dynamic)",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
             id = "def_avencores_goida_bypass",
-            name = "AvenCores/goida (Обход жестких блокировок по SNI/CIDR)",
+            name = "AvenCores/goida (Сборник обхода черных списков SNI/CIDR)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
             groupRegex = "\\[OpenRay\\]\\s*(Dynamic)",
             enabled = false
@@ -72,12 +72,16 @@ object DefaultSubscriptions {
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
-            id = "def_rkp_bypass",
-            name = "RKP (Анти-РосКомПозор: Белые и Черные списки)",
-            url = listOf(
-                "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
-                "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt"
-            ).joinToString("|"),
+            id = "def_rkp_whitelist",
+            name = "RKP (Анти-РосКомПозор: Белые списки)",
+            url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
+            groupRegex = "(🌐)\\s*Неизвестно",
+            enabled = false
+        ),
+        SmartConnectManager.CustomSubData(
+            id = "def_rkp_blacklist",
+            name = "RKP (Анти-РосКомПозор: Черные списки)",
+            url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
             groupRegex = "(🌐)\\s*Неизвестно",
             enabled = false
         ),
