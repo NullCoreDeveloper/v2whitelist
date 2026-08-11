@@ -48,7 +48,7 @@ object SettingsManager {
      * @param index The index of the routing type.
      * @return A mutable list of RulesetItem.
      */
-    private fun getPresetRoutingRulesets(context: Context, index: Int = 0): MutableList<RulesetItem>? {
+    private fun getPresetRoutingRulesets(context: Context, index: Int = 4): MutableList<RulesetItem>? {
         val fileName = RoutingType.fromIndex(index).fileName
         val assets = Utils.readTextFromAssets(context, fileName)
         if (TextUtils.isEmpty(assets)) {

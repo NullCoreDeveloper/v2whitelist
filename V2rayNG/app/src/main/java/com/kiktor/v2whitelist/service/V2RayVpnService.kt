@@ -367,32 +367,39 @@ class V2RayVpnService : VpnService(), ServiceControl {
         val isProxyMode = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == true && !bypassApps
         
         if (bypassRuApps && !isProxyMode) {
-            val ruApps = listOf(
-                "ru.sberbankmobile", // Сбербанк
-                "com.idamob.tinkoff.android", // Т-Банк
-                "ru.rostel", // Госуслуги
-                "ru.ozon.app.android", // Ozon
-                "com.wildberries.ru", // Wildberries
-                "com.avito.android", // Авито
-                "ru.vtb.invest", // ВТБ Инвестиции
-                "ru.vtb.msa", // ВТБ
-                "ru.alfabank.mobile.android", // Альфа-Банк
-                "ru.yoo.money", // ЮMoney
-                "ru.yandex.taxi", // Яндекс Go
-                "ru.kinopoisk", // Кинопоиск
-                "ru.vk.store", // RuStore
-                "com.vkontakte.android" // ВКонтакте
-            )
-            ruApps.forEach {
-                try {
-                    // Also make sure the user didn't explicitly put it in the "proxy" list (apps list) 
-                    // although in Bypass mode, they are explicitly disallowed anyway.
-                    builder.addDisallowedApplication(it)
-                } catch (e: PackageManager.NameNotFoundException) {
-                    // Ignore if not installed
-                } catch (e: IllegalArgumentException) {
-                    // Already added to disallowed
+            try {
+                val pm = packageManager
+                val packages = pm.getInstalledPackages(0)
+                
+                packages.forEach { pkg ->
+                    val pName = pkg.packageName.lowercase()
+                    // Эвристика определения российских приложений:
+                    if (pName.startsWith("ru.") || 
+                        pName.contains("yandex") || 
+                        pName.contains("tinkoff") || 
+                        pName.contains("sberbank") || 
+                        pName.contains("vkontakte") || 
+                        pName.contains("vk.store") || 
+                        pName.contains("ozon") || 
+                        pName.contains("wildberries") || 
+                        pName.contains("avito") || 
+                        pName.contains("alfabank") || 
+                        pName.contains("mail.ru") || 
+                        pName.contains("kinopoisk") || 
+                        pName.contains("rostel") || 
+                        pName.contains("vtb")
+                    ) {
+                        try {
+                            builder.addDisallowedApplication(pkg.packageName)
+                        } catch (e: PackageManager.NameNotFoundException) {
+                            // Ignore if not found
+                        } catch (e: IllegalArgumentException) {
+                            // Already added to disallowed
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "Failed to scan packages for RU bypass", e)
             }
         }
     }

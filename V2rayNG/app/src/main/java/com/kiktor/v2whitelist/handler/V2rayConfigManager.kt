@@ -521,6 +521,22 @@ object V2rayConfigManager {
             rulesetItems?.forEach { key ->
                 getRoutingUserRule(key, v2rayConfig)
             }
+
+            // Inject RU routing dynamically if Bypass RU apps is enabled
+            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_RU_APPS, true) == true) {
+                v2rayConfig.routing.rules.add(
+                    RulesBean(
+                        outboundTag = AppConfig.TAG_DIRECT,
+                        domain = arrayListOf("geosite:category-ru")
+                    )
+                )
+                v2rayConfig.routing.rules.add(
+                    RulesBean(
+                        outboundTag = AppConfig.TAG_DIRECT,
+                        ip = arrayListOf("geoip:ru")
+                    )
+                )
+            }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to configure routing", e)
             return false
