@@ -62,6 +62,7 @@ object DefaultSubscriptions {
             id = "def_jsxta_whitelist",
             name = "jsxta (Динамические авто-тестируемые сервера)",
             url = "https://gbr.mydan.online/configs",
+            groupRegex = "(ShatakVPN|V\\.O\\.I\\.D|EbraSha)",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
@@ -77,6 +78,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
                 "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt"
             ).joinToString("|"),
+            groupRegex = "(🌐)\\s*Неизвестно",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
@@ -94,10 +96,8 @@ object DefaultSubscriptions {
         SmartConnectManager.CustomSubData(
             id = "def_hiztin_gribi",
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
-            url = listOf(
-                "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
-                "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/26.txt"
-            ).joinToString("|"),
+            url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+            groupRegex = "(@[A-Za-z0-9_]+)",
             enabled = false
         )
     )
