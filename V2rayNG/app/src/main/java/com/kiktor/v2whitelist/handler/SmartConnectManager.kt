@@ -240,6 +240,9 @@ object SmartConnectManager {
      * Фильтрует серверы: убирает не поддерживаемые и применяет фильтр локаций из настроек.
      */
     private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+        // Получаем список выключенных подписок, чтобы не подключаться к их серверам
+        val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
+        
         // Загружаем настройки фильтра
         val filterMode = MmkvManager.decodeSettingsString(
             AppConfig.PREF_LOCATION_FILTER_MODE,
@@ -254,7 +257,11 @@ object SmartConnectManager {
         return allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
-                guid to profile
+                if (disabledSubIds.contains(profile.subscriptionId)) {
+                    null // Пропускаем серверы из выключенных подписок
+                } else {
+                    guid to profile
+                }
             } else null
         }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
             .filter {
