@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.text.TextUtils
 import android.util.Log
+import kotlinx.coroutines.*
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.HY2
 import com.kiktor.v2whitelist.R
@@ -458,7 +459,8 @@ object AngConfigManager {
                 val lock = Any()
                 
                 val jobs = urls.map { singleUrl ->
-                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    @OptIn(DelicateCoroutinesApi::class)
+                    GlobalScope.launch(Dispatchers.IO) {
                         var result = ""
                         try {
                             val urlFixed = HttpUtil.toIdnUrl(singleUrl)
