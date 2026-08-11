@@ -87,8 +87,8 @@ object NotificationManager {
      * Shows the notification.
      * @param currentConfig The current profile configuration.
      */
-    fun showNotification(currentConfig: ProfileItem?) {
-        val service = getService() ?: return
+    fun showNotification(currentConfig: ProfileItem?, providedService: Service? = null) {
+        val service = providedService ?: getService() ?: return
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
         val startMainIntent = Intent(service, MainActivity::class.java)
@@ -106,7 +106,7 @@ object NotificationManager {
 
         val channelId =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                createNotificationChannel()
+                createNotificationChannel(service)
             } else {
                 ""
             }
@@ -165,7 +165,7 @@ object NotificationManager {
      * @return The channel ID.
      */
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun createNotificationChannel(): String {
+    private fun createNotificationChannel(providedService: Service? = null): String {
         val channelId = AppConfig.RAY_NG_CHANNEL_ID
         val channelName = AppConfig.RAY_NG_CHANNEL_NAME
         val chan = NotificationChannel(
@@ -175,7 +175,7 @@ object NotificationManager {
         chan.lightColor = Color.DKGRAY
         chan.importance = NotificationManager.IMPORTANCE_NONE
         chan.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        getNotificationManager()?.createNotificationChannel(chan)
+        getNotificationManager(providedService)?.createNotificationChannel(chan)
         return channelId
     }
 
@@ -204,9 +204,9 @@ object NotificationManager {
      * Gets the notification manager.
      * @return The notification manager.
      */
-    private fun getNotificationManager(): NotificationManager? {
+    private fun getNotificationManager(providedService: Service? = null): NotificationManager? {
         if (mNotificationManager == null) {
-            val service = getService() ?: return null
+            val service = providedService ?: getService() ?: return null
             mNotificationManager = service.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         }
         return mNotificationManager

@@ -464,13 +464,21 @@ object Utils {
      * @return The URL string with illegal characters replaced.
      */
     fun fixIllegalUrl(str: String): String {
+        fun fixBase(b: String): String {
+            return b.replace(" ", "%20")
+                .replace("|", "%7C")
+                .replace("{", "%7B")
+                .replace("}", "%7D")
+                .replace("\"", "%22")
+        }
+
         val parts = str.split("#", limit = 2)
         if (parts.size == 2) {
-            val base = parts[0].replace(" ", "%20").replace("|", "%7C")
+            val base = fixBase(parts[0])
             val fragment = android.net.Uri.encode(parts[1])
             return "$base#$fragment"
         }
-        return str.replace(" ", "%20").replace("|", "%7C")
+        return fixBase(str)
     }
 
     /**

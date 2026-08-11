@@ -97,7 +97,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(AppConfig.TAG, "onStartCommand: VPN service starting (pid=${android.os.Process.myPid()})")
-        NotificationManager.showNotification(null)
+        NotificationManager.showNotification(null, this)
 
         if (!setupVpnService()) {
             Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, service will stop")
