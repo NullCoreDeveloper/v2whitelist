@@ -47,20 +47,15 @@ object DefaultSubscriptions {
         SmartConnectManager.CustomSubData(
             id = "def_avencores_goida",
             name = "AvenCores/goida (Рекомендованные стабильные)",
-            url = listOf(
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/6.txt",
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/22.txt",
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/23.txt",
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/24.txt",
-                "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/25.txt"
-            ).joinToString("|"),
+            url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
+            groupRegex = "\\[OpenRay\\]\\s*(Dynamic)",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
             id = "def_avencores_goida_bypass",
             name = "AvenCores/goida (Обход жестких блокировок по SNI/CIDR)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
+            groupRegex = "\\[OpenRay\\]\\s*(Dynamic)",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
