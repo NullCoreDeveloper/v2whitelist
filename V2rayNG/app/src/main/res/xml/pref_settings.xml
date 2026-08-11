@@ -3,12 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory android:title="@string/title_v2whitelist_settings">
-        <!-- Profile Check -->
-        <CheckBoxPreference
-            android:key="pref_profile_check_enabled"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_profile_check"
-            android:title="@string/title_pref_profile_check" />
+        <!-- Manage Subscriptions -->
+        <Preference
+            android:key="pref_manage_custom_subs"
+            android:summary="@string/summary_pref_manage_subs"
+            android:title="@string/title_pref_manage_subs" />
 
         <!-- Auto failover -->
         <CheckBoxPreference
@@ -24,6 +23,20 @@
             android:summary="@string/summary_pref_bypass_ru_apps"
             android:title="@string/title_pref_bypass_ru_apps" />
 
+        <!-- Auto Check App Updates -->
+        <CheckBoxPreference
+            android:key="pref_auto_check_update"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_auto_check_update"
+            android:title="@string/title_pref_auto_check_update" />
+
+        <!-- Profile Check -->
+        <CheckBoxPreference
+            android:key="pref_profile_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_profile_check"
+            android:title="@string/title_pref_profile_check" />
+
         <!-- Custom Endpoint (Proxy Chain) -->
         <CheckBoxPreference
             android:key="pref_custom_endpoint_enabled"
@@ -35,13 +48,6 @@
             android:summary="@string/summary_pref_custom_endpoint_url"
             android:title="@string/title_pref_custom_endpoint_url" />
 
-        <!-- Auto Check App Updates -->
-        <CheckBoxPreference
-            android:key="pref_auto_check_update"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_auto_check_update"
-            android:title="@string/title_pref_auto_check_update" />
-            
         <CheckBoxPreference
             android:key="pref_check_update_pre_release"
             android:defaultValue="false"
@@ -65,10 +71,6 @@
             android:key="pref_check_update_now"
             android:summary="@string/summary_pref_check_update_now"
             android:title="@string/title_pref_check_update_now" />
-        <Preference
-            android:key="pref_manage_custom_subs"
-            android:summary="@string/summary_pref_manage_subs"
-            android:title="@string/title_pref_manage_subs" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_ui_settings">
