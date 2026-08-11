@@ -29,6 +29,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt"
             ).joinToString("|"),
+            groupRegex = "(🌐)\\s*Anycast-IP",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
@@ -40,6 +41,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
             ).joinToString("|"),
+            groupRegex = "(🌐)\\s*Anycast-IP",
             enabled = false
         ),
         SmartConnectManager.CustomSubData(
