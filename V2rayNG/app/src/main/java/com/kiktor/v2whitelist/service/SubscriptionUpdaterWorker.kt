@@ -33,10 +33,12 @@ class SubscriptionUpdaterWorker(
 
     @SuppressLint("MissingPermission")
     override suspend fun doWork(): Result {
-        Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: starting background subscription update")
+        Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: starting background subscription update (sequential mode)")
         showNotification()
         return try {
-            SmartConnectManager.updateSubscription(applicationContext)
+            // sequential=true: перебираем зеркала по одному, без параллельных GlobalScope-корутин.
+            // В фоне торопиться некуда — экономим RAM и CPU.
+            SmartConnectManager.updateSubscription(applicationContext, sequential = true)
             Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
             Result.success()
         } catch (e: Exception) {

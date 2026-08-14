@@ -175,8 +175,10 @@ object SmartConnectManager {
     /**
      * Force updates all active subscriptions.
      * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
+     * @param sequential если true — последовательная подкачка (фоновый воркер),
+     *                    false — параллельная гонка зеркал (UI).
      */
-    suspend fun updateSubscription(context: Context, isStartup: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun updateSubscription(context: Context, isStartup: Boolean = false, sequential: Boolean = false) = withContext(Dispatchers.IO) {
         // Запоминаем текущий закэшированный GUID ДО обновления
         // Сбрасывать кэш заранее не нужно — это ломает Fast Path для пользователя!
         val cachedGuidBeforeUpdate = MmkvManager.getValidLastServer()
@@ -196,7 +198,7 @@ object SmartConnectManager {
             if (i < waitLoops - 1) delay(1000)
         }
         
-        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort")
+        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
 
         // Ensure base subscriptions are initialized if this is the first launch
         checkAndSetupSubscription(context)
@@ -209,7 +211,7 @@ object SmartConnectManager {
             val existing = subscriptions.find { it.guid == subId }
             if (existing != null) {
                 Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
-                AngConfigManager.updateConfigViaSub(existing, socksPort)
+                AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
             } else {
                 // Создаём если нет
                 val subItem = SubscriptionItem().apply {
@@ -218,7 +220,7 @@ object SmartConnectManager {
                     enabled = true
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort)
+                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort, sequential)
             }
         }
 

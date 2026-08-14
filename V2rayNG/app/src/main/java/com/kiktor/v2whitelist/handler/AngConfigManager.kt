@@ -443,9 +443,11 @@ object AngConfigManager {
      *
      * @param it The subscription item.
      * @param socksPort SOCKS5 порт для загрузки через VPN (0 = не использовать).
+     * @param sequential Если true — последовательный перебор зеркал (для фонового воркера).
+     *                   Если false — параллельная гонка зеркал (для UI, когда пользователь ждёт).
      * @return The number of configurations updated.
      */
-    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0): Int {
+    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0, sequential: Boolean = false): Int {
         try {
             if (TextUtils.isEmpty(it.guid) || TextUtils.isEmpty(it.subscription.remarks) || TextUtils.isEmpty(it.subscription.url)) {
                 return 0
@@ -457,57 +459,102 @@ object AngConfigManager {
             val urls = it.subscription.url.split("|").map { url -> url.trim() }.filter { url -> url.isNotEmpty() }
             if (urls.isEmpty()) return 0
             
-            Log.i(AppConfig.TAG, "Updating sub via ${urls.size} mirrors: ${it.subscription.remarks}")
+            Log.i(AppConfig.TAG, "Updating sub '${it.subscription.remarks}' via ${urls.size} mirrors (sequential=$sequential)")
             val userAgent = it.subscription.userAgent
             val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
             var configText = ""
 
-            kotlinx.coroutines.runBlocking {
-                val channel = kotlinx.coroutines.channels.Channel<String>(urls.size)
-                var activeJobs = urls.size
-                val lock = Any()
-                
-                val jobs = urls.map { singleUrl ->
-                    @OptIn(DelicateCoroutinesApi::class)
-                    GlobalScope.launch(Dispatchers.IO) {
-                        var result = ""
+            if (sequential) {
+                // ── Последовательный режим (фоновый воркер) ──────────────────────────────
+                // Перебираем зеркала по одному: нет GlobalScope, нет Channel, нет лишних потоков.
+                // Первое успешное зеркало — останавливаемся. Дёшево по RAM и CPU.
+                kotlinx.coroutines.runBlocking {
+                    for (singleUrl in urls) {
                         try {
                             val urlFixed = HttpUtil.toIdnUrl(singleUrl)
                             if (!Utils.isValidUrl(urlFixed)) {
-                                if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) return@launch
+                                if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) continue
                             }
-                            
+                            var result = ""
                             // 1. HTTP Proxy
                             if (httpPort > 0) {
-                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
+                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 8000, httpPort) } catch (_: Exception) {}
                             }
                             // 2. SOCKS5 Proxy
                             if (result.isEmpty() && socksPort > 0) {
-                                try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 4000, socksPort) } catch (_: Exception) {}
+                                try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 6000, socksPort) } catch (_: Exception) {}
                             }
                             // 3. Direct
                             if (result.isEmpty()) {
-                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 4000) } catch (_: Exception) {}
+                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000) } catch (_: Exception) {}
                             }
-                            
                             if (result.isNotEmpty()) {
-                                Log.i(AppConfig.TAG, "Mirror WON the race: $singleUrl")
-                                channel.trySend(result)
+                                Log.i(AppConfig.TAG, "Sequential mirror succeeded: $singleUrl")
+                                configText = result
+                                return@runBlocking // нашли — выходим сразу
                             }
+                            Log.d(AppConfig.TAG, "Sequential mirror failed: $singleUrl")
                         } catch (e: Exception) {
-                            Log.d(AppConfig.TAG, "Mirror failed: $singleUrl")
-                        } finally {
-                            synchronized(lock) {
-                                activeJobs--
-                                if (activeJobs == 0) channel.trySend("")
-                            }
+                            Log.d(AppConfig.TAG, "Sequential mirror error: $singleUrl — ${e.message}")
                         }
                     }
                 }
-                
-                // Wait for the first successful result or all failing
-                configText = channel.receive()
-                jobs.forEach { job -> job.cancel() }
+            } else {
+                // ── Параллельная гонка (UI, ручное обновление) ───────────────────────────
+                // Все зеркала стартуют одновременно, побеждает первое успешное.
+                // Быстро, но ресурсоёмко — не для фонового воркера.
+                kotlinx.coroutines.runBlocking {
+                    val channel = kotlinx.coroutines.channels.Channel<String>(urls.size)
+                    var activeJobs = urls.size
+                    val lock = Any()
+                    
+                    val jobs = urls.map { singleUrl ->
+                        @OptIn(DelicateCoroutinesApi::class)
+                        GlobalScope.launch(Dispatchers.IO) {
+                            var result = ""
+                            try {
+                                val urlFixed = HttpUtil.toIdnUrl(singleUrl)
+                                if (!Utils.isValidUrl(urlFixed)) {
+                                    if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) return@launch
+                                }
+                                // 1. HTTP Proxy
+                                if (httpPort > 0) {
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
+                                }
+                                // 2. SOCKS5 Proxy
+                                if (result.isEmpty() && socksPort > 0) {
+                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 4000, socksPort) } catch (_: Exception) {}
+                                }
+                                // 3. Direct
+                                if (result.isEmpty()) {
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 4000) } catch (_: Exception) {}
+                                }
+                                if (result.isNotEmpty()) {
+                                    Log.i(AppConfig.TAG, "Mirror WON the race: $singleUrl")
+                                    channel.trySend(result)
+                                }
+                            } catch (e: Exception) {
+                                Log.d(AppConfig.TAG, "Mirror failed: $singleUrl")
+                            } finally {
+                                synchronized(lock) {
+                                    activeJobs--
+                                    // Когда все зеркала закончили — сигнализируем пустой строкой
+                                    if (activeJobs == 0) channel.trySend("")
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Таймаут 30с на подписку: защита от TCP-зависания зеркал без ответа.
+                    // Без него channel.receive() мог висеть вечно если один GlobalScope.launch завис
+                    // (TCP handshake без ACK) — Android убивал WorkManager воркер по таймауту → FAILED.
+                    configText = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
+                        channel.receive()
+                    } ?: ""
+                    
+                    // Отменяем все оставшиеся загрузки зеркал
+                    jobs.forEach { job -> job.cancel() }
+                }
             }
 
             if (configText.isEmpty()) {
