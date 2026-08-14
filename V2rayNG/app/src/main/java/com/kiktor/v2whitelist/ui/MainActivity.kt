@@ -45,6 +45,7 @@ import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.Utils
 import com.kiktor.v2whitelist.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -58,6 +59,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     val mainViewModel: MainViewModel by viewModels()
     private var activeJob: Job? = null
     private var isTaskRunning = false
+    // true пока мы показываем сообщение об ошибке после провала SmartConnect (2.5с задержка)
+    private var isShowingError = false
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == RESULT_OK) {
@@ -281,21 +284,26 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 SmartConnectManager.updateSubscription(this@MainActivity)
                 mainViewModel.reloadServerList()
             } finally {
-                isTaskRunning = false
-                updateUIState(mainViewModel.isRunning.value == true)
-                updateSubscriptionStatusUI()
+                withContext(NonCancellable) {
+                    isTaskRunning = false
+                    activeJob = null
+                    updateUIState(mainViewModel.isRunning.value == true)
+                    updateSubscriptionStatusUI()
+                }
             }
         }
     }
 
     private fun setupViewModel() {
         mainViewModel.isRunning.observe(this) { isRunning ->
-            if (!isTaskRunning) {
+            // Не сбрасываем UI пока идёт поиск ИЛИ пока показываем ошибку
+            if (!isTaskRunning && !isShowingError) {
                 updateUIState(isRunning)
             }
         }
         mainViewModel.uiStatus.observe(this) { status ->
-            if (isTaskRunning) {
+            // Показываем статус пока идёт задача ИЛИ пока показываем ошибку
+            if (isTaskRunning || isShowingError) {
                 binding.tvStatusDetail.text = status
             }
         }
@@ -317,10 +325,21 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                 try {
                     success = SmartConnectManager.smartConnect(this@MainActivity)
                 } finally {
-                    isTaskRunning = false
-                    activeJob = null
-                    if (!success) {
-                        updateUIState(mainViewModel.isRunning.value == true)
+                    // withContext(NonCancellable) гарантирует выполнение даже если job отменён
+                    withContext(NonCancellable) {
+                        if (!success) {
+                            // Показываем ошибку 2.5с, чтобы пользователь успел прочитать
+                            isTaskRunning = false
+                            isShowingError = true
+                            delay(2500)
+                            isShowingError = false
+                        } else {
+                            isTaskRunning = false
+                        }
+                        activeJob = null
+                        if (!success) {
+                            updateUIState(mainViewModel.isRunning.value == true)
+                        }
                     }
                 }
             }
@@ -338,10 +357,19 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
             try {
                 success = SmartConnectManager.switchServer(this@MainActivity)
             } finally {
-                isTaskRunning = false
-                activeJob = null
-                if (!success) {
-                    updateUIState(mainViewModel.isRunning.value == true)
+                withContext(NonCancellable) {
+                    if (!success) {
+                        isTaskRunning = false
+                        isShowingError = true
+                        delay(2500)
+                        isShowingError = false
+                    } else {
+                        isTaskRunning = false
+                    }
+                    activeJob = null
+                    if (!success) {
+                        updateUIState(mainViewModel.isRunning.value == true)
+                    }
                 }
             }
         }
@@ -351,6 +379,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         activeJob?.cancel()
         activeJob = null
         isTaskRunning = false
+        isShowingError = false
         updateUIState(mainViewModel.isRunning.value == true)
     }
 

@@ -17,7 +17,6 @@ import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.ui.LocationFilterActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -27,9 +26,10 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlin.random.Random
+import java.util.concurrent.atomic.AtomicBoolean
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -315,6 +315,8 @@ object SmartConnectManager {
             "https://connectivitycheck.gstatic.com/generate_204"
         )
 
+        // AtomicBoolean вместо cancelChildren() — не ломает awaitAll() CancellationException-ом
+        val foundFastServer = AtomicBoolean(false)
         val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
 
         withTimeoutOrNull(totalTimeoutMs) {
@@ -322,7 +324,8 @@ object SmartConnectManager {
                 val jobs = servers.map { (guid, profile) ->
                     async {
                         testSemaphore.withPermit {
-                            if (resultsList.any { it.third < 500 }) return@withPermit null
+                            // Ранний выход если уже нашли хороший сервер — не через cancelChildren!
+                            if (foundFastServer.get()) return@withPermit null
 
                             try {
                                 val randomUrl = testUrls[Random.nextInt(testUrls.size)]
@@ -336,8 +339,8 @@ object SmartConnectManager {
                                 val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
                                 val result = Triple(guid, profile, finalDelay)
                                 if (finalDelay < 500) {
-                                    synchronized(resultsList) { resultsList.add(result) }
-                                    this@coroutineScope.coroutineContext[Job]?.cancelChildren()
+                                    // Атомарно помечаем — остальные корутины пропустят тест
+                                    foundFastServer.set(true)
                                 }
                                 result
                             } catch (e: Exception) {
@@ -347,7 +350,13 @@ object SmartConnectManager {
                         }
                     }
                 }
-                resultsList.addAll(jobs.awaitAll().filterNotNull())
+                // awaitAll() теперь безопасен — корутины не отменяются, просто пропускают работу
+                val allResults = jobs.awaitAll().filterNotNull()
+                synchronized(resultsList) {
+                    // Дедупликация: добавляем только те, которых ещё нет в списке
+                    val existingGuids = resultsList.map { it.first }.toSet()
+                    resultsList.addAll(allResults.filter { it.first !in existingGuids })
+                }
             }
         }
 
@@ -466,8 +475,9 @@ object SmartConnectManager {
         // ── Полный SmartConnect ────────────────────────────────────────────────
         
 
-        // Проверяем состояние интернета
-        when (checkInternetStatus()) {
+        // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
+        val internetStatus = checkInternetStatus()
+        when (internetStatus) {
             0 -> {
                 Log.i(AppConfig.TAG, "SmartConnect: интернет доступен")
                 sendStatus(context, context.getString(R.string.status_testing_servers))
@@ -498,7 +508,12 @@ object SmartConnectManager {
 
         for ((index, chunk) in chunkedServers.withIndex()) {
             Log.i(AppConfig.TAG, "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
-            sendStatus(context, context.getString(R.string.status_testing_servers))
+            // Обновляем статус "тестируем" только если интернет в норме.
+            // При "глушат" (1) и "нет интернета" (2) строки уже говорят "ищём серверы" —
+            // перезаписывать их бессмысленно, иначе пользователь не увидит важный контекст.
+            if (internetStatus == 0) {
+                sendStatus(context, context.getString(R.string.status_testing_servers))
+            }
 
             val results = testServers(context, chunk)
 
