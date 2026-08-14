@@ -343,11 +343,21 @@ object SmartConnectManager {
 
                                 val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
                                 val result = Triple(guid, profile, finalDelay)
+                                
+                                // Добавляем результат сразу, чтобы не потерять при таймауте чанка
+                                synchronized(resultsList) {
+                                    if (resultsList.none { it.first == guid }) {
+                                        resultsList.add(result)
+                                    }
+                                }
+                                
                                 if (finalDelay < 500) {
                                     // Атомарно помечаем — остальные корутины пропустят тест
                                     foundFastServer.set(true)
                                 }
                                 result
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e // Прокидываем CancellationException дальше
                             } catch (e: Exception) {
                                 Log.e(AppConfig.TAG, "testServers error for $guid", e)
                                 null
@@ -355,12 +365,11 @@ object SmartConnectManager {
                         }
                     }
                 }
-                // awaitAll() теперь безопасен — корутины не отменяются, просто пропускают работу
-                val allResults = jobs.awaitAll().filterNotNull()
-                synchronized(resultsList) {
-                    // Дедупликация: добавляем только те, которых ещё нет в списке
-                    val existingGuids = resultsList.map { it.first }.toSet()
-                    resultsList.addAll(allResults.filter { it.first !in existingGuids })
+                
+                try {
+                    jobs.awaitAll()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    Log.w(AppConfig.TAG, "Chunk testing timed out, proceeding with partial results (${resultsList.size})")
                 }
             }
         }
