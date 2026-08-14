@@ -128,15 +128,17 @@ object SmartConnectManager {
                     url = sub.url
                     filter = sub.filter
                     enabled = true
+                    sharePercent = sub.sharePercent
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
                 AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
             } else {
                 val subItem = existing.subscription
-                if (subItem.url != sub.url || subItem.filter != sub.filter || subItem.remarks != sub.name) {
+                if (subItem.url != sub.url || subItem.filter != sub.filter || subItem.remarks != sub.name || subItem.sharePercent != sub.sharePercent) {
                     subItem.url = sub.url
                     subItem.remarks = sub.name
                     subItem.filter = sub.filter
+                    subItem.sharePercent = sub.sharePercent
                     MmkvManager.encodeSubscription(subId, subItem)
                     // URL или фильтр изменились — перезагружаем серверы немедленно
                     AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))

@@ -53,12 +53,14 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val etUrl = dialogView.findViewById<EditText>(R.id.et_sub_url)
         val etFilter = dialogView.findViewById<EditText>(R.id.et_sub_filter)
         val etGroupRegex = dialogView.findViewById<EditText>(R.id.et_sub_group_regex)
+        val etSharePercent = dialogView.findViewById<EditText>(R.id.et_sub_share_percent)
 
         if (existingItem != null) {
             etName.setText(existingItem.name)
             etUrl.setText(existingItem.url)
             etFilter.setText(existingItem.filter)
             etGroupRegex.setText(existingItem.groupRegex)
+            etSharePercent.setText(existingItem.sharePercent?.toString() ?: "")
         }
 
         val builder = AlertDialog.Builder(this)
@@ -101,6 +103,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 val url = etUrl.text.toString().trim()
                 val filter = etFilter.text.toString().trim()
                 val groupRegex = etGroupRegex.text.toString().trim()
+                val sharePercentStr = etSharePercent.text.toString().trim()
+                val sharePercent = if (sharePercentStr.isNotEmpty()) sharePercentStr.toIntOrNull() else null
 
                 if (name.isEmpty()) {
                     toast(R.string.sub_setting_remarks)
@@ -116,6 +120,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     existingItem.url = url
                     existingItem.filter = filter
                     existingItem.groupRegex = groupRegex
+                    existingItem.sharePercent = sharePercent
                     adapter.notifyDataSetChanged()
                 } else {
                     val sub = CustomSubItem(
@@ -124,7 +129,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                         url = url,
                         filter = filter,
                         groupRegex = groupRegex,
-                        enabled = true
+                        enabled = true,
+                        sharePercent = sharePercent
                     )
                     customSubs.add(sub)
                     adapter.notifyItemInserted(customSubs.size - 1)
@@ -234,6 +240,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         var filter: String = "",
         var groupRegex: String = "",
         var enabled: Boolean = true,
-        var lastUpdated: Long = 0L
+        var lastUpdated: Long = 0L,
+        var sharePercent: Int? = null
     )
 }
