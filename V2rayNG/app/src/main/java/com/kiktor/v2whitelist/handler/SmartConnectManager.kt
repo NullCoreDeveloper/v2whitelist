@@ -694,7 +694,9 @@ object SmartConnectManager {
         }
 
         // Group by subscription
-        val subGroups = servers.groupBy { it.second.subscriptionId }.toMutableMap()
+        val subGroups = servers.groupBy { it.second.subscriptionId }
+            .mapValues { it.value.toMutableList() }
+            .toMutableMap()
         
         // Remove null or empty subscription keys if any
         val allSubs = MmkvManager.decodeSubscriptions().associateBy { it.guid }
