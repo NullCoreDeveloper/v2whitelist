@@ -53,6 +53,7 @@ class SubEditActivity : BaseActivity() {
         binding.allowInsecureUrl.isChecked = subItem.allowInsecureUrl
         binding.etPreProfile.text = Utils.getEditable(subItem.prevProfile)
         binding.etNextProfile.text = Utils.getEditable(subItem.nextProfile)
+        binding.etSharePercent.text = Utils.getEditable(subItem.sharePercent?.toString() ?: "")
         return true
     }
 
@@ -66,6 +67,7 @@ class SubEditActivity : BaseActivity() {
         binding.chkEnable.isChecked = true
         binding.etPreProfile.text = null
         binding.etNextProfile.text = null
+        binding.etSharePercent.text = null
         return true
     }
 
@@ -84,6 +86,9 @@ class SubEditActivity : BaseActivity() {
         subItem.prevProfile = binding.etPreProfile.text.toString()
         subItem.nextProfile = binding.etNextProfile.text.toString()
         subItem.allowInsecureUrl = binding.allowInsecureUrl.isChecked
+        
+        val sharePercentStr = binding.etSharePercent.text.toString()
+        subItem.sharePercent = if (sharePercentStr.isNotBlank()) sharePercentStr.toIntOrNull() else null
 
         if (TextUtils.isEmpty(subItem.remarks)) {
             toast(R.string.sub_setting_remarks)

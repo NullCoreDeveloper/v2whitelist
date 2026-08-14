@@ -9,6 +9,22 @@
             android:summary="@string/summary_pref_manage_subs"
             android:title="@string/title_pref_manage_subs" />
 
+        <!-- SmartConnect Server Chunking -->
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_chunk_size"
+            android:defaultValue="20"
+            android:summary="@string/summary_pref_chunk_size"
+            android:title="@string/title_pref_chunk_size" />
+
+        <ListPreference
+            android:defaultValue="equal"
+            android:entries="@array/chunk_preset_entries"
+            android:entryValues="@array/chunk_preset_values"
+            android:key="pref_chunk_preset"
+            android:summary="%s"
+            android:title="@string/title_pref_chunk_preset" />
+
         <!-- Auto failover -->
         <CheckBoxPreference
             android:key="pref_auto_failover"

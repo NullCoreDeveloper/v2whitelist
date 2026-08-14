@@ -277,6 +277,10 @@
     <string name="failover_notification_content">Ищем новый сервер и переподключаемся...</string>
     <string name="title_v2whitelist_settings">Фишки ПроБел</string>
 
+    <string name="title_pref_chunk_size">Размер пачки серверов</string>
+    <string name="summary_pref_chunk_size">Сколько серверов тестировать за один проход (по умолчанию: 20)</string>
+    <string name="title_pref_chunk_preset">Пресет распределения по умолчанию</string>
+
     <string name="title_logcat">Журнал</string>
     <string name="logcat_copy">Копировать</string>
     <string name="logcat_clear">Очистить</string>
@@ -290,6 +294,8 @@
     <string name="sub_setting_url">URL (необязательно)</string>
     <string name="sub_setting_user_agent">User Agent</string>
     <string name="sub_setting_filter">Название фильтра</string>
+    <string name="sub_setting_share_percent">Процент доли (0-100)</string>
+    <string name="sub_setting_share_percent_hint">Оставьте пустым для авто</string>
     <string name="sub_setting_enable">Использовать обновление</string>
     <string name="sub_auto_update">Использовать автообновление</string>
     <string name="sub_allow_insecure_url">Разрешать незащищённые HTTP-адреса</string>
@@ -413,6 +419,13 @@
         <item>Общие</item>
         <item>Белый список Ирана</item>
         <item>Белый список России</item>
+    </string-array>
+
+    <string-array name="chunk_preset_entries">
+        <item>Случайный разброс</item>
+        <item>Поровну</item>
+        <item>Больше серверов = больше доля</item>
+        <item>Меньше серверов = больше доля</item>
     </string-array>
 
     <string-array name="vpn_bypass_lan">

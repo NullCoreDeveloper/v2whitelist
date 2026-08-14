@@ -295,6 +295,10 @@
     <string name="failover_notification_content">Searching for a new server...</string>
     <string name="title_v2whitelist_settings">ПроБел Features</string>
 
+    <string name="title_pref_chunk_size">Server chunk size</string>
+    <string name="summary_pref_chunk_size">Number of servers to test in one batch (Default: 20)</string>
+    <string name="title_pref_chunk_preset">Default distribution preset</string>
+
     <string name="title_logcat">Logcat</string>
     <string name="logcat_copy">Copy</string>
     <string name="logcat_clear">Clear</string>
@@ -308,6 +312,8 @@
     <string name="sub_setting_url">Optional URL</string>
     <string name="sub_setting_user_agent">User Agent</string>
     <string name="sub_setting_filter">Remarks regular filter</string>
+    <string name="sub_setting_share_percent">Share Percent (0-100)</string>
+    <string name="sub_setting_share_percent_hint">Leave blank for default</string>
     <string name="sub_setting_enable">Enable update</string>
     <string name="sub_auto_update">Enable automatic update</string>
     <string name="sub_allow_insecure_url">Allow insecure HTTP address</string>
@@ -431,6 +437,13 @@
         <item>Global</item>
         <item>Iran Whitelist</item>
         <item>Russia Whitelist</item>
+    </string-array>
+
+    <string-array name="chunk_preset_entries">
+        <item>Random (Legacy)</item>
+        <item>Equal distribution</item>
+        <item>Proportional to size</item>
+        <item>Inverse proportional</item>
     </string-array>
 
     <string-array name="vpn_bypass_lan">
