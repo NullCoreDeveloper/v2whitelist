@@ -275,7 +275,7 @@
     <string name="summary_pref_auto_failover">Автоматически переключаться на следующий сервер, если текущий не отвечает</string>
     <string name="failover_notification_title">Связь с сервером потеряна</string>
     <string name="failover_notification_content">Ищем новый сервер и переподключаемся...</string>
-    <string name="title_v2whitelist_settings">Фишки v2Whitelist</string>
+    <string name="title_v2whitelist_settings">Фишки ПроБел</string>
 
     <string name="title_logcat">Журнал</string>
     <string name="logcat_copy">Копировать</string>
@@ -479,7 +479,7 @@
     <string name="title_location_filter">Фильтр локаций</string>
     <string name="btn_label_filter">Фильтр</string>
     <string name="btn_label_share">Поделиться</string>
-    <string name="share_app_text">v2Whitelist — клиент для обхода блокировок и белых списков на мобильном интернете. Бесплатно, без рекламы и слежки! Прямая ссылка на скачивание:\n%1$s</string>
+    <string name="share_app_text">ПроБел (v2Whitelist) — клиент для обхода блокировок и белых списков на мобильном интернете. Бесплатно, без рекламы и слежки! Прямая ссылка на скачивание:\n%1$s</string>
     <string name="location_filter_mode_title">Режим фильтра</string>
     <string name="location_filter_mode_exclude">Исключение</string>
     <string name="location_filter_mode_whitelist">Белый список</string>
@@ -501,7 +501,7 @@
     <string name="summary_pref_custom_endpoint_url">Вставьте ссылку (vless://, vmess://, и т.д.)</string>
     <string name="title_custom_subscriptions">Управление подписками</string>
     <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>
-    <string name="summary_pref_use_builtin_sub">Встроенная подписка v2Whitelist Official</string>
+    <string name="summary_pref_use_builtin_sub">Встроенная подписка ПроБел Official</string>
     <string name="title_pref_manage_subs">Управление подписками</string>
     <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
     <string name="custom_sub_add">Добавить подписку</string>

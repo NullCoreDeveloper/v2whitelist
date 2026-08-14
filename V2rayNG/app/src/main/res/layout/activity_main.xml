@@ -22,7 +22,7 @@
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
-                app:title="v2Whitelist">
+                app:title="ПроБел">
 
                 <LinearLayout
                     android:id="@+id/layout_last_update"

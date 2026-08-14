@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">v2Whitelist</string>
+    <string name="app_name" translatable="false">ПроБел</string>
     <string name="app_widget_name">Switch</string>
     <string name="app_tile_name">Switch</string>
     <string name="app_tile_first_use">First use of this feature, please use the app to add server</string>
@@ -293,7 +293,7 @@
     <string name="summary_pref_auto_failover">Automatically switch to next server if current does not respond</string>
     <string name="failover_notification_title">Server connection lost</string>
     <string name="failover_notification_content">Searching for a new server...</string>
-    <string name="title_v2whitelist_settings">v2Whitelist Features</string>
+    <string name="title_v2whitelist_settings">ПроБел Features</string>
 
     <string name="title_logcat">Logcat</string>
     <string name="logcat_copy">Copy</string>
@@ -478,7 +478,7 @@
     <string name="title_location_filter">Location Filter</string>
     <string name="btn_label_filter">Filter</string>
     <string name="btn_label_share">Share</string>
-    <string name="share_app_text">v2Whitelist — a client for bypassing blocks and mobile internet whitelists. Free, no ads, and no tracking! Direct download link:\n%1$s</string>
+    <string name="share_app_text">ПроБел (v2Whitelist) — a client for bypassing blocks and mobile internet whitelists. Free, no ads, and no tracking! Direct download link:\n%1$s</string>
     <string name="location_filter_mode_title">Filter Mode</string>
     <string name="location_filter_mode_exclude">Exclude</string>
     <string name="location_filter_mode_whitelist">Whitelist</string>
@@ -510,7 +510,7 @@
     <!-- Custom Subscriptions -->
     <string name="title_custom_subscriptions">Manage Subscriptions</string>
     <string name="title_pref_use_builtin_sub">Use built-in subscription</string>
-    <string name="summary_pref_use_builtin_sub">v2Whitelist Official built-in subscription</string>
+    <string name="summary_pref_use_builtin_sub">ПроБел Official built-in subscription</string>
     <string name="title_pref_manage_subs">Manage Subscriptions</string>
     <string name="summary_pref_manage_subs">Add or remove custom subscriptions</string>
     <string name="custom_sub_add">Add subscription</string>
