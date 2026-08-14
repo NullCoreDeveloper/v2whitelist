@@ -167,7 +167,8 @@ object SmartConnectManager {
         val url: String = "",
         val filter: String = "",
         val groupRegex: String = "",
-        val enabled: Boolean = true
+        val enabled: Boolean = true,
+        val sharePercent: Int? = null
     )
 
     private fun sendStatus(context: Context, status: String) {
