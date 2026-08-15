@@ -334,6 +334,13 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                             delay(2500)
                             isShowingError = false
                         } else {
+                            // Ждем пока ядро реально запустится (до 2 секунд),
+                            // чтобы кнопка не прыгала из оранжевого в серый, а затем в зеленый
+                            var waitCount = 0
+                            while (mainViewModel.isRunning.value != true && waitCount < 40) {
+                                delay(50)
+                                waitCount++
+                            }
                             isTaskRunning = false
                         }
                         activeJob = null
@@ -365,6 +372,12 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                         delay(2500)
                         isShowingError = false
                     } else {
+                        // Ждем пока ядро реально запустится (до 2 секунд),
+                        var waitCount = 0
+                        while (mainViewModel.isRunning.value != true && waitCount < 40) {
+                            delay(50)
+                            waitCount++
+                        }
                         isTaskRunning = false
                     }
                     activeJob = null
