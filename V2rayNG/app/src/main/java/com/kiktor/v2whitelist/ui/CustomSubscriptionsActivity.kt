@@ -7,8 +7,10 @@ import android.widget.TextView
 import android.widget.EditText
 import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.kiktor.v2whitelist.helper.SimpleItemTouchHelperCallback
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
@@ -215,11 +217,18 @@ class CustomSubscriptionsActivity : BaseActivity() {
             },
             onEdit = { position ->
                 showAddDialog(customSubs[position])
+            },
+            onMoveCompleted = {
+                saveCustomSubs()
             }
         )
 
         rvSubscriptions.layoutManager = LinearLayoutManager(this)
         rvSubscriptions.adapter = adapter
+        
+        val itemTouchHelper = ItemTouchHelper(SimpleItemTouchHelperCallback(adapter))
+        itemTouchHelper.attachToRecyclerView(rvSubscriptions)
+        
         updateEmptyState()
     }
 

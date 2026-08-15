@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.ui
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -8,20 +9,32 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.helper.ItemTouchHelperAdapter
+import com.kiktor.v2whitelist.helper.ItemTouchHelperViewHolder
+import java.util.Collections
 
 class CustomSubscriptionAdapter(
-    private val items: List<CustomSubscriptionsActivity.CustomSubItem>,
+    private val items: MutableList<CustomSubscriptionsActivity.CustomSubItem>,
     private val onToggle: (position: Int, isEnabled: Boolean) -> Unit,
     private val onDelete: (position: Int) -> Unit,
-    private val onEdit: (position: Int) -> Unit
-) : RecyclerView.Adapter<CustomSubscriptionAdapter.ViewHolder>() {
+    private val onEdit: (position: Int) -> Unit,
+    private val onMoveCompleted: () -> Unit
+) : RecyclerView.Adapter<CustomSubscriptionAdapter.ViewHolder>(), ItemTouchHelperAdapter {
 
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view), ItemTouchHelperViewHolder {
         val tvName: TextView = view.findViewById(R.id.tv_sub_name)
         val tvUrl: TextView = view.findViewById(R.id.tv_sub_url)
         val tvLastUpdate: TextView = view.findViewById(R.id.tv_sub_last_update)
         val switchEnabled: MaterialSwitch = view.findViewById(R.id.switch_sub_enabled)
         val btnDelete: ImageButton = view.findViewById(R.id.btn_delete)
+        
+        override fun onItemSelected() {
+            itemView.setBackgroundColor(Color.LTGRAY)
+        }
+
+        override fun onItemClear() {
+            itemView.setBackgroundColor(0) // Transparent
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -60,4 +73,18 @@ class CustomSubscriptionAdapter(
     }
 
     override fun getItemCount() = items.size
+
+    override fun onItemMove(fromPosition: Int, toPosition: Int): Boolean {
+        Collections.swap(items, fromPosition, toPosition)
+        notifyItemMoved(fromPosition, toPosition)
+        return true
+    }
+
+    override fun onItemMoveCompleted() {
+        onMoveCompleted()
+    }
+
+    override fun onItemDismiss(position: Int) {
+        // Мы используем кнопку для удаления, свайп отключен по умолчанию
+    }
 }
