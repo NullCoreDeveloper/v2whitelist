@@ -337,9 +337,10 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                             isTaskRunning = false
                         }
                         activeJob = null
-                        if (!success) {
-                            updateUIState(mainViewModel.isRunning.value == true)
-                        }
+                        // ВСЕГДА обновляем UI: если MSG_STATE_START_SUCCESS пришёл пока
+                        // isTaskRunning=true, observer был заблокирован и LiveData не
+                        // переотправит то же значение → UI застрял бы в оранжевом.
+                        updateUIState(mainViewModel.isRunning.value == true)
                     }
                 }
             }
@@ -367,9 +368,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                         isTaskRunning = false
                     }
                     activeJob = null
-                    if (!success) {
-                        updateUIState(mainViewModel.isRunning.value == true)
-                    }
+                    // ВСЕГДА обновляем UI — аналогичная гонка как в handleConnectAction
+                    updateUIState(mainViewModel.isRunning.value == true)
                 }
             }
         }
@@ -430,9 +430,8 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
     }
 
     private fun updateUIState(isRunning: Boolean) {
-        // Не сбрасываем isTaskRunning здесь — это делает caller (finally-блок).
-        // Иначе observer может вызвать updateUIState пока корутина ещё работает.
-        activeJob = null
+        // Не трогаем activeJob здесь — это делает caller (finally-блок).
+        // Иначе observer может обнулить activeJob пока корутина ещё работает.
         binding.btnBigConnect.isEnabled = true
         binding.progressBar.isVisible = false
         binding.progressBarCircular.isVisible = false

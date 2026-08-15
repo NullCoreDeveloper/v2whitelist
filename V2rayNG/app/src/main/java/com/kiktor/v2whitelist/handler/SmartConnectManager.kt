@@ -46,6 +46,34 @@ object SmartConnectManager {
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
 
     /**
+     * Блокирует выполнение до тех пор, пока не появится реальный доступ в интернет (проверка dzen.ru).
+     * Защищает кэш серверов от удаления при выключенном WiFi или отсутствии сети.
+     */
+    private suspend fun waitForInternet(context: Context) {
+        var isWaiting = false
+        while (true) {
+            val dzenOk = try {
+                Socket().use { it.connect(InetSocketAddress("dzen.ru", 443), 1500); true }
+            } catch (_: Exception) { false }
+
+            if (dzenOk) {
+                if (isWaiting) {
+                    Log.i(AppConfig.TAG, "waitForInternet: Интернет появился (dzen.ru ответил)")
+                }
+                break
+            }
+
+            if (!isWaiting) {
+                Log.w(AppConfig.TAG, "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
+                isWaiting = true
+            }
+            sendStatus(context, context.getString(R.string.status_no_internet) + " (Ожидание сети...)")
+            
+            delay(2000)
+        }
+    }
+
+    /**
      * Проверяет состояние интернета.
      * @return 0 - OK (всё доступно), 1 - JAMMED (только Яндекс), 2 - NO_INTERNET (ничего не доступно)
      */
@@ -552,11 +580,16 @@ object SmartConnectManager {
         if (isStartup) {
             val internetStatus = checkInternetStatus()
             if (internetStatus == 1) { // JAMMED
-                coroutineScope {
-                    launch(Dispatchers.IO) {
+                // ВАЖНО: используем GlobalScope.launch, а НЕ coroutineScope!
+                // coroutineScope блокировал возврат из connectToBest на 5+ секунд,
+                // и если updateSubscription падал — убивал весь smartConnect → серая кнопка.
+                GlobalScope.launch(Dispatchers.IO) {
+                    try {
                         delay(5000) // Ждем пока VPN разгонится
                         Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
-                        updateSubscription(context)
+                        updateSubscription(context, sequential = true)
+                    } catch (e: Exception) {
+                        Log.e(AppConfig.TAG, "Survival logic: background update failed", e)
                     }
                 }
             }
@@ -571,8 +604,12 @@ object SmartConnectManager {
                 if (System.currentTimeMillis() - oldestUpdate > UPDATE_INTERVAL_MS) {
                     Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
                     GlobalScope.launch(Dispatchers.IO) {
-                        // ВАЖНО: sequential = true, чтобы обновлять плавно и не убить пул потоков
-                        updateSubscription(context, isStartup = true, sequential = true)
+                        try {
+                            // sequential = true, чтобы обновлять плавно и не убить пул потоков
+                            updateSubscription(context, isStartup = true, sequential = true)
+                        } catch (e: Exception) {
+                            Log.e(AppConfig.TAG, "smartConnect: background update failed", e)
+                        }
                     }
                 }
             }
@@ -583,6 +620,9 @@ object SmartConnectManager {
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
      */
     suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
+        
+        // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
+        waitForInternet(context)
 
         // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
         if (checkVipCacheAndConnect(context, isStartup = true)) {
@@ -681,6 +721,9 @@ object SmartConnectManager {
      * Switches to the next best server.
      */
     suspend fun switchServer(context: Context): Boolean = withContext(Dispatchers.IO) {
+        // Ждем появления интернета (dzen.ru) перед переключением
+        waitForInternet(context)
+        
         val currentGuid = MmkvManager.getSelectServer()
         val allServers = MmkvManager.decodeServerList()
         val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
