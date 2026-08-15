@@ -30,7 +30,8 @@
     <string name="status_switching_server">Selecting another server…</string>
     <string name="status_updating_subscription">Updating server list…</string>
     <string name="status_no_servers">No servers found. Try updating the list.</string>
-    <string name="status_no_internet">No direct internet. Looking for bypass servers… (may take a while)</string>
+    <string name="status_no_internet">No internet connection.</string>
+    <string name="status_waiting_for_network">No direct internet. Waiting for network…</string>
     <string name="status_jamming_detected">Possible internet jamming, looking for fast bypass servers… (may take a while)</string>
     <string name="status_updating_via_vpn">Updating subscription via active VPN…</string>
 
