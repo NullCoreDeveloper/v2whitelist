@@ -364,7 +364,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
         // If Per-App Proxy is in Proxy mode (bypassApps = false), all non-selected apps are already bypassed,
         // so we don't need to explicitly disallow them (and Android doesn't allow mixing allowed/disallowed).
         val bypassRuApps = MmkvManager.decodeSettingsBool("pref_bypass_ru_apps", true)
-        val isProxyMode = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == true && !bypassApps
+        val isPerAppProxyEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == true
+        val isProxyMode = isPerAppProxyEnabled && !bypassApps
         
         if (bypassRuApps && !isProxyMode) {
             try {
@@ -373,8 +374,14 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 
                 packages.forEach { pkg ->
                     val pName = pkg.packageName.lowercase()
+                    
+                    // Если пользователь включил ручное управление сплит-туннелированием,
+                    // мы отключаем широкое правило ru.*, чтобы не выкашивать невинные приложения вроде 4pda.
+                    // При этом жесткие исключения для банков и магазинов остаются.
+                    val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
+
                     // Эвристика определения российских приложений:
-                    if (pName.startsWith("ru.") || 
+                    if (isBroadRuRule || 
                         pName.contains("yandex") || 
                         pName.contains("tinkoff") || 
                         pName.contains("sberbank") || 
