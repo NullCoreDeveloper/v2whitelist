@@ -604,6 +604,10 @@ object MmkvManager {
         return settingsStorage.encode(key, value)
     }
 
+    fun containsSettings(key: String): Boolean {
+        return settingsStorage.containsKey(key)
+    }
+
     /**
      * Encodes the settings.
      *

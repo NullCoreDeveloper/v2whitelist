@@ -427,14 +427,10 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_MUX_XUDP_CONCURRENCY, "8")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_LENGTH, "50-100")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
-
-        // Принудительно отключаем hev-socks5-tunnel: нативная JNI библиотека вызывает SIGSEGV
-        // и убивает процесс VPN. Используем встроенный Xray tun вместо этого.
-        MmkvManager.encodeSettings(AppConfig.PREF_USE_HEV_TUNNEL, false)
     }
 
     private fun ensureDefaultValue(key: String, default: String) {
-        if (MmkvManager.decodeSettingsString(key).isNullOrEmpty()) {
+        if (!MmkvManager.containsSettings(key)) {
             MmkvManager.encodeSettings(key, default)
         }
     }
