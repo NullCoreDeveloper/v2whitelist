@@ -227,6 +227,15 @@ object SmartConnectManager {
             }
         }
 
+        // Обновляем обычные подписки (добавленные пользователем вручную)
+        val allSubscriptions = MmkvManager.decodeSubscriptions()
+        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
+        for (sub in regularSubs) {
+            Log.d(AppConfig.TAG, "Manually updating regular subscription: ${sub.subscription.remarks}")
+            AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
+        }
+
+
         // ПОСЛЕ обновления: проверяем, существует ли ещё закэшированный сервер.
         // Если GUID исчез из нового списка — только тогда сбрасываем кэш.
         // Так Fast Path не ломается при каждом фоновом обновлении!
@@ -554,12 +563,16 @@ object SmartConnectManager {
 
             val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
             if (isAutoUpdateEnabled) {
-                val existingSub = MmkvManager.decodeSubscriptions().find { it.guid == SUBSCRIPTION_ID }
-                val lastUpdated = existingSub?.subscription?.lastUpdated ?: 0L
-                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
+                // Ищем самую старую подписку среди включенных (или 0, если еще не обновляли)
+                val allSubs = MmkvManager.decodeSubscriptions()
+                val oldestUpdate = allSubs.filter { it.subscription.enabled }
+                    .minOfOrNull { it.subscription.lastUpdated } ?: 0L
+
+                if (System.currentTimeMillis() - oldestUpdate > UPDATE_INTERVAL_MS) {
                     Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
                     GlobalScope.launch(Dispatchers.IO) {
-                        updateSubscription(context, isStartup = true)
+                        // ВАЖНО: sequential = true, чтобы обновлять плавно и не убить пул потоков
+                        updateSubscription(context, isStartup = true, sequential = true)
                     }
                 }
             }
