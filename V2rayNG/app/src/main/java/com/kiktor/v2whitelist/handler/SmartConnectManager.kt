@@ -440,54 +440,144 @@ object SmartConnectManager {
     }
 
     /**
+     * Быстрый путь (Fast Path): проверяем серверы из VIP-кэша.
+     */
+    private suspend fun checkVipCacheAndConnect(context: Context, isStartup: Boolean = false): Boolean {
+        val vipGuids = MmkvManager.getVipCache()
+        if (vipGuids.isEmpty()) return false
+
+        Log.i(AppConfig.TAG, "VIP Cache: checking ${vipGuids.size} servers")
+        
+        val vipCandidates = mutableListOf<Pair<String, ProfileItem>>()
+        val invalidGuids = mutableListOf<String>()
+        for (guid in vipGuids) {
+            val profile = MmkvManager.decodeServerConfig(guid)
+            if (profile != null) {
+                vipCandidates.add(Pair(guid, profile))
+            } else {
+                invalidGuids.add(guid)
+            }
+        }
+        
+        invalidGuids.forEach { MmkvManager.removeVipServer(it) }
+        
+        if (vipCandidates.isEmpty()) return false
+        
+        sendStatus(context, context.getString(R.string.status_testing_servers))
+        
+        val results = testServers(context, vipCandidates)
+        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+        
+        val validResults = results.filter { it.third < Long.MAX_VALUE }
+        
+        if (profileCheckEnabled) {
+            for (candidate in validResults) {
+                if (verifyProfile(context, candidate.first)) {
+                    connectToBest(context, candidate, isStartup)
+                    val leftovers = validResults.filter { it.first != candidate.first }
+                    if (leftovers.isNotEmpty()) {
+                        verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    }
+                    return true
+                } else {
+                    Log.w(AppConfig.TAG, "VIP Cache: server ${candidate.first} failed deep check, removing")
+                    MmkvManager.removeVipServer(candidate.first)
+                }
+            }
+        } else {
+            val candidate = validResults.firstOrNull()
+            if (candidate != null) {
+                connectToBest(context, candidate, isStartup)
+                val leftovers = validResults.filter { it.first != candidate.first }
+                if (leftovers.isNotEmpty()) {
+                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                }
+                return true
+            }
+        }
+        
+        Log.w(AppConfig.TAG, "VIP Cache: all servers failed, cache cleared or empty")
+        MmkvManager.clearVipCache()
+        return false
+    }
+
+    private fun verifyAndCacheLeftovers(context: Context, candidates: List<Triple<String, ProfileItem, Long>>) {
+        GlobalScope.launch(Dispatchers.IO) {
+            val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+            for (candidate in candidates) {
+                if (MmkvManager.getVipCache().size >= 5) break
+                if (profileCheckEnabled) {
+                    if (verifyProfile(context, candidate.first)) {
+                        Log.i(AppConfig.TAG, "Background: added ${candidate.second.remarks} to VIP cache")
+                        MmkvManager.addVipServer(candidate.first)
+                    }
+                } else {
+                    MmkvManager.addVipServer(candidate.first)
+                }
+            }
+        }
+    }
+
+    private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false) {
+        Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
+        sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
+        MmkvManager.setSelectServer(best.first)
+
+        MmkvManager.addVipServer(best.first)
+        MmkvManager.saveLastConnectedServer(best.first)
+        Log.i(AppConfig.TAG, "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
+
+        val isRunning = V2RayServiceManager.isRunning()
+        if (isRunning) {
+            MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+        } else {
+            withContext(Dispatchers.Main) {
+                if (context is com.kiktor.v2whitelist.ui.MainActivity) {
+                    context.startV2Ray()
+                } else {
+                    V2RayServiceManager.startVService(context)
+                }
+            }
+        }
+        
+        if (isStartup) {
+            val internetStatus = checkInternetStatus()
+            if (internetStatus == 1) { // JAMMED
+                coroutineScope {
+                    launch(Dispatchers.IO) {
+                        delay(5000) // Ждем пока VPN разгонится
+                        Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
+                        updateSubscription(context)
+                    }
+                }
+            }
+
+            val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
+            if (isAutoUpdateEnabled) {
+                val existingSub = MmkvManager.decodeSubscriptions().find { it.guid == SUBSCRIPTION_ID }
+                val lastUpdated = existingSub?.subscription?.lastUpdated ?: 0L
+                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
+                    Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
+                    GlobalScope.launch(Dispatchers.IO) {
+                        updateSubscription(context, isStartup = true)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
-     *
-     * Если с момента последнего включения VPN прошло менее [AppConfig.LAST_SERVER_CACHE_TTL_MS],
-     * сразу переиспользует последний сервер без тестирования (быстрый путь).
-     * Иначе — полный SmartConnect с тестированием.
      */
     suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
 
-        // ── Быстрый путь: кэш последнего сервера ──────────────────────────────
-        val cachedGuid = MmkvManager.getValidLastServer()
-        if (cachedGuid != null) {
-            val cachedProfile = MmkvManager.decodeServerConfig(cachedGuid)
-            if (cachedProfile != null) {
-                Log.i(AppConfig.TAG, "SmartConnect: используем кэшированный сервер → ${cachedProfile.remarks}")
-                sendStatus(context, context.getString(R.string.status_using_cached_server, cachedProfile.remarks))
-                MmkvManager.setSelectServer(cachedGuid)
-                // Обновляем timestamp — часовой таймер сбрасывается с нового включения
-                MmkvManager.saveLastConnectedServer(cachedGuid)
-
-                val isRunning = V2RayServiceManager.isRunning()
-                if (isRunning) {
-                    MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
-                } else {
-                    withContext(Dispatchers.Main) {
-                        if (context is com.kiktor.v2whitelist.ui.MainActivity) {
-                            context.startV2Ray()
-                        } else {
-                            V2RayServiceManager.startVService(context)
-                        }
-                    }
-                }
-
-                // Логика 'выживания': если интернет глушат и подписка старая, обновляем её через VPN сразу после коннекта
-                val status = checkInternetStatus()
-                if (status == 1) { // JAMMED
-                    coroutineScope {
-                        launch(Dispatchers.IO) {
-                            delay(5000) // Ждем пока VPN разгонится
-                            Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
-                            updateSubscription(context)
-                        }
-                    }
-                }
-                return@withContext true
-            }
+        // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
+        if (checkVipCacheAndConnect(context, isStartup = true)) {
+            return@withContext true
         }
+
         // ── Полный SmartConnect ────────────────────────────────────────────────
-        
+
 
         // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
         val internetStatus = checkInternetStatus()
@@ -546,6 +636,11 @@ object SmartConnectManager {
             }
 
             if (best != null) {
+                connectToBest(context, best, isStartup = true)
+                val leftovers = results.filter { it.first != best!!.first && it.third < Long.MAX_VALUE }
+                if (leftovers.isNotEmpty()) {
+                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                }
                 break // Found a working server, stop testing other chunks
             }
             Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
@@ -558,42 +653,8 @@ object SmartConnectManager {
         }
 
         if (best != null) {
-            Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
-            sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
-            MmkvManager.setSelectServer(best.first)
-
-            // Сохраняем сервер в кэш для быстрого повторного подключения
-            MmkvManager.saveLastConnectedServer(best.first)
-            Log.i(AppConfig.TAG, "SmartConnect: сервер ${best.second.remarks} сохранён в кэш")
-
-            // Если VPN уже запущен — переключаем ядро, а не пытаемся стартовать заново
-            val isRunning = V2RayServiceManager.isRunning()
-            Log.i(AppConfig.TAG, "smartConnect: V2RayServiceManager.isRunning()=$isRunning")
-            if (isRunning) {
-                Log.i(AppConfig.TAG, "smartConnect: VPN is running, sending SWITCH_SERVER message")
-                MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
-            } else {
-                Log.i(AppConfig.TAG, "smartConnect: VPN is not running, calling startV2Ray()")
-                withContext(Dispatchers.Main) {
-                    if (context is com.kiktor.v2whitelist.ui.MainActivity) {
-                        context.startV2Ray()
-                    } else {
-                        V2RayServiceManager.startVService(context)
-                    }
-                }
-            }
-            
-            // Фоновое авто-обновление подписки после установки соединения
-            val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
-            if (isAutoUpdateEnabled) {
-                val existingSub = MmkvManager.decodeSubscriptions().find { it.guid == SUBSCRIPTION_ID }
-                val lastUpdated = existingSub?.subscription?.lastUpdated ?: 0L
-                if (System.currentTimeMillis() - lastUpdated > UPDATE_INTERVAL_MS) {
-                    Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
-                    GlobalScope.launch(Dispatchers.IO) {
-                        updateSubscription(context, isStartup = true)
-                    }
-                }
+            if (!chunkedServers.any { chunk -> chunk.any { it.first == best!!.first } }) {
+                connectToBest(context, best, isStartup = true)
             }
             return@withContext true
         } else {
@@ -613,6 +674,11 @@ object SmartConnectManager {
 
         if (filteredServers.isEmpty()) {
             return@withContext false
+        }
+
+        // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
+        if (checkVipCacheAndConnect(context, isStartup = false)) {
+            return@withContext true
         }
 
         sendStatus(context, context.getString(R.string.status_switching_server))
@@ -639,6 +705,11 @@ object SmartConnectManager {
             }
 
             if (nextBest != null) {
+                connectToBest(context, nextBest, isStartup = false)
+                val leftovers = results.filter { it.first != nextBest!!.first && it.third < Long.MAX_VALUE }
+                if (leftovers.isNotEmpty()) {
+                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                }
                 break
             }
             Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
@@ -649,28 +720,8 @@ object SmartConnectManager {
         }
 
         if (nextBest != null) {
-            Log.i(AppConfig.TAG, "switchServer: Switching to ${nextBest.second.remarks}")
-            sendStatus(context, context.getString(R.string.status_connecting_to, nextBest.second.remarks))
-            MmkvManager.setSelectServer(nextBest.first)
-
-            // Обновляем кэш — при ручном переключении запоминаем новый сервер
-            MmkvManager.saveLastConnectedServer(nextBest.first)
-            Log.i(AppConfig.TAG, "switchServer: кэш обновлён → ${nextBest.second.remarks}")
-
-            val isRunning = V2RayServiceManager.isRunning()
-            Log.i(AppConfig.TAG, "switchServer: V2RayServiceManager.isRunning()=$isRunning")
-            if (isRunning) {
-                Log.i(AppConfig.TAG, "switchServer: VPN is running, sending SWITCH_SERVER message")
-                MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
-            } else {
-                Log.i(AppConfig.TAG, "switchServer: VPN is not running, calling startV2Ray()")
-                withContext(Dispatchers.Main) {
-                    if (context is com.kiktor.v2whitelist.ui.MainActivity) {
-                        context.startV2Ray()
-                    } else {
-                        V2RayServiceManager.startVService(context)
-                    }
-                }
+            if (!chunkedServers.any { chunk -> chunk.any { it.first == nextBest!!.first } }) {
+                connectToBest(context, nextBest, isStartup = false)
             }
             return@withContext true
         }

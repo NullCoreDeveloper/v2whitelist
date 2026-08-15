@@ -817,6 +817,53 @@ object MmkvManager {
         settingsStorage.remove(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECT_TIME)
     }
 
+    /**
+     * Возвращает список VIP-серверов (кэш проверенных серверов, до 5 штук).
+     */
+    fun getVipCache(): MutableList<String> {
+        val json = settingsStorage.decodeString(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE)
+        return if (json.isNullOrBlank()) {
+            mutableListOf()
+        } else {
+            JsonUtil.fromJson(json, Array<String>::class.java)?.toMutableList() ?: mutableListOf()
+        }
+    }
+
+    /**
+     * Добавляет сервер в VIP-кэш (в начало, LRU).
+     * Если превышает 5, удаляет самые старые.
+     */
+    fun addVipServer(guid: String) {
+        if (guid.isBlank()) return
+        val cache = getVipCache()
+        // Удаляем если уже есть, чтобы переместить в начало
+        cache.remove(guid)
+        cache.add(0, guid)
+        // Обрезаем до 5 элементов
+        while (cache.size > 5) {
+            cache.removeAt(cache.size - 1)
+        }
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(cache))
+    }
+
+    /**
+     * Удаляет сервер из VIP-кэша.
+     */
+    fun removeVipServer(guid: String) {
+        if (guid.isBlank()) return
+        val cache = getVipCache()
+        if (cache.remove(guid)) {
+            settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(cache))
+        }
+    }
+
+    /**
+     * Очищает весь VIP-кэш.
+     */
+    fun clearVipCache() {
+        settingsStorage.remove(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE)
+    }
+
     //endregion
 
     //region WebDAV

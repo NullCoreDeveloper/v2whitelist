@@ -96,6 +96,7 @@ object AppConfig {
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
     const val CACHE_KEYWORD_FILTER = "cache_keyword_filter"
+    const val PREF_VIP_CACHE = "pref_vip_cache_list"
 
     /** Кэш последнего подключённого сервера.
      *  Если с последнего включения VPN прошло меньше LAST_SERVER_CACHE_TTL_MS,
