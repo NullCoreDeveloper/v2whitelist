@@ -864,6 +864,29 @@ object MmkvManager {
         settingsStorage.remove(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE)
     }
 
+    /**
+     * Полностью заменяет VIP-кэш на новый список GUID-ов.
+     * Используется для ремаппинга после обновления подписок,
+     * когда старые GUID-ы умирают и заменяются новыми.
+     */
+    fun replaceVipCache(guids: List<String>) {
+        if (guids.isEmpty()) {
+            clearVipCache()
+            return
+        }
+        val trimmed = guids.take(5)
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(trimmed))
+    }
+
+    /**
+     * Обновляет GUID в LastServerCache БЕЗ сброса timestamp.
+     * Нужно после обновления подписок: сервер тот же, но GUID новый.
+     */
+    fun remapLastConnectedServer(newGuid: String) {
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECTED_SERVER, newGuid)
+        // НЕ трогаем PREF_LAST_CONNECT_TIME — таймстамп от реального подключения
+    }
+
     //endregion
 
     //region WebDAV

@@ -67,7 +67,7 @@ object SmartConnectManager {
                 Log.w(AppConfig.TAG, "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
                 isWaiting = true
             }
-            sendStatus(context, context.getString(R.string.status_no_internet) + " (Ожидание сети...)")
+            sendStatus(context, context.getString(R.string.status_waiting_for_network))
             
             delay(2000)
         }
@@ -210,9 +210,31 @@ object SmartConnectManager {
      *                    false — параллельная гонка зеркал (UI).
      */
     suspend fun updateSubscription(context: Context, isStartup: Boolean = false, sequential: Boolean = false) = withContext(Dispatchers.IO) {
-        // Запоминаем текущий закэшированный GUID ДО обновления
-        // Сбрасывать кэш заранее не нужно — это ломает Fast Path для пользователя!
-        val cachedGuidBeforeUpdate = MmkvManager.getValidLastServer()
+        // ══════════════════════════════════════════════════════════════════════
+        // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
+        // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
+        // Поэтому нужно запомнить identity серверов (server+port+remarks),
+        // чтобы потом найти их новые GUID-ы и ремаппить кэши.
+        // ══════════════════════════════════════════════════════════════════════
+        data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
+
+        val lastServerGuid = MmkvManager.getValidLastServer()
+        val lastServerIdentity = lastServerGuid?.let { guid ->
+            MmkvManager.decodeServerConfig(guid)?.let { p ->
+                ServerIdentity(p.server, p.serverPort, p.remarks)
+            }
+        }
+
+        val vipGuids = MmkvManager.getVipCache()
+        val vipIdentities = vipGuids.mapNotNull { guid ->
+            MmkvManager.decodeServerConfig(guid)?.let { p ->
+                ServerIdentity(p.server, p.serverPort, p.remarks)
+            }
+        }
+
+        if (vipIdentities.isNotEmpty()) {
+            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipIdentities.size} серверов (${vipIdentities.joinToString { it.remarks }})")
+        }
 
         val candidateSocksPort = SettingsManager.getSocksPort()
         var socksPort = 0
@@ -263,17 +285,48 @@ object SmartConnectManager {
             AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
         }
 
-
-        // ПОСЛЕ обновления: проверяем, существует ли ещё закэшированный сервер.
-        // Если GUID исчез из нового списка — только тогда сбрасываем кэш.
-        // Так Fast Path не ломается при каждом фоновом обновлении!
-        if (cachedGuidBeforeUpdate != null) {
+        // ══════════════════════════════════════════════════════════════════════
+        // РЕМАППИНГ КЭШЕЙ ПОСЛЕ ОБНОВЛЕНИЯ
+        // Строим индекс identity → newGuid для быстрого поиска.
+        // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
+        // ══════════════════════════════════════════════════════════════════════
+        if (lastServerIdentity != null || vipIdentities.isNotEmpty()) {
             val updatedServers = MmkvManager.decodeServerList()
-            if (!updatedServers.contains(cachedGuidBeforeUpdate)) {
-                MmkvManager.clearLastConnectedServer()
-                Log.i(AppConfig.TAG, "updateSubscription: кэшированный сервер $cachedGuidBeforeUpdate исчез из списка, кэш сброшен")
-            } else {
-                Log.i(AppConfig.TAG, "updateSubscription: кэшированный сервер всё ещё существует, Fast Path сохранён")
+            val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
+            for (guid in updatedServers) {
+                val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+                val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
+                if (!identityIndex.containsKey(key)) {
+                    identityIndex[key] = guid
+                }
+            }
+
+            // ── Ремаппим LastServerCache ──
+            if (lastServerIdentity != null) {
+                val key = "${lastServerIdentity.server}|${lastServerIdentity.port}|${lastServerIdentity.remarks}"
+                val newGuid = identityIndex[key]
+                if (newGuid != null) {
+                    MmkvManager.remapLastConnectedServer(newGuid)
+                    Log.i(AppConfig.TAG, "updateSubscription: LastServerCache ремаппирован → ${lastServerIdentity.remarks}")
+                } else {
+                    MmkvManager.clearLastConnectedServer()
+                    Log.w(AppConfig.TAG, "updateSubscription: LastServerCache сервер исчез после обновления, кэш сброшен")
+                }
+            }
+
+            // ── Ремаппим VIP-кэш ──
+            if (vipIdentities.isNotEmpty()) {
+                val remapped = vipIdentities.mapNotNull { id ->
+                    val key = "${id.server}|${id.port}|${id.remarks}"
+                    identityIndex[key]
+                }
+                if (remapped.isNotEmpty()) {
+                    MmkvManager.replaceVipCache(remapped)
+                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipIdentities.size} серверов сохранено")
+                } else {
+                    MmkvManager.clearVipCache()
+                    Log.w(AppConfig.TAG, "updateSubscription: все VIP-серверы исчезли после обновления, кэш очищен")
+                }
             }
         }
     }
@@ -500,7 +553,7 @@ object SmartConnectManager {
         
         if (vipCandidates.isEmpty()) return false
         
-        sendStatus(context, context.getString(R.string.status_testing_servers))
+        sendStatus(context, context.getString(R.string.status_checking_vip_servers))
         
         val results = testServers(context, vipCandidates)
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
@@ -510,7 +563,7 @@ object SmartConnectManager {
         if (profileCheckEnabled) {
             for (candidate in validResults) {
                 if (verifyProfile(context, candidate.first)) {
-                    connectToBest(context, candidate, isStartup)
+                    connectToBest(context, candidate, isStartup, isFromVipCache = true)
                     val leftovers = validResults.filter { it.first != candidate.first }
                     if (leftovers.isNotEmpty()) {
                         verifyAndCacheLeftovers(context.applicationContext, leftovers)
@@ -524,7 +577,7 @@ object SmartConnectManager {
         } else {
             val candidate = validResults.firstOrNull()
             if (candidate != null) {
-                connectToBest(context, candidate, isStartup)
+                connectToBest(context, candidate, isStartup, isFromVipCache = true)
                 val leftovers = validResults.filter { it.first != candidate.first }
                 if (leftovers.isNotEmpty()) {
                     verifyAndCacheLeftovers(context.applicationContext, leftovers)
@@ -533,8 +586,7 @@ object SmartConnectManager {
             }
         }
         
-        Log.w(AppConfig.TAG, "VIP Cache: all servers failed, cache cleared or empty")
-        MmkvManager.clearVipCache()
+        Log.w(AppConfig.TAG, "VIP Cache: all valid servers failed")
         return false
     }
 
@@ -555,9 +607,13 @@ object SmartConnectManager {
         }
     }
 
-    private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false) {
+    private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false, isFromVipCache: Boolean = false) {
         Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
-        sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
+        if (isFromVipCache) {
+            sendStatus(context, context.getString(R.string.status_using_cached_server, best.second.remarks))
+        } else {
+            sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
+        }
         MmkvManager.setSelectServer(best.first)
 
         MmkvManager.addVipServer(best.first)
@@ -725,6 +781,16 @@ object SmartConnectManager {
         waitForInternet(context)
         
         val currentGuid = MmkvManager.getSelectServer()
+        
+        // Если пользователь вручную нажал "Сменить сервер", значит текущий сервер его чем-то
+        // не устроил (например, забанен IP). Удаляем его из VIP-кэша, чтобы:
+        // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
+        // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
+        if (currentGuid != null) {
+            Log.i(AppConfig.TAG, "switchServer: user manually rejected current server, removing from VIP cache")
+            MmkvManager.removeVipServer(currentGuid)
+        }
+        
         val allServers = MmkvManager.decodeServerList()
         val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
 

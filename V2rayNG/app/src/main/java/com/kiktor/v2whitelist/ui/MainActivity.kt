@@ -296,9 +296,16 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
     private fun setupViewModel() {
         mainViewModel.isRunning.observe(this) { isRunning ->
-            // Не сбрасываем UI пока идёт поиск ИЛИ пока показываем ошибку
-            if (!isTaskRunning && !isShowingError) {
-                updateUIState(isRunning)
+            if (isRunning) {
+                // Сервис успешно запущен! Принудительно сбрасываем статус "Загрузка"
+                isTaskRunning = false
+                isShowingError = false
+                updateUIState(true)
+            } else {
+                // Не сбрасываем UI пока идёт поиск ИЛИ пока показываем ошибку
+                if (!isTaskRunning && !isShowingError) {
+                    updateUIState(false)
+                }
             }
         }
         mainViewModel.uiStatus.observe(this) { status ->
@@ -333,21 +340,25 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                             isShowingError = true
                             delay(2500)
                             isShowingError = false
+                            updateUIState(mainViewModel.isRunning.value == true)
                         } else {
-                            // Ждем пока ядро реально запустится (до 2 секунд),
-                            // чтобы кнопка не прыгала из оранжевого в серый, а затем в зеленый
-                            var waitCount = 0
-                            while (mainViewModel.isRunning.value != true && waitCount < 40) {
-                                delay(50)
-                                waitCount++
+                            if (mainViewModel.isRunning.value == true) {
+                                isTaskRunning = false
+                                updateUIState(true)
+                            } else {
+                                // Сервис еще запускается. Оставляем интерфейс оранжевым!
+                                // Observer сам переведет его в зеленый, когда придет MSG_STATE_START_SUCCESS
+                                // Ставим предохранитель 15 секунд на случай тихого падения
+                                lifecycleScope.launch {
+                                    delay(15000)
+                                    if (isTaskRunning && activeJob == null) {
+                                        isTaskRunning = false
+                                        updateUIState(mainViewModel.isRunning.value == true)
+                                    }
+                                }
                             }
-                            isTaskRunning = false
                         }
                         activeJob = null
-                        // ВСЕГДА обновляем UI: если MSG_STATE_START_SUCCESS пришёл пока
-                        // isTaskRunning=true, observer был заблокирован и LiveData не
-                        // переотправит то же значение → UI застрял бы в оранжевом.
-                        updateUIState(mainViewModel.isRunning.value == true)
                     }
                 }
             }
@@ -371,18 +382,22 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                         isShowingError = true
                         delay(2500)
                         isShowingError = false
+                        updateUIState(mainViewModel.isRunning.value == true)
                     } else {
-                        // Ждем пока ядро реально запустится (до 2 секунд),
-                        var waitCount = 0
-                        while (mainViewModel.isRunning.value != true && waitCount < 40) {
-                            delay(50)
-                            waitCount++
+                        if (mainViewModel.isRunning.value == true) {
+                            isTaskRunning = false
+                            updateUIState(true)
+                        } else {
+                            lifecycleScope.launch {
+                                delay(15000)
+                                if (isTaskRunning && activeJob == null) {
+                                    isTaskRunning = false
+                                    updateUIState(mainViewModel.isRunning.value == true)
+                                }
+                            }
                         }
-                        isTaskRunning = false
                     }
                     activeJob = null
-                    // ВСЕГДА обновляем UI — аналогичная гонка как в handleConnectAction
-                    updateUIState(mainViewModel.isRunning.value == true)
                 }
             }
         }

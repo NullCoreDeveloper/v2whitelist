@@ -24,6 +24,7 @@
 
     <string name="status_starting_smart_connect">Looking for the best server…</string>
     <string name="status_testing_servers">Testing server speeds…</string>
+    <string name="status_checking_vip_servers">Fast checking top VIP servers…</string>
     <string name="status_found_best">Found a great server! Connecting…</string>
     <string name="status_connecting_to">Connecting to %s…</string>
     <string name="status_using_cached_server">Fast connecting to %s…</string>
