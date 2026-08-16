@@ -203,7 +203,7 @@ object UpdateCheckerManager {
         try {
             val isRunning = com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()
             val httpPort = if (isRunning) SettingsManager.getHttpPort() else 0
-            val response = HttpUtil.getUrlContent(checksumUrl, 5000, httpPort) ?: return@withContext false
+            val response = HttpUtil.getUrlContentWithUserAgent(checksumUrl, null, 5000, httpPort)
             
             var expectedHash: String? = null
             for (line in response.lines()) {
