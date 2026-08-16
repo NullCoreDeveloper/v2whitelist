@@ -90,21 +90,31 @@ class CheckUpdateActivity : BaseActivity() {
         AlertDialog.Builder(this)
             .setView(dialogView)
             .setPositiveButton(R.string.update_now) { _, _ ->
-                result.downloadUrl?.let { url ->
-                    downloadAndInstall(url)
+                if (result.downloadUrl != null) {
+                    downloadAndInstall(result)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun downloadAndInstall(url: String) {
+    private fun downloadAndInstall(result: CheckUpdateResult) {
         showLoading()
         toast("Downloading update...")
         lifecycleScope.launch {
             try {
-                val apkFile = UpdateCheckerManager.downloadApk(this@CheckUpdateActivity, url)
+                val apkFile = UpdateCheckerManager.downloadApk(this@CheckUpdateActivity, result.downloadUrl!!)
                 if (apkFile != null && apkFile.exists()) {
+                    if (result.checksumUrl != null && result.apkFileName != null) {
+                        toast("Verifying security signature...")
+                        val isValid = UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
+                        if (!isValid) {
+                            apkFile.delete()
+                            toastError("Security check failed! APK might be corrupted or compromised.")
+                            hideLoading()
+                            return@launch
+                        }
+                    }
                     installApk(apkFile)
                 } else {
                     toastError("Failed to download APK")

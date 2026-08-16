@@ -214,15 +214,15 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(dialogView)
             .setPositiveButton(R.string.update_now) { _, _ ->
-                result.downloadUrl?.let { url ->
-                    downloadAndInstall(url)
+                if (result.downloadUrl != null) {
+                    downloadAndInstall(result)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun downloadAndInstall(url: String) {
+    private fun downloadAndInstall(result: com.kiktor.v2whitelist.dto.CheckUpdateResult) {
         val progressBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             val pad = (24 * resources.displayMetrics.density).toInt()
@@ -237,13 +237,22 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
 
         lifecycleScope.launch {
             try {
-                val apkFile = com.kiktor.v2whitelist.handler.UpdateCheckerManager.downloadApk(this@MainActivity, url) { progress ->
+                val apkFile = com.kiktor.v2whitelist.handler.UpdateCheckerManager.downloadApk(this@MainActivity, result.downloadUrl!!) { progress ->
                     runOnUiThread {
                         progressBar.progress = progress
                     }
                 }
                 progressDialog.dismiss()
                 if (apkFile != null && apkFile.exists()) {
+                    if (result.checksumUrl != null && result.apkFileName != null) {
+                        toast("Verifying security signature...")
+                        val isValid = com.kiktor.v2whitelist.handler.UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
+                        if (!isValid) {
+                            apkFile.delete()
+                            toast("Security check failed! APK might be corrupted or compromised.")
+                            return@launch
+                        }
+                    }
                     installApk(apkFile)
                 } else {
                     toast(R.string.toast_failure)

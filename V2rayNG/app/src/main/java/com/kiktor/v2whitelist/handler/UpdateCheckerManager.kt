@@ -50,11 +50,16 @@ object UpdateCheckerManager {
 
         return@withContext if (compareVersions(latestVersion, BuildConfig.VERSION_NAME) > 0) {
             val downloadUrl = getDownloadUrl(latestRelease, Build.SUPPORTED_ABIS[0])
+            val apkFileName = downloadUrl.substringAfterLast("/")
+            val checksumUrl = latestRelease.assets.firstOrNull { it.name == "sha256sum.txt" }?.browserDownloadUrl
+            
             CheckUpdateResult(
                 hasUpdate = true,
                 latestVersion = latestVersion,
                 releaseNotes = latestRelease.body,
                 downloadUrl = downloadUrl,
+                checksumUrl = checksumUrl,
+                apkFileName = apkFileName,
                 isPreRelease = latestRelease.prerelease
             )
         } else {
@@ -192,5 +197,44 @@ object UpdateCheckerManager {
         
         return asset?.browserDownloadUrl
             ?: throw IllegalStateException("No compatible APK found")
+    }
+
+    suspend fun verifyChecksum(apkFile: File, checksumUrl: String, apkFileName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val isRunning = com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()
+            val httpPort = if (isRunning) SettingsManager.getHttpPort() else 0
+            val response = HttpUtil.getUrlContent(checksumUrl, 5000, httpPort) ?: return@withContext false
+            
+            var expectedHash: String? = null
+            for (line in response.lines()) {
+                if (line.contains(apkFileName)) {
+                    expectedHash = line.substringBefore(" ").trim()
+                    break
+                }
+            }
+            
+            if (expectedHash == null) {
+                Log.e(AppConfig.TAG, "Checksum for $apkFileName not found in sha256sum.txt")
+                return@withContext false
+            }
+            
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val fis = java.io.FileInputStream(apkFile)
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (fis.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+            fis.close()
+            
+            val hashBytes = digest.digest()
+            val actualHash = hashBytes.joinToString("") { "%02x".format(it) }
+            
+            Log.i(AppConfig.TAG, "Expected SHA-256: $expectedHash, Actual: $actualHash")
+            return@withContext expectedHash.equals(actualHash, ignoreCase = true)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to verify checksum: ${e.message}", e)
+            return@withContext false
+        }
     }
 }

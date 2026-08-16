@@ -72,11 +72,18 @@ jobs:
           -Pandroid.injected.signing.key.password=${{ secrets.RELEASE_KEY_PASSWORD }}
       working-directory: V2rayNG
 
+    - name: Prepare Release Assets
+      run: |
+        mkdir -p release-apks
+        find V2rayNG/app/build/outputs/apk/ -name "*.apk" -type f -exec cp {} release-apks/ \;
+        cd release-apks
+        sha256sum *.apk > sha256sum.txt
+
     - name: Create Release and Upload APK
       uses: softprops/action-gh-release@v2
       with:
         prerelease: true
         files: |
-          V2rayNG/app/build/outputs/apk/*/release/*.apk
+          release-apks/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
