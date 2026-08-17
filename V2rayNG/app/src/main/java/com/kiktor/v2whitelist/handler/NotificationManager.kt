@@ -257,6 +257,7 @@ object NotificationManager {
             .setContentText(service.getString(R.string.failover_notification_content))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setTimeoutAfter(10000) // Автоматически убирать через 10 секунд
 
         getNotificationManager()?.notify(NOTIFICATION_ID + 1, builder.build())
     }
