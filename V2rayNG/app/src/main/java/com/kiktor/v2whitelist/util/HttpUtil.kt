@@ -137,7 +137,7 @@ object HttpUtil {
             if (currentUrl == null) continue
             val conn = createProxyConnection(currentUrl, httpPort, timeout, timeout) ?: continue
             val finalUserAgent = if (userAgent.isNullOrBlank()) {
-                "v2rayNG/${BuildConfig.VERSION_NAME} v2whitelist/${BuildConfig.VERSION_NAME}"
+                "v2rayNG/${BuildConfig.VERSION_NAME}"
             } else {
                 userAgent
             }
