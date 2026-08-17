@@ -388,7 +388,7 @@ object SettingsManager {
      * @return True if HEV TUN is used, false otherwise.
      */
     fun isUsingHevTun(): Boolean {
-        return MmkvManager.decodeSettingsBool(AppConfig.PREF_USE_HEV_TUNNEL, false)
+        return false // Форсированно отключаем из-за крашей SIGSEGV на Android 10 и ниже
     }
 
     /**
