@@ -16,6 +16,7 @@ import java.util.EnumMap
 /**
  * QR code decoder utility.
  */
+ //aHBuZHgudGpwb3B3ei5jb20vcnZveGM/cT1TQ0tBSzQ0bU1nTA==
 object QRCodeDecoder {
     val HINTS: MutableMap<DecodeHintType, Any?> = EnumMap(DecodeHintType::class.java)
 
