@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
 class LocationFilterActivity : BaseActivity() {
 
@@ -136,7 +137,7 @@ class LocationFilterActivity : BaseActivity() {
             val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
             val customSubs = if (!customSubsJson.isNullOrEmpty()) {
                 try {
-                    com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SmartConnectManager.CustomSubData>::class.java)?.toList() ?: emptyList()
+                    com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SubscriptionHelper.CustomSubData>::class.java)?.toList() ?: emptyList()
                 } catch (e: Exception) {
                     emptyList()
                 }

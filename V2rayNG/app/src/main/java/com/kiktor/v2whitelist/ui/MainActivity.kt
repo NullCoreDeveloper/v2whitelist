@@ -50,6 +50,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
 class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelectedListener {
     private val binding by lazy {
@@ -107,7 +108,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
                     lifecycleScope.launch {
                         delay(5000) // Ждем 5 сек, пока VPN поднимется
                         if (mainViewModel.isRunning.value == true) {
-                            com.kiktor.v2whitelist.handler.SmartConnectManager.updateSubscription(this@MainActivity)
+                            com.kiktor.v2whitelist.handler.SubscriptionHelper.updateSubscription(this@MainActivity)
                             mainViewModel.reloadServerList()
                         }
                     }
@@ -290,7 +291,7 @@ class MainActivity : HelperBaseActivity(), NavigationView.OnNavigationItemSelect
         activeJob = lifecycleScope.launch {
             setConnectingState(getString(R.string.status_updating_subscription))
             try {
-                SmartConnectManager.updateSubscription(this@MainActivity)
+                SubscriptionHelper.updateSubscription(this@MainActivity)
                 mainViewModel.reloadServerList()
             } finally {
                 withContext(NonCancellable) {

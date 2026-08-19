@@ -17,6 +17,7 @@ import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import java.util.concurrent.TimeUnit
+import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
 /**
  * WorkManager задание для автообновления подписки раз в час.
@@ -38,7 +39,7 @@ class SubscriptionUpdaterWorker(
         return try {
             // sequential=true: перебираем зеркала по одному, без параллельных GlobalScope-корутин.
             // В фоне торопиться некуда — экономим RAM и CPU.
-            SmartConnectManager.updateSubscription(applicationContext, sequential = true)
+            SubscriptionHelper.updateSubscription(applicationContext, sequential = true)
             Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
             Result.success()
         } catch (e: Exception) {

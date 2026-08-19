@@ -420,7 +420,7 @@ object SmartConnectManager {
     /**
      * Надежно проверяет, работает ли прокси на локальном порту (межпроцессная проверка)
      */
-    private fun isProxyRunning(port: Int): Boolean {
+    fun isProxyRunning(port: Int): Boolean {
         if (port <= 0) return false
         return try {
             java.net.Socket().use { socket ->

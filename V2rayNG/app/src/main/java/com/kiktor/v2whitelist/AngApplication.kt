@@ -16,6 +16,7 @@ import com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
 class AngApplication : MultiDexApplication() {
     companion object {
@@ -76,7 +77,7 @@ class AngApplication : MultiDexApplication() {
                 .apply()
 
             CoroutineScope(Dispatchers.Main).launch {
-                SmartConnectManager.checkAndSetupSubscription(this@AngApplication)
+                SubscriptionHelper.checkAndSetupSubscription(this@AngApplication)
             }
 
             // Регистрируем фоновое обновление подписки раз в час

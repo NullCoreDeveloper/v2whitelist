@@ -8,7 +8,7 @@ object DefaultSubscriptions {
      * enabled = false означает, что она просто будет лежать в списке кастомных подписок на всякий случай.
      */
     val PREPOPULATED_SUBS = listOf(
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_zieng2",
             name = "zieng2 (Для обхода белых списков)",
             url = listOf(
@@ -20,7 +20,7 @@ object DefaultSubscriptions {
             ).joinToString("|"),
             enabled = true
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_igareck_black",
             name = "igareck (Обход черных списков / Блокировок)",
             url = listOf(
@@ -32,7 +32,7 @@ object DefaultSubscriptions {
             groupRegex = "(🌐)\\s*Anycast-IP",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_igareck_white",
             name = "igareck (Обход белых списков / Внутри РФ)",
             url = listOf(
@@ -44,60 +44,60 @@ object DefaultSubscriptions {
             groupRegex = "(🌐)\\s*Anycast-IP",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_avencores_goida",
             name = "AvenCores/goida (Сборник обхода черных списков)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
             groupRegex = "(Dynamic|wlrustg|V\\.O\\.I\\.D|oneclickvpnkeys|EbraSha|ShatakVPN)",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_avencores_goida_bypass",
             name = "AvenCores/goida (Сборник обхода белых списков SNI/CIDR)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
             groupRegex = "(Dynamic|wlrustg|V\\.O\\.I\\.D|oneclickvpnkeys|EbraSha|ShatakVPN)",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_jsxta_whitelist",
             name = "jsxta (Динамические авто-тестируемые сервера)",
             url = "https://gbr.mydan.online/configs",
             groupRegex = "(ShatakVPN|V\\.O\\.I\\.D|EbraSha)",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_mifa_bobrik",
             name = "mifa/bobrik (Резервные сервера)",
             url = "https://mifa.world/bobrik",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_rkp_whitelist",
             name = "RKP (Анти-РосКомПозор: Белые списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
             groupRegex = "(🌐)\\s*Неизвестно",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_rkp_blacklist",
             name = "RKP (Анти-РосКомПозор: Черные списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
             groupRegex = "(🌐)\\s*Неизвестно",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_aetris",
             name = "AetrisVPN (Сборник: Резервные + YouTube)",
             url = "https://raw.githubusercontent.com/flaafix/AetrisVPN/main/AetrisVPN.txt",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_etoneya",
             name = "etoneya (Специально для YouTube / YTUnblock)",
             url = "https://etoneya.su/whitelist",
             enabled = false
         ),
-        SmartConnectManager.CustomSubData(
+        SubscriptionHelper.CustomSubData(
             id = "def_hiztin_gribi",
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
