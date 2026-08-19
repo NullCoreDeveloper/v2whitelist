@@ -4,6 +4,7 @@ import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.LOOPBACK
 import com.kiktor.v2whitelist.BuildConfig
+import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.util.Utils.encode
 import com.kiktor.v2whitelist.util.Utils.urlDecode
 import java.io.IOException
@@ -136,7 +137,10 @@ object HttpUtil {
         while (redirects++ < maxRedirects) {
             if (currentUrl == null) continue
             val conn = createProxyConnection(currentUrl, httpPort, timeout, timeout) ?: continue
-            val finalUserAgent = if (userAgent.isNullOrBlank()) {
+            val customUserAgent = MmkvManager.decodeString("pref_custom_user_agent", "")
+            val finalUserAgent = if (!customUserAgent.isNullOrBlank()) {
+                customUserAgent
+            } else if (userAgent.isNullOrBlank()) {
                 "v2rayNG/${BuildConfig.VERSION_NAME}"
             } else {
                 userAgent

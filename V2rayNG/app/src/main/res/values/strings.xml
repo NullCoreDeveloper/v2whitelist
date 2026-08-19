@@ -280,6 +280,9 @@
     <string name="summary_pref_auto_update_subscription">Update your subscriptions automatically at set intervals in the background. Depending on the device, this feature may not always work</string>
     <string name="title_pref_auto_update_interval">Auto Update Interval (Minutes, Min value 15)</string>
 
+    <string name="title_pref_custom_user_agent">Custom User-Agent</string>
+    <string name="summary_pref_custom_user_agent">Override default User-Agent for fetching subscriptions</string>
+
     <string name="title_core_loglevel">Log Level</string>
     <string name="title_outbound_domain_resolve_method">Outbound domain pre-resolve method</string>
     <string name="title_mode">Mode</string>
