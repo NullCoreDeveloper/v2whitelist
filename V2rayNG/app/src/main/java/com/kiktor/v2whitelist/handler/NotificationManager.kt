@@ -261,4 +261,11 @@ object NotificationManager {
 
         getNotificationManager()?.notify(NOTIFICATION_ID + 1, builder.build())
     }
+
+    /**
+     * Cancels the failover notification to prevent it from getting stuck on screen.
+     */
+    fun cancelFailoverNotification() {
+        getNotificationManager()?.cancel(NOTIFICATION_ID + 1)
+    }
 }

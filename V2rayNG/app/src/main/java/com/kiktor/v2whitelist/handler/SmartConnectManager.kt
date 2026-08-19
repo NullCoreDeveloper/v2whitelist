@@ -40,432 +40,10 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
 object SmartConnectManager {
-    private val testSemaphore = Semaphore(48)
+    
 
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
-
-    /**
-     * Блокирует выполнение до тех пор, пока не появится реальный доступ в интернет (проверка dzen.ru).
-     * Защищает кэш серверов от удаления при выключенном WiFi или отсутствии сети.
-     */
-    private suspend fun waitForInternet(context: Context) {
-        var isWaiting = false
-        while (true) {
-            val dzenOk = try {
-                Socket().use { it.connect(InetSocketAddress("dzen.ru", 443), 1500); true }
-            } catch (_: Exception) { false }
-
-            if (dzenOk) {
-                if (isWaiting) {
-                    Log.i(AppConfig.TAG, "waitForInternet: Интернет появился (dzen.ru ответил)")
-                }
-                break
-            }
-
-            if (!isWaiting) {
-                Log.w(AppConfig.TAG, "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
-                isWaiting = true
-            }
-            sendStatus(context, context.getString(R.string.status_waiting_for_network))
-            
-            delay(2000)
-        }
-    }
-
-    /**
-     * Проверяет состояние интернета.
-     * @return 0 - OK (всё доступно), 1 - JAMMED (только Яндекс), 2 - NO_INTERNET (ничего не доступно)
-     */
-    fun checkInternetStatus(): Int {
-        val googleOk = try {
-            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 1500); true }
-        } catch (_: Exception) { false }
-
-        val yandexOk = try {
-            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 53), 1500); true }
-        } catch (_: Exception) { false }
-
-        return when {
-            googleOk && yandexOk -> 0   // Все отлично
-            !googleOk && yandexOk -> 1  // Глушат (Яндекс жив, Гугл нет)
-            else -> 2                   // Интернета нет совсем
-        }
-    }
-
-    /**
-     * Pre-populates the zieng2/wl subscription with mirrors on first launch,
-     * and sets up all custom subscriptions.
-     */
-    suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
-        // Мигрируем серверы из старой хардкод-подписки (матрешки), чтобы не оставить пользователя без связи
-        val subscriptions = MmkvManager.decodeSubscriptions()
-        if (subscriptions.any { it.guid == SUBSCRIPTION_ID }) {
-            Log.d(AppConfig.TAG, "Migrating old hardcoded subscription servers to the new custom sub")
-            val newSubId = "custom_sub_def_zieng2"
-            val serverList = MmkvManager.decodeServerList()
-            var migratedCount = 0
-            for (guid in serverList) {
-                val profile = MmkvManager.decodeServerConfig(guid)
-                if (profile != null && profile.subscriptionId == SUBSCRIPTION_ID) {
-                    profile.subscriptionId = newSubId
-                    MmkvManager.encodeServerConfig(guid, profile)
-                    migratedCount++
-                }
-            }
-            Log.d(AppConfig.TAG, "Migrated $migratedCount servers. Removing old subscription object.")
-            
-            MmkvManager.removeSubscription(SUBSCRIPTION_ID)
-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
-        }
-
-        val defaultsAdded = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
-        if (!defaultsAdded) {
-            val customSubs = loadCustomSubs().toMutableList()
-            var changed = false
-            for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-                if (customSubs.none { it.name == defaultSub.name }) {
-                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
-                    customSubs.add(defaultSub)
-                    changed = true
-                }
-            }
-            if (changed) {
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
-            }
-            MmkvManager.encodeSettings("pref_defaults_added_v1", true)
-        }
-
-        // Обработка кастомных подписок (zieng2/wl теперь обычная кастомная подписка)
-        setupCustomSubscriptions(context)
-    }
-
-    /**
-     * Настраивает кастомные подписки из MMKV.
-     */
-    private suspend fun setupCustomSubscriptions(context: Context) {
-        val customSubs = loadCustomSubs()
-        for (sub in customSubs.filter { it.enabled }) {
-            val subId = "custom_sub_${sub.id}"
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            val existing = subscriptions.find { it.guid == subId }
-
-            if (existing == null) {
-                val subItem = SubscriptionItem().apply {
-                    remarks = sub.name
-                    url = sub.url
-                    filter = sub.filter
-                    enabled = true
-                    sharePercent = sub.sharePercent
-                }
-                MmkvManager.encodeSubscription(subId, subItem)
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
-            } else {
-                val subItem = existing.subscription
-                if (subItem.url != sub.url || subItem.filter != sub.filter || subItem.remarks != sub.name || subItem.sharePercent != sub.sharePercent) {
-                    subItem.url = sub.url
-                    subItem.remarks = sub.name
-                    subItem.filter = sub.filter
-                    subItem.sharePercent = sub.sharePercent
-                    MmkvManager.encodeSubscription(subId, subItem)
-                    // URL или фильтр изменились — перезагружаем серверы немедленно
-                    AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
-                }
-            }
-        }
-    }
-
-    /**
-     * Загружает кастомные подписки из MMKV.
-     */
-    private fun loadCustomSubs(): List<CustomSubData> {
-        val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
-        if (json.isNullOrEmpty()) return emptyList()
-        return try {
-            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    /** Дата-класс для JSON-десериализации кастомных подписок */
-    data class CustomSubData(
-        val id: String = "",
-        val name: String = "",
-        val url: String = "",
-        val filter: String = "",
-        val groupRegex: String = "",
-        val enabled: Boolean = true,
-        val sharePercent: Int? = null
-    )
-
-    private fun sendStatus(context: Context, status: String) {
-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
-    }
-
-    /**
-     * Force updates all active subscriptions.
-     * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
-     * @param sequential если true — последовательная подкачка (фоновый воркер),
-     *                    false — параллельная гонка зеркал (UI).
-     */
-    suspend fun updateSubscription(context: Context, isStartup: Boolean = false, sequential: Boolean = false) = withContext(Dispatchers.IO) {
-        // ══════════════════════════════════════════════════════════════════════
-        // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
-        // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
-        // Поэтому нужно запомнить identity серверов (server+port+remarks),
-        // чтобы потом найти их новые GUID-ы и ремаппить кэши.
-        // ══════════════════════════════════════════════════════════════════════
-        data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
-
-        val lastServerGuid = MmkvManager.getValidLastServer()
-        val lastServerIdentity = lastServerGuid?.let { guid ->
-            MmkvManager.decodeServerConfig(guid)?.let { p ->
-                ServerIdentity(p.server, p.serverPort, p.remarks)
-            }
-        }
-
-        val vipGuids = MmkvManager.getVipCache()
-        val vipIdentities = vipGuids.mapNotNull { guid ->
-            MmkvManager.decodeServerConfig(guid)?.let { p ->
-                ServerIdentity(p.server, p.serverPort, p.remarks)
-            }
-        }
-
-        if (vipIdentities.isNotEmpty()) {
-            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipIdentities.size} серверов (${vipIdentities.joinToString { it.remarks }})")
-        }
-
-        val candidateSocksPort = SettingsManager.getSocksPort()
-        var socksPort = 0
-        var vpnStarted = false
-        
-        // Ожидаем запуска прокси (дольше при старте приложения, так как он может запускаться SmartConnect'ом)
-        val waitLoops = if (isStartup) 8 else 1
-        for (i in 0 until waitLoops) {
-            if (isProxyRunning(candidateSocksPort)) {
-                socksPort = candidateSocksPort
-                vpnStarted = true
-                break
-            }
-            if (i < waitLoops - 1) delay(1000)
-        }
-        
-        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
-
-        // Ensure base subscriptions are initialized if this is the first launch
-        checkAndSetupSubscription(context)
-
-        // Обновляем кастомные подписки
-        val customSubs = loadCustomSubs()
-        for (sub in customSubs.filter { it.enabled }) {
-            val subId = "custom_sub_${sub.id}"
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            val existing = subscriptions.find { it.guid == subId }
-            if (existing != null) {
-                Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
-                AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
-            } else {
-                // Создаём если нет
-                val subItem = SubscriptionItem().apply {
-                    remarks = sub.name
-                    url = sub.url
-                    enabled = true
-                }
-                MmkvManager.encodeSubscription(subId, subItem)
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort, sequential)
-            }
-        }
-
-        // Обновляем обычные подписки (добавленные пользователем вручную)
-        val allSubscriptions = MmkvManager.decodeSubscriptions()
-        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
-        for (sub in regularSubs) {
-            Log.d(AppConfig.TAG, "Manually updating regular subscription: ${sub.subscription.remarks}")
-            AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
-        }
-
-        // ══════════════════════════════════════════════════════════════════════
-        // РЕМАППИНГ КЭШЕЙ ПОСЛЕ ОБНОВЛЕНИЯ
-        // Строим индекс identity → newGuid для быстрого поиска.
-        // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
-        // ══════════════════════════════════════════════════════════════════════
-        if (lastServerIdentity != null || vipIdentities.isNotEmpty()) {
-            val updatedServers = MmkvManager.decodeServerList()
-            val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
-            for (guid in updatedServers) {
-                val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-                val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
-                if (!identityIndex.containsKey(key)) {
-                    identityIndex[key] = guid
-                }
-            }
-
-            // ── Ремаппим LastServerCache ──
-            if (lastServerIdentity != null) {
-                val key = "${lastServerIdentity.server}|${lastServerIdentity.port}|${lastServerIdentity.remarks}"
-                val newGuid = identityIndex[key]
-                if (newGuid != null) {
-                    MmkvManager.remapLastConnectedServer(newGuid)
-                    Log.i(AppConfig.TAG, "updateSubscription: LastServerCache ремаппирован → ${lastServerIdentity.remarks}")
-                } else {
-                    MmkvManager.clearLastConnectedServer()
-                    Log.w(AppConfig.TAG, "updateSubscription: LastServerCache сервер исчез после обновления, кэш сброшен")
-                }
-            }
-
-            // ── Ремаппим VIP-кэш ──
-            if (vipIdentities.isNotEmpty()) {
-                val remapped = vipIdentities.mapNotNull { id ->
-                    val key = "${id.server}|${id.port}|${id.remarks}"
-                    identityIndex[key]
-                }
-                if (remapped.isNotEmpty()) {
-                    MmkvManager.replaceVipCache(remapped)
-                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipIdentities.size} серверов сохранено")
-                } else {
-                    MmkvManager.clearVipCache()
-                    Log.w(AppConfig.TAG, "updateSubscription: все VIP-серверы исчезли после обновления, кэш очищен")
-                }
-            }
-        }
-    }
-
-    /**
-     * Фильтрует серверы: убирает не поддерживаемые и применяет фильтр локаций из настроек.
-     */
-    private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
-        // Получаем список выключенных подписок, чтобы не подключаться к их серверам
-        val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
-        
-        // Загружаем настройки фильтра
-        val filterMode = MmkvManager.decodeSettingsString(
-            AppConfig.PREF_LOCATION_FILTER_MODE,
-            AppConfig.LOCATION_FILTER_MODE_EXCLUDE
-        ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
-
-        val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
-            ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
-            
-        val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
-
-        return allServers.mapNotNull { guid ->
-            val profile = MmkvManager.decodeServerConfig(guid)
-            if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
-                if (disabledSubIds.contains(profile.subscriptionId)) {
-                    null // Пропускаем серверы из выключенных подписок
-                } else {
-                    guid to profile
-                }
-            } else null
-        }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
-            .filter {
-                // Фильтр по локациям (эмодзи-флаги или кастомные группы)
-                if (filterSet.isEmpty()) return@filter true
-                
-                var tag: String? = null
-                val regexStr = groupRegexMap[it.second.subscriptionId]
-                if (!regexStr.isNullOrEmpty()) {
-                    try {
-                        val match = Regex(regexStr).find(it.second.remarks)
-                        if (match != null && match.groupValues.size > 1) {
-                            tag = match.groupValues[1]
-                        }
-                    } catch (e: Exception) {}
-                }
-                if (tag.isNullOrEmpty()) {
-                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
-                }
-                if (tag.isNullOrEmpty()) {
-                    tag = "🌐" // Fallback tag for servers without any emojis or regex match
-                }
-                
-                when (filterMode) {
-                    AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
-                        // Режим исключения: если тег в наборе — исключаем
-                        tag == null || !filterSet.contains(tag)
-                    }
-                    AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
-                        // Режим белого списка: если тег в наборе — разрешаем
-                        tag != null && filterSet.contains(tag)
-                    }
-                    else -> true
-                }
-            }
-    }
-
-    /**
-     * Тестирует серверы параллельно и возвращает результаты, отсортированные по задержке.
-     */
-    private suspend fun testServers(
-        context: Context,
-        servers: List<Pair<String, ProfileItem>>,
-        totalTimeoutMs: Long = 6000,
-        perServerTimeoutMs: Long = 1500
-    ): List<Triple<String, ProfileItem, Long>> {
-        val testUrls = listOf(
-            AppConfig.DELAY_TEST_URL,
-            "https://www.google.com/generate_204",
-            "https://www.cloudflare.com/cdn-cgi/trace",
-            "https://connectivitycheck.gstatic.com/generate_204"
-        )
-
-        // AtomicBoolean вместо cancelChildren() — не ломает awaitAll() CancellationException-ом
-        val foundFastServer = AtomicBoolean(false)
-        val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
-
-        withTimeoutOrNull(totalTimeoutMs) {
-            coroutineScope {
-                val jobs = servers.map { (guid, profile) ->
-                    async {
-                        testSemaphore.withPermit {
-                            // Ранний выход если уже нашли хороший сервер — не через cancelChildren!
-                            if (foundFastServer.get()) return@withPermit null
-
-                            try {
-                                val randomUrl = testUrls[Random.nextInt(testUrls.size)]
-                                val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
-                                val delay = if (config.status) {
-                                    withTimeoutOrNull(perServerTimeoutMs) {
-                                        V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
-                                    } ?: -1L
-                                } else -1L
-
-                                val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
-                                val result = Triple(guid, profile, finalDelay)
-                                
-                                // Добавляем результат сразу, чтобы не потерять при таймауте чанка
-                                synchronized(resultsList) {
-                                    if (resultsList.none { it.first == guid }) {
-                                        resultsList.add(result)
-                                    }
-                                }
-                                
-                                if (finalDelay < 500) {
-                                    // Атомарно помечаем — остальные корутины пропустят тест
-                                    foundFastServer.set(true)
-                                }
-                                result
-                            } catch (e: kotlinx.coroutines.CancellationException) {
-                                throw e // Прокидываем CancellationException дальше
-                            } catch (e: Exception) {
-                                Log.e(AppConfig.TAG, "testServers error for $guid", e)
-                                null
-                            }
-                        }
-                    }
-                }
-                
-                try {
-                    jobs.awaitAll()
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    Log.w(AppConfig.TAG, "Chunk testing timed out, proceeding with partial results (${resultsList.size})")
-                }
-            }
-        }
-
-        return resultsList.sortedBy { it.third }
-    }
 
     /**
      * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
@@ -473,7 +51,7 @@ object SmartConnectManager {
      * Только так можно достоверно убедиться, что сервер рабочий — проверка протокольного
      * рукопожатия, авторизации и прохождения трафика, а не просто TCP-доступности.
      */
-    private suspend fun verifyProfile(context: Context, guid: String): Boolean {
+    private suspend fun NodeTesterManager.verifyProfile(context: Context, guid: String): Boolean {
         // Выделяем свободный локальный порт для SOCKS-прокси
         val port = try {
             ServerSocket(0).use { it.localPort }
@@ -555,18 +133,18 @@ object SmartConnectManager {
         
         sendStatus(context, context.getString(R.string.status_checking_vip_servers))
         
-        val results = testServers(context, vipCandidates)
+        val results = NodeTesterManager.testServers(context, vipCandidates)
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
         
         val validResults = results.filter { it.third < Long.MAX_VALUE }
         
         if (profileCheckEnabled) {
             for (candidate in validResults) {
-                if (verifyProfile(context, candidate.first)) {
+                if (NodeTesterManager.verifyProfile(context, candidate.first)) {
                     connectToBest(context, candidate, isStartup, isFromVipCache = true)
                     val leftovers = validResults.filter { it.first != candidate.first }
                     if (leftovers.isNotEmpty()) {
-                        verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                        NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                     }
                     return true
                 } else {
@@ -580,7 +158,7 @@ object SmartConnectManager {
                 connectToBest(context, candidate, isStartup, isFromVipCache = true)
                 val leftovers = validResults.filter { it.first != candidate.first }
                 if (leftovers.isNotEmpty()) {
-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                 }
                 return true
             }
@@ -590,22 +168,7 @@ object SmartConnectManager {
         return false
     }
 
-    private fun verifyAndCacheLeftovers(context: Context, candidates: List<Triple<String, ProfileItem, Long>>) {
-        GlobalScope.launch(Dispatchers.IO) {
-            val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
-            for (candidate in candidates) {
-                if (MmkvManager.getVipCache().size >= 5) break
-                if (profileCheckEnabled) {
-                    if (verifyProfile(context, candidate.first)) {
-                        Log.i(AppConfig.TAG, "Background: added ${candidate.second.remarks} to VIP cache")
-                        MmkvManager.addVipServer(candidate.first)
-                    }
-                } else {
-                    MmkvManager.addVipServer(candidate.first)
-                }
-            }
-        }
-    }
+    
 
     private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false, isFromVipCache: Boolean = false) {
         Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
@@ -634,7 +197,7 @@ object SmartConnectManager {
         }
         
         if (isStartup) {
-            val internetStatus = checkInternetStatus()
+            val internetStatus = NetworkManager.checkInternetStatus()
             if (internetStatus == 1) { // JAMMED
                 // ВАЖНО: используем GlobalScope.launch, а НЕ coroutineScope!
                 // coroutineScope блокировал возврат из connectToBest на 5+ секунд,
@@ -643,7 +206,7 @@ object SmartConnectManager {
                     try {
                         delay(5000) // Ждем пока VPN разгонится
                         Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
-                        updateSubscription(context, sequential = true)
+                        SubscriptionHelper.updateSubscription(context, sequential = true)
                     } catch (e: Exception) {
                         Log.e(AppConfig.TAG, "Survival logic: background update failed", e)
                     }
@@ -662,7 +225,7 @@ object SmartConnectManager {
                     GlobalScope.launch(Dispatchers.IO) {
                         try {
                             // sequential = true, чтобы обновлять плавно и не убить пул потоков
-                            updateSubscription(context, isStartup = true, sequential = true)
+                            SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = true)
                         } catch (e: Exception) {
                             Log.e(AppConfig.TAG, "smartConnect: background update failed", e)
                         }
@@ -678,10 +241,11 @@ object SmartConnectManager {
     suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
         
         // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
-        waitForInternet(context)
+        NetworkManager.waitForInternet(context)
 
         // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
         if (checkVipCacheAndConnect(context, isStartup = true)) {
+            NotificationManager.cancelFailoverNotification()
             return@withContext true
         }
 
@@ -689,7 +253,7 @@ object SmartConnectManager {
 
 
         // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
-        val internetStatus = checkInternetStatus()
+        val internetStatus = NetworkManager.checkInternetStatus()
         when (internetStatus) {
             0 -> {
                 Log.i(AppConfig.TAG, "SmartConnect: интернет доступен")
@@ -705,7 +269,7 @@ object SmartConnectManager {
             }
         }
 
-        checkAndSetupSubscription(context)
+        SubscriptionHelper.checkAndSetupSubscription(context)
         val allServers = MmkvManager.decodeServerList()
         val filteredServers = filterServers(allServers).shuffled()
 
@@ -728,12 +292,12 @@ object SmartConnectManager {
                 sendStatus(context, context.getString(R.string.status_testing_servers))
             }
 
-            val results = testServers(context, chunk)
+            val results = NodeTesterManager.testServers(context, chunk)
 
             // Если включена проверка профиля — проверяем кандидатов по порядку
             if (profileCheckEnabled) {
                 for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                    if (verifyProfile(context, candidate.first)) {
+                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
                         best = candidate
                         break
                     } else {
@@ -748,7 +312,7 @@ object SmartConnectManager {
                 connectToBest(context, best, isStartup = true)
                 val leftovers = results.filter { it.first != best!!.first && it.third < Long.MAX_VALUE }
                 if (leftovers.isNotEmpty()) {
-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                 }
                 break // Found a working server, stop testing other chunks
             }
@@ -765,6 +329,7 @@ object SmartConnectManager {
             if (!chunkedServers.any { chunk -> chunk.any { it.first == best!!.first } }) {
                 connectToBest(context, best, isStartup = true)
             }
+            NotificationManager.cancelFailoverNotification()
             return@withContext true
         } else {
             Log.e(AppConfig.TAG, "Critical: No servers available to connect")
@@ -778,7 +343,7 @@ object SmartConnectManager {
      */
     suspend fun switchServer(context: Context): Boolean = withContext(Dispatchers.IO) {
         // Ждем появления интернета (dzen.ru) перед переключением
-        waitForInternet(context)
+        NetworkManager.waitForInternet(context)
         
         val currentGuid = MmkvManager.getSelectServer()
         
@@ -800,6 +365,7 @@ object SmartConnectManager {
 
         // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
         if (checkVipCacheAndConnect(context, isStartup = false)) {
+            NotificationManager.cancelFailoverNotification()
             return@withContext true
         }
 
@@ -813,11 +379,11 @@ object SmartConnectManager {
             Log.i(AppConfig.TAG, "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
             sendStatus(context, context.getString(R.string.status_testing_servers))
 
-            val results = testServers(context, chunk)
+            val results = NodeTesterManager.testServers(context, chunk)
 
             if (profileCheckEnabled) {
                 for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                    if (verifyProfile(context, candidate.first)) {
+                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
                         nextBest = candidate
                         break
                     }
@@ -830,7 +396,7 @@ object SmartConnectManager {
                 connectToBest(context, nextBest, isStartup = false)
                 val leftovers = results.filter { it.first != nextBest!!.first && it.third < Long.MAX_VALUE }
                 if (leftovers.isNotEmpty()) {
-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                 }
                 break
             }
@@ -845,6 +411,7 @@ object SmartConnectManager {
             if (!chunkedServers.any { chunk -> chunk.any { it.first == nextBest!!.first } }) {
                 connectToBest(context, nextBest, isStartup = false)
             }
+            NotificationManager.cancelFailoverNotification()
             return@withContext true
         }
         return@withContext false
