@@ -41,6 +41,46 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
 object SmartConnectManager {
+
+    suspend fun findMoreVipServers(context: Context): Boolean = withContext(Dispatchers.IO) {
+        NetworkManager.waitForInternet(context)
+        val allServers = MmkvManager.decodeServerList()
+        val currentVipGuids = MmkvManager.getVipCache().toSet()
+        val candidates = filterServers(allServers, null)
+            .filter { !currentVipGuids.contains(it.first) }
+            .shuffled()
+        
+        if (candidates.isEmpty()) {
+            GeekModeLogger.log("SmartConnect", "findMoreVipServers: нет доступных новых серверов для проверки")
+            return@withContext false
+        }
+        
+        val chunkedServers = buildProportionalChunks(candidates)
+        if (chunkedServers.isEmpty()) return@withContext false
+        
+        val chunk = chunkedServers.first()
+        GeekModeLogger.log("SmartConnect", "findMoreVipServers: запуск проверки чанка из ${chunk.size} серверов для пополнения VIP")
+        
+        val results = NodeTesterManager.testServers(context, chunk)
+        if (results.isEmpty()) {
+            GeekModeLogger.log("SmartConnect", "findMoreVipServers: чанк не дал результатов")
+            return@withContext false
+        }
+        
+        var added = 0
+        for (candidate in results) {
+            val success = NodeTesterManager.verifyProfile(context, candidate.first)
+            if (success) {
+                MmkvManager.addVipServer(candidate.first)
+                GeekModeLogger.log("SmartConnect", "findMoreVipServers: сервер ${candidate.second.remarks} добавлен в VIP кэш")
+                added++
+            }
+        }
+        
+        GeekModeLogger.log("SmartConnect", "findMoreVipServers: завершено, добавлено $added серверов")
+        return@withContext added > 0
+    }
+
     
 
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"

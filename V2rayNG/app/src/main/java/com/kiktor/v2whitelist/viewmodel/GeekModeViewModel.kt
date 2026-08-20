@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import libv2ray.V2RayPoint
 
+import com.kiktor.v2whitelist.handler.SmartConnectManager
+
+
 class GeekModeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _rxTxSpeeds = MutableStateFlow<Pair<Double, Double>>(Pair(0.0, 0.0))
@@ -36,6 +39,40 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                 }
                 _logs.value = currentLogs
             }
+        }
+    }
+
+    
+    data class VipServerItem(val guid: String, val name: String, val ping: Long)
+
+    private val _vipServersFlow = MutableStateFlow<List<VipServerItem>>(emptyList())
+    val vipServersFlow: StateFlow<List<VipServerItem>> = _vipServersFlow.asStateFlow()
+
+    fun loadVipServers() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val guids = MmkvManager.getVipCache()
+            val items = guids.mapNotNull { guid ->
+                val config = MmkvManager.decodeServerConfig(guid) ?: return@mapNotNull null
+                val delay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
+                VipServerItem(guid, config.remarks ?: "Unknown", delay)
+            }
+            _vipServersFlow.value = items
+        }
+    }
+
+    fun findAdditionalVipServers() {
+        viewModelScope.launch(Dispatchers.IO) {
+            GeekModeLogger.log("GeekMode", "Ищем дополнительные VIP сервера...")
+            SmartConnectManager.findMoreVipServers(getApplication())
+            loadVipServers() // Обновляем список после поиска
+        }
+    }
+
+    fun removeVipServer(guid: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            MmkvManager.removeVipServer(guid)
+            GeekModeLogger.log("GeekMode", "Сервер удален из VIP кэша вручную")
+            loadVipServers()
         }
     }
 

@@ -36,6 +36,7 @@ object NodeTesterManager {
         totalTimeoutMs: Long = 6000,
         perServerTimeoutMs: Long = 1500
     ): List<Triple<String, ProfileItem, Long>> {
+        GeekModeLogger.log("NodeTester", "testServers: Запуск проверки TCP пинга для чанка из ${servers.size} серверов")
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
             "https://www.google.com/generate_204",
@@ -145,6 +146,7 @@ object NodeTesterManager {
                 false
             } else {
                 GeekModeLogger.log("NodeTester", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_profile_check_passed))
                 true
             }
