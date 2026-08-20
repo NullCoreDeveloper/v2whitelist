@@ -41,6 +41,95 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
 object SmartConnectManager {
+    private fun sendStatus(context: Context, status: String) {
+        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
+    }
+
+
+    private fun loadCustomSubs(): List<CustomSubData> {
+        val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+        if (json.isNullOrEmpty()) return emptyList()
+        return try {
+            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Дата-класс для JSON-десериализации кастомных подписок */
+    data class CustomSubData(
+        val id: String = "",
+        val name: String = "",
+        val url: String = "",
+        val filter: String = "",
+        val groupRegex: String = "",
+        val enabled: Boolean = true,
+        val sharePercent: Int? = null
+    )
+
+
+    private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+        // Получаем список выключенных подписок, чтобы не подключаться к их серверам
+        val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
+        
+        // Загружаем настройки фильтра
+        val filterMode = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_LOCATION_FILTER_MODE,
+            AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+        ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+
+        val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
+            ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
+            
+        val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
+
+        return allServers.mapNotNull { guid ->
+            val profile = MmkvManager.decodeServerConfig(guid)
+            if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
+                if (disabledSubIds.contains(profile.subscriptionId)) {
+                    null // Пропускаем серверы из выключенных подписок
+                } else {
+                    guid to profile
+                }
+            } else null
+        }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
+            .filter {
+                // Фильтр по локациям (эмодзи-флаги или кастомные группы)
+                if (filterSet.isEmpty()) return@filter true
+                
+                var tag: String? = null
+                val regexStr = groupRegexMap[it.second.subscriptionId]
+                if (!regexStr.isNullOrEmpty()) {
+                    try {
+                        val match = Regex(regexStr).find(it.second.remarks)
+                        if (match != null && match.groupValues.size > 1) {
+                            tag = match.groupValues[1]
+                        }
+                    } catch (e: Exception) {}
+                }
+                if (tag.isNullOrEmpty()) {
+                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+                }
+                if (tag.isNullOrEmpty()) {
+                    tag = "🌐" // Fallback tag for servers without any emojis or regex match
+                }
+                
+                when (filterMode) {
+                    AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
+                        // Режим исключения: если тег в наборе — исключаем
+                        tag == null || !filterSet.contains(tag)
+                    }
+                    AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
+                        // Режим белого списка: если тег в наборе — разрешаем
+                        tag != null && filterSet.contains(tag)
+                    }
+                    else -> true
+                }
+            }
+    }
+
+
+
 
     suspend fun findMoreVipServers(context: Context): Boolean = withContext(Dispatchers.IO) {
         NetworkManager.waitForInternet(context)
@@ -51,7 +140,7 @@ object SmartConnectManager {
             .shuffled()
         
         if (candidates.isEmpty()) {
-            GeekModeLogger.log("SmartConnect", "findMoreVipServers: нет доступных новых серверов для проверки")
+            GeekModeLogger.log("SmartConnect", "findMoreVipServers: no new servers available to check")
             return@withContext false
         }
         
@@ -59,11 +148,11 @@ object SmartConnectManager {
         if (chunkedServers.isEmpty()) return@withContext false
         
         val chunk = chunkedServers.first()
-        GeekModeLogger.log("SmartConnect", "findMoreVipServers: запуск проверки чанка из ${chunk.size} серверов для пополнения VIP")
+        GeekModeLogger.log("SmartConnect", "findMoreVipServers: starting chunk check of ${chunk.size} servers to replenish VIP")
         
         val results = NodeTesterManager.testServers(context, chunk)
         if (results.isEmpty()) {
-            GeekModeLogger.log("SmartConnect", "findMoreVipServers: чанк не дал результатов")
+            GeekModeLogger.log("SmartConnect", "findMoreVipServers: chunk yielded no results")
             return@withContext false
         }
         
@@ -72,12 +161,12 @@ object SmartConnectManager {
             val success = NodeTesterManager.verifyProfile(context, candidate.first)
             if (success) {
                 MmkvManager.addVipServer(candidate.first)
-                GeekModeLogger.log("SmartConnect", "findMoreVipServers: сервер ${candidate.second.remarks} добавлен в VIP кэш")
+                GeekModeLogger.log("SmartConnect", "findMoreVipServers: server ${candidate.second.remarks} added to VIP cache")
                 added++
             }
         }
         
-        GeekModeLogger.log("SmartConnect", "findMoreVipServers: завершено, добавлено $added серверов")
+        GeekModeLogger.log("SmartConnect", "findMoreVipServers: completed, added $added servers")
         return@withContext added > 0
     }
 
@@ -97,14 +186,14 @@ object SmartConnectManager {
         val port = try {
             ServerSocket(0).use { it.localPort }
         } catch (e: Exception) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось выделить порт для $guid")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: failed to allocate port for $guid")
             return false
         }
 
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
         if (!configResult.status) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось создать конфиг speedtest для $guid")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: failed to create speedtest config for $guid")
             return false
         }
 
@@ -130,15 +219,15 @@ object SmartConnectManager {
             val (elapsed, _) = SpeedtestManager.testConnection(context, port)
 
             if (elapsed <= 0) {
-                GeekModeLogger.log("SmartConnect", "verifyProfile: трафик через сервер не прошёл для $guid")
+                GeekModeLogger.log("SmartConnect", "verifyProfile: traffic did not pass through server for $guid")
                 false
             } else {
-                GeekModeLogger.log("SmartConnect", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                GeekModeLogger.log("SmartConnect", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 sendStatus(context, context.getString(R.string.status_profile_check_passed))
                 true
             }
         } catch (e: Exception) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: исключение для $guid: ${e.message}")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: exception for $guid: ${e.message}")
             false
         } finally {
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
@@ -222,7 +311,7 @@ object SmartConnectManager {
 
         MmkvManager.addVipServer(best.first)
         MmkvManager.saveLastConnectedServer(best.first)
-        GeekModeLogger.log("SmartConnect", "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
+        GeekModeLogger.log("SmartConnect", "SmartConnect: server ${best.second.remarks} saved to top VIP cache")
 
         val isRunning = V2RayServiceManager.isRunning()
         if (isRunning) {
@@ -297,15 +386,15 @@ object SmartConnectManager {
         val internetStatus = NetworkManager.checkInternetStatus()
         when (internetStatus) {
             0 -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет доступен")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: internet is available")
                 sendStatus(context, context.getString(R.string.status_testing_servers))
             }
             1 -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет глушат (только Яндекс доступен)")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: internet is jammed (only local resources available)")
                 sendStatus(context, context.getString(R.string.status_jamming_detected))
             }
             else -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: интернета нет совсем")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: no internet connection")
                 sendStatus(context, context.getString(R.string.status_no_internet))
             }
         }

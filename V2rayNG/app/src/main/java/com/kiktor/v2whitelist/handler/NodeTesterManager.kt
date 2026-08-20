@@ -36,7 +36,7 @@ object NodeTesterManager {
         totalTimeoutMs: Long = 6000,
         perServerTimeoutMs: Long = 1500
     ): List<Triple<String, ProfileItem, Long>> {
-        GeekModeLogger.log("NodeTester", "testServers: Запуск проверки TCP пинга для чанка из ${servers.size} серверов")
+        GeekModeLogger.log("NodeTester", "testServers: starting TCP ping check for chunk of ${servers.size} servers")
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
             "https://www.google.com/generate_204",
@@ -93,7 +93,7 @@ object NodeTesterManager {
                 try {
                     jobs.awaitAll()
                 } catch (e: kotlinx.coroutines.CancellationException) {
-                    GeekModeLogger.log("NodeTester", "Chunk testing timed out + ": " + proceeding with partial results (${resultsList.size})")
+                    GeekModeLogger.log("NodeTester", "Chunk testing timed out: proceeding with partial results (${resultsList.size})")
                 }
             }
         }
@@ -110,14 +110,14 @@ object NodeTesterManager {
         val port = try {
             ServerSocket(0).use { it.localPort }
         } catch (e: Exception) {
-            GeekModeLogger.log("NodeTester", "verifyProfile: не удалось выделить порт для $guid")
+            GeekModeLogger.log("NodeTester", "verifyProfile: failed to allocate port for $guid")
             return false
         }
 
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
         if (!configResult.status) {
-            GeekModeLogger.log("NodeTester", "verifyProfile: не удалось создать конфиг speedtest для $guid")
+            GeekModeLogger.log("NodeTester", "verifyProfile: failed to create speedtest config for $guid")
             return false
         }
 
@@ -142,16 +142,16 @@ object NodeTesterManager {
             val (elapsed, _) = SpeedtestManager.testConnection(context, port)
 
             if (elapsed <= 0) {
-                GeekModeLogger.log("NodeTester", "verifyProfile: трафик через сервер не прошёл для $guid")
+                GeekModeLogger.log("NodeTester", "verifyProfile: traffic did not pass through server for $guid")
                 false
             } else {
-                GeekModeLogger.log("NodeTester", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                GeekModeLogger.log("NodeTester", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_profile_check_passed))
                 true
             }
         } catch (e: Exception) {
-            GeekModeLogger.log("NodeTester", "verifyProfile: исключение для $guid: ${e.message}")
+            GeekModeLogger.log("NodeTester", "verifyProfile: exception for $guid: ${e.message}")
             false
         } finally {
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы

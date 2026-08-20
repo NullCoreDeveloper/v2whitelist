@@ -12,10 +12,18 @@
         android:text="@string/btn_label_about"
         android:textSize="20sp"
         android:textStyle="bold"
-        android:textColor="?android:attr/textColorPrimary"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <TextView
+        android:id="@+id/tv_version"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary"
         android:layout_marginBottom="16dp" />
 
     <TextView
+
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="ПроБел (ex. v2Whitelist) представляет собой минималистичный и оптимизированный клиент. Главная цель проекта — обеспечить надежный обход ТСПУ (технических средств противодействия угрозам) и глушилок мобильной связи, предоставляя быстрый и бесперебойный доступ."

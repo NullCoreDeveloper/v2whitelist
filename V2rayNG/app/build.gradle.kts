@@ -28,6 +28,11 @@ android {
     namespace = "com.kiktor.v2whitelist"
     compileSdk = 36
 
+    lint {
+        disable.add("MissingTranslation")
+        abortOnError = false
+    }
+
     defaultConfig {
         applicationId = "com.kiktor.v2whitelist"
         minSdk = 24

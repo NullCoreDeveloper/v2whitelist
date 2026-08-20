@@ -483,7 +483,7 @@
     <string name="btn_label_cancel">Cancel</string>
     <string name="btn_label_switch">Next Profile</string>
     <string name="btn_label_settings">Settings</string>
-    <string name="btn_label_logs">Logs</string>
+    <string name="btn_label_logs">Geek Mode</string>
     <string name="btn_label_update">Update</string>
     <string name="btn_label_about">About</string>
     <string name="title_check_update">Check for updates</string>
@@ -493,7 +493,7 @@
     <string name="title_qr_current_server">Current server QR Code</string>
 
     <!-- Location Filter -->
-    <string name="title_location_filter">Location Filter</string>
+    <string name="title_location_filter">Filter</string>
     <string name="btn_label_filter">Filter</string>
     <string name="btn_label_share">Share</string>
     <string name="share_app_text">ПроБел (v2Whitelist) — a client for bypassing blocks and mobile internet whitelists. Free, no ads, and no tracking! Direct download link:\n%1$s</string>
@@ -505,6 +505,15 @@
     <string name="location_filter_locations_title">Locations</string>
     <string name="location_filter_empty">No available locations. Update subscription.</string>
     <string name="location_filter_server_count">Servers: %d</string>
+
+    <!-- Geek Mode -->
+    <string name="geek_mode_btn_ping_test">Ping Test</string>
+    <string name="geek_mode_btn_find_vip">Find VIP</string>
+    <string name="geek_mode_btn_ping_vip">Ping VIP</string>
+    <string name="geek_mode_vip_cache">VIP Cache:</string>
+    <string name="geek_mode_logs_title">Logs (Real-time):</string>
+    <string name="geek_mode_no_server">No server selected</string>
+    <string name="geek_mode_unknown_config">Unknown config</string>
 
     <!-- Profile Check (Beta) -->
     <string name="title_pref_profile_check">Profile check before connection</string>
@@ -556,4 +565,6 @@
     <string name="status_actual">Up to date</string>
     <string name="status_stale">Stale</string>
     <string name="status_passed_time">%1$s (updated %2$s ago)</string>
+    <string name="title_pref_logcat" translatable="false">Logs</string>
+    <string name="summary_pref_logcat" translatable="false">View v2ray core and app logs</string>
 </resources>

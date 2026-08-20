@@ -462,7 +462,7 @@
     <string name="btn_label_cancel">Отмена</string>
     <string name="btn_label_switch">Следующий профиль</string>
     <string name="btn_label_settings">Настройки</string>
-    <string name="btn_label_logs">Логи</string>
+    <string name="btn_label_logs">Geek Mode</string>
     <string name="btn_label_update">Обновить</string>
     <string name="status_updating_subscription">Обновляем список серверов…</string>
     <string name="status_starting_smart_connect">Ищем лучший сервер для вас…</string>
@@ -494,7 +494,7 @@
     <string name="tv_server_name">Сервер: %s</string>
     <string name="btn_scan_add">Скан</string>
     <string name="title_qr_current_server">QR-код текущего сервера</string>
-    <string name="title_location_filter">Фильтр локаций</string>
+    <string name="title_location_filter">Фильтр</string>
     <string name="btn_label_filter">Фильтр</string>
     <string name="btn_label_share">Поделиться</string>
     <string name="share_app_text">ПроБел (v2Whitelist) — клиент для обхода блокировок и белых списков на мобильном интернете. Бесплатно, без рекламы и слежки! Прямая ссылка на скачивание:\n%1$s</string>
@@ -506,6 +506,16 @@
     <string name="location_filter_locations_title">Локации</string>
     <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
     <string name="location_filter_server_count">Серверов: %d</string>
+
+    <!-- Geek Mode -->
+    <string name="geek_mode_btn_ping_test">Пинг-тест</string>
+    <string name="geek_mode_btn_find_vip">Искать VIP</string>
+    <string name="geek_mode_btn_ping_vip">Пинг VIP</string>
+    <string name="geek_mode_vip_cache">VIP Кэш:</string>
+    <string name="geek_mode_logs_title">Логи (Real-time):</string>
+    <string name="geek_mode_no_server">Сервер не выбран</string>
+    <string name="geek_mode_unknown_config">Неизвестный конфиг</string>
+
     <string name="title_pref_profile_check">Проверка профиля перед подключением</string>
     <string name="summary_pref_profile_check">Обеспечивает 100% стабильность. Без нее вы можете попасть на "мертвый" сервер.</string>
     <string name="title_pref_bypass_ru_apps">Банки, Госуслуги, Ozon и WB вне VPN</string>

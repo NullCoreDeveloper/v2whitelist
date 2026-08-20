@@ -27,6 +27,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    - name: Accept Android SDK licenses
+      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
     - name: Install NDK
       run: |
         NDK_VER="28.2.13676358"
@@ -61,6 +64,17 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       working-directory: V2rayNG
+
+    - name: Run Android Lint
+      run: ./gradlew lintFdroidDebug
+      working-directory: V2rayNG
+      continue-on-error: true
+
+    - name: Upload Lint Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-report
+        path: V2rayNG/app/build/reports/lint-results-fdroidDebug.html
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug

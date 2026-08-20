@@ -104,6 +104,9 @@
             android:name=".ui.LogcatActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.GeekModeActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.RoutingSettingActivity"
             android:exported="false" />
         <activity

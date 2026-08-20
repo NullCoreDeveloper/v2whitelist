@@ -137,7 +137,7 @@ object HttpUtil {
         while (redirects++ < maxRedirects) {
             if (currentUrl == null) continue
             val conn = createProxyConnection(currentUrl, httpPort, timeout, timeout) ?: continue
-            val customUserAgent = MmkvManager.decodeString("pref_custom_user_agent", "")
+            val customUserAgent = MmkvManager.decodeSettingsString("pref_custom_user_agent", "")
             val finalUserAgent = if (!customUserAgent.isNullOrBlank()) {
                 customUserAgent
             } else if (userAgent.isNullOrBlank()) {

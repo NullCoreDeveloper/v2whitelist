@@ -131,6 +131,12 @@ class SettingsActivity : BaseActivity() {
                 startActivity(android.content.Intent(requireContext(), CustomSubscriptionsActivity::class.java))
                 true
             }
+
+            // Логи
+            findPreference<androidx.preference.Preference>("pref_logcat")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), LogcatActivity::class.java))
+                true
+            }
         }
 
         private fun initPreferenceSummaries() {

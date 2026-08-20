@@ -36,6 +36,9 @@ object NotificationManager {
     private var speedNotificationJob: Job? = null
     private var mNotificationManager: NotificationManager? = null
 
+    /** Live speed in bytes/sec: Pair(rx, tx). Collected by GeekModeViewModel. */
+    val speedFlow = kotlinx.coroutines.flow.MutableSharedFlow<Pair<Double, Double>>(replay = 1, extraBufferCapacity = 8)
+
     /**
      * Starts the speed notification.
      * @param currentConfig The current profile configuration.
@@ -66,6 +69,11 @@ object NotificationManager {
                 val directUplink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.UPLINK)
                 val directDownlink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.DOWNLINK)
                 val zeroSpeed = proxyTotal == 0L && directUplink == 0L && directDownlink == 0L
+
+                // Emit live speed for Geek Mode
+                val rxSpeed = (proxyTotal + directDownlink) / sinceLastQueryInSeconds
+                val txSpeed = (directUplink) / sinceLastQueryInSeconds
+                speedFlow.tryEmit(Pair(rxSpeed, txSpeed))
                 if (!zeroSpeed || !lastZeroSpeed) {
                     if (proxyTotal == 0L) {
                         appendSpeedString(text, outboundTags?.firstOrNull(), 0.0, 0.0)

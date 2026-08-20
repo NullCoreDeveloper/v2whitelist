@@ -125,13 +125,10 @@ class MainActivity : HelperBaseActivity() {
         binding.btnBigConnect.setOnClickListener { handleConnectAction() }
         binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
-        binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, LogcatActivity::class.java)) }
+        binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, GeekModeActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
         binding.btnShareQuick.setOnClickListener { handleShareApp() }
-        binding.btnGeekMode.setOnClickListener {
-            GeekModeBottomSheetFragment().show(supportFragmentManager, "GeekMode")
-        }
 
         // QR-код текущего подключённого сервера
         binding.btnShowQr.setOnClickListener { showCurrentServerQr() }
@@ -150,6 +147,8 @@ class MainActivity : HelperBaseActivity() {
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
+
+            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_version)?.text = "Версия: v${com.kiktor.v2whitelist.BuildConfig.VERSION_NAME}"
 
             bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_tg)?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://t.me/NullCoreDeveloper")

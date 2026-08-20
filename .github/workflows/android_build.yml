@@ -23,6 +23,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    - name: Accept Android SDK licenses
+      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
     - name: Install NDK
       run: |
         NDK_VER="28.2.13676358"
