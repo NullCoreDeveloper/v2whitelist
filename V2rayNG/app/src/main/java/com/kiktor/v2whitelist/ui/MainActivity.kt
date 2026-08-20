@@ -129,6 +129,9 @@ class MainActivity : HelperBaseActivity() {
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
         binding.btnShareQuick.setOnClickListener { handleShareApp() }
+        binding.btnGeekMode.setOnClickListener {
+            GeekModeBottomSheetFragment().show(supportFragmentManager, "GeekMode")
+        }
 
         // QR-код текущего подключённого сервера
         binding.btnShowQr.setOnClickListener { showCurrentServerQr() }

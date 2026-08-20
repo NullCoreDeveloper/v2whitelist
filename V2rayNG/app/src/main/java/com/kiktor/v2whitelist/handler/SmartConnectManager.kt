@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.handler
 
 import android.content.Context
 import android.util.Log
+import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.dto.ProfileItem
 import com.kiktor.v2whitelist.dto.SubscriptionItem
@@ -56,14 +57,14 @@ object SmartConnectManager {
         val port = try {
             ServerSocket(0).use { it.localPort }
         } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "verifyProfile: не удалось выделить порт для $guid")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось выделить порт для $guid")
             return false
         }
 
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
         if (!configResult.status) {
-            Log.w(AppConfig.TAG, "verifyProfile: не удалось создать конфиг speedtest для $guid")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось создать конфиг speedtest для $guid")
             return false
         }
 
@@ -89,15 +90,15 @@ object SmartConnectManager {
             val (elapsed, _) = SpeedtestManager.testConnection(context, port)
 
             if (elapsed <= 0) {
-                Log.w(AppConfig.TAG, "verifyProfile: трафик через сервер не прошёл для $guid")
+                GeekModeLogger.log("SmartConnect", "verifyProfile: трафик через сервер не прошёл для $guid")
                 false
             } else {
-                Log.i(AppConfig.TAG, "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                GeekModeLogger.log("SmartConnect", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
                 sendStatus(context, context.getString(R.string.status_profile_check_passed))
                 true
             }
         } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "verifyProfile: исключение для $guid: ${e.message}")
+            GeekModeLogger.log("SmartConnect", "verifyProfile: исключение для $guid: ${e.message}")
             false
         } finally {
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
@@ -114,7 +115,7 @@ object SmartConnectManager {
         val vipGuids = MmkvManager.getVipCache()
         if (vipGuids.isEmpty()) return false
 
-        Log.i(AppConfig.TAG, "VIP Cache: checking ${vipGuids.size} servers")
+        GeekModeLogger.log("SmartConnect", "VIP Cache: checking ${vipGuids.size} servers")
         
         val vipCandidates = mutableListOf<Pair<String, ProfileItem>>()
         val invalidGuids = mutableListOf<String>()
@@ -148,7 +149,7 @@ object SmartConnectManager {
                     }
                     return true
                 } else {
-                    Log.w(AppConfig.TAG, "VIP Cache: server ${candidate.first} failed deep check, removing")
+                    GeekModeLogger.log("SmartConnect", "VIP Cache: server ${candidate.first} failed deep check, removing")
                     MmkvManager.removeVipServer(candidate.first)
                 }
             }
@@ -164,14 +165,14 @@ object SmartConnectManager {
             }
         }
         
-        Log.w(AppConfig.TAG, "VIP Cache: all valid servers failed")
+        GeekModeLogger.log("SmartConnect", "VIP Cache: all valid servers failed")
         return false
     }
 
     
 
     private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false, isFromVipCache: Boolean = false) {
-        Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
+        GeekModeLogger.log("SmartConnect", "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
         if (isFromVipCache) {
             sendStatus(context, context.getString(R.string.status_using_cached_server, best.second.remarks))
         } else {
@@ -181,7 +182,7 @@ object SmartConnectManager {
 
         MmkvManager.addVipServer(best.first)
         MmkvManager.saveLastConnectedServer(best.first)
-        Log.i(AppConfig.TAG, "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
+        GeekModeLogger.log("SmartConnect", "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
 
         val isRunning = V2RayServiceManager.isRunning()
         if (isRunning) {
@@ -205,10 +206,10 @@ object SmartConnectManager {
                 GlobalScope.launch(Dispatchers.IO) {
                     try {
                         delay(5000) // Ждем пока VPN разгонится
-                        Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
+                        GeekModeLogger.log("SmartConnect", "Survival logic: Jamming detected, triggering background update via VPN")
                         SubscriptionHelper.updateSubscription(context, sequential = true)
                     } catch (e: Exception) {
-                        Log.e(AppConfig.TAG, "Survival logic: background update failed", e)
+                        GeekModeLogger.log("SmartConnect", "Survival logic: background update failed" + ": " + e)
                     }
                 }
             }
@@ -221,13 +222,13 @@ object SmartConnectManager {
                     .minOfOrNull { it.subscription.lastUpdated } ?: 0L
 
                 if (System.currentTimeMillis() - oldestUpdate > UPDATE_INTERVAL_MS) {
-                    Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
+                    GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
                     GlobalScope.launch(Dispatchers.IO) {
                         try {
                             // sequential = true, чтобы обновлять плавно и не убить пул потоков
                             SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = true)
                         } catch (e: Exception) {
-                            Log.e(AppConfig.TAG, "smartConnect: background update failed", e)
+                            GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
                         }
                     }
                 }
@@ -256,15 +257,15 @@ object SmartConnectManager {
         val internetStatus = NetworkManager.checkInternetStatus()
         when (internetStatus) {
             0 -> {
-                Log.i(AppConfig.TAG, "SmartConnect: интернет доступен")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет доступен")
                 sendStatus(context, context.getString(R.string.status_testing_servers))
             }
             1 -> {
-                Log.w(AppConfig.TAG, "SmartConnect: интернет глушат (только Яндекс доступен)")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет глушат (только Яндекс доступен)")
                 sendStatus(context, context.getString(R.string.status_jamming_detected))
             }
             else -> {
-                Log.w(AppConfig.TAG, "SmartConnect: интернета нет совсем")
+                GeekModeLogger.log("SmartConnect", "SmartConnect: интернета нет совсем")
                 sendStatus(context, context.getString(R.string.status_no_internet))
             }
         }
@@ -274,7 +275,7 @@ object SmartConnectManager {
         val filteredServers = filterServers(allServers).shuffled()
 
         if (filteredServers.isEmpty()) {
-            Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
+            GeekModeLogger.log("SmartConnect", "No servers found in hardcoded subscription")
             sendStatus(context, context.getString(R.string.status_no_servers))
             return@withContext false
         }
@@ -284,7 +285,7 @@ object SmartConnectManager {
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
         for ((index, chunk) in chunkedServers.withIndex()) {
-            Log.i(AppConfig.TAG, "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+            GeekModeLogger.log("SmartConnect", "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
             // Обновляем статус "тестируем" только если интернет в норме.
             // При "глушат" (1) и "нет интернета" (2) строки уже говорят "ищём серверы" —
             // перезаписывать их бессмысленно, иначе пользователь не увидит важный контекст.
@@ -316,12 +317,12 @@ object SmartConnectManager {
                 }
                 break // Found a working server, stop testing other chunks
             }
-            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
+            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
         }
 
         // Fallback: if no server found in time, just pick the first one from list
         if (best == null && filteredServers.isNotEmpty()) {
-            Log.w(AppConfig.TAG, "No servers found within timeout, picking first available")
+            GeekModeLogger.log("SmartConnect", "No servers found within timeout, picking first available")
             best = Triple(filteredServers[0].first, filteredServers[0].second, Long.MAX_VALUE)
         }
 
@@ -332,7 +333,7 @@ object SmartConnectManager {
             NotificationManager.cancelFailoverNotification()
             return@withContext true
         } else {
-            Log.e(AppConfig.TAG, "Critical: No servers available to connect")
+            GeekModeLogger.log("SmartConnect", "Critical: No servers available to connect")
             sendStatus(context, context.getString(R.string.status_no_servers))
             return@withContext false
         }
@@ -352,7 +353,7 @@ object SmartConnectManager {
         // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
         // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
         if (currentGuid != null) {
-            Log.i(AppConfig.TAG, "switchServer: user manually rejected current server, removing from VIP cache")
+            GeekModeLogger.log("SmartConnect", "switchServer: user manually rejected current server, removing from VIP cache")
             MmkvManager.removeVipServer(currentGuid)
         }
         
@@ -376,7 +377,7 @@ object SmartConnectManager {
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
         for ((index, chunk) in chunkedServers.withIndex()) {
-            Log.i(AppConfig.TAG, "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+            GeekModeLogger.log("SmartConnect", "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
             sendStatus(context, context.getString(R.string.status_testing_servers))
 
             val results = NodeTesterManager.testServers(context, chunk)
@@ -400,7 +401,7 @@ object SmartConnectManager {
                 }
                 break
             }
-            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
+            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
         }
 
         if (nextBest == null && filteredServers.isNotEmpty()) {

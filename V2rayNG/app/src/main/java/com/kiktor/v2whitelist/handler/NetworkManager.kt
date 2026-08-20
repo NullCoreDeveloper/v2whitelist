@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.handler
 
 import android.content.Context
 import android.util.Log
+import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.util.MessageUtil
@@ -24,13 +25,13 @@ object NetworkManager {
 
             if (dzenOk) {
                 if (isWaiting) {
-                    Log.i(AppConfig.TAG, "waitForInternet: Интернет появился (dzen.ru ответил)")
+                    GeekModeLogger.log("Network", "waitForInternet: Интернет появился (dzen.ru ответил)")
                 }
                 break
             }
 
             if (!isWaiting) {
-                Log.w(AppConfig.TAG, "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
+                GeekModeLogger.log("Network", "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
                 isWaiting = true
             }
             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_waiting_for_network))

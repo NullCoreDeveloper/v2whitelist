@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.handler
 
 import android.content.Context
 import android.util.Log
+import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.dto.ProfileItem
@@ -81,7 +82,7 @@ object NodeTesterManager {
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e // Прокидываем CancellationException дальше
                             } catch (e: Exception) {
-                                Log.e(AppConfig.TAG, "testServers error for $guid", e)
+                                GeekModeLogger.log("NodeTester", "testServers error for $guid" + ": " + e)
                                 null
                             }
                         }
@@ -91,7 +92,7 @@ object NodeTesterManager {
                 try {
                     jobs.awaitAll()
                 } catch (e: kotlinx.coroutines.CancellationException) {
-                    Log.w(AppConfig.TAG, "Chunk testing timed out, proceeding with partial results (${resultsList.size})")
+                    GeekModeLogger.log("NodeTester", "Chunk testing timed out + ": " + proceeding with partial results (${resultsList.size})")
                 }
             }
         }
@@ -108,14 +109,14 @@ object NodeTesterManager {
         val port = try {
             ServerSocket(0).use { it.localPort }
         } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "verifyProfile: не удалось выделить порт для $guid")
+            GeekModeLogger.log("NodeTester", "verifyProfile: не удалось выделить порт для $guid")
             return false
         }
 
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
         if (!configResult.status) {
-            Log.w(AppConfig.TAG, "verifyProfile: не удалось создать конфиг speedtest для $guid")
+            GeekModeLogger.log("NodeTester", "verifyProfile: не удалось создать конфиг speedtest для $guid")
             return false
         }
 
@@ -140,15 +141,15 @@ object NodeTesterManager {
             val (elapsed, _) = SpeedtestManager.testConnection(context, port)
 
             if (elapsed <= 0) {
-                Log.w(AppConfig.TAG, "verifyProfile: трафик через сервер не прошёл для $guid")
+                GeekModeLogger.log("NodeTester", "verifyProfile: трафик через сервер не прошёл для $guid")
                 false
             } else {
-                Log.i(AppConfig.TAG, "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                GeekModeLogger.log("NodeTester", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_profile_check_passed))
                 true
             }
         } catch (e: Exception) {
-            Log.w(AppConfig.TAG, "verifyProfile: исключение для $guid: ${e.message}")
+            GeekModeLogger.log("NodeTester", "verifyProfile: исключение для $guid: ${e.message}")
             false
         } finally {
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
@@ -165,11 +166,11 @@ object NodeTesterManager {
                 if (MmkvManager.getVipCache().size >= 5) break
                 if (profileCheckEnabled) {
                     if (verifyProfile(context, candidate.first)) {
-                        Log.i(AppConfig.TAG, "Background: added ${candidate.second.remarks} to VIP cache")
+                        GeekModeLogger.log("NodeTester", "Background: added ${candidate.second.remarks} to VIP cache")
                         MmkvManager.addVipServer(candidate.first)
                     }
                 } else {
-                    Log.i(AppConfig.TAG, "Background: added ${candidate.second.remarks} to VIP cache (no deep check)")
+                    GeekModeLogger.log("NodeTester", "Background: added ${candidate.second.remarks} to VIP cache (no deep check)")
                     MmkvManager.addVipServer(candidate.first)
                 }
             }

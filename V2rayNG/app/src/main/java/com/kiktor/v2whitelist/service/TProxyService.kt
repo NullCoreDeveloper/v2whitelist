@@ -47,12 +47,14 @@ class TProxyService(
 //        Log.i(AppConfig.TAG, "Config file created: ${configFile.absolutePath}")
 //        Log.d(AppConfig.TAG, "HevSocks5Tunnel Config content:\n$configContent")
 
-        try {
-//            Log.i(AppConfig.TAG, "TProxyStartService...")
-            TProxyStartService(configFile.absolutePath, vpnInterface.fd)
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "HevSocks5Tunnel exception: ${e.message}")
-        }
+        Thread {
+            try {
+//                Log.i(AppConfig.TAG, "TProxyStartService...")
+                TProxyStartService(configFile.absolutePath, vpnInterface.fd)
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "HevSocks5Tunnel exception: ${e.message}")
+            }
+        }.start()
     }
 
     private fun buildConfig(): String {
