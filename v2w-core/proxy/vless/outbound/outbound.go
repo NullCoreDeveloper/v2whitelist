@@ -42,19 +42,13 @@ import (
 	"github.com/xtls/xray-core/transport/pipe"
 )
 
-func init() {
-	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
-		return New(ctx, config.(*Config))
-	}))
-}
+// init removed for v2w-core
 
 // Handler is an outbound connection handler for VLess protocol.
 type Handler struct {
 	server        *protocol.ServerSpec
-	policyManager policy.Manager
 	cone          bool
 	encryption    *encryption.ClientInstance
-	reverse       *Reverse
 
 	testpre  uint32
 	initpre  sync.Once
@@ -76,11 +70,9 @@ func New(ctx context.Context, config *Config) (*Handler, error) {
 		return nil, errors.New("failed to get server spec").Base(err).AtError()
 	}
 
-	v := core.MustFromContext(ctx)
 	handler := &Handler{
 		server:        server,
-		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
-		cone:          ctx.Value("cone").(bool),
+		cone:          false, // Hardcoded for scanner
 	}
 
 	a := handler.server.User.Account.(*vless.MemoryAccount)
@@ -97,36 +89,7 @@ func New(ctx context.Context, config *Config) (*Handler, error) {
 		}
 	}
 
-	if a.Reverse != nil {
-		rvsCtx := session.ContextWithInbound(ctx, &session.Inbound{
-			Tag:  a.Reverse.Tag,
-			Name: "vless-reverse",
-			User: handler.server.User, // TODO: email
-		})
-		if sc := a.Reverse.Sniffing; sc != nil && sc.Enabled {
-			request, err := proxymanConfig.BuildSniffingRequest(sc)
-			if err != nil {
-				return nil, errors.New("failed to build reverse sniffing request").Base(err).AtError()
-			}
-			rvsCtx = session.ContextWithContent(rvsCtx, &session.Content{
-				SniffingRequest: request,
-			})
-		}
-		handler.reverse = &Reverse{
-			tag:        a.Reverse.Tag,
-			dispatcher: v.GetFeature(routing.DispatcherType()).(routing.Dispatcher),
-			ctx:        rvsCtx,
-			handler:    handler,
-		}
-		handler.reverse.monitorTask = &task.Periodic{
-			Execute:  handler.reverse.monitor,
-			Interval: time.Second * 2,
-		}
-		go func() {
-			time.Sleep(2 * time.Second)
-			handler.reverse.Start()
-		}()
-	}
+	// Reverse proxy removed for v2w-core
 
 	handler.testpre = a.Testpre
 
@@ -424,66 +387,4 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	return nil
 }
 
-type Reverse struct {
-	tag         string
-	dispatcher  routing.Dispatcher
-	ctx         context.Context
-	handler     *Handler
-	workers     []*reverse.BridgeWorker
-	monitorTask *task.Periodic
-}
-
-func (r *Reverse) monitor() error {
-	var activeWorkers []*reverse.BridgeWorker
-	for _, w := range r.workers {
-		if w.IsActive() {
-			activeWorkers = append(activeWorkers, w)
-		}
-	}
-	if len(activeWorkers) != len(r.workers) {
-		r.workers = activeWorkers
-	}
-
-	var numConnections uint32
-	var numWorker uint32
-	for _, w := range r.workers {
-		if w.IsActive() {
-			numConnections += w.Connections()
-			numWorker++
-		}
-	}
-	if numWorker == 0 || numConnections/numWorker > 16 {
-		reader1, writer1 := pipe.New(pipe.WithSizeLimit(2 * buf.Size))
-		reader2, writer2 := pipe.New(pipe.WithSizeLimit(2 * buf.Size))
-		link1 := &transport.Link{Reader: reader1, Writer: writer2}
-		link2 := &transport.Link{Reader: reader2, Writer: writer1}
-		w := &reverse.BridgeWorker{
-			Tag:        r.tag,
-			Dispatcher: r.dispatcher,
-		}
-		worker, err := mux.NewServerWorker(session.ContextWithIsReverseMux(r.ctx, true), w, link1)
-		if err != nil {
-			errors.LogWarningInner(r.ctx, err, "failed to create mux server worker")
-			return nil
-		}
-		w.Worker = worker
-		r.workers = append(r.workers, w)
-		go func() {
-			ctx := session.ContextWithOutbounds(r.ctx, []*session.Outbound{{
-				Target: net.Destination{Address: net.DomainAddress("v1.rvs.cool")},
-			}})
-			r.handler.Process(ctx, link2, session.FullHandlerFromContext(ctx).(*proxyman.Handler))
-			common.Interrupt(reader1)
-			common.Interrupt(reader2)
-		}()
-	}
-	return nil
-}
-
-func (r *Reverse) Start() error {
-	return r.monitorTask.Start()
-}
-
-func (r *Reverse) Close() error {
-	return r.monitorTask.Close()
-}
+// Reverse struct removed for v2w-core
