@@ -12,7 +12,9 @@ import com.kiktor.v2whitelist.AppConfig.VPN
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.extension.toLongEx
 import com.kiktor.v2whitelist.extension.toast
+import androidx.activity.result.contract.ActivityResultContracts
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.helper.BackupManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
 
@@ -27,6 +29,29 @@ class SettingsActivity : BaseActivity() {
         private val localDns by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_LOCAL_DNS_ENABLED) }
         private val fakeDns by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_FAKE_DNS_ENABLED) }
         private val appendHttpProxy by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_APPEND_HTTP_PROXY) }
+
+        private val exportDataLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri != null) {
+                val success = BackupManager.exportData(requireContext(), uri)
+                if (success) {
+                    requireContext().toast(getString(R.string.msg_export_success))
+                } else {
+                    requireContext().toast(getString(R.string.msg_export_fail))
+                }
+            }
+        }
+
+        private val importDataLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                val success = BackupManager.importData(requireContext(), uri)
+                if (success) {
+                    requireContext().toast(getString(R.string.msg_import_success))
+                } else {
+                    requireContext().toast(getString(R.string.msg_import_fail))
+                }
+            }
+        }
+
 
         //        private val localDnsPort by lazy { findPreference<EditTextPreference>(AppConfig.PREF_LOCAL_DNS_PORT) }
         private val vpnDns by lazy { findPreference<EditTextPreference>(AppConfig.PREF_VPN_DNS) }
@@ -135,6 +160,17 @@ class SettingsActivity : BaseActivity() {
             // Логи
             findPreference<androidx.preference.Preference>("pref_logcat")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), LogcatActivity::class.java))
+                true
+            }
+
+            // Backup & Restore
+            findPreference<androidx.preference.Preference>("pref_export_data")?.setOnPreferenceClickListener {
+                val dateStr = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+                exportDataLauncher.launch("ProBel_Backup_$dateStr.json")
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_import_data")?.setOnPreferenceClickListener {
+                importDataLauncher.launch(arrayOf("application/json", "*/*"))
                 true
             }
         }

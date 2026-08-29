@@ -545,4 +545,15 @@
     <string name="status_actual">Актуальна</string>
     <string name="status_stale">Устарела</string>
     <string name="status_passed_time">%1$s (прошло %2$s)</string>
+
+    <!-- Backup & Restore -->
+    <string name="title_backup_restore">Резервное копирование</string>
+    <string name="title_export_data">Экспорт данных</string>
+    <string name="summary_export_data">Сохранить настройки, серверы и подписки в файл</string>
+    <string name="title_import_data">Импорт данных</string>
+    <string name="summary_import_data">Восстановить настройки, серверы и подписки из файла</string>
+    <string name="msg_export_success">Данные успешно экспортированы</string>
+    <string name="msg_export_fail">Ошибка экспорта данных</string>
+    <string name="msg_import_success">Данные успешно импортированы. Возможно, потребуется перезапуск приложения.</string>
+    <string name="msg_import_fail">Ошибка импорта данных</string>
 </resources>

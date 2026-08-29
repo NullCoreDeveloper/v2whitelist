@@ -567,4 +567,15 @@
     <string name="status_passed_time">%1$s (updated %2$s ago)</string>
     <string name="title_pref_logcat" translatable="false">Logs</string>
     <string name="summary_pref_logcat" translatable="false">View v2ray core and app logs</string>
+
+    <!-- Backup & Restore -->
+    <string name="title_backup_restore">Backup &amp; Restore</string>
+    <string name="title_export_data">Export Data</string>
+    <string name="summary_export_data">Save settings, subscriptions, and servers to a file</string>
+    <string name="title_import_data">Import Data</string>
+    <string name="summary_import_data">Restore settings, subscriptions, and servers from a file</string>
+    <string name="msg_export_success">Data exported successfully</string>
+    <string name="msg_export_fail">Failed to export data</string>
+    <string name="msg_import_success">Data imported successfully. The app might need to be restarted to apply all changes.</string>
+    <string name="msg_import_fail">Failed to import data</string>
 </resources>

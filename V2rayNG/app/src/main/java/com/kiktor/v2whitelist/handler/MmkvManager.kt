@@ -749,6 +749,31 @@ object MmkvManager {
     }
 
     /**
+     * Gets all settings as a map.
+     */
+    fun getAllSettings(): Map<String, *>? {
+        return settingsStorage.all
+    }
+
+    /**
+     * Imports a map of settings.
+     */
+    fun importSettings(settings: Map<String, *>) {
+        for ((key, value) in settings) {
+            when (value) {
+                is String -> encodeSettings(key, value)
+                is Boolean -> encodeSettings(key, value)
+                is Int -> encodeSettings(key, value)
+                is Long -> encodeSettings(key, value)
+                is Float -> encodeSettings(key, value)
+                is Double -> encodeSettings(key, value.toFloat()) // GSON sometimes parses numbers as Double
+                is Number -> encodeSettings(key, value.toDouble().toLong()) // Try fallback for generic Numbers
+                is MutableSet<*> -> encodeSettings(key, value as MutableSet<String>)
+            }
+        }
+    }
+
+    /**
      * Encodes the start on boot setting.
      *
      * @param startOnBoot Whether to start on boot.

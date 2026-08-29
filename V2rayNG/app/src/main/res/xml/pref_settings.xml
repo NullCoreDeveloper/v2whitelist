@@ -369,4 +369,16 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/title_backup_restore">
+        <Preference
+            android:key="pref_export_data"
+            android:summary="@string/summary_export_data"
+            android:title="@string/title_export_data" />
+
+        <Preference
+            android:key="pref_import_data"
+            android:summary="@string/summary_import_data"
+            android:title="@string/title_import_data" />
+    </PreferenceCategory>
+
 </PreferenceScreen>
