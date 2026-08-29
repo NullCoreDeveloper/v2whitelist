@@ -6,8 +6,6 @@ import (
 
 	"github.com/xtls/xray-core/common/ctx"
 	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/features/outbound"
-	"github.com/xtls/xray-core/features/routing"
 )
 
 //go:linkname IndependentCancelCtx context.newCancelCtx
@@ -129,16 +127,7 @@ func TrackedConnectionError(ctx context.Context, tracker TrackedRequestErrorFeed
 	return context.WithValue(ctx, trackedConnectionErrorKey, tracker)
 }
 
-func ContextWithDispatcher(ctx context.Context, dispatcher routing.Dispatcher) context.Context {
-	return context.WithValue(ctx, dispatcherKey, dispatcher)
-}
-
-func DispatcherFromContext(ctx context.Context) routing.Dispatcher {
-	if dispatcher, ok := ctx.Value(dispatcherKey).(routing.Dispatcher); ok {
-		return dispatcher
-	}
-	return nil
-}
+// routing and dispatcher context removed
 
 func ContextWithTimeoutOnly(ctx context.Context, only bool) context.Context {
 	return context.WithValue(ctx, timeoutOnlyKey, only)
@@ -162,16 +151,7 @@ func AllowedNetworkFromContext(ctx context.Context) net.Network {
 	return net.Network_Unknown
 }
 
-func ContextWithFullHandler(ctx context.Context, handler outbound.Handler) context.Context {
-	return context.WithValue(ctx, fullHandlerKey, handler)
-}
-
-func FullHandlerFromContext(ctx context.Context) outbound.Handler {
-	if val, ok := ctx.Value(fullHandlerKey).(outbound.Handler); ok {
-		return val
-	}
-	return nil
-}
+// full handler context removed
 
 func ContextWithMitmAlpn11(ctx context.Context, alpn11 bool) context.Context {
 	return context.WithValue(ctx, mitmAlpn11Key, alpn11)

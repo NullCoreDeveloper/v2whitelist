@@ -19,15 +19,12 @@ import (
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/protocol"
+
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/common/signal"
-	"github.com/xtls/xray-core/features/routing"
-	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/proxy/vless/encryption"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/finalmask"
 	"github.com/xtls/xray-core/transport/internet/reality"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/internet/tls"
@@ -57,45 +54,10 @@ const (
 	CommandPaddingDirect   byte = 0x02
 )
 
-// An Inbound processes inbound connections.
-type Inbound interface {
-	// Network returns a list of networks that this inbound supports. Connections with not-supported networks will not be passed into Process().
-	Network() []net.Network
-
-	// Process processes a connection of given network. If necessary, the Inbound can dispatch the connection to an Outbound.
-	Process(context.Context, net.Network, stat.Connection, routing.Dispatcher) error
-}
-
 // An Outbound process outbound connections.
 type Outbound interface {
 	// Process processes the given connection. The given dialer may be used to dial a system outbound connection.
 	Process(context.Context, *transport.Link, internet.Dialer) error
-}
-
-// UserManager is the interface for Inbounds and Outbounds that can manage their users.
-type UserManager interface {
-	// AddUser adds a new user.
-	AddUser(context.Context, *protocol.MemoryUser) error
-
-	// RemoveUser removes a user by email.
-	RemoveUser(context.Context, string) error
-
-	// Get user by email.
-	GetUser(context.Context, string) *protocol.MemoryUser
-
-	// Get all users.
-	GetUsers(context.Context) []*protocol.MemoryUser
-
-	// Get users count.
-	GetUsersCount(context.Context) int64
-}
-
-type GetInbound interface {
-	GetInbound() Inbound
-}
-
-type GetOutbound interface {
-	GetOutbound() Outbound
 }
 
 // TrafficState is used to track uplink and downlink of one connection
@@ -183,7 +145,7 @@ type VisionReader struct {
 	ob           *session.Outbound
 
 	// internal
-	directReadCounter stats.Counter
+	directReadCounter any
 }
 
 func NewVisionReader(reader buf.Reader, trafficState *TrafficState, isUplink bool, ctx context.Context, conn net.Conn, input *bytes.Reader, rawInput *bytes.Buffer, ob *session.Outbound) *VisionReader {
@@ -225,10 +187,7 @@ func (w *VisionReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 	}
 
 	if *switchToDirectCopy {
-		if w.directReadCounter != nil {
-			w.directReadCounter.Add(int64(buffer.Len()))
-		}
-		return buffer, err
+				return buffer, err
 	}
 
 	if *withinPaddingBuffers || w.trafficState.NumberOfPacketToFilter > 0 {
@@ -295,7 +254,7 @@ type VisionWriter struct {
 
 	// internal
 	writeOnceUserUUID  []byte
-	directWriteCounter stats.Counter
+	directWriteCounter any
 
 	testseed []uint32
 }
@@ -344,10 +303,7 @@ func (w *VisionWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
 		w.directWriteCounter = writerCounter
 		*switchToDirectCopy = false
 	}
-	if !mb.IsEmpty() && w.directWriteCounter != nil {
-		w.directWriteCounter.Add(int64(mb.Len()))
-	}
-
+	
 	if w.trafficState.NumberOfPacketToFilter > 0 {
 		XtlsFilterTls(mb, w.trafficState, w.ctx)
 	}
@@ -669,8 +625,8 @@ func XtlsFilterTls(buffer buf.MultiBuffer, trafficState *TrafficState, ctx conte
 }
 
 // UnwrapRawConn support unwrap encryption, stats, mask wrappers, tls, utls, reality, proxyproto, uds-wrapper conn and get raw tcp/uds conn from it
-func UnwrapRawConn(conn net.Conn) (net.Conn, stats.Counter, stats.Counter) {
-	var readCounter, writerCounter stats.Counter
+func UnwrapRawConn(conn net.Conn) (net.Conn, any, any) {
+	var readCounter, writerCounter any
 	if conn != nil {
 		isEncryption := false
 		if commonConn, ok := conn.(*encryption.CommonConn); ok {
@@ -682,9 +638,7 @@ func UnwrapRawConn(conn net.Conn) (net.Conn, stats.Counter, stats.Counter) {
 		}
 		if statConn, ok := conn.(*stat.CounterConnection); ok {
 			conn = statConn.Connection
-			readCounter = statConn.ReadCounter
-			writerCounter = statConn.WriteCounter
-		}
+					}
 
 		if !isEncryption { // avoids double penetration
 			if xc, ok := conn.(*tls.Conn); ok {
@@ -698,16 +652,11 @@ func UnwrapRawConn(conn net.Conn) (net.Conn, stats.Counter, stats.Counter) {
 			}
 		}
 
-		conn = finalmask.UnwrapTcpMask(conn)
-
-		if pc, ok := conn.(*proxyproto.Conn); ok {
+				if pc, ok := conn.(*proxyproto.Conn); ok {
 			conn = pc.Raw()
 			// 8192 > 4096, there is no need to process pc's bufReader
 		}
-		if uc, ok := conn.(*internet.UnixConnWrapper); ok {
-			conn = uc.UnixConn
-		}
-	}
+			}
 	return conn, readCounter, writerCounter
 }
 
@@ -716,7 +665,7 @@ func UnwrapRawConn(conn net.Conn) (net.Conn, stats.Counter, stats.Counter) {
 // - writer are from *transport.Link
 func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net.Conn, writer buf.Writer, timer *signal.ActivityTimer, inTimer *signal.ActivityTimer) error {
 	readerConn, readCounter, _ := UnwrapRawConn(readerConn)
-	writerConn, _, writeCounter := UnwrapRawConn(writerConn)
+	writerConn, _, _ = UnwrapRawConn(writerConn)
 	reader := buf.NewReader(readerConn)
 	if runtime.GOOS != "linux" && runtime.GOOS != "android" {
 		return readV(ctx, reader, writer, timer, readCounter)
@@ -755,24 +704,15 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 			if inTimer != nil {
 				inTimer.SetTimeout(24 * time.Hour)
 			}
-			w, err := tc.ReadFrom(readerConn)
-			if readCounter != nil {
-				readCounter.Add(w) // outbound stats
-			}
-			if writeCounter != nil {
-				writeCounter.Add(w) // inbound stats
-			}
-			if err != nil && errors.Cause(err) != io.EOF {
+			_, err := tc.ReadFrom(readerConn)
+									if err != nil && errors.Cause(err) != io.EOF {
 				return err
 			}
 			return nil
 		}
 		buffer, err := reader.ReadMultiBuffer()
 		if !buffer.IsEmpty() {
-			if readCounter != nil {
-				readCounter.Add(int64(buffer.Len()))
-			}
-			timer.Update()
+						timer.Update()
 			if werr := writer.WriteMultiBuffer(buffer); werr != nil {
 				return werr
 			}
@@ -786,7 +726,7 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 	}
 }
 
-func readV(ctx context.Context, reader buf.Reader, writer buf.Writer, timer signal.ActivityUpdater, readCounter stats.Counter) error {
+func readV(ctx context.Context, reader buf.Reader, writer buf.Writer, timer signal.ActivityUpdater, readCounter any) error {
 	errors.LogDebug(ctx, "CopyRawConn (maybe) readv")
 	if err := buf.Copy(reader, writer, buf.UpdateActivity(timer), buf.AddToStatCounter(readCounter)); err != nil {
 		return errors.New("failed to process response").Base(err)
@@ -796,9 +736,7 @@ func readV(ctx context.Context, reader buf.Reader, writer buf.Writer, timer sign
 
 func IsRAWTransportWithoutSecurity(conn stat.Connection) bool {
 	iConn := stat.TryUnwrapStatsConn(conn)
-	iConn = finalmask.UnwrapTcpMask(iConn)
 	_, ok1 := iConn.(*proxyproto.Conn)
 	_, ok2 := iConn.(*net.TCPConn)
-	_, ok3 := iConn.(*internet.UnixConnWrapper)
-	return ok1 || ok2 || ok3
+	return ok1 || ok2
 }

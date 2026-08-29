@@ -8,8 +8,6 @@ import (
 
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/features/dns"
-	"github.com/xtls/xray-core/features/outbound"
 )
 
 var (
@@ -24,8 +22,6 @@ type SystemDialer interface {
 }
 
 type DefaultSystemDialer struct {
-	dns dns.Client
-	obm outbound.Manager
 }
 
 func resolveSrcAddr(network net.Network, src net.Address) net.Addr {

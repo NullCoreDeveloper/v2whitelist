@@ -22,9 +22,6 @@ import (
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/common/signal"
 	"github.com/xtls/xray-core/common/task"
-	"github.com/xtls/xray-core/common/session"
-	"github.com/xtls/xray-core/common/signal"
-	"github.com/xtls/xray-core/common/task"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 	"golang.zx2c4.com/wireguard/device"
@@ -36,9 +33,9 @@ type entry struct {
 }
 
 type Handler struct {
-	conf          *DeviceConfig
+	conf *DeviceConfig
 
-	streamSettings  *internet.MemoryStreamConfig
+	streamSettings *internet.MemoryStreamConfig
 
 	tun  tun.Device
 	tnet *Net
@@ -53,7 +50,6 @@ type Handler struct {
 
 func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 	streamSettings, _ := session.StreamSettingsFromContext(ctx).(*internet.MemoryStreamConfig)
-
 
 	if len(conf.Peers) == 0 {
 		return nil, errors.New("empty peers")
@@ -114,9 +110,9 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 	}
 
 	return &Handler{
-		conf:          conf,
+		conf: conf,
 
-		streamSettings:  streamSettings,
+		streamSettings: streamSettings,
 
 		tun:  tun,
 		tnet: tnet,
@@ -147,7 +143,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	if !addrPort.IsValid() {
 		return errors.New("invalid target ", destination)
 	}
-
 
 	var newCtx context.Context
 	var newCancel context.CancelFunc
@@ -197,7 +192,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		reader = c
 		writer = c
 	default:
-		panic(ob.Target.Network)
+		panic("unknown network")
 	}
 
 	requestFunc := func() error {
@@ -262,14 +257,7 @@ func (h *Handler) init(ctx context.Context) error {
 		default:
 			panic(reflect.TypeOf(c))
 		}
-		if h.streamSettings.UdpmaskManager != nil {
-			newConn, err := h.streamSettings.UdpmaskManager.WrapPacketConnClient(pktConn)
-			if err != nil {
-				pktConn.Close()
-				return nil, errors.New("mask err").Base(err)
-			}
-			pktConn = newConn
-		}
+		return pktConn, nil
 		return pktConn, nil
 	}
 	bind := &bind{}

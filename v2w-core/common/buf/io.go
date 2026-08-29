@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/transport/internet/stat"
 )
 
@@ -30,7 +29,6 @@ type TimeoutReader interface {
 
 type TimeoutWrapperReader struct {
 	Reader
-	stats.Counter
 	mb   MultiBuffer
 	err  error
 	done chan struct{}
@@ -40,15 +38,9 @@ func (r *TimeoutWrapperReader) ReadMultiBuffer() (MultiBuffer, error) {
 	if r.done != nil {
 		<-r.done
 		r.done = nil
-		if r.Counter != nil {
-			r.Counter.Add(int64(r.mb.Len()))
-		}
 		return r.mb, r.err
 	}
 	r.mb, r.err = r.Reader.ReadMultiBuffer()
-	if r.Counter != nil {
-		r.Counter.Add(int64(r.mb.Len()))
-	}
 	return r.mb, r.err
 }
 
@@ -68,9 +60,6 @@ func (r *TimeoutWrapperReader) ReadMultiBufferTimeout(duration time.Duration) (M
 	select {
 	case <-r.done:
 		r.done = nil
-		if r.Counter != nil {
-			r.Counter.Add(int64(r.mb.Len()))
-		}
 		return r.mb, r.err
 	case <-timeout:
 		return nil, nil
@@ -84,17 +73,9 @@ type Writer interface {
 }
 
 // WriteAllBytes ensures all bytes are written into the given writer.
-func WriteAllBytes(writer io.Writer, payload []byte, c stats.Counter) error {
-	wc := 0
-	defer func() {
-		if c != nil {
-			c.Add(int64(wc))
-		}
-	}()
-
+func WriteAllBytes(writer io.Writer, payload []byte, c any) error {
 	for len(payload) > 0 {
 		n, err := writer.Write(payload)
-		wc += n
 		if err != nil {
 			return err
 		}
@@ -128,11 +109,10 @@ func NewReader(reader io.Reader) Reader {
 			if err != nil {
 				errors.LogInfoInner(context.Background(), err, "failed to get sysconn")
 			} else {
-				var counter stats.Counter
+				var counter any
 
 				if statConn, ok := reader.(*stat.CounterConnection); ok {
 					reader = statConn.Connection
-					counter = statConn.ReadCounter
 				}
 				return NewReadVReader(reader, rawConn, counter)
 			}
@@ -184,13 +164,8 @@ func NewWriter(writer io.Writer) Writer {
 		}
 	}
 
-	var counter stats.Counter
-
-	if statConn, ok := writer.(*stat.CounterConnection); ok {
-		counter = statConn.WriteCounter
-	}
 	return &BufferToBytesWriter{
 		Writer:  iConn,
-		counter: counter,
+		counter: nil,
 	}
 }

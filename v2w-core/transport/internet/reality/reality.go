@@ -28,7 +28,6 @@ import (
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/utils"
-	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/transport/internet/tls"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/net/http2"
@@ -140,10 +139,10 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 		hello := uConn.HandshakeState.Hello
 		hello.SessionId = make([]byte, 32)
 		copy(hello.Raw[39:], hello.SessionId) // the fixed location of `Session ID`
-		hello.SessionId[0] = core.Version_x
-		hello.SessionId[1] = core.Version_y
-		hello.SessionId[2] = core.Version_z
-		hello.SessionId[3] = 0 // reserved
+		hello.SessionId[0] = 1                // core.Version_x
+		hello.SessionId[1] = 8                // core.Version_y
+		hello.SessionId[2] = 4                // core.Version_z
+		hello.SessionId[3] = 0                // reserved
 		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(time.Now().Unix()))
 		copy(hello.SessionId[8:], config.ShortId)
 		if config.Show {

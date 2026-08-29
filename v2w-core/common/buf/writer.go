@@ -7,14 +7,13 @@ import (
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/features/stats"
 )
 
 // BufferToBytesWriter is a Writer that writes alloc.Buffer into underlying writer.
 type BufferToBytesWriter struct {
 	io.Writer
 
-	counter stats.Counter
+	counter any
 	cache   [][]byte
 }
 
@@ -50,7 +49,6 @@ func (w *BufferToBytesWriter) WriteMultiBuffer(mb MultiBuffer) error {
 	wc := int64(0)
 	defer func() {
 		if w.counter != nil {
-			w.counter.Add(wc)
 		}
 	}()
 	for size > 0 {

@@ -12,14 +12,8 @@ import (
 	"unsafe"
 
 	utls "github.com/refraction-networking/utls"
-	proxymanConfig "github.com/xtls/xray-core/app/proxyman"
-	proxyman "github.com/xtls/xray-core/app/proxyman/outbound"
-	"github.com/xtls/xray-core/app/reverse"
-	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
-	xctx "github.com/xtls/xray-core/common/ctx"
 	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/mux"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/retry"
@@ -27,9 +21,6 @@ import (
 	"github.com/xtls/xray-core/common/signal"
 	"github.com/xtls/xray-core/common/task"
 	"github.com/xtls/xray-core/common/xudp"
-	"github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/features/policy"
-	"github.com/xtls/xray-core/features/routing"
 	"github.com/xtls/xray-core/proxy"
 	"github.com/xtls/xray-core/proxy/vless"
 	"github.com/xtls/xray-core/proxy/vless/encoding"
@@ -39,16 +30,15 @@ import (
 	"github.com/xtls/xray-core/transport/internet/reality"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/internet/tls"
-	"github.com/xtls/xray-core/transport/pipe"
 )
 
 // init removed for v2w-core
 
 // Handler is an outbound connection handler for VLess protocol.
 type Handler struct {
-	server        *protocol.ServerSpec
-	cone          bool
-	encryption    *encryption.ClientInstance
+	server     *protocol.ServerSpec
+	cone       bool
+	encryption *encryption.ClientInstance
 
 	testpre  uint32
 	initpre  sync.Once
@@ -71,8 +61,8 @@ func New(ctx context.Context, config *Config) (*Handler, error) {
 	}
 
 	handler := &Handler{
-		server:        server,
-		cone:          false, // Hardcoded for scanner
+		server: server,
+		cone:   false, // Hardcoded for scanner
 	}
 
 	a := handler.server.User.Account.(*vless.MemoryAccount)
@@ -101,9 +91,7 @@ func (h *Handler) Close() error {
 	if h.preConns != nil {
 		close(h.preConns)
 	}
-	if h.reverse != nil {
-		return h.reverse.Close()
-	}
+
 	return nil
 }
 
@@ -214,7 +202,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		// default
 	}
 
-
 	var newCtx context.Context
 	var newCancel context.CancelFunc
 	if session.TimeoutOnlyFromContext(ctx) {
@@ -228,7 +215,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			newCancel()
 		}
 	}, 10*time.Second) // Hardcoded for scanner
-
 
 	clientReader := link.Reader // .(*pipe.Reader)
 	clientWriter := link.Writer // .(*pipe.Writer)

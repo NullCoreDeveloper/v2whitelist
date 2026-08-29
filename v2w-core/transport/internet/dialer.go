@@ -2,7 +2,9 @@ package internet
 
 import (
 	"context"
+	"fmt"
 	stdnet "net"
+	"strings"
 
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
@@ -83,7 +85,6 @@ func LookupForIP(domain string, strategy DomainStrategy, localAddr net.Address) 
 	}
 	return res, nil
 }
-
 
 func checkAddressPortStrategy(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (*net.Destination, error) {
 	if sockopt.AddressPortStrategy == AddressPortStrategy_None {

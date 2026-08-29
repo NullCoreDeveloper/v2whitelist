@@ -12,7 +12,6 @@ import (
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/browser_dialer"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/internet/tls"
 )
@@ -53,14 +52,6 @@ func dialWebSocket(ctx context.Context, dest net.Destination, streamSettings *in
 				return nil, err
 			}
 
-			if streamSettings.TcpmaskManager != nil {
-				newConn, err := streamSettings.TcpmaskManager.WrapConnClient(conn)
-				if err != nil {
-					conn.Close()
-					return nil, errors.New("mask err").Base(err)
-				}
-				conn = newConn
-			}
 
 			return conn, err
 		},
@@ -85,14 +76,6 @@ func dialWebSocket(ctx context.Context, dest net.Destination, streamSettings *in
 					return nil, err
 				}
 
-				if streamSettings.TcpmaskManager != nil {
-					newConn, err := streamSettings.TcpmaskManager.WrapConnClient(pconn)
-					if err != nil {
-						pconn.Close()
-						return nil, errors.New("mask err").Base(err)
-					}
-					pconn = newConn
-				}
 
 				// TLS and apply the handshake
 				cn := tls.UClient(pconn, tlsConfig, fingerprint).(*tls.UConn)
@@ -111,27 +94,7 @@ func dialWebSocket(ctx context.Context, dest net.Destination, streamSettings *in
 		}
 	}
 
-	if browser_dialer.HasBrowserDialer() {
-		// For Browser Dialer's optimized IP and non-standard port
-		host := wsSettings.Host
-		if host == "" && tConfig.ServerName != "" {
-			host = tConfig.ServerName
-		}
-		if host == "" {
-			host = dest.Address.String()
-		}
-		if !(protocol == "ws" && dest.Port == 80) && !(protocol == "wss" && dest.Port == 443) {
-			host += ":" + dest.Port.String()
-		}
-		uri := protocol + "://" + host + wsSettings.GetNormalizedPath()
-
-		conn, err := browser_dialer.DialWS(uri, ed)
-		if err != nil {
-			return nil, err
-		}
-
-		return NewConnection(conn, conn.RemoteAddr(), nil, wsSettings.HeartbeatPeriod), nil
-	}
+	// browser_dialer removed
 
 	host := dest.Address.String()
 	if !(protocol == "ws" && dest.Port == 80) && !(protocol == "wss" && dest.Port == 443) {

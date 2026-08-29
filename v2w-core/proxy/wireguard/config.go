@@ -1,12 +1,23 @@
 package wireguard
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"net/netip"
 
 	"github.com/xtls/xray-core/common/protocol"
 	"google.golang.org/protobuf/proto"
 )
+
+func ParseKey(key string) ([32]byte, error) {
+	var k [32]byte
+	b, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return k, err
+	}
+	copy(k[:], b)
+	return k, nil
+}
 
 func (p *PeerConfig) AsAccount() (protocol.Account, error) {
 	pub, err := ParseKey(p.PublicKey)
@@ -24,12 +35,13 @@ func (p *PeerConfig) AsAccount() (protocol.Account, error) {
 	}
 
 	return &MemoryAccount{
-		Pub:          *pub,
+		Pub:          pub,
 		AllowedIPs:   allowedIPs,
 		PreSharedKey: p.PreSharedKey,
 		KeepAlive:    p.KeepAlive,
 	}, nil
 }
+
 
 type MemoryAccount struct {
 	Pub          [32]byte

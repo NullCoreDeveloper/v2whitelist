@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
@@ -13,8 +12,6 @@ import (
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/common/signal"
 	"github.com/xtls/xray-core/common/task"
-	core "github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/features/policy"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/stat"
@@ -22,8 +19,7 @@ import (
 
 // Client is a inbound handler for trojan protocol
 type Client struct {
-	server        *protocol.ServerSpec
-	policyManager policy.Manager
+	server *protocol.ServerSpec
 }
 
 // NewClient create a new trojan client.
@@ -36,24 +32,14 @@ func NewClient(ctx context.Context, config *ClientConfig) (*Client, error) {
 		return nil, errors.New("failed to get server spec").Base(err)
 	}
 
-	v := core.MustFromContext(ctx)
 	client := &Client{
-		server:        server,
-		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
+		server: server,
 	}
 	return client, nil
 }
 
 // Process implements OutboundHandler.Process().
-func (c *Client) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer) error {
-	outbounds := session.OutboundsFromContext(ctx)
-	ob := outbounds[len(outbounds)-1]
-	if !ob.Target.IsValid() {
-		return errors.New("target not specified")
-	}
-	ob.Name = "trojan"
-	ob.CanSpliceCopy = 3
-	destination := ob.Target
+func (c *Client) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, destination net.Destination) error {
 	network := destination.Network
 
 	server := c.server
@@ -87,17 +73,16 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		newCtx, newCancel = context.WithCancel(context.Background())
 	}
 
-	sessionPolicy := c.policyManager.ForLevel(user.Level)
 	ctx, cancel := context.WithCancel(ctx)
 	timer := signal.CancelAfterInactivity(ctx, func() {
 		cancel()
 		if newCancel != nil {
 			newCancel()
 		}
-	}, sessionPolicy.Timeouts.ConnectionIdle)
+	}, 10*time.Second) // Hardcoded for scanner
 
 	postRequest := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded uplink timeout
 
 		bufferWriter := buf.NewBufferedWriter(buf.NewWriter(conn))
 
@@ -137,7 +122,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 	}
 
 	getResponse := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded downlink timeout
 
 		var reader buf.Reader
 		if network == net.Network_UDP {
@@ -162,8 +147,4 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 	return nil
 }
 
-func init() {
-	common.Must(common.RegisterConfig((*ClientConfig)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
-		return NewClient(ctx, config.(*ClientConfig))
-	}))
-}
+// init removed for v2w-core

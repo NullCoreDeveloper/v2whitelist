@@ -7,12 +7,12 @@
 package vless
 
 import (
-	proxyman "github.com/xtls/xray-core/app/proxyman"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -23,9 +23,9 @@ const (
 )
 
 type Reverse struct {
-	state         protoimpl.MessageState   `protogen:"open.v1"`
-	Tag           string                   `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
-	Sniffing      *proxyman.SniffingConfig `protobuf:"bytes,2,opt,name=sniffing,proto3" json:"sniffing,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tag           string                 `protobuf:"bytes,1,opt,name=tag,proto3" json:"tag,omitempty"`
+	Sniffing      any                    `protobuf:"bytes,2,opt,name=sniffing,proto3" json:"sniffing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -67,7 +67,7 @@ func (x *Reverse) GetTag() string {
 	return ""
 }
 
-func (x *Reverse) GetSniffing() *proxyman.SniffingConfig {
+func (x *Reverse) GetSniffing() any {
 	if x != nil {
 		return x.Sniffing
 	}
@@ -220,9 +220,9 @@ func file_proxy_vless_account_proto_rawDescGZIP() []byte {
 
 var file_proxy_vless_account_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proxy_vless_account_proto_goTypes = []any{
-	(*Reverse)(nil),                 // 0: xray.proxy.vless.Reverse
-	(*Account)(nil),                 // 1: xray.proxy.vless.Account
-	(*proxyman.SniffingConfig)(nil), // 2: xray.app.proxyman.SniffingConfig
+	(*Reverse)(nil), // 0: xray.proxy.vless.Reverse
+	(*Account)(nil), // 1: xray.proxy.vless.Account
+	(any)(nil),      // 2: xray.app.proxyman.SniffingConfig
 }
 var file_proxy_vless_account_proto_depIdxs = []int32{
 	2, // 0: xray.proxy.vless.Reverse.sniffing:type_name -> xray.app.proxyman.SniffingConfig

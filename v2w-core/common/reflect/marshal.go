@@ -9,7 +9,6 @@ import (
 
 	cnet "github.com/xtls/xray-core/common/net"
 	cserial "github.com/xtls/xray-core/common/serial"
-	"github.com/xtls/xray-core/infra/conf"
 )
 
 func MarshalToJson(v interface{}, insertTypeInfo bool) (string, bool) {
@@ -183,15 +182,6 @@ func marshalKnownType(v interface{}, ignoreNullValue bool, insertTypeInfo bool) 
 	case *cnet.PortList:
 		npl := v.(*cnet.PortList)
 		return serializePortList(npl)
-	case *conf.PortList:
-		cpl := v.(*conf.PortList)
-		return serializePortList(cpl.Build())
-	case conf.Int32Range:
-		i32rng := v.(conf.Int32Range)
-		if i32rng.Left == i32rng.Right {
-			return i32rng.Left, true
-		}
-		return i32rng.String(), true
 	case cnet.Address:
 		if addr := v.(cnet.Address); addr != nil {
 			return addr.String(), true
