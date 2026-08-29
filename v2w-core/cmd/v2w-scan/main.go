@@ -20,7 +20,9 @@ import (
 	vless_outbound "github.com/xtls/xray-core/proxy/vless/outbound"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/grpc"
+	"github.com/xtls/xray-core/transport/internet/httpupgrade"
 	"github.com/xtls/xray-core/transport/internet/reality"
+	"github.com/xtls/xray-core/transport/internet/splithttp"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/internet/tcp"
 	"github.com/xtls/xray-core/transport/internet/tls"
@@ -89,6 +91,43 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 				"Host": q.Get("host"),
 			},
 		}
+	case "xhttp":
+		streamSettings.ProtocolName = "splithttp"
+		config := &splithttp.Config{
+			Path: q.Get("path"),
+			Host: q.Get("host"),
+			Mode: q.Get("mode"),
+			Headers: map[string]string{
+				"Host": q.Get("host"),
+			},
+		}
+		parseRange := func(s string) *splithttp.RangeConfig {
+			if s == "" {
+				return nil
+			}
+			parts := strings.Split(s, "-")
+			if len(parts) == 1 {
+				v, _ := strconv.Atoi(parts[0])
+				return &splithttp.RangeConfig{From: int32(v), To: int32(v)}
+			}
+			from, _ := strconv.Atoi(parts[0])
+			to, _ := strconv.Atoi(parts[1])
+			return &splithttp.RangeConfig{From: int32(from), To: int32(to)}
+		}
+		config.XPaddingBytes = parseRange(q.Get("x_padding_bytes"))
+		if config.XPaddingBytes == nil {
+			config.XPaddingBytes = parseRange(q.Get("xPaddingBytes"))
+		}
+		streamSettings.ProtocolSettings = config
+	case "httpupgrade":
+		streamSettings.ProtocolName = "httpupgrade"
+		streamSettings.ProtocolSettings = &httpupgrade.Config{
+			Path: q.Get("path"),
+			Host: q.Get("host"),
+			Header: map[string]string{
+				"Host": q.Get("host"),
+			},
+		}
 	case "grpc":
 		streamSettings.ProtocolSettings = &grpc.Config{
 			ServiceName: q.Get("serviceName"),
@@ -99,10 +138,20 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 
 	switch security {
 	case "tls":
+		streamSettings.SecurityType = "tls"
+		alpn := q.Get("alpn")
+		var nextProtocol []string
+		if alpn != "" {
+			for _, p := range strings.Split(alpn, ",") {
+				nextProtocol = append(nextProtocol, strings.TrimSpace(p))
+			}
+		}
 		streamSettings.SecuritySettings = &tls.Config{
-			ServerName: q.Get("sni"),
+			ServerName:   q.Get("sni"),
+			NextProtocol: nextProtocol,
 		}
 	case "reality":
+		streamSettings.SecurityType = "reality"
 		pbkBytes, _ := base64.RawURLEncoding.DecodeString(q.Get("pbk"))
 		shortId, _ := hex.DecodeString(q.Get("sid"))
 		streamSettings.SecuritySettings = &reality.Config{
@@ -136,12 +185,10 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 }
 
 func main() {
-	resp, err := http.Get("https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt")
+	resp, err := http.Get("https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt")
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
-
 	var links []string
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -150,8 +197,6 @@ func main() {
 			links = append(links, line)
 		}
 	}
-
-	fmt.Printf("Fetched %d VLESS links. Starting mass scan with concurrency limit of 30...\n", len(links))
 
 	var wg sync.WaitGroup
 	coreScanner := core.NewScanner()
@@ -181,18 +226,21 @@ func main() {
 			}
 
 			dialer := &customDialer{streamSettings: stream}
-			
+
 			name := "Unknown"
 			if idx := strings.Index(l, "#"); idx != -1 {
 				name, _ = url.QueryUnescape(l[idx+1:])
 			}
 
-			res := coreScanner.TestNode(context.Background(), handler, dialer, dest)
+			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 80)
+			res := coreScanner.TestNode(context.Background(), handler, dialer, targetDest)
+			
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
 				fmt.Printf("[SUCCESS] %v | %s | %s\n", res.Latency, dest.String(), name)
 			} else {
 				atomic.AddInt32(&failCount, 1)
+				fmt.Printf("[FAILED] %s (%v)\n", dest.String(), res.Error)
 			}
 		}(link)
 	}

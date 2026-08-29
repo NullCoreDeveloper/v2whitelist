@@ -45,7 +45,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		Writer: buf.NewWriter(downW),
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	errChan := make(chan error, 1)
