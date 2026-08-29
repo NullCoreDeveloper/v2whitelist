@@ -108,48 +108,9 @@ func (h *Handler) Close() error {
 }
 
 // Process implements proxy.Outbound.Process().
-func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer) error {
-	outbounds := session.OutboundsFromContext(ctx)
-	ob := outbounds[len(outbounds)-1]
-	if !ob.Target.IsValid() && ob.Target.Address.String() != "v1.rvs.cool" {
-		return errors.New("target not specified").AtError()
-	}
-	ob.Name = "vless"
-
+func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target net.Destination) error {
 	rec := h.server
 	var conn stat.Connection
-
-	if h.testpre > 0 && h.reverse == nil {
-		h.initpre.Do(func() {
-			h.preConns = make(chan *ConnExpire)
-			for range h.testpre { // TODO: randomize
-				go func() {
-					defer func() { recover() }()
-					ctx := xctx.ContextWithID(context.Background(), session.NewID())
-					for {
-						conn, err := dialer.Dial(ctx, rec.Destination)
-						if err != nil {
-							errors.LogWarningInner(ctx, err, "pre-connect failed")
-							continue
-						}
-						h.preConns <- &ConnExpire{Conn: conn, Expire: time.Now().Add(time.Minute * 2)} // TODO: customize & randomize
-						time.Sleep(time.Millisecond * 200)                                             // TODO: customize & randomize
-					}
-				}()
-			}
-		})
-		for {
-			connTime := <-h.preConns
-			if connTime == nil {
-				return errors.New("closed handler").AtWarning()
-			}
-			if time.Now().Before(connTime.Expire) {
-				conn = connTime.Conn
-				break
-			}
-			connTime.Conn.Close()
-		}
-	}
 
 	if conn == nil {
 		if err := retry.ExponentialBackoff(5, 200).On(func() error {
@@ -165,10 +126,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 	defer conn.Close()
 
-	ob.Conn = conn // for Vision's pre-connect
-
 	iConn := stat.TryUnwrapStatsConn(conn)
-	target := ob.Target
 	errors.LogInfo(ctx, "tunneling request to ", target, " via ", rec.Destination.NetAddr())
 
 	if h.encryption != nil {
@@ -217,7 +175,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		requestAddons.Flow = requestAddons.Flow[:16]
 		fallthrough
 	case vless.XRV:
-		ob.CanSpliceCopy = 2
 		switch request.Command {
 		case protocol.RequestCommandUDP:
 			if !allowUDP443 && request.Port == 443 {
@@ -230,7 +187,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			var p uintptr
 			if commonConn, ok := conn.(*encryption.CommonConn); ok {
 				if _, ok := commonConn.Conn.(*encryption.XorConn); ok || !proxy.IsRAWTransportWithoutSecurity(iConn) {
-					ob.CanSpliceCopy = 3 // full-random xorConn / non-RAW transport / another securityConn should not be penetrated
+					// skipped CanSpliceCopy
 				}
 				t = reflect.TypeOf(commonConn).Elem()
 				p = uintptr(unsafe.Pointer(commonConn))
@@ -254,8 +211,9 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			panic("unknown VLESS request command")
 		}
 	default:
-		ob.CanSpliceCopy = 3
+		// default
 	}
+
 
 	var newCtx context.Context
 	var newCancel context.CancelFunc
@@ -263,14 +221,14 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		newCtx, newCancel = context.WithCancel(context.Background())
 	}
 
-	sessionPolicy := h.policyManager.ForLevel(request.User.Level)
 	ctx, cancel := context.WithCancel(ctx)
 	timer := signal.CancelAfterInactivity(ctx, func() {
 		cancel()
 		if newCancel != nil {
 			newCancel()
 		}
-	}, sessionPolicy.Timeouts.ConnectionIdle)
+	}, 10*time.Second) // Hardcoded for scanner
+
 
 	clientReader := link.Reader // .(*pipe.Reader)
 	clientWriter := link.Writer // .(*pipe.Writer)
@@ -282,7 +240,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	postRequest := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded uplink timeout
 
 		bufferWriter := buf.NewBufferedWriter(buf.NewWriter(conn))
 		if err := encoding.EncodeRequestHeader(bufferWriter, request, requestAddons); err != nil {
@@ -290,7 +248,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		}
 
 		// default: serverWriter := bufferWriter
-		serverWriter := encoding.EncodeBodyAddons(bufferWriter, request, requestAddons, trafficState, true, ctx, conn, ob)
+		serverWriter := encoding.EncodeBodyAddons(bufferWriter, request, requestAddons, trafficState, true, ctx, conn, nil) // ob is nil now
 		if request.Command == protocol.RequestCommandMux && request.Port == 666 {
 			serverWriter = xudp.NewPacketWriter(serverWriter, target, xudp.GetGlobalID(ctx))
 		}
@@ -342,7 +300,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	getResponse := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded downlink timeout
 
 		responseAddons, err := encoding.DecodeResponseHeader(conn, request)
 		if err != nil {
@@ -352,7 +310,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		// default: serverReader := buf.NewReader(conn)
 		serverReader := encoding.DecodeBodyAddons(conn, request, responseAddons)
 		if requestAddons.Flow == vless.XRV {
-			serverReader = proxy.NewVisionReader(serverReader, trafficState, false, ctx, conn, input, rawInput, ob)
+			serverReader = proxy.NewVisionReader(serverReader, trafficState, false, ctx, conn, input, rawInput, nil) // ob is nil now
 		}
 		if request.Command == protocol.RequestCommandMux && request.Port == 666 {
 			if requestAddons.Flow == vless.XRV {

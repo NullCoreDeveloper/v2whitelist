@@ -22,10 +22,9 @@ import (
 	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/common/signal"
 	"github.com/xtls/xray-core/common/task"
-	"github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/features/dns"
-	"github.com/xtls/xray-core/features/policy"
-	"github.com/xtls/xray-core/features/stats"
+	"github.com/xtls/xray-core/common/session"
+	"github.com/xtls/xray-core/common/signal"
+	"github.com/xtls/xray-core/common/task"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 	"golang.zx2c4.com/wireguard/device"
@@ -38,12 +37,8 @@ type entry struct {
 
 type Handler struct {
 	conf          *DeviceConfig
-	policyManager policy.Manager
-	dns           dns.Client
 
 	streamSettings  *internet.MemoryStreamConfig
-	uplinkCounter   stats.Counter
-	downlinkCounter stats.Counter
 
 	tun  tun.Device
 	tnet *Net
@@ -57,30 +52,8 @@ type Handler struct {
 }
 
 func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
-	v := core.MustFromContext(ctx)
-	p := v.GetFeature(policy.ManagerType()).(policy.Manager)
-	d := v.GetFeature(dns.ClientType()).(dns.Client)
+	streamSettings, _ := session.StreamSettingsFromContext(ctx).(*internet.MemoryStreamConfig)
 
-	streamSettings := session.StreamSettingsFromContext(ctx).(*internet.MemoryStreamConfig)
-	tag := session.FullHandlerFromContext(ctx).Tag()
-	var uplinkCounter stats.Counter
-	var downlinkCounter stats.Counter
-	if len(tag) > 0 && p.ForSystem().Stats.OutboundUplink {
-		statsManager := v.GetFeature(stats.ManagerType()).(stats.Manager)
-		name := "outbound>>>" + tag + ">>>traffic>>>uplink"
-		c, _ := statsManager.GetOrRegisterCounter(name)
-		if c != nil {
-			uplinkCounter = c
-		}
-	}
-	if len(tag) > 0 && p.ForSystem().Stats.OutboundDownlink {
-		statsManager := v.GetFeature(stats.ManagerType()).(stats.Manager)
-		name := "outbound>>>" + tag + ">>>traffic>>>downlink"
-		c, _ := statsManager.GetOrRegisterCounter(name)
-		if c != nil {
-			downlinkCounter = c
-		}
-	}
 
 	if len(conf.Peers) == 0 {
 		return nil, errors.New("empty peers")
@@ -142,12 +115,8 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 
 	return &Handler{
 		conf:          conf,
-		policyManager: p,
-		dns:           d,
 
 		streamSettings:  streamSettings,
-		uplinkCounter:   uplinkCounter,
-		downlinkCounter: downlinkCounter,
 
 		tun:  tun,
 		tnet: tnet,
@@ -158,35 +127,27 @@ func NewClient(ctx context.Context, conf *DeviceConfig) (*Handler, error) {
 }
 
 // Process implements proxy.Outbound.Process.
-func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer) error {
-	outbounds := session.OutboundsFromContext(ctx)
-	ob := outbounds[len(outbounds)-1]
-	if !ob.Target.IsValid() {
-		return errors.New("target not specified")
-	}
-	ob.Name = "wireguard"
-	ob.CanSpliceCopy = 3
-	dialer.SetOutboundGateway(ctx, ob)
-
+func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, destination net.Destination) error {
 	if err := h.init(ctx); err != nil {
 		return err
 	}
 
 	var addr netip.Addr
-	if ob.Target.Address.Family().IsDomain() {
-		ip, err := h.resolveRemote(ob.Target.Address.String())
+	if destination.Address.Family().IsDomain() {
+		ip, err := h.resolveRemote(destination.Address.String())
 		if err != nil {
 			return errors.New("failed to resolve domain").Base(err)
 		}
 		addr, _ = netip.AddrFromSlice(ip)
 	} else {
-		addr, _ = netip.AddrFromSlice(ob.Target.Address.IP())
+		addr, _ = netip.AddrFromSlice(destination.Address.IP())
 	}
 
-	addrPort := netip.AddrPortFrom(addr, ob.Target.Port.Value())
+	addrPort := netip.AddrPortFrom(addr, destination.Port.Value())
 	if !addrPort.IsValid() {
-		return errors.New("invalid target ", ob.Target)
+		return errors.New("invalid target ", destination)
 	}
+
 
 	var newCtx context.Context
 	var newCancel context.CancelFunc
@@ -194,14 +155,13 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		newCtx, newCancel = context.WithCancel(context.Background())
 	}
 
-	sessionPolicy := h.policyManager.ForLevel(0)
 	ctx, cancel := context.WithCancel(ctx)
 	timer := signal.CancelAfterInactivity(ctx, func() {
 		cancel()
 		if newCancel != nil {
 			newCancel()
 		}
-	}, sessionPolicy.Timeouts.ConnectionIdle)
+	}, 10*time.Second) // Hardcoded for scanner
 
 	if newCtx != nil {
 		ctx = newCtx
@@ -210,17 +170,13 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	var reader buf.Reader
 	var writer buf.Writer
 
-	switch ob.Target.Network {
+	switch destination.Network {
 	case net.Network_TCP:
 		var conn net.Conn
 		var err error
-		if sessionPolicy.Timeouts.Handshake != 0 {
-			timeoutCtx, timeoutCancel := context.WithTimeout(ctx, sessionPolicy.Timeouts.Handshake)
-			conn, err = h.tnet.DialContextTCPAddrPort(timeoutCtx, addrPort)
-			timeoutCancel()
-		} else {
-			conn, err = h.tnet.DialContextTCPAddrPort(ctx, addrPort)
-		}
+		timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 10*time.Second)
+		conn, err = h.tnet.DialContextTCPAddrPort(timeoutCtx, addrPort)
+		timeoutCancel()
 		if err != nil {
 			return errors.New("failed to create TCP connection").Base(err)
 		}
@@ -245,12 +201,12 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	requestFunc := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded downlink timeout
 		return buf.Copy(link.Reader, writer, buf.UpdateActivity(timer))
 	}
 
 	responseFunc := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded uplink timeout
 		return buf.Copy(reader, link.Writer, buf.UpdateActivity(timer))
 	}
 
@@ -314,13 +270,6 @@ func (h *Handler) init(ctx context.Context) error {
 			}
 			pktConn = newConn
 		}
-		if h.uplinkCounter != nil || h.downlinkCounter != nil {
-			pktConn = &PacketCounterConnection{
-				PacketConn:   pktConn,
-				ReadCounter:  h.downlinkCounter,
-				WriteCounter: h.uplinkCounter,
-			}
-		}
 		return pktConn, nil
 	}
 	bind := &bind{}
@@ -372,14 +321,16 @@ func (h *Handler) init(ctx context.Context) error {
 
 func (h *Handler) resolveLocal(host string) (net.IP, error) {
 	return h.resolveDomain(host, h.conf.DomainStrategy, func(host string) ([]net.IP, uint32, error) {
-		return h.dns.LookupIP(host, dns.IPOption{IPv4Enable: true, IPv6Enable: true})
+		ips, err := gonet.LookupIP(host)
+		return ips, 60, err
 	})
 }
 
 func (h *Handler) resolveRemote(host string) (net.IP, error) {
 	return h.resolveDomain(host, h.conf.DomainStrategy, func(host string) ([]net.IP, uint32, error) {
 		if h.local {
-			return h.dns.LookupIP(host, dns.IPOption{IPv4Enable: true, IPv6Enable: true})
+			ips, err := gonet.LookupIP(host)
+			return ips, 60, err
 		}
 		return h.tnet.LookupHost(host)
 	})
@@ -403,7 +354,7 @@ func (h *Handler) resolveDomain(host string, strategy DeviceConfig_DomainStrateg
 		return nil, err
 	}
 	if len(ips) == 0 {
-		return nil, dns.ErrEmptyResponse
+		return nil, errors.New("empty response")
 	}
 	var got4, got6 []net.IP
 	for _, ip := range ips {
@@ -436,7 +387,7 @@ func (h *Handler) resolveDomain(host string, strategy DeviceConfig_DomainStrateg
 		panic(strategy)
 	}
 	if len(got) == 0 {
-		return nil, dns.ErrEmptyResponse
+		return nil, errors.New("empty response")
 	}
 	entry := entry{
 		got:  got,
@@ -502,24 +453,4 @@ func (c *udpConnClient) WriteMultiBuffer(mb buf.MultiBuffer) error {
 	return nil
 }
 
-type PacketCounterConnection struct {
-	net.PacketConn
-	ReadCounter  stats.Counter
-	WriteCounter stats.Counter
-}
-
-func (c *PacketCounterConnection) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	n, addr, err = c.PacketConn.ReadFrom(p)
-	if err == nil && c.ReadCounter != nil {
-		c.ReadCounter.Add(int64(n))
-	}
-	return
-}
-
-func (c *PacketCounterConnection) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	n, err = c.PacketConn.WriteTo(p, addr)
-	if err == nil && c.WriteCounter != nil {
-		c.WriteCounter.Add(int64(n))
-	}
-	return
-}
+// removed PacketCounterConnection

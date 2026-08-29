@@ -19,8 +19,7 @@ import (
 	"github.com/xtls/xray-core/common/signal"
 	"github.com/xtls/xray-core/common/task"
 	"github.com/xtls/xray-core/common/xudp"
-	core "github.com/xtls/xray-core/core"
-	"github.com/xtls/xray-core/features/policy"
+	"github.com/xtls/xray-core/common/xudp"
 	"github.com/xtls/xray-core/proxy/vmess"
 	"github.com/xtls/xray-core/proxy/vmess/encoding"
 	"github.com/xtls/xray-core/transport"
@@ -30,9 +29,8 @@ import (
 
 // Handler is an outbound connection handler for VMess protocol.
 type Handler struct {
-	server        *protocol.ServerSpec
-	policyManager policy.Manager
-	cone          bool
+	server *protocol.ServerSpec
+	cone   bool
 }
 
 // New creates a new VMess outbound handler.
@@ -45,26 +43,16 @@ func New(ctx context.Context, config *Config) (*Handler, error) {
 		return nil, errors.New("failed to get server spec").Base(err)
 	}
 
-	v := core.MustFromContext(ctx)
 	handler := &Handler{
-		server:        server,
-		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
-		cone:          ctx.Value("cone").(bool),
+		server: server,
+		cone:   false, // Hardcoded for scanner
 	}
 
 	return handler, nil
 }
 
 // Process implements proxy.Outbound.Process().
-func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer) error {
-	outbounds := session.OutboundsFromContext(ctx)
-	ob := outbounds[len(outbounds)-1]
-	if !ob.Target.IsValid() {
-		return errors.New("target not specified").AtError()
-	}
-	ob.Name = "vmess"
-	ob.CanSpliceCopy = 3
-
+func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target net.Destination) error {
 	rec := h.server
 	var conn stat.Connection
 
@@ -82,7 +70,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 	defer conn.Close()
 
-	target := ob.Target
 	errors.LogInfo(ctx, "tunneling request to ", target, " via ", rec.Destination.NetAddr())
 
 	command := protocol.RequestCommandTCP
@@ -133,7 +120,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	session := encoding.NewClientSession(ctx, int64(behaviorSeed))
-	sessionPolicy := h.policyManager.ForLevel(request.User.Level)
 
 	ctx, cancel := context.WithCancel(ctx)
 	timer := signal.CancelAfterInactivity(ctx, func() {
@@ -141,7 +127,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		if newCancel != nil {
 			newCancel()
 		}
-	}, sessionPolicy.Timeouts.ConnectionIdle)
+	}, 10*time.Second) // Hardcoded for scanner
 
 	if request.Command == protocol.RequestCommandUDP && h.cone && request.Port != 53 && request.Port != 443 {
 		request.Command = protocol.RequestCommandMux
@@ -150,7 +136,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	requestDone := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded uplink timeout
 
 		writer := buf.NewBufferedWriter(buf.NewWriter(conn))
 		if err := session.EncodeRequestHeader(request, writer); err != nil {
@@ -187,7 +173,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	responseDone := func() error {
-		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
+		defer timer.SetTimeout(10 * time.Second) // Hardcoded downlink timeout
 
 		reader := &buf.BufferedReader{Reader: buf.NewReader(conn)}
 		header, err := session.DecodeResponseHeader(reader)
@@ -232,10 +218,4 @@ func reloadEnvSettings() error {
 	return nil
 }
 
-func init() {
-	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
-		return New(ctx, config.(*Config))
-	}))
-
-	platform.RegisterEnvReload(reloadEnvSettings)
-}
+// init removed for v2w-core
