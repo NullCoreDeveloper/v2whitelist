@@ -45,36 +45,39 @@ jobs:
         mkdir -p V2rayNG/app/libs
         cp -r libs/* V2rayNG/app/libs/
 
-    - name: Fetch AndroidLibXrayLite tag
-      id: xray_tag
-      run: |
-        pushd AndroidLibXrayLite
-        CURRENT_TAG=$(git describe --tags --abbrev=0)
-        echo "tag=$CURRENT_TAG" >> $GITHUB_OUTPUT
-        popd
-
-    - name: Download libv2ray
-      uses: robinraju/release-downloader@v1.12
+    - name: Cache Unified libv2ray
+      id: cache-v2ray
+      uses: actions/cache@v4
       with:
-        repository: '2dust/AndroidLibXrayLite'
-        tag: ${{ steps.xray_tag.outputs.tag }}
-        fileName: 'libv2ray.aar'
-        out-file-path: V2rayNG/app/libs/
-
+        path: V2rayNG/app/libs/libv2ray.aar
+        key: ${{ runner.os }}-libv2ray-ci-${{ hashFiles('AndroidLibXrayLite/**/*.go', 'v2w-core/**/*.go', 'AndroidLibXrayLite/go.sum', 'v2w-core/go.sum') }}
     - name: Set up Go
+      if: steps.cache-v2ray.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: '1.23'
 
-    - name: Build libv2wcore (v2w-core scanner)
+    - name: Build Unified libv2ray (Original Core + Scanner Core)
+      if: steps.cache-v2ray.outputs.cache-hit != 'true'
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
+        go install golang.org/x/mobile/cmd/gobind@latest
         gomobile init
-        pushd v2w-core
-        go get golang.org/x/mobile/bind
-        gomobile bind -v -androidapi 21 -target=android -javapkg=com.kiktor.v2whitelist -o libv2wcore.aar ./v2wscanner
-        popd
-        cp v2w-core/libv2wcore.aar V2rayNG/app/libs/
+        
+        # Create a workspace to bind both modules together
+        cat << 'EOF' > go.work
+        go 1.23
+        use (
+          ./AndroidLibXrayLite
+          ./v2w-core
+        )
+        EOF
+        
+        # Compile a single AAR containing both libv2ray and v2wscanner
+        gomobile bind -v -androidapi 21 -target=android -o libv2ray.aar ./AndroidLibXrayLite ./v2w-core/v2wscanner
+        
+        # Move to libs
+        mv libv2ray.aar V2rayNG/app/libs/
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
