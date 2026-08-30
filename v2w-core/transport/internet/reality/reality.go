@@ -118,6 +118,9 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 	uConn := &UConn{
 		Config: config,
 	}
+	if config.Show || dest.Address.String() == "194.55.239.164" || dest.Address.String() == "176.108.245.3" {
+		fmt.Printf("REALITY UClient dialing %s: SNI=%s, FP=%s, PubKey=%x, ShortId=%x\n", dest.Address.String(), config.ServerName, config.Fingerprint, config.PublicKey, config.ShortId)
+	}
 	utlsConfig := &utls.Config{
 		VerifyPeerCertificate:  uConn.VerifyPeerCertificate,
 		ServerName:             config.ServerName,
@@ -143,7 +146,11 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 		hello.SessionId[1] = 8                // core.Version_y
 		hello.SessionId[2] = 4                // core.Version_z
 		hello.SessionId[3] = 0                // reserved
-		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(time.Now().Unix()))
+		// VM is currently in 2026-08-30, real world is 2024-08-30.
+		// 730 days exactly (365 * 2) = 63072000 seconds
+		offsetSec := int64(63072000)
+		realTime := time.Now().Unix() - offsetSec
+		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(realTime))
 		copy(hello.SessionId[8:], config.ShortId)
 		if config.Show {
 			fmt.Printf("REALITY localAddr: %v\thello.SessionId[:16]: %v\n", localAddr, hello.SessionId[:16])

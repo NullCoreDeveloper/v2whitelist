@@ -97,14 +97,14 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 	}
 
 	uuid := u.User.Username()
-	host := u.Hostname()
+	serverIP := u.Hostname()
 	portStr := u.Port()
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, nil, net.Destination{}, err
 	}
 
-	dest := net.TCPDestination(net.ParseAddress(host), net.Port(port))
+	dest := net.TCPDestination(net.ParseAddress(serverIP), net.Port(port))
 
 	q := u.Query()
 	netType := q.Get("type")
@@ -142,10 +142,14 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		if host == "" {
 			host = q.Get("sni")
 		}
+		mode := q.Get("mode")
+		if mode == "" {
+			mode = "auto"
+		}
 		config := &splithttp.Config{
 			Path: q.Get("path"),
 			Host: host,
-			Mode: q.Get("mode"),
+			Mode: mode,
 			Headers: map[string]string{
 				"Host": host,
 			},
@@ -213,12 +217,23 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		}
 	case "reality":
 		streamSettings.SecurityType = "reality"
-		pbkBytes, _ := base64.RawURLEncoding.DecodeString(q.Get("pbk"))
-		shortId, _ := hex.DecodeString(q.Get("sid"))
+		pbkStr := q.Get("pbk")
+		pbkBytes, err := base64.RawURLEncoding.DecodeString(pbkStr)
+		if err != nil {
+			pbkBytes, _ = base64.URLEncoding.DecodeString(pbkStr)
+		}
+		
+		sidStr := q.Get("sid")
+		shortId, err := hex.DecodeString(sidStr)
+		if err != nil && len(sidStr) > 0 {
+			// If sid is invalid hex, we just use it as bytes
+			shortId = []byte(sidStr)
+		}
 		sni := q.Get("sni")
 		if sni == "" {
 			sni = q.Get("host")
 		}
+		
 		streamSettings.SecuritySettings = &reality.Config{
 			Show:        false,
 			Dest:        sni + ":443",
@@ -226,8 +241,9 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 			ServerNames: []string{sni},
 			ServerName:  sni,
 			ShortIds:    [][]byte{shortId},
+			ShortId:     shortId,
 			PublicKey:   pbkBytes,
-			Fingerprint: q.Get("fp"),
+			Fingerprint: "hellofirefox_102",
 			SpiderX:     q.Get("spx"),
 			SpiderY:     []int64{100, 1000, 1, 3, 2, 4, 10, 50, 10, 50},
 		}
@@ -241,7 +257,7 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 
 	config := &vless_outbound.Config{
 		Vnext: &protocol.ServerEndpoint{
-			Address: net.NewIPOrDomain(net.ParseAddress(host)),
+			Address: net.NewIPOrDomain(net.ParseAddress(serverIP)),
 			Port:    uint32(port),
 			User: &protocol.User{
 				Account: serial.ToTypedMessage(account),
@@ -295,7 +311,7 @@ func main() {
 	var successfulLinks []string
 	var linksMu sync.Mutex
 
-	sem := make(chan struct{}, 5)
+	sem := make(chan struct{}, 10)
 
 	for _, link := range links {
 		wg.Add(1)
@@ -339,7 +355,7 @@ func main() {
 				name, _ = url.QueryUnescape(l[idx+1:])
 			}
 
-			targetDest := net.TCPDestination(net.DomainAddress("clients3.google.com"), 443)
+			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 443)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)

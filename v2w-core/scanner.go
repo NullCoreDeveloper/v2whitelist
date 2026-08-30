@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/xtls/xray-core/common/buf"
@@ -64,31 +65,50 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- handler.Process(ctx, link, dialer, dest)
+		// IMPORTANT: The destination here is the TARGET website we want the proxy to connect to!
+		// It MUST NOT be the proxy server's IP, otherwise it creates a loopback!
+		targetDest := net.TCPDestination(net.ParseAddress("cp.cloudflare.com"), net.Port(443))
+		err := handler.Process(ctx, link, dialer, targetDest)
+		if err != nil {
+			errChan <- err
+		}
 	}()
 
-	// Perform a TLS handshake to verify connectivity.
+	// Perform a full HTTPS GET request using net/http, exactly like V2RayNG
 	conn := &pipeConn{r: downR, w: upW}
-	tlsConn := tls.Client(conn, &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         "clients3.google.com",
-	})
+	
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return conn, nil
+		},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         "cp.cloudflare.com",
+		},
+	}
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 
 	errChan2 := make(chan error, 1)
 	go func() {
-		errChan2 <- tlsConn.HandshakeContext(ctx)
+		resp, err := client.Get("https://cp.cloudflare.com/generate_204")
+		if err != nil {
+			errChan2 <- fmt.Errorf("http get err: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		errChan2 <- nil
 	}()
 
 	select {
 	case <-ctx.Done():
-		return ScanResult{Error: fmt.Errorf("timeout")}
+		return ScanResult{Error: fmt.Errorf("timeout (waiting for HTTP response)")}
 	case err := <-errChan: // Error from proxy handler
 		if err != nil {
 			return ScanResult{Error: fmt.Errorf("proxy error: %v", err)}
 		}
 	case err := <-errChan2:
 		if err != nil {
-			return ScanResult{Error: fmt.Errorf("tls handshake failed: %v", err)}
+			return ScanResult{Error: fmt.Errorf("http ping failed: %v", err)}
 		}
 	}
 
