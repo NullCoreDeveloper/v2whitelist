@@ -2,10 +2,10 @@ package core
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"time"
-	"bytes"
 
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/net"
@@ -23,6 +23,20 @@ type ScanResult struct {
 	Latency time.Duration
 	Error   error
 }
+
+type pipeConn struct {
+	r io.Reader
+	w io.Writer
+}
+
+func (c *pipeConn) Read(b []byte) (int, error)         { return c.r.Read(b) }
+func (c *pipeConn) Write(b []byte) (int, error)        { return c.w.Write(b) }
+func (c *pipeConn) Close() error                       { return nil }
+func (c *pipeConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
+func (c *pipeConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
+func (c *pipeConn) SetDeadline(t time.Time) error      { return nil }
+func (c *pipeConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *pipeConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // Scanner is a high-concurrency stateless scanner for connectivity testing.
 type Scanner struct{}
@@ -53,46 +67,29 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		errChan <- handler.Process(ctx, link, dialer, dest)
 	}()
 
-	// Send an HTTP payload to test connectivity.
-	payload := []byte("GET /generate_204 HTTP/1.1\r\nHost: cp.cloudflare.com\r\nUser-Agent: curl/7.81.0\r\nConnection: close\r\n\r\n")
-	go func() {
-		upW.Write(payload)
-	}()
+	// Perform a TLS handshake to verify connectivity.
+	conn := &pipeConn{r: downR, w: upW}
+	tlsConn := tls.Client(conn, &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         "clients3.google.com",
+	})
 
-	// Try to read response with a timeout
-	type readResult struct {
-		n   int
-		err error
-	}
-	readChan := make(chan readResult, 1)
-	resp := make([]byte, 2048)
-	
+	errChan2 := make(chan error, 1)
 	go func() {
-		n, err := downR.Read(resp)
-		readChan <- readResult{n, err}
+		errChan2 <- tlsConn.HandshakeContext(ctx)
 	}()
-
-	var n int
-	var err error
 
 	select {
 	case <-ctx.Done():
 		return ScanResult{Error: fmt.Errorf("timeout")}
-	case r := <-readChan:
-		n = r.n
-		err = r.err
-	}
-
-	// If we successfully read something, we consider it a success.
-	if err != nil && err != io.EOF {
-		return ScanResult{Error: err}
-	}
-	if n == 0 {
-		return ScanResult{Error: fmt.Errorf("empty response")}
-	}
-
-	if !bytes.Contains(resp[:n], []byte("204 No Content")) {
-		return ScanResult{Error: fmt.Errorf("invalid response: %q", string(resp[:n]))}
+	case err := <-errChan: // Error from proxy handler
+		if err != nil {
+			return ScanResult{Error: fmt.Errorf("proxy error: %v", err)}
+		}
+	case err := <-errChan2:
+		if err != nil {
+			return ScanResult{Error: fmt.Errorf("tls handshake failed: %v", err)}
+		}
 	}
 
 	return ScanResult{Latency: time.Since(start)}

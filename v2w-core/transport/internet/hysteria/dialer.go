@@ -19,7 +19,6 @@ import (
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/net/cnc"
 	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/finalmask"
 	"github.com/xtls/xray-core/transport/internet/hysteria/congestion"
 	"github.com/xtls/xray-core/transport/internet/hysteria/congestion/bbr"
 	"github.com/xtls/xray-core/transport/internet/hysteria/udphop"
@@ -30,12 +29,11 @@ import (
 type client struct {
 	sync.Mutex
 
-	dest           net.Destination
-	config         *Config
-	tlsConfig      *go_tls.Config
-	socketConfig   *internet.SocketConfig
-	udpmaskManager *finalmask.UdpmaskManager
-	quicParams     *internet.QuicParams
+	dest         net.Destination
+	config       *Config
+	tlsConfig    *go_tls.Config
+	socketConfig *internet.SocketConfig
+	quicParams   *internet.QuicParams
 
 	conn    *quic.Conn
 	tr      *quic.Transport
@@ -162,15 +160,6 @@ func (c *client) dial(ctx context.Context) error {
 
 	if len(quicParams.UdpHop.Ports) > 0 {
 		pktConn = udphop.NewUDPHopPacketConn(udphop.ToAddrs(udpAddr.IP, quicParams.UdpHop.Ports), time.Duration(quicParams.UdpHop.IntervalMin)*time.Second, time.Duration(quicParams.UdpHop.IntervalMax)*time.Second, udpHopDialer, pktConn, index)
-	}
-
-	if c.udpmaskManager != nil {
-		newConn, err := c.udpmaskManager.WrapPacketConnClient(pktConn)
-		if err != nil {
-			pktConn.Close()
-			return errors.New("mask err").Base(err)
-		}
-		pktConn = newConn
 	}
 
 	tr := &quic.Transport{Conn: pktConn, DisableGSO: quicParams.DisableGSO}
@@ -354,7 +343,6 @@ func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.Me
 				config:         streamSettings.ProtocolSettings.(*Config),
 				tlsConfig:      tlsConfig.GetTLSConfig(tls.WithDestination(dest)),
 				socketConfig:   streamSettings.SocketSettings,
-				udpmaskManager: streamSettings.UdpmaskManager,
 				quicParams:     streamSettings.QuicParams,
 			}
 			manager.m[dialerConf{dest, streamSettings}] = c

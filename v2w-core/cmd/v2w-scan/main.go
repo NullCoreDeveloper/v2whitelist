@@ -1,21 +1,26 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/serial"
+	"github.com/xtls/xray-core/proxy/hysteria"
+	"github.com/xtls/xray-core/proxy/hysteria/account"
 	"github.com/xtls/xray-core/proxy/vless"
 	vless_outbound "github.com/xtls/xray-core/proxy/vless/outbound"
 	"github.com/xtls/xray-core/transport/internet"
@@ -42,7 +47,46 @@ func (d *customDialer) DestIpAddress() net.IP {
 	return nil
 }
 
-func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStreamConfig, net.Destination, error) {
+func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	if strings.HasPrefix(rawURL, "hysteria2://") {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			return nil, nil, net.Destination{}, err
+		}
+		password := u.User.Username()
+		host := u.Hostname()
+		portStr := u.Port()
+		port, _ := strconv.Atoi(portStr)
+		dest := net.TCPDestination(net.ParseAddress(host), net.Port(port))
+		q := u.Query()
+		sni := q.Get("sni")
+		if sni == "" {
+			sni = q.Get("host")
+		}
+		streamSettings := &internet.MemoryStreamConfig{
+			ProtocolName: "hysteria2",
+			SecurityType: "tls",
+			SecuritySettings: &tls.Config{
+				ServerName:    sni,
+			},
+		}
+		if fp := q.Get("fp"); fp != "" {
+			streamSettings.SecuritySettings.(*tls.Config).Fingerprint = fp
+		}
+		config := &hysteria.ClientConfig{
+			Server: &protocol.ServerEndpoint{
+				Address: net.NewIPOrDomain(net.ParseAddress(host)),
+				Port:    uint32(port),
+				User: &protocol.User{
+					Account: serial.ToTypedMessage(&account.Account{
+						Auth: password,
+					}),
+				},
+			},
+		}
+		return config, streamSettings, dest, nil
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, nil, net.Destination{}, err
@@ -80,6 +124,7 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 
 	switch netType {
 	case "tcp":
+		streamSettings.ProtocolName = "tcp"
 		streamSettings.ProtocolSettings = &tcp.Config{}
 	case "ws":
 		fallthrough
@@ -93,12 +138,16 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 		}
 	case "xhttp":
 		streamSettings.ProtocolName = "splithttp"
+		host := q.Get("host")
+		if host == "" {
+			host = q.Get("sni")
+		}
 		config := &splithttp.Config{
 			Path: q.Get("path"),
-			Host: q.Get("host"),
+			Host: host,
 			Mode: q.Get("mode"),
 			Headers: map[string]string{
-				"Host": q.Get("host"),
+				"Host": host,
 			},
 		}
 		parseRange := func(s string) *splithttp.RangeConfig {
@@ -121,14 +170,19 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 		streamSettings.ProtocolSettings = config
 	case "httpupgrade":
 		streamSettings.ProtocolName = "httpupgrade"
+		host := q.Get("host")
+		if host == "" {
+			host = q.Get("sni")
+		}
 		streamSettings.ProtocolSettings = &httpupgrade.Config{
 			Path: q.Get("path"),
-			Host: q.Get("host"),
+			Host: host,
 			Header: map[string]string{
-				"Host": q.Get("host"),
+				"Host": host,
 			},
 		}
 	case "grpc":
+		streamSettings.ProtocolName = "grpc"
 		streamSettings.ProtocolSettings = &grpc.Config{
 			ServiceName: q.Get("serviceName"),
 		}
@@ -146,22 +200,36 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 				nextProtocol = append(nextProtocol, strings.TrimSpace(p))
 			}
 		}
+		sni := q.Get("sni")
+		if sni == "" {
+			sni = q.Get("host")
+		}
 		streamSettings.SecuritySettings = &tls.Config{
-			ServerName:   q.Get("sni"),
+			ServerName:   sni,
 			NextProtocol: nextProtocol,
+		}
+		if fp := q.Get("fp"); fp != "" {
+			streamSettings.SecuritySettings.(*tls.Config).Fingerprint = fp
 		}
 	case "reality":
 		streamSettings.SecurityType = "reality"
 		pbkBytes, _ := base64.RawURLEncoding.DecodeString(q.Get("pbk"))
 		shortId, _ := hex.DecodeString(q.Get("sid"))
+		sni := q.Get("sni")
+		if sni == "" {
+			sni = q.Get("host")
+		}
 		streamSettings.SecuritySettings = &reality.Config{
 			Show:        false,
-			Dest:        q.Get("sni") + ":443",
+			Dest:        sni + ":443",
 			Type:        netType,
-			ServerNames: []string{q.Get("sni")},
+			ServerNames: []string{sni},
+			ServerName:  sni,
 			ShortIds:    [][]byte{shortId},
 			PublicKey:   pbkBytes,
 			Fingerprint: q.Get("fp"),
+			SpiderX:     q.Get("spx"),
+			SpiderY:     []int64{100, 1000, 1, 3, 2, 4, 10, 50, 10, 50},
 		}
 	}
 
@@ -185,15 +253,35 @@ func parseVlessURL(rawURL string) (*vless_outbound.Config, *internet.MemoryStrea
 }
 
 func main() {
-	resp, err := http.Get("https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt")
-	if err != nil {
-		panic(err)
+	subUrl := flag.String("sub", "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt", "URL to fetch VLESS subscription from or local file path")
+	flag.Parse()
+
+	var subData string
+	if strings.HasPrefix(*subUrl, "http://") || strings.HasPrefix(*subUrl, "https://") {
+		resp, err := http.Get(*subUrl)
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+		subData = string(data)
+	} else {
+		data, err := os.ReadFile(*subUrl)
+		if err != nil {
+			panic(err)
+		}
+		subData = string(data)
 	}
+
+	subData = strings.ReplaceAll(subData, "\r\n", "\n")
+	rawLines := strings.Split(subData, "\n")
 	var links []string
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "vless://") {
+	for _, line := range rawLines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") {
 			links = append(links, line)
 		}
 	}
@@ -203,8 +291,11 @@ func main() {
 
 	var successCount int32
 	var failCount int32
+	
+	var successfulLinks []string
+	var linksMu sync.Mutex
 
-	sem := make(chan struct{}, 30)
+	sem := make(chan struct{}, 5)
 
 	for _, link := range links {
 		wg.Add(1)
@@ -219,8 +310,24 @@ func main() {
 				return
 			}
 
-			handler, err := vless_outbound.New(context.Background(), config)
-			if err != nil {
+			var handler core.ProxyHandler
+			if outboundConfig, ok := config.(*vless_outbound.Config); ok {
+				h, err := vless_outbound.New(context.Background(), outboundConfig)
+				if err != nil || h == nil {
+					atomic.AddInt32(&failCount, 1)
+					return
+				}
+				handler = h
+			} else if outboundConfig, ok := config.(*hysteria.ClientConfig); ok {
+				h, err := hysteria.NewClient(context.Background(), outboundConfig)
+				if err != nil || h == nil {
+					atomic.AddInt32(&failCount, 1)
+					return
+				}
+				handler = h
+			}
+
+			if handler == nil {
 				atomic.AddInt32(&failCount, 1)
 				return
 			}
@@ -232,19 +339,29 @@ func main() {
 				name, _ = url.QueryUnescape(l[idx+1:])
 			}
 
-			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 80)
-			res := coreScanner.TestNode(context.Background(), handler, dialer, targetDest)
+			targetDest := net.TCPDestination(net.DomainAddress("clients3.google.com"), 443)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
 			
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
-				fmt.Printf("[SUCCESS] %v | %s | %s\n", res.Latency, dest.String(), name)
+				linksMu.Lock()
+				successfulLinks = append(successfulLinks, l)
+				linksMu.Unlock()
 			} else {
 				atomic.AddInt32(&failCount, 1)
-				fmt.Printf("[FAILED] %s (%v)\n", dest.String(), res.Error)
+				fmt.Printf("[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
 			}
 		}(link)
 	}
 
 	wg.Wait()
 	fmt.Printf("\n--- Scan Complete ---\nSuccess: %d\nFailed/Timeout/Unsupported: %d\n", successCount, failCount)
+	if len(successfulLinks) > 0 {
+		fmt.Printf("\n--- Working Configs ---\n")
+		for _, sl := range successfulLinks {
+			fmt.Println(sl)
+		}
+	}
 }

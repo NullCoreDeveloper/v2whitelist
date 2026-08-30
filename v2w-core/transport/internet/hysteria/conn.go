@@ -12,7 +12,6 @@ import (
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
-	"github.com/xtls/xray-core/transport/internet"
 )
 
 type interConn struct {
@@ -158,7 +157,7 @@ type udpSessionManager struct {
 	next   uint32
 	closed bool
 
-	addConn        internet.ConnHandler
+	addConn        func(net.Conn)
 	udpIdleTimeout time.Duration
 	user           *protocol.MemoryUser
 }

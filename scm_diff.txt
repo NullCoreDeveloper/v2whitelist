@@ -1,0 +1,824 @@
+diff --git a/V2rayNG/app/src/main/java/com/kiktor/v2whitelist/handler/SmartConnectManager.kt b/V2rayNG/app/src/main/java/com/kiktor/v2whitelist/handler/SmartConnectManager.kt
+index a432e442..dd08eb03 100644
+--- a/V2rayNG/app/src/main/java/com/kiktor/v2whitelist/handler/SmartConnectManager.kt
++++ b/V2rayNG/app/src/main/java/com/kiktor/v2whitelist/handler/SmartConnectManager.kt
+@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.handler
+ 
+ import android.content.Context
+ import android.util.Log
++import com.kiktor.v2whitelist.handler.GeekModeLogger
+ import com.kiktor.v2whitelist.AppConfig
+ import com.kiktor.v2whitelist.dto.ProfileItem
+ import com.kiktor.v2whitelist.dto.SubscriptionItem
+@@ -40,432 +41,50 @@ import libv2ray.CoreCallbackHandler
+ import libv2ray.CoreController
+ 
+ object SmartConnectManager {
+-    private val testSemaphore = Semaphore(48)
+ 
+-    const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
+-    const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
+-
+-    /**
+-     * Блокирует выполнение до тех пор, пока не появится реальный доступ в интернет (проверка dzen.ru).
+-     * Защищает кэш серверов от удаления при выключенном WiFi или отсутствии сети.
+-     */
+-    private suspend fun waitForInternet(context: Context) {
+-        var isWaiting = false
+-        while (true) {
+-            val dzenOk = try {
+-                Socket().use { it.connect(InetSocketAddress("dzen.ru", 443), 1500); true }
+-            } catch (_: Exception) { false }
+-
+-            if (dzenOk) {
+-                if (isWaiting) {
+-                    Log.i(AppConfig.TAG, "waitForInternet: Интернет появился (dzen.ru ответил)")
+-                }
+-                break
+-            }
+-
+-            if (!isWaiting) {
+-                Log.w(AppConfig.TAG, "waitForInternet: Нет прямого доступа в интернет. Ожидание сети...")
+-                isWaiting = true
+-            }
+-            sendStatus(context, context.getString(R.string.status_waiting_for_network))
+-            
+-            delay(2000)
+-        }
+-    }
+-
+-    /**
+-     * Проверяет состояние интернета.
+-     * @return 0 - OK (всё доступно), 1 - JAMMED (только Яндекс), 2 - NO_INTERNET (ничего не доступно)
+-     */
+-    fun checkInternetStatus(): Int {
+-        val googleOk = try {
+-            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 1500); true }
+-        } catch (_: Exception) { false }
+-
+-        val yandexOk = try {
+-            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 53), 1500); true }
+-        } catch (_: Exception) { false }
+-
+-        return when {
+-            googleOk && yandexOk -> 0   // Все отлично
+-            !googleOk && yandexOk -> 1  // Глушат (Яндекс жив, Гугл нет)
+-            else -> 2                   // Интернета нет совсем
+-        }
+-    }
+-
+-    /**
+-     * Pre-populates the zieng2/wl subscription with mirrors on first launch,
+-     * and sets up all custom subscriptions.
+-     */
+-    suspend fun checkAndSetupSubscription(context: Context) = withContext(Dispatchers.IO) {
+-        // Мигрируем серверы из старой хардкод-подписки (матрешки), чтобы не оставить пользователя без связи
+-        val subscriptions = MmkvManager.decodeSubscriptions()
+-        if (subscriptions.any { it.guid == SUBSCRIPTION_ID }) {
+-            Log.d(AppConfig.TAG, "Migrating old hardcoded subscription servers to the new custom sub")
+-            val newSubId = "custom_sub_def_zieng2"
+-            val serverList = MmkvManager.decodeServerList()
+-            var migratedCount = 0
+-            for (guid in serverList) {
+-                val profile = MmkvManager.decodeServerConfig(guid)
+-                if (profile != null && profile.subscriptionId == SUBSCRIPTION_ID) {
+-                    profile.subscriptionId = newSubId
+-                    MmkvManager.encodeServerConfig(guid, profile)
+-                    migratedCount++
+-                }
+-            }
+-            Log.d(AppConfig.TAG, "Migrated $migratedCount servers. Removing old subscription object.")
+-            
+-            MmkvManager.removeSubscription(SUBSCRIPTION_ID)
+-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+-        }
+-
+-        val defaultsAdded = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
+-        if (!defaultsAdded) {
+-            val customSubs = loadCustomSubs().toMutableList()
+-            var changed = false
+-            for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+-                if (customSubs.none { it.name == defaultSub.name }) {
+-                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
+-                    customSubs.add(defaultSub)
+-                    changed = true
+-                }
+-            }
+-            if (changed) {
+-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+-            }
+-            MmkvManager.encodeSettings("pref_defaults_added_v1", true)
+-        }
+-
+-        // Обработка кастомных подписок (zieng2/wl теперь обычная кастомная подписка)
+-        setupCustomSubscriptions(context)
+-    }
+-
+-    /**
+-     * Настраивает кастомные подписки из MMKV.
+-     */
+-    private suspend fun setupCustomSubscriptions(context: Context) {
+-        val customSubs = loadCustomSubs()
+-        for (sub in customSubs.filter { it.enabled }) {
+-            val subId = "custom_sub_${sub.id}"
+-            val subscriptions = MmkvManager.decodeSubscriptions()
+-            val existing = subscriptions.find { it.guid == subId }
+-
+-            if (existing == null) {
+-                val subItem = SubscriptionItem().apply {
+-                    remarks = sub.name
+-                    url = sub.url
+-                    filter = sub.filter
+-                    enabled = true
+-                    sharePercent = sub.sharePercent
+-                }
+-                MmkvManager.encodeSubscription(subId, subItem)
+-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
+-            } else {
+-                val subItem = existing.subscription
+-                if (subItem.url != sub.url || subItem.filter != sub.filter || subItem.remarks != sub.name || subItem.sharePercent != sub.sharePercent) {
+-                    subItem.url = sub.url
+-                    subItem.remarks = sub.name
+-                    subItem.filter = sub.filter
+-                    subItem.sharePercent = sub.sharePercent
+-                    MmkvManager.encodeSubscription(subId, subItem)
+-                    // URL или фильтр изменились — перезагружаем серверы немедленно
+-                    AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem))
+-                }
+-            }
+-        }
+-    }
+-
+-    /**
+-     * Загружает кастомные подписки из MMKV.
+-     */
+-    private fun loadCustomSubs(): List<CustomSubData> {
+-        val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+-        if (json.isNullOrEmpty()) return emptyList()
+-        return try {
+-            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+-        } catch (e: Exception) {
+-            emptyList()
+-        }
+-    }
+-
+-    /** Дата-класс для JSON-десериализации кастомных подписок */
+-    data class CustomSubData(
+-        val id: String = "",
+-        val name: String = "",
+-        val url: String = "",
+-        val filter: String = "",
+-        val groupRegex: String = "",
+-        val enabled: Boolean = true,
+-        val sharePercent: Int? = null
+-    )
+-
+-    private fun sendStatus(context: Context, status: String) {
+-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
+-    }
+-
+-    /**
+-     * Force updates all active subscriptions.
+-     * Сбрасывает кэш последнего сервера — после обновления старый GUID может не существовать.
+-     * @param sequential если true — последовательная подкачка (фоновый воркер),
+-     *                    false — параллельная гонка зеркал (UI).
+-     */
+-    suspend fun updateSubscription(context: Context, isStartup: Boolean = false, sequential: Boolean = false) = withContext(Dispatchers.IO) {
+-        // ══════════════════════════════════════════════════════════════════════
+-        // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
+-        // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
+-        // Поэтому нужно запомнить identity серверов (server+port+remarks),
+-        // чтобы потом найти их новые GUID-ы и ремаппить кэши.
+-        // ══════════════════════════════════════════════════════════════════════
+-        data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
+-
+-        val lastServerGuid = MmkvManager.getValidLastServer()
+-        val lastServerIdentity = lastServerGuid?.let { guid ->
+-            MmkvManager.decodeServerConfig(guid)?.let { p ->
+-                ServerIdentity(p.server, p.serverPort, p.remarks)
+-            }
+-        }
+-
+-        val vipGuids = MmkvManager.getVipCache()
+-        val vipIdentities = vipGuids.mapNotNull { guid ->
+-            MmkvManager.decodeServerConfig(guid)?.let { p ->
+-                ServerIdentity(p.server, p.serverPort, p.remarks)
+-            }
+-        }
+-
+-        if (vipIdentities.isNotEmpty()) {
+-            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipIdentities.size} серверов (${vipIdentities.joinToString { it.remarks }})")
+-        }
+-
+-        val candidateSocksPort = SettingsManager.getSocksPort()
+-        var socksPort = 0
+-        var vpnStarted = false
++    suspend fun findMoreVipServers(context: Context): Boolean = withContext(Dispatchers.IO) {
++        NetworkManager.waitForInternet(context)
++        val allServers = MmkvManager.decodeServerList()
++        val currentVipGuids = MmkvManager.getVipCache().toSet()
++        val candidates = filterServers(allServers, null)
++            .filter { !currentVipGuids.contains(it.first) }
++            .shuffled()
+         
+-        // Ожидаем запуска прокси (дольше при старте приложения, так как он может запускаться SmartConnect'ом)
+-        val waitLoops = if (isStartup) 8 else 1
+-        for (i in 0 until waitLoops) {
+-            if (isProxyRunning(candidateSocksPort)) {
+-                socksPort = candidateSocksPort
+-                vpnStarted = true
+-                break
+-            }
+-            if (i < waitLoops - 1) delay(1000)
++        if (candidates.isEmpty()) {
++            GeekModeLogger.log("SmartConnect", "findMoreVipServers: нет доступных новых серверов для проверки")
++            return@withContext false
+         }
+         
+-        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
+-
+-        // Ensure base subscriptions are initialized if this is the first launch
+-        checkAndSetupSubscription(context)
+-
+-        // Обновляем кастомные подписки
+-        val customSubs = loadCustomSubs()
+-        for (sub in customSubs.filter { it.enabled }) {
+-            val subId = "custom_sub_${sub.id}"
+-            val subscriptions = MmkvManager.decodeSubscriptions()
+-            val existing = subscriptions.find { it.guid == subId }
+-            if (existing != null) {
+-                Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
+-                AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
+-            } else {
+-                // Создаём если нет
+-                val subItem = SubscriptionItem().apply {
+-                    remarks = sub.name
+-                    url = sub.url
+-                    enabled = true
+-                }
+-                MmkvManager.encodeSubscription(subId, subItem)
+-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort, sequential)
+-            }
+-        }
+-
+-        // Обновляем обычные подписки (добавленные пользователем вручную)
+-        val allSubscriptions = MmkvManager.decodeSubscriptions()
+-        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
+-        for (sub in regularSubs) {
+-            Log.d(AppConfig.TAG, "Manually updating regular subscription: ${sub.subscription.remarks}")
+-            AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
++        val chunkedServers = buildProportionalChunks(candidates)
++        if (chunkedServers.isEmpty()) return@withContext false
++        
++        val chunk = chunkedServers.first()
++        GeekModeLogger.log("SmartConnect", "findMoreVipServers: запуск проверки чанка из ${chunk.size} серверов для пополнения VIP")
++        
++        val results = NodeTesterManager.testServers(context, chunk)
++        if (results.isEmpty()) {
++            GeekModeLogger.log("SmartConnect", "findMoreVipServers: чанк не дал результатов")
++            return@withContext false
+         }
+-
+-        // ══════════════════════════════════════════════════════════════════════
+-        // РЕМАППИНГ КЭШЕЙ ПОСЛЕ ОБНОВЛЕНИЯ
+-        // Строим индекс identity → newGuid для быстрого поиска.
+-        // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
+-        // ══════════════════════════════════════════════════════════════════════
+-        if (lastServerIdentity != null || vipIdentities.isNotEmpty()) {
+-            val updatedServers = MmkvManager.decodeServerList()
+-            val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
+-            for (guid in updatedServers) {
+-                val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+-                val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
+-                if (!identityIndex.containsKey(key)) {
+-                    identityIndex[key] = guid
+-                }
+-            }
+-
+-            // ── Ремаппим LastServerCache ──
+-            if (lastServerIdentity != null) {
+-                val key = "${lastServerIdentity.server}|${lastServerIdentity.port}|${lastServerIdentity.remarks}"
+-                val newGuid = identityIndex[key]
+-                if (newGuid != null) {
+-                    MmkvManager.remapLastConnectedServer(newGuid)
+-                    Log.i(AppConfig.TAG, "updateSubscription: LastServerCache ремаппирован → ${lastServerIdentity.remarks}")
+-                } else {
+-                    MmkvManager.clearLastConnectedServer()
+-                    Log.w(AppConfig.TAG, "updateSubscription: LastServerCache сервер исчез после обновления, кэш сброшен")
+-                }
+-            }
+-
+-            // ── Ремаппим VIP-кэш ──
+-            if (vipIdentities.isNotEmpty()) {
+-                val remapped = vipIdentities.mapNotNull { id ->
+-                    val key = "${id.server}|${id.port}|${id.remarks}"
+-                    identityIndex[key]
+-                }
+-                if (remapped.isNotEmpty()) {
+-                    MmkvManager.replaceVipCache(remapped)
+-                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipIdentities.size} серверов сохранено")
+-                } else {
+-                    MmkvManager.clearVipCache()
+-                    Log.w(AppConfig.TAG, "updateSubscription: все VIP-серверы исчезли после обновления, кэш очищен")
+-                }
++        
++        var added = 0
++        for (candidate in results) {
++            val success = NodeTesterManager.verifyProfile(context, candidate.first)
++            if (success) {
++                MmkvManager.addVipServer(candidate.first)
++                GeekModeLogger.log("SmartConnect", "findMoreVipServers: сервер ${candidate.second.remarks} добавлен в VIP кэш")
++                added++
+             }
+         }
+-    }
+-
+-    /**
+-     * Фильтрует серверы: убирает не поддерживаемые и применяет фильтр локаций из настроек.
+-     */
+-    private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+-        // Получаем список выключенных подписок, чтобы не подключаться к их серверам
+-        val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
+         
+-        // Загружаем настройки фильтра
+-        val filterMode = MmkvManager.decodeSettingsString(
+-            AppConfig.PREF_LOCATION_FILTER_MODE,
+-            AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+-        ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+-
+-        val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
+-            ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
+-            
+-        val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
+-
+-        return allServers.mapNotNull { guid ->
+-            val profile = MmkvManager.decodeServerConfig(guid)
+-            if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
+-                if (disabledSubIds.contains(profile.subscriptionId)) {
+-                    null // Пропускаем серверы из выключенных подписок
+-                } else {
+-                    guid to profile
+-                }
+-            } else null
+-        }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
+-            .filter {
+-                // Фильтр по локациям (эмодзи-флаги или кастомные группы)
+-                if (filterSet.isEmpty()) return@filter true
+-                
+-                var tag: String? = null
+-                val regexStr = groupRegexMap[it.second.subscriptionId]
+-                if (!regexStr.isNullOrEmpty()) {
+-                    try {
+-                        val match = Regex(regexStr).find(it.second.remarks)
+-                        if (match != null && match.groupValues.size > 1) {
+-                            tag = match.groupValues[1]
+-                        }
+-                    } catch (e: Exception) {}
+-                }
+-                if (tag.isNullOrEmpty()) {
+-                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
+-                }
+-                if (tag.isNullOrEmpty()) {
+-                    tag = "🌐" // Fallback tag for servers without any emojis or regex match
+-                }
+-                
+-                when (filterMode) {
+-                    AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
+-                        // Режим исключения: если тег в наборе — исключаем
+-                        tag == null || !filterSet.contains(tag)
+-                    }
+-                    AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
+-                        // Режим белого списка: если тег в наборе — разрешаем
+-                        tag != null && filterSet.contains(tag)
+-                    }
+-                    else -> true
+-                }
+-            }
++        GeekModeLogger.log("SmartConnect", "findMoreVipServers: завершено, добавлено $added серверов")
++        return@withContext added > 0
+     }
+ 
+-    /**
+-     * Тестирует серверы параллельно и возвращает результаты, отсортированные по задержке.
+-     */
+-    private suspend fun testServers(
+-        context: Context,
+-        servers: List<Pair<String, ProfileItem>>,
+-        totalTimeoutMs: Long = 6000,
+-        perServerTimeoutMs: Long = 1500
+-    ): List<Triple<String, ProfileItem, Long>> {
+-        val testUrls = listOf(
+-            AppConfig.DELAY_TEST_URL,
+-            "https://www.google.com/generate_204",
+-            "https://www.cloudflare.com/cdn-cgi/trace",
+-            "https://connectivitycheck.gstatic.com/generate_204"
+-        )
+-
+-        // AtomicBoolean вместо cancelChildren() — не ломает awaitAll() CancellationException-ом
+-        val foundFastServer = AtomicBoolean(false)
+-        val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
+-
+-        withTimeoutOrNull(totalTimeoutMs) {
+-            coroutineScope {
+-                val jobs = servers.map { (guid, profile) ->
+-                    async {
+-                        testSemaphore.withPermit {
+-                            // Ранний выход если уже нашли хороший сервер — не через cancelChildren!
+-                            if (foundFastServer.get()) return@withPermit null
+-
+-                            try {
+-                                val randomUrl = testUrls[Random.nextInt(testUrls.size)]
+-                                val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
+-                                val delay = if (config.status) {
+-                                    withTimeoutOrNull(perServerTimeoutMs) {
+-                                        V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
+-                                    } ?: -1L
+-                                } else -1L
+-
+-                                val finalDelay = if (delay <= 0) Long.MAX_VALUE else delay
+-                                val result = Triple(guid, profile, finalDelay)
+-                                
+-                                // Добавляем результат сразу, чтобы не потерять при таймауте чанка
+-                                synchronized(resultsList) {
+-                                    if (resultsList.none { it.first == guid }) {
+-                                        resultsList.add(result)
+-                                    }
+-                                }
+-                                
+-                                if (finalDelay < 500) {
+-                                    // Атомарно помечаем — остальные корутины пропустят тест
+-                                    foundFastServer.set(true)
+-                                }
+-                                result
+-                            } catch (e: kotlinx.coroutines.CancellationException) {
+-                                throw e // Прокидываем CancellationException дальше
+-                            } catch (e: Exception) {
+-                                Log.e(AppConfig.TAG, "testServers error for $guid", e)
+-                                null
+-                            }
+-                        }
+-                    }
+-                }
+-                
+-                try {
+-                    jobs.awaitAll()
+-                } catch (e: kotlinx.coroutines.CancellationException) {
+-                    Log.w(AppConfig.TAG, "Chunk testing timed out, proceeding with partial results (${resultsList.size})")
+-                }
+-            }
+-        }
++    
+ 
+-        return resultsList.sortedBy { it.third }
+-    }
++    const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
++    const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
+ 
+     /**
+      * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
+@@ -473,19 +92,19 @@ object SmartConnectManager {
+      * Только так можно достоверно убедиться, что сервер рабочий — проверка протокольного
+      * рукопожатия, авторизации и прохождения трафика, а не просто TCP-доступности.
+      */
+-    private suspend fun verifyProfile(context: Context, guid: String): Boolean {
++    private suspend fun NodeTesterManager.verifyProfile(context: Context, guid: String): Boolean {
+         // Выделяем свободный локальный порт для SOCKS-прокси
+         val port = try {
+             ServerSocket(0).use { it.localPort }
+         } catch (e: Exception) {
+-            Log.w(AppConfig.TAG, "verifyProfile: не удалось выделить порт для $guid")
++            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось выделить порт для $guid")
+             return false
+         }
+ 
+         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
+         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
+         if (!configResult.status) {
+-            Log.w(AppConfig.TAG, "verifyProfile: не удалось создать конфиг speedtest для $guid")
++            GeekModeLogger.log("SmartConnect", "verifyProfile: не удалось создать конфиг speedtest для $guid")
+             return false
+         }
+ 
+@@ -511,15 +130,15 @@ object SmartConnectManager {
+             val (elapsed, _) = SpeedtestManager.testConnection(context, port)
+ 
+             if (elapsed <= 0) {
+-                Log.w(AppConfig.TAG, "verifyProfile: трафик через сервер не прошёл для $guid")
++                GeekModeLogger.log("SmartConnect", "verifyProfile: трафик через сервер не прошёл для $guid")
+                 false
+             } else {
+-                Log.i(AppConfig.TAG, "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
++                GeekModeLogger.log("SmartConnect", "verifyProfile: сервер $guid рабочий, задержка = ${elapsed}ms")
+                 sendStatus(context, context.getString(R.string.status_profile_check_passed))
+                 true
+             }
+         } catch (e: Exception) {
+-            Log.w(AppConfig.TAG, "verifyProfile: исключение для $guid: ${e.message}")
++            GeekModeLogger.log("SmartConnect", "verifyProfile: исключение для $guid: ${e.message}")
+             false
+         } finally {
+             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
+@@ -536,7 +155,7 @@ object SmartConnectManager {
+         val vipGuids = MmkvManager.getVipCache()
+         if (vipGuids.isEmpty()) return false
+ 
+-        Log.i(AppConfig.TAG, "VIP Cache: checking ${vipGuids.size} servers")
++        GeekModeLogger.log("SmartConnect", "VIP Cache: checking ${vipGuids.size} servers")
+         
+         val vipCandidates = mutableListOf<Pair<String, ProfileItem>>()
+         val invalidGuids = mutableListOf<String>()
+@@ -555,22 +174,22 @@ object SmartConnectManager {
+         
+         sendStatus(context, context.getString(R.string.status_checking_vip_servers))
+         
+-        val results = testServers(context, vipCandidates)
++        val results = NodeTesterManager.testServers(context, vipCandidates)
+         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+         
+         val validResults = results.filter { it.third < Long.MAX_VALUE }
+         
+         if (profileCheckEnabled) {
+             for (candidate in validResults) {
+-                if (verifyProfile(context, candidate.first)) {
++                if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                     connectToBest(context, candidate, isStartup, isFromVipCache = true)
+                     val leftovers = validResults.filter { it.first != candidate.first }
+                     if (leftovers.isNotEmpty()) {
+-                        verifyAndCacheLeftovers(context.applicationContext, leftovers)
++                        NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                     }
+                     return true
+                 } else {
+-                    Log.w(AppConfig.TAG, "VIP Cache: server ${candidate.first} failed deep check, removing")
++                    GeekModeLogger.log("SmartConnect", "VIP Cache: server ${candidate.first} failed deep check, removing")
+                     MmkvManager.removeVipServer(candidate.first)
+                 }
+             }
+@@ -580,35 +199,20 @@ object SmartConnectManager {
+                 connectToBest(context, candidate, isStartup, isFromVipCache = true)
+                 val leftovers = validResults.filter { it.first != candidate.first }
+                 if (leftovers.isNotEmpty()) {
+-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
++                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                 }
+                 return true
+             }
+         }
+         
+-        Log.w(AppConfig.TAG, "VIP Cache: all valid servers failed")
++        GeekModeLogger.log("SmartConnect", "VIP Cache: all valid servers failed")
+         return false
+     }
+ 
+-    private fun verifyAndCacheLeftovers(context: Context, candidates: List<Triple<String, ProfileItem, Long>>) {
+-        GlobalScope.launch(Dispatchers.IO) {
+-            val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+-            for (candidate in candidates) {
+-                if (MmkvManager.getVipCache().size >= 5) break
+-                if (profileCheckEnabled) {
+-                    if (verifyProfile(context, candidate.first)) {
+-                        Log.i(AppConfig.TAG, "Background: added ${candidate.second.remarks} to VIP cache")
+-                        MmkvManager.addVipServer(candidate.first)
+-                    }
+-                } else {
+-                    MmkvManager.addVipServer(candidate.first)
+-                }
+-            }
+-        }
+-    }
++    
+ 
+     private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false, isFromVipCache: Boolean = false) {
+-        Log.i(AppConfig.TAG, "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
++        GeekModeLogger.log("SmartConnect", "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
+         if (isFromVipCache) {
+             sendStatus(context, context.getString(R.string.status_using_cached_server, best.second.remarks))
+         } else {
+@@ -618,7 +222,7 @@ object SmartConnectManager {
+ 
+         MmkvManager.addVipServer(best.first)
+         MmkvManager.saveLastConnectedServer(best.first)
+-        Log.i(AppConfig.TAG, "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
++        GeekModeLogger.log("SmartConnect", "SmartConnect: сервер ${best.second.remarks} сохранён в топ VIP-кэша")
+ 
+         val isRunning = V2RayServiceManager.isRunning()
+         if (isRunning) {
+@@ -634,7 +238,7 @@ object SmartConnectManager {
+         }
+         
+         if (isStartup) {
+-            val internetStatus = checkInternetStatus()
++            val internetStatus = NetworkManager.checkInternetStatus()
+             if (internetStatus == 1) { // JAMMED
+                 // ВАЖНО: используем GlobalScope.launch, а НЕ coroutineScope!
+                 // coroutineScope блокировал возврат из connectToBest на 5+ секунд,
+@@ -642,10 +246,10 @@ object SmartConnectManager {
+                 GlobalScope.launch(Dispatchers.IO) {
+                     try {
+                         delay(5000) // Ждем пока VPN разгонится
+-                        Log.i(AppConfig.TAG, "Survival logic: Jamming detected, triggering background update via VPN")
+-                        updateSubscription(context, sequential = true)
++                        GeekModeLogger.log("SmartConnect", "Survival logic: Jamming detected, triggering background update via VPN")
++                        SubscriptionHelper.updateSubscription(context, sequential = true)
+                     } catch (e: Exception) {
+-                        Log.e(AppConfig.TAG, "Survival logic: background update failed", e)
++                        GeekModeLogger.log("SmartConnect", "Survival logic: background update failed" + ": " + e)
+                     }
+                 }
+             }
+@@ -658,13 +262,13 @@ object SmartConnectManager {
+                     .minOfOrNull { it.subscription.lastUpdated } ?: 0L
+ 
+                 if (System.currentTimeMillis() - oldestUpdate > UPDATE_INTERVAL_MS) {
+-                    Log.i(AppConfig.TAG, "smartConnect: triggering background subscription update")
++                    GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
+                     GlobalScope.launch(Dispatchers.IO) {
+                         try {
+                             // sequential = true, чтобы обновлять плавно и не убить пул потоков
+-                            updateSubscription(context, isStartup = true, sequential = true)
++                            SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = true)
+                         } catch (e: Exception) {
+-                            Log.e(AppConfig.TAG, "smartConnect: background update failed", e)
++                            GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
+                         }
+                     }
+                 }
+@@ -678,10 +282,11 @@ object SmartConnectManager {
+     suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
+         
+         // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
+-        waitForInternet(context)
++        NetworkManager.waitForInternet(context)
+ 
+         // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
+         if (checkVipCacheAndConnect(context, isStartup = true)) {
++            NotificationManager.cancelFailoverNotification()
+             return@withContext true
+         }
+ 
+@@ -689,28 +294,28 @@ object SmartConnectManager {
+ 
+ 
+         // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
+-        val internetStatus = checkInternetStatus()
++        val internetStatus = NetworkManager.checkInternetStatus()
+         when (internetStatus) {
+             0 -> {
+-                Log.i(AppConfig.TAG, "SmartConnect: интернет доступен")
++                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет доступен")
+                 sendStatus(context, context.getString(R.string.status_testing_servers))
+             }
+             1 -> {
+-                Log.w(AppConfig.TAG, "SmartConnect: интернет глушат (только Яндекс доступен)")
++                GeekModeLogger.log("SmartConnect", "SmartConnect: интернет глушат (только Яндекс доступен)")
+                 sendStatus(context, context.getString(R.string.status_jamming_detected))
+             }
+             else -> {
+-                Log.w(AppConfig.TAG, "SmartConnect: интернета нет совсем")
++                GeekModeLogger.log("SmartConnect", "SmartConnect: интернета нет совсем")
+                 sendStatus(context, context.getString(R.string.status_no_internet))
+             }
+         }
+ 
+-        checkAndSetupSubscription(context)
++        SubscriptionHelper.checkAndSetupSubscription(context)
+         val allServers = MmkvManager.decodeServerList()
+         val filteredServers = filterServers(allServers).shuffled()
+ 
+         if (filteredServers.isEmpty()) {
+-            Log.e(AppConfig.TAG, "No servers found in hardcoded subscription")
++            GeekModeLogger.log("SmartConnect", "No servers found in hardcoded subscription")
+             sendStatus(context, context.getString(R.string.status_no_servers))
+             return@withContext false
+         }
+@@ -720,7 +325,7 @@ object SmartConnectManager {
+         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+ 
+         for ((index, chunk) in chunkedServers.withIndex()) {
+-            Log.i(AppConfig.TAG, "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
++            GeekModeLogger.log("SmartConnect", "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+             // Обновляем статус "тестируем" только если интернет в норме.
+             // При "глушат" (1) и "нет интернета" (2) строки уже говорят "ищём серверы" —
+             // перезаписывать их бессмысленно, иначе пользователь не увидит важный контекст.
+@@ -728,12 +333,12 @@ object SmartConnectManager {
+                 sendStatus(context, context.getString(R.string.status_testing_servers))
+             }
+ 
+-            val results = testServers(context, chunk)
++            val results = NodeTesterManager.testServers(context, chunk)
+ 
+             // Если включена проверка профиля — проверяем кандидатов по порядку
+             if (profileCheckEnabled) {
+                 for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+-                    if (verifyProfile(context, candidate.first)) {
++                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                         best = candidate
+                         break
+                     } else {
+@@ -748,16 +353,16 @@ object SmartConnectManager {
+                 connectToBest(context, best, isStartup = true)
+                 val leftovers = results.filter { it.first != best!!.first && it.third < Long.MAX_VALUE }
+                 if (leftovers.isNotEmpty()) {
+-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
++                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                 }
+                 break // Found a working server, stop testing other chunks
+             }
+-            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
++            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
+         }
+ 
+         // Fallback: if no server found in time, just pick the first one from list
+         if (best == null && filteredServers.isNotEmpty()) {
+-            Log.w(AppConfig.TAG, "No servers found within timeout, picking first available")
++            GeekModeLogger.log("SmartConnect", "No servers found within timeout, picking first available")
+             best = Triple(filteredServers[0].first, filteredServers[0].second, Long.MAX_VALUE)
+         }
+ 
+@@ -765,9 +370,10 @@ object SmartConnectManager {
+             if (!chunkedServers.any { chunk -> chunk.any { it.first == best!!.first } }) {
+                 connectToBest(context, best, isStartup = true)
+             }
++            NotificationManager.cancelFailoverNotification()
+             return@withContext true
+         } else {
+-            Log.e(AppConfig.TAG, "Critical: No servers available to connect")
++            GeekModeLogger.log("SmartConnect", "Critical: No servers available to connect")
+             sendStatus(context, context.getString(R.string.status_no_servers))
+             return@withContext false
+         }
+@@ -778,7 +384,7 @@ object SmartConnectManager {
+      */
+     suspend fun switchServer(context: Context): Boolean = withContext(Dispatchers.IO) {
+         // Ждем появления интернета (dzen.ru) перед переключением
+-        waitForInternet(context)
++        NetworkManager.waitForInternet(context)
+         
+         val currentGuid = MmkvManager.getSelectServer()
+         
+@@ -787,7 +393,7 @@ object SmartConnectManager {
+         // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
+         // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
+         if (currentGuid != null) {
+-            Log.i(AppConfig.TAG, "switchServer: user manually rejected current server, removing from VIP cache")
++            GeekModeLogger.log("SmartConnect", "switchServer: user manually rejected current server, removing from VIP cache")
+             MmkvManager.removeVipServer(currentGuid)
+         }
+         
+@@ -800,6 +406,7 @@ object SmartConnectManager {
+ 
+         // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
+         if (checkVipCacheAndConnect(context, isStartup = false)) {
++            NotificationManager.cancelFailoverNotification()
+             return@withContext true
+         }
+ 
+@@ -810,14 +417,14 @@ object SmartConnectManager {
+         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+ 
+         for ((index, chunk) in chunkedServers.withIndex()) {
+-            Log.i(AppConfig.TAG, "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
++            GeekModeLogger.log("SmartConnect", "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+             sendStatus(context, context.getString(R.string.status_testing_servers))
+ 
+-            val results = testServers(context, chunk)
++            val results = NodeTesterManager.testServers(context, chunk)
+ 
+             if (profileCheckEnabled) {
+                 for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+-                    if (verifyProfile(context, candidate.first)) {
++                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                         nextBest = candidate
+                         break
+                     }
+@@ -830,11 +437,11 @@ object SmartConnectManager {
+                 connectToBest(context, nextBest, isStartup = false)
+                 val leftovers = results.filter { it.first != nextBest!!.first && it.third < Long.MAX_VALUE }
+                 if (leftovers.isNotEmpty()) {
+-                    verifyAndCacheLeftovers(context.applicationContext, leftovers)
++                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                 }
+                 break
+             }
+-            Log.w(AppConfig.TAG, "No working server found in chunk ${index + 1}, moving to next chunk...")
++            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
+         }
+ 
+         if (nextBest == null && filteredServers.isNotEmpty()) {
+@@ -845,6 +452,7 @@ object SmartConnectManager {
+             if (!chunkedServers.any { chunk -> chunk.any { it.first == nextBest!!.first } }) {
+                 connectToBest(context, nextBest, isStartup = false)
+             }
++            NotificationManager.cancelFailoverNotification()
+             return@withContext true
+         }
+         return@withContext false
+@@ -853,7 +461,7 @@ object SmartConnectManager {
+     /**
+      * Надежно проверяет, работает ли прокси на локальном порту (межпроцессная проверка)
+      */
+-    private fun isProxyRunning(port: Int): Boolean {
++    fun isProxyRunning(port: Int): Boolean {
+         if (port <= 0) return false
+         return try {
+             java.net.Socket().use { socket ->
