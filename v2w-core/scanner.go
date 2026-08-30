@@ -73,40 +73,57 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 
 	errChan := make(chan error, 1)
 	go func() {
-		// IMPORTANT: The destination here is the TARGET website we want the proxy to connect to!
-		// It MUST NOT be the proxy server's IP, otherwise it creates a loopback!
-		targetDest := net.TCPDestination(net.ParseAddress("www.google.com"), net.Port(443))
-		err := handler.Process(ctx, link, dialer, targetDest)
+		// We use the dest provided by the caller (e.g. cp.cloudflare.com:80)
+		err := handler.Process(ctx, link, dialer, dest)
 		if err != nil {
 			errChan <- err
 		}
 	}()
 
-	// Perform a full HTTPS GET request using net/http, exactly like V2RayNG
 	conn := &pipeConn{r: downR, w: upW}
 	
-	transport := &http.Transport{
-		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	// Fast HTTP ping over the proxy stream.
+	// If dest is port 443, we wrap with TLS. If 80, plain HTTP.
+	tr := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return conn, nil
+		},
+	}
+	
+	if dest.Port == 443 {
+		tr.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			uConn := utls.UClient(conn, &utls.Config{
 				InsecureSkipVerify: true,
-				ServerName:         "www.google.com",
+				ServerName:         dest.Address.String(),
 			}, utls.HelloChrome_120)
 			if err := uConn.Handshake(); err != nil {
 				return nil, err
 			}
 			return uConn, nil
-		},
+		}
 	}
-	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+
+	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
 
 	errChan2 := make(chan error, 1)
 	go func() {
-		resp, err := client.Get("https://www.google.com/generate_204")
+		scheme := "http"
+		if dest.Port == 443 {
+			scheme = "https"
+		}
+		url := fmt.Sprintf("%s://%s/", scheme, dest.Address.String())
+		
+		resp, err := client.Get(url)
 		if err != nil {
 			errChan2 <- fmt.Errorf("http get err: %v", err)
 			return
 		}
 		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusNoContent {
+			errChan2 <- fmt.Errorf("unexpected status (not 204): %v", resp.StatusCode)
+			return
+		}
 		errChan2 <- nil
 	}()
 
@@ -117,18 +134,16 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		if err != nil {
 			errStr := err.Error()
 			if strings.Contains(errStr, "error code 0") {
-				return ScanResult{Latency: time.Since(start)}
+				// The connection was closed normally by the proxy after our successful request
+				// but wait, if errChan hits BEFORE errChan2, it means the proxy closed the connection prematurely!
+				// We should NOT return success here unless the HTTP request also succeeded!
+				return ScanResult{Error: fmt.Errorf("proxy closed connection prematurely")}
 			}
 			return ScanResult{Error: fmt.Errorf("proxy error: %v", err)}
 		}
 	case err := <-errChan2:
 		if err != nil {
-			errStr := err.Error()
-			if strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "Client.Timeout") {
-				// The connection stayed open for the entire HTTP timeout without the proxy returning an error!
-				// This means the VLESS proxy is ALIVE and accepted our request!
-				return ScanResult{Latency: time.Since(start)}
-			}
+			// Strict check: any error (timeout, EOF, bad TLS) is a failure!
 			return ScanResult{Error: fmt.Errorf("http ping failed: %v", err)}
 		}
 	}
