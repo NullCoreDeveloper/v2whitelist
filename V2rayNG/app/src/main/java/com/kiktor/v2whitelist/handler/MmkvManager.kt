@@ -876,14 +876,21 @@ object MmkvManager {
      * Добавляет сервер в VIP-кэш (в начало, LRU).
      * Если превышает 5, удаляет самые старые.
      */
+    fun getVipCacheLimit(): Int {
+        val defaultLimit = 5
+        val limitStr = decodeSettingsString("pref_vip_cache_limit")
+        return limitStr?.toIntOrNull() ?: defaultLimit
+    }
+
     fun addVipServer(guid: String) {
         if (guid.isBlank()) return
         val cache = getVipCache()
         // Удаляем если уже есть, чтобы переместить в начало
         cache.remove(guid)
         cache.add(0, guid)
-        // Обрезаем до 5 элементов
-        while (cache.size > 5) {
+        
+        val limit = getVipCacheLimit()
+        while (cache.size > limit) {
             cache.removeAt(cache.size - 1)
         }
         settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(cache))

@@ -165,7 +165,7 @@ object NodeTesterManager {
         GlobalScope.launch(Dispatchers.IO) {
             val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
             for (candidate in candidates) {
-                if (MmkvManager.getVipCache().size >= 5) break
+                if (MmkvManager.getVipCache().size >= MmkvManager.getVipCacheLimit()) break
                 if (profileCheckEnabled) {
                     if (verifyProfile(context, candidate.first)) {
                         GeekModeLogger.log("NodeTester", "Background: added ${candidate.second.remarks} to VIP cache")

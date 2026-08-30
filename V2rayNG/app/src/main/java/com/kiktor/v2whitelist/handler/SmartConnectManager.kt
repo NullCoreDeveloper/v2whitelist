@@ -410,7 +410,13 @@ object SmartConnectManager {
         }
 
         if (MmkvManager.isV2wCoreEnabled()) {
-            return@withContext smartConnectV2WCore(context, filteredServers, isStartup = true)
+            return@withContext V2WScannerEngine.runV2WCoreScan(
+                context, 
+                filteredServers, 
+                isStartup = true,
+                sendStatus = { status -> sendStatus(context, status) },
+                connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
+            )
         }
 
         val chunkedServers = buildProportionalChunks(filteredServers)
@@ -498,7 +504,13 @@ object SmartConnectManager {
         }
 
         if (MmkvManager.isV2wCoreEnabled()) {
-            return@withContext smartConnectV2WCore(context, filteredServers, isStartup = false)
+            return@withContext V2WScannerEngine.runV2WCoreScan(
+                context, 
+                filteredServers, 
+                isStartup = false,
+                sendStatus = { status -> sendStatus(context, status) },
+                connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
+            )
         }
 
         // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
@@ -715,76 +727,5 @@ object SmartConnectManager {
         return chunks
     }
 
-    private suspend fun smartConnectV2WCore(
-        context: Context,
-        servers: List<Pair<String, ProfileItem>>,
-        isStartup: Boolean
-    ): Boolean = coroutineScope {
-        val batchSize = MmkvManager.getV2wCoreBatchSize()
-        val concurrency = MmkvManager.getV2wCoreConcurrency()
 
-        val candidates = servers.take(batchSize)
-        val sb = java.lang.StringBuilder()
-        val urlToGuid = mutableMapOf<String, Pair<String, ProfileItem>>()
-        for (server in candidates) {
-            val url = AngConfigManager.shareConfig(server.first)
-            if (url.isNotEmpty()) {
-                sb.append(url).append("\n")
-                urlToGuid[url] = server
-            }
-        }
-
-        if (urlToGuid.isEmpty()) return@coroutineScope false
-
-        sendStatus(context, "Инициализация v2w-core сканера...")
-
-        val channel = kotlinx.coroutines.channels.Channel<Triple<String, ProfileItem, Long>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-
-        val callback = object : libv2ray.V2WScanCallback {
-            override fun onServerSuccess(configUrl: String?, delay: Long) {
-                if (configUrl != null) {
-                    val item = urlToGuid[configUrl]
-                    if (item != null) {
-                        channel.trySend(Triple(item.first, item.second, delay))
-                    }
-                }
-            }
-
-            override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
-                channel.close()
-            }
-        }
-
-        // Run scanner in background thread
-        launch(Dispatchers.IO) {
-            try {
-                libv2ray.Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
-            } catch (e: Exception) {
-                GeekModeLogger.log("SmartConnect", "v2w-core error: ${e.message}")
-                channel.close()
-            }
-        }
-
-        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
-        var connected = false
-
-        for (candidate in channel) {
-            if (profileCheckEnabled) {
-                if (NodeTesterManager.run { verifyProfile(context, candidate.first) }) {
-                    connectToBest(context, candidate, isStartup)
-                    connected = true
-                    break
-                } else {
-                    sendStatus(context, context.getString(R.string.status_profile_check_failed))
-                }
-            } else {
-                connectToBest(context, candidate, isStartup)
-                connected = true
-                break
-            }
-        }
-
-        // Wait for coroutines to finish cleanly, though we already connected
-        return@coroutineScope connected
-    }
 }

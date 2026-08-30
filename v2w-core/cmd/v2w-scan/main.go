@@ -312,20 +312,21 @@ func main() {
 
 	var successCount int32
 	var failCount int32
-	
+
 	var successfulLinks []string
 	var linksMu sync.Mutex
 
-	sem := make(chan struct{}, 20)
+	// Limit concurrent configs to 35
+	sem := make(chan struct{}, 35)
 
-	for _, link := range links {
+	for _, l := range links {
 		wg.Add(1)
-		go func(l string) {
+		go func(linkStr string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			config, stream, dest, err := parseVlessURL(l)
+			config, stream, dest, err := parseVlessURL(linkStr)
 			if err != nil {
 				atomic.AddInt32(&failCount, 1)
 				return
@@ -356,26 +357,25 @@ func main() {
 			dialer := &customDialer{streamSettings: stream}
 
 			name := "Unknown"
-			if idx := strings.Index(l, "#"); idx != -1 {
-				name, _ = url.QueryUnescape(l[idx+1:])
+			if idx := strings.Index(linkStr, "#"); idx != -1 {
+				name, _ = url.QueryUnescape(linkStr[idx+1:])
 			}
 
-			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 443)
-			var res core.ScanResult
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			res = coreScanner.TestNode(ctx, handler, dialer, targetDest)
+			targetDest := net.TCPDestination(net.DomainAddress("www.google.com"), 443)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
 			cancel()
 
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
 				linksMu.Lock()
-				successfulLinks = append(successfulLinks, l)
+				successfulLinks = append(successfulLinks, linkStr)
 				linksMu.Unlock()
 			} else {
 				atomic.AddInt32(&failCount, 1)
 				fmt.Printf("[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
 			}
-		}(link)
+		}(l)
 	}
 
 	wg.Wait()

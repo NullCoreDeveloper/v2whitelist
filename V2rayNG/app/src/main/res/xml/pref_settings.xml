@@ -44,12 +44,19 @@
         <EditTextPreference
             android:inputType="number"
             android:key="pref_v2w_core_concurrency"
-            android:defaultValue="20"
+            android:defaultValue="35"
             android:summary="@string/summary_pref_v2w_core_concurrency"
             android:title="@string/title_pref_v2w_core_concurrency" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_v2whitelist_settings_misc">
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_vip_cache_limit"
+            android:defaultValue="5"
+            android:summary="@string/summary_pref_vip_cache_limit"
+            android:title="@string/title_pref_vip_cache_limit" />
+
         <!-- Auto failover -->
         <CheckBoxPreference
             android:key="pref_auto_failover"

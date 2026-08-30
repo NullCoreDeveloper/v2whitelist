@@ -2,23 +2,21 @@ package core
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
-	"strings"
 	"time"
 
-	utls "github.com/refraction-networking/utls"
-
 	"github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/net"
+	xnet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 )
 
 // ProxyHandler is a common interface for stripped down Xray proxy handlers.
 type ProxyHandler interface {
-	Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target net.Destination) error
+	Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target xnet.Destination) error
 }
 
 // ScanResult contains the result of a single node scan.
@@ -26,26 +24,6 @@ type ScanResult struct {
 	Latency time.Duration
 	Error   error
 }
-
-type pipeConn struct {
-	r io.Reader
-	w io.Writer
-}
-
-func (c *pipeConn) Read(b []byte) (int, error) {
-	n, err := c.r.Read(b)
-	return n, err
-}
-func (c *pipeConn) Write(b []byte) (int, error) {
-	n, err := c.w.Write(b)
-	return n, err
-}
-func (c *pipeConn) Close() error                       { return nil }
-func (c *pipeConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
-func (c *pipeConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
-func (c *pipeConn) SetDeadline(t time.Time) error      { return nil }
-func (c *pipeConn) SetReadDeadline(t time.Time) error  { return nil }
-func (c *pipeConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // Scanner is a high-concurrency stateless scanner for connectivity testing.
 type Scanner struct{}
@@ -55,98 +33,119 @@ func NewScanner() *Scanner {
 	return &Scanner{}
 }
 
-// TestNode performs a stateless connection test using the given protocol handler.
-// It bypasses the entire routing/dispatcher infrastructure.
-func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, dest net.Destination) ScanResult {
+// TestNode performs a full End-to-End connectivity test.
+// It establishes the proxy tunnel and verifies a real HTTP 204 response from
+// connectivitycheck.gstatic.com (port 80, plain HTTP) through the proxy.
+//
+// Design notes:
+//   - net.Pipe() is used instead of two io.Pipe()s to avoid a deadlock
+//     that occurs on WebSocket/plain-TCP transports where the proxy writer
+//     blocks waiting for the HTTP client reader (and vice versa).
+//   - The proxy handler runs in its own goroutine and sends its error to
+//     proxyDone. If the proxy fails before the HTTP request completes, we
+//     return a "proxy" error immediately instead of waiting for the timeout.
+func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, dest xnet.Destination) ScanResult {
 	start := time.Now()
 
-	upR, upW := io.Pipe()
-	downR, downW := io.Pipe()
-
-	link := &transport.Link{
-		Reader: buf.NewReader(upR),
-		Writer: buf.NewWriter(downW),
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	errChan := make(chan error, 1)
+	// clientConn — used by the HTTP client.
+	// serverConn — used by the proxy handler (xray transport.Link).
+	// Data written to one end is readable from the other.
+	clientConn, serverConn := net.Pipe()
+
+	// Ensure both ends are closed when the context expires.
 	go func() {
-		// We use the dest provided by the caller (e.g. cp.cloudflare.com:80)
-		err := handler.Process(ctx, link, dialer, dest)
-		if err != nil {
-			errChan <- err
-		}
+		<-ctx.Done()
+		clientConn.Close()
+		serverConn.Close()
 	}()
 
-	conn := &pipeConn{r: downR, w: upW}
-	
-	// Fast HTTP ping over the proxy stream.
-	// If dest is port 443, we wrap with TLS. If 80, plain HTTP.
+	link := &transport.Link{
+		Reader: buf.NewReader(serverConn),
+		Writer: buf.NewWriter(serverConn),
+	}
+
+	proxyDone := make(chan error, 1)
+	go func() {
+		err := handler.Process(ctx, link, dialer, dest)
+		proxyDone <- err
+		// Close server side so the HTTP client unblocks if proxy finished early.
+		serverConn.Close()
+		clientConn.Close()
+	}()
+
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return conn, nil
+			return clientConn, nil
 		},
 	}
-	
+
+	// Only wrap with TLS if the destination uses port 443.
 	if dest.Port == 443 {
 		tr.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			uConn := utls.UClient(conn, &utls.Config{
+			tConn := tls.Client(clientConn, &tls.Config{
 				InsecureSkipVerify: true,
 				ServerName:         dest.Address.String(),
-			}, utls.HelloChrome_120)
-			if err := uConn.Handshake(); err != nil {
+				// Force HTTP/1.1 to avoid ALPN h2 negotiation issues inside the pipe.
+				NextProtos: []string{"http/1.1"},
+			})
+			if err := tConn.HandshakeContext(ctx); err != nil {
 				return nil, err
 			}
-			return uConn, nil
+			return tConn, nil
 		}
 	}
 
-	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
 
-	errChan2 := make(chan error, 1)
+	httpDone := make(chan error, 1)
 	go func() {
 		scheme := "http"
 		if dest.Port == 443 {
 			scheme = "https"
 		}
-		url := fmt.Sprintf("%s://%s/", scheme, dest.Address.String())
-		
-		resp, err := client.Get(url)
+		urlStr := fmt.Sprintf("%s://%s/generate_204", scheme, dest.Address.String())
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 		if err != nil {
-			errChan2 <- fmt.Errorf("http get err: %v", err)
+			httpDone <- fmt.Errorf("req build: %v", err)
+			return
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			httpDone <- fmt.Errorf("http: %v", err)
 			return
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != http.StatusNoContent {
-			errChan2 <- fmt.Errorf("unexpected status (not 204): %v", resp.StatusCode)
+			httpDone <- fmt.Errorf("status %d (want 204)", resp.StatusCode)
 			return
 		}
-		errChan2 <- nil
+		httpDone <- nil
 	}()
 
-	select {
-	case <-ctx.Done():
-		return ScanResult{Error: fmt.Errorf("timeout (waiting for HTTP response)")}
-	case err := <-errChan: // Error from proxy handler
-		if err != nil {
-			errStr := err.Error()
-			if strings.Contains(errStr, "error code 0") {
-				// The connection was closed normally by the proxy after our successful request
-				// but wait, if errChan hits BEFORE errChan2, it means the proxy closed the connection prematurely!
-				// We should NOT return success here unless the HTTP request also succeeded!
-				return ScanResult{Error: fmt.Errorf("proxy closed connection prematurely")}
+	for {
+		select {
+		case <-ctx.Done():
+			return ScanResult{Error: fmt.Errorf("timeout")}
+
+		case proxyErr := <-proxyDone:
+			if proxyErr != nil {
+				return ScanResult{Error: fmt.Errorf("proxy: %v", proxyErr)}
 			}
-			return ScanResult{Error: fmt.Errorf("proxy error: %v", err)}
-		}
-	case err := <-errChan2:
-		if err != nil {
-			// Strict check: any error (timeout, EOF, bad TLS) is a failure!
-			return ScanResult{Error: fmt.Errorf("http ping failed: %v", err)}
+			// Proxy finished normally (e.g. after HTTP request completed).
+			// Drain httpDone or wait for context — don't return success prematurely.
+			proxyDone = nil // disable this case to avoid infinite loop
+
+		case err := <-httpDone:
+			if err != nil {
+				return ScanResult{Error: err}
+			}
+			return ScanResult{Latency: time.Since(start)}
 		}
 	}
-
-	return ScanResult{Latency: time.Since(start)}
 }
