@@ -362,18 +362,9 @@ func main() {
 
 			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 443)
 			var res core.ScanResult
-			for attempt := 1; attempt <= 3; attempt++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				res = coreScanner.TestNode(ctx, handler, dialer, targetDest)
-				cancel()
-				
-				if res.Error == nil {
-					break // Success!
-				}
-				if attempt < 3 {
-					time.Sleep(1 * time.Second) // Wait before retrying to bypass rate-limits
-				}
-			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			res = coreScanner.TestNode(ctx, handler, dialer, targetDest)
+			cancel()
 
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
