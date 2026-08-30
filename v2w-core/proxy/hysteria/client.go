@@ -5,6 +5,7 @@ import (
 	go_errors "errors"
 	"io"
 	"math/rand"
+	"time"
 
 	"github.com/apernet/quic-go"
 	"github.com/xtls/xray-core/common/buf"
@@ -63,7 +64,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		if newCancel != nil {
 			newCancel()
 		}
-	}, 300)
+	}, 10*time.Second)
 
 	if newCtx != nil {
 		ctx = newCtx
