@@ -58,12 +58,21 @@ jobs:
         fileName: 'libv2ray.aar'
         out-file-path: V2rayNG/app/libs/
 
+    - name: Cache libv2wcore
+      id: cache-v2wcore
+      uses: actions/cache@v4
+      with:
+        path: v2w-core/libv2wcore.aar
+        key: ${{ runner.os }}-v2wcore-${{ hashFiles('v2w-core/**/*.go', 'v2w-core/go.mod', 'v2w-core/go.sum') }}
+
     - name: Set up Go
+      if: steps.cache-v2wcore.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: '1.23'
 
     - name: Build libv2wcore (v2w-core scanner)
+      if: steps.cache-v2wcore.outputs.cache-hit != 'true'
       run: |
         go install golang.org/x/mobile/cmd/gomobile@latest
         gomobile init
@@ -71,7 +80,9 @@ jobs:
         go get golang.org/x/mobile/bind
         gomobile bind -v -androidapi 21 -target=android -javapkg=com.kiktor.v2whitelist -o libv2wcore.aar ./v2wscanner
         popd
-        cp v2w-core/libv2wcore.aar V2rayNG/app/libs/
+
+    - name: Copy libv2wcore to libs
+      run: cp v2w-core/libv2wcore.aar V2rayNG/app/libs/
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
