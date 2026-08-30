@@ -52,7 +52,7 @@ jobs:
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.26.x'
 
     - name: Build Unified libv2ray (Original Core + Scanner Core)
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
@@ -63,7 +63,7 @@ jobs:
         
         # Create a workspace to bind both modules together
         cat << 'EOF' > go.work
-        go 1.23
+        go 1.26
         use (
           ./AndroidLibXrayLite
           ./v2w-core
