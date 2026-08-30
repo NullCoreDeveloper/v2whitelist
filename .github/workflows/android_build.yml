@@ -61,6 +61,12 @@ jobs:
         go install golang.org/x/mobile/cmd/gobind@d1f7d34360758c8fa4e81b703102e5a1e44e65f5
         gomobile init
         
+        # Dynamically downgrade go.mod versions to 1.23 to avoid Go 1.26 breaking changes in dependencies
+        sed -i 's/go 1.2[4-9]/go 1.23/g' AndroidLibXrayLite/go.mod || true
+        sed -i 's/go 1.2[4-9]\.[0-9]/go 1.23/g' AndroidLibXrayLite/go.mod || true
+        sed -i 's/go 1.2[4-9]/go 1.23/g' v2w-core/go.mod || true
+        sed -i 's/go 1.2[4-9]\.[0-9]/go 1.23/g' v2w-core/go.mod || true
+        
         # Create a workspace to bind both modules together
         cat << 'EOF' > go.work
         go 1.23
