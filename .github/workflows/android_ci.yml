@@ -60,8 +60,8 @@ jobs:
     - name: Build Unified libv2ray (Original Core + Scanner Core)
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       run: |
-        go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260709172247-6129f5bee9d5
-        go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+        go install golang.org/x/mobile/cmd/gomobile@d1f7d34360758c8fa4e81b703102e5a1e44e65f5
+        go install golang.org/x/mobile/cmd/gobind@d1f7d34360758c8fa4e81b703102e5a1e44e65f5
         gomobile init
         
         # Create a workspace to bind both modules together
