@@ -64,7 +64,7 @@ const file_transport_internet_udp_config_proto_rawDesc = "" +
 	"\n" +
 	"#transport/internet/udp/config.proto\x12\x1bxray.transport.internet.udp\"\b\n" +
 	"\x06ConfigBs\n" +
-	"\x1fcom.xray.transport.internet.udpP\x01Z0github.com/xtls/xray-core/transport/internet/udp\xaa\x02\x1bXray.Transport.Internet.Udpb\x06proto3"
+	"\x1fcom.xray.transport.internet.udpP\x01Z0github.com/kiktor/v2w-core/transport/internet/udp\xaa\x02\x1bXray.Transport.Internet.Udpb\x06proto3"
 
 var (
 	file_transport_internet_udp_config_proto_rawDescOnce sync.Once

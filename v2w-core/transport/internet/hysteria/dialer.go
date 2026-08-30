@@ -14,16 +14,16 @@ import (
 
 	"github.com/apernet/quic-go"
 	"github.com/apernet/quic-go/http3"
-	"github.com/xtls/xray-core/common"
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/net/cnc"
-	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/hysteria/congestion"
-	"github.com/xtls/xray-core/transport/internet/hysteria/congestion/bbr"
-	"github.com/xtls/xray-core/transport/internet/hysteria/udphop"
-	"github.com/xtls/xray-core/transport/internet/stat"
-	"github.com/xtls/xray-core/transport/internet/tls"
+	"github.com/kiktor/v2w-core/common"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/net/cnc"
+	"github.com/kiktor/v2w-core/transport/internet"
+	"github.com/kiktor/v2w-core/transport/internet/hysteria/congestion"
+	"github.com/kiktor/v2w-core/transport/internet/hysteria/congestion/bbr"
+	"github.com/kiktor/v2w-core/transport/internet/hysteria/udphop"
+	"github.com/kiktor/v2w-core/transport/internet/stat"
+	"github.com/kiktor/v2w-core/transport/internet/tls"
 )
 
 type client struct {

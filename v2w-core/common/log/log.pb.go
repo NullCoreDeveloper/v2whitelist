@@ -88,7 +88,7 @@ const file_common_log_log_proto_rawDesc = "" +
 	"\aWarning\x10\x02\x12\b\n" +
 	"\x04Info\x10\x03\x12\t\n" +
 	"\x05Debug\x10\x04BO\n" +
-	"\x13com.xray.common.logP\x01Z$github.com/xtls/xray-core/common/log\xaa\x02\x0fXray.Common.Logb\x06proto3"
+	"\x13com.xray.common.logP\x01Z$github.com/kiktor/v2w-core/common/log\xaa\x02\x0fXray.Common.Logb\x06proto3"
 
 var (
 	file_common_log_log_proto_rawDescOnce sync.Once

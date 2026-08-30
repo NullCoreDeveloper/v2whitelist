@@ -9,9 +9,9 @@ import (
 
 	"github.com/apernet/quic-go"
 	"github.com/apernet/quic-go/quicvarint"
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/protocol"
 )
 
 type interConn struct {

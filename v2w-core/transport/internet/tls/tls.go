@@ -9,9 +9,9 @@ import (
 	"time"
 
 	utls "github.com/refraction-networking/utls"
-	"github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/utils"
+	"github.com/kiktor/v2w-core/common/buf"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/utils"
 )
 
 type Interface interface {

@@ -1,8 +1,8 @@
 package encoding
 
 import (
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/protocol"
 )
 
 const (

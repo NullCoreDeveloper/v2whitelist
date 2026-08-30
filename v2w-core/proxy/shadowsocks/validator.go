@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/xtls/xray-core/common/dice"
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/dice"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/protocol"
 )
 
 // Validator stores valid Shadowsocks users.

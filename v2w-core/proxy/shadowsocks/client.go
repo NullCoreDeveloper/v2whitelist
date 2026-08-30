@@ -4,17 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/protocol"
-	"github.com/xtls/xray-core/common/retry"
-	"github.com/xtls/xray-core/common/session"
-	"github.com/xtls/xray-core/common/signal"
-	"github.com/xtls/xray-core/common/task"
-	"github.com/xtls/xray-core/transport"
-	"github.com/xtls/xray-core/transport/internet"
-	"github.com/xtls/xray-core/transport/internet/stat"
+	"github.com/kiktor/v2w-core/common/buf"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/retry"
+	"github.com/kiktor/v2w-core/common/session"
+	"github.com/kiktor/v2w-core/common/signal"
+	"github.com/kiktor/v2w-core/common/task"
+	"github.com/kiktor/v2w-core/transport"
+	"github.com/kiktor/v2w-core/transport/internet"
+	"github.com/kiktor/v2w-core/transport/internet/stat"
 )
 
 // Client is a inbound handler for Shadowsocks protocol

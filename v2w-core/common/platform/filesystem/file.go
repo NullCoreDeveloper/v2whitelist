@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/platform"
+	"github.com/kiktor/v2w-core/common/buf"
+	"github.com/kiktor/v2w-core/common/platform"
 )
 
 type FileReaderFunc func(path string) (io.ReadCloser, error)

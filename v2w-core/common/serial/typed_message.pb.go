@@ -85,7 +85,7 @@ const file_common_serial_typed_message_proto_rawDesc = "" +
 	"\fTypedMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05valueBX\n" +
-	"\x16com.xray.common.serialP\x01Z'github.com/xtls/xray-core/common/serial\xaa\x02\x12Xray.Common.Serialb\x06proto3"
+	"\x16com.xray.common.serialP\x01Z'github.com/kiktor/v2w-core/common/serial\xaa\x02\x12Xray.Common.Serialb\x06proto3"
 
 var (
 	file_common_serial_typed_message_proto_rawDescOnce sync.Once

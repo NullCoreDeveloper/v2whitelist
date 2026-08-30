@@ -4,8 +4,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/xtls/xray-core/common"
-	"github.com/xtls/xray-core/common/errors"
+	"github.com/kiktor/v2w-core/common"
+	"github.com/kiktor/v2w-core/common/errors"
 )
 
 type PacketHeader interface {

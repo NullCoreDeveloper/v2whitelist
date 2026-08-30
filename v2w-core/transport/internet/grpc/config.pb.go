@@ -137,7 +137,7 @@ const file_transport_internet_grpc_config_proto_rawDesc = "" +
 	"\x15permit_without_stream\x18\x06 \x01(\bR\x13permitWithoutStream\x120\n" +
 	"\x14initial_windows_size\x18\a \x01(\x05R\x12initialWindowsSize\x12\x1d\n" +
 	"\n" +
-	"user_agent\x18\b \x01(\tR\tuserAgentB3Z1github.com/xtls/xray-core/transport/internet/grpcb\x06proto3"
+	"user_agent\x18\b \x01(\tR\tuserAgentB3Z1github.com/kiktor/v2w-core/transport/internet/grpcb\x06proto3"
 
 var (
 	file_transport_internet_grpc_config_proto_rawDescOnce sync.Once

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/xtls/xray-core/common/buf"
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/platform"
-	"github.com/xtls/xray-core/common/protocol"
-	"github.com/xtls/xray-core/common/session"
+	"github.com/kiktor/v2w-core/common/buf"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/platform"
+	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/session"
 	"lukechampine.com/blake3"
 )
 

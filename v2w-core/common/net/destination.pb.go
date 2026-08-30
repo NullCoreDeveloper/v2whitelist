@@ -92,7 +92,7 @@ const file_common_net_destination_proto_rawDesc = "" +
 	"\anetwork\x18\x01 \x01(\x0e2\x18.xray.common.net.NetworkR\anetwork\x125\n" +
 	"\aaddress\x18\x02 \x01(\v2\x1b.xray.common.net.IPOrDomainR\aaddress\x12\x12\n" +
 	"\x04port\x18\x03 \x01(\rR\x04portBO\n" +
-	"\x13com.xray.common.netP\x01Z$github.com/xtls/xray-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
+	"\x13com.xray.common.netP\x01Z$github.com/kiktor/v2w-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
 
 var (
 	file_common_net_destination_proto_rawDescOnce sync.Once

@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/xtls/xray-core/common/buf"
-	xnet "github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/transport"
-	"github.com/xtls/xray-core/transport/internet"
+	"github.com/kiktor/v2w-core/common/buf"
+	xnet "github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/transport"
+	"github.com/kiktor/v2w-core/transport/internet"
 )
 
 // ProxyHandler is a common interface for stripped down Xray proxy handlers.

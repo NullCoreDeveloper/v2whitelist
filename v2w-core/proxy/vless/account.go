@@ -3,9 +3,9 @@ package vless
 import (
 	"google.golang.org/protobuf/proto"
 
-	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/protocol"
-	"github.com/xtls/xray-core/common/uuid"
+	"github.com/kiktor/v2w-core/common/errors"
+	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/uuid"
 )
 
 // AsAccount implements protocol.Account.AsAccount().

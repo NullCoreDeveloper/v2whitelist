@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/xtls/xray-core/common/platform"
+	"github.com/kiktor/v2w-core/common/platform"
 )
 
 type allocStrategy struct {

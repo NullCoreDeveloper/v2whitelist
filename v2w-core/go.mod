@@ -1,4 +1,4 @@
-module github.com/xtls/xray-core
+module github.com/kiktor/v2w-core
 
 go 1.26
 
@@ -26,14 +26,16 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.0.6 // indirect
-	github.com/google/btree v1.1.2 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/google/btree v1.1.3 // indirect
 	github.com/juju/ratelimit v1.0.2 // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
+	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
+	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect

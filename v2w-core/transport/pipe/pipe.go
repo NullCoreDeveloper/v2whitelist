@@ -3,8 +3,8 @@ package pipe
 import (
 	"context"
 
-	"github.com/xtls/xray-core/common/signal"
-	"github.com/xtls/xray-core/common/signal/done"
+	"github.com/kiktor/v2w-core/common/signal"
+	"github.com/kiktor/v2w-core/common/signal/done"
 
 )
 

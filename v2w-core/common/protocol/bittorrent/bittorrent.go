@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/xtls/xray-core/common"
+	"github.com/kiktor/v2w-core/common"
 )
 
 type SniffHeader struct{}

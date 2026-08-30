@@ -3,8 +3,8 @@ package drain
 import (
 	"io"
 
-	"github.com/xtls/xray-core/common/dice"
-	"github.com/xtls/xray-core/common/errors"
+	"github.com/kiktor/v2w-core/common/dice"
+	"github.com/kiktor/v2w-core/common/errors"
 )
 
 type BehaviorSeedLimitedDrainer struct {

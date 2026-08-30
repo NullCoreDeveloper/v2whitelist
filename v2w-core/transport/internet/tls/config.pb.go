@@ -11,7 +11,7 @@ import (
 	sync "sync"
 	unsafe "unsafe"
 
-	internet "github.com/xtls/xray-core/transport/internet"
+	internet "github.com/kiktor/v2w-core/transport/internet"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -400,7 +400,7 @@ const file_transport_internet_tls_config_proto_rawDesc = "" +
 	"\x0fech_config_list\x18\x13 \x01(\tR\rechConfigList\x12U\n" +
 	"\x13ech_socket_settings\x18\x15 \x01(\v2%.xray.transport.internet.SocketConfigR\x11echSocketSettings\x125\n" +
 	"\x17pinned_peer_cert_sha256\x18\x16 \x03(\fR\x14pinnedPeerCertSha256Bs\n" +
-	"\x1fcom.xray.transport.internet.tlsP\x01Z0github.com/xtls/xray-core/transport/internet/tls\xaa\x02\x1bXray.Transport.Internet.Tlsb\x06proto3"
+	"\x1fcom.xray.transport.internet.tlsP\x01Z0github.com/kiktor/v2w-core/transport/internet/tls\xaa\x02\x1bXray.Transport.Internet.Tlsb\x06proto3"
 
 var (
 	file_transport_internet_tls_config_proto_rawDescOnce sync.Once

@@ -3,8 +3,8 @@ package account
 import (
 	"sync"
 
-	"github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/net"
+	"github.com/kiktor/v2w-core/common/protocol"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"

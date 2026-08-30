@@ -7,7 +7,7 @@
 package splithttp
 
 import (
-	internet "github.com/xtls/xray-core/transport/internet"
+	internet "github.com/kiktor/v2w-core/transport/internet"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -476,7 +476,7 @@ const file_transport_internet_splithttp_config_proto_rawDesc = "" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x85\x01\n" +
-	"%com.xray.transport.internet.splithttpP\x01Z6github.com/xtls/xray-core/transport/internet/splithttp\xaa\x02!Xray.Transport.Internet.SplitHttpb\x06proto3"
+	"%com.xray.transport.internet.splithttpP\x01Z6github.com/kiktor/v2w-core/transport/internet/splithttp\xaa\x02!Xray.Transport.Internet.SplitHttpb\x06proto3"
 
 var (
 	file_transport_internet_splithttp_config_proto_rawDescOnce sync.Once

@@ -131,7 +131,7 @@ const file_common_net_network_proto_rawDesc = "" +
 	"\x03TCP\x10\x02\x12\a\n" +
 	"\x03UDP\x10\x03\x12\b\n" +
 	"\x04UNIX\x10\x04BO\n" +
-	"\x13com.xray.common.netP\x01Z$github.com/xtls/xray-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
+	"\x13com.xray.common.netP\x01Z$github.com/kiktor/v2w-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
 
 var (
 	file_common_net_network_proto_rawDescOnce sync.Once

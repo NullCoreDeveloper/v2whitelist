@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xtls/xray-core/common/crypto"
-	"github.com/xtls/xray-core/common/errors"
+	"github.com/kiktor/v2w-core/common/crypto"
+	"github.com/kiktor/v2w-core/common/errors"
 	"golang.org/x/crypto/chacha20poly1305"
 	"lukechampine.com/blake3"
 )

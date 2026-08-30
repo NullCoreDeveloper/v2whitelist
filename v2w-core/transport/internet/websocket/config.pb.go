@@ -121,7 +121,7 @@ const file_transport_internet_websocket_config_proto_rawDesc = "" +
 	"\vHeaderEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x85\x01\n" +
-	"%com.xray.transport.internet.websocketP\x01Z6github.com/xtls/xray-core/transport/internet/websocket\xaa\x02!Xray.Transport.Internet.Websocketb\x06proto3"
+	"%com.xray.transport.internet.websocketP\x01Z6github.com/kiktor/v2w-core/transport/internet/websocket\xaa\x02!Xray.Transport.Internet.Websocketb\x06proto3"
 
 var (
 	file_transport_internet_websocket_config_proto_rawDescOnce sync.Once

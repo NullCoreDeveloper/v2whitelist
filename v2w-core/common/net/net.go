@@ -1,12 +1,12 @@
 // Package net is a drop-in replacement to Golang's net package, with some more functionalities.
-package net // import "github.com/xtls/xray-core/common/net"
+package net // import "github.com/kiktor/v2w-core/common/net"
 
 import (
 	"net"
 	"sync/atomic"
 	"time"
 
-	"github.com/xtls/xray-core/common/errors"
+	"github.com/kiktor/v2w-core/common/errors"
 )
 
 // defines the maximum time an idle TCP session can survive in the tunnel, so

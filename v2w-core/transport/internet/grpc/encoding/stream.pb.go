@@ -121,7 +121,7 @@ const file_transport_internet_grpc_encoding_stream_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x03(\fR\x04data2\xe6\x01\n" +
 	"\vGRPCService\x12c\n" +
 	"\x03Tun\x12+.xray.transport.internet.grpc.encoding.Hunk\x1a+.xray.transport.internet.grpc.encoding.Hunk(\x010\x01\x12r\n" +
-	"\bTunMulti\x120.xray.transport.internet.grpc.encoding.MultiHunk\x1a0.xray.transport.internet.grpc.encoding.MultiHunk(\x010\x01B<Z:github.com/xtls/xray-core/transport/internet/grpc/encodingb\x06proto3"
+	"\bTunMulti\x120.xray.transport.internet.grpc.encoding.MultiHunk\x1a0.xray.transport.internet.grpc.encoding.MultiHunk(\x010\x01B<Z:github.com/kiktor/v2w-core/transport/internet/grpc/encodingb\x06proto3"
 
 var (
 	file_transport_internet_grpc_encoding_stream_proto_rawDescOnce sync.Once

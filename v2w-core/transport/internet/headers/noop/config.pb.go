@@ -101,7 +101,7 @@ const file_transport_internet_headers_noop_config_proto_rawDesc = "" +
 	",transport/internet/headers/noop/config.proto\x12$xray.transport.internet.headers.noop\"\b\n" +
 	"\x06Config\"\x12\n" +
 	"\x10ConnectionConfigB\x8e\x01\n" +
-	"(com.xray.transport.internet.headers.noopP\x01Z9github.com/xtls/xray-core/transport/internet/headers/noop\xaa\x02$Xray.Transport.Internet.Headers.Noopb\x06proto3"
+	"(com.xray.transport.internet.headers.noopP\x01Z9github.com/kiktor/v2w-core/transport/internet/headers/noop\xaa\x02$Xray.Transport.Internet.Headers.Noopb\x06proto3"
 
 var (
 	file_transport_internet_headers_noop_config_proto_rawDescOnce sync.Once

@@ -322,7 +322,7 @@ const file_transport_internet_reality_config_proto_rawDesc = "" +
 	"afterBytes\x12\"\n" +
 	"\rbytes_per_sec\x18\x02 \x01(\x04R\vbytesPerSec\x12-\n" +
 	"\x13burst_bytes_per_sec\x18\x03 \x01(\x04R\x10burstBytesPerSecB\x7f\n" +
-	"#com.xray.transport.internet.realityP\x01Z4github.com/xtls/xray-core/transport/internet/reality\xaa\x02\x1fXray.Transport.Internet.Realityb\x06proto3"
+	"#com.xray.transport.internet.realityP\x01Z4github.com/kiktor/v2w-core/transport/internet/reality\xaa\x02\x1fXray.Transport.Internet.Realityb\x06proto3"
 
 var (
 	file_transport_internet_reality_config_proto_rawDescOnce sync.Once

@@ -11,7 +11,7 @@ import (
 	sync "sync"
 	unsafe "unsafe"
 
-	serial "github.com/xtls/xray-core/common/serial"
+	serial "github.com/kiktor/v2w-core/common/serial"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -83,7 +83,7 @@ const file_transport_internet_tcp_config_proto_rawDesc = "" +
 	"\x06Config\x12I\n" +
 	"\x0fheader_settings\x18\x02 \x01(\v2 .xray.common.serial.TypedMessageR\x0eheaderSettings\x122\n" +
 	"\x15accept_proxy_protocol\x18\x03 \x01(\bR\x13acceptProxyProtocolJ\x04\b\x01\x10\x02Bs\n" +
-	"\x1fcom.xray.transport.internet.tcpP\x01Z0github.com/xtls/xray-core/transport/internet/tcp\xaa\x02\x1bXray.Transport.Internet.Tcpb\x06proto3"
+	"\x1fcom.xray.transport.internet.tcpP\x01Z0github.com/kiktor/v2w-core/transport/internet/tcp\xaa\x02\x1bXray.Transport.Internet.Tcpb\x06proto3"
 
 var (
 	file_transport_internet_tcp_config_proto_rawDescOnce sync.Once

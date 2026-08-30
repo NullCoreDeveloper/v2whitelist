@@ -82,7 +82,7 @@ const file_proxy_vless_encoding_addons_proto_rawDesc = "" +
 	"\x06Addons\x12\x12\n" +
 	"\x04Flow\x18\x01 \x01(\tR\x04Flow\x12\x12\n" +
 	"\x04Seed\x18\x02 \x01(\fR\x04SeedBm\n" +
-	"\x1dcom.xray.proxy.vless.encodingP\x01Z.github.com/xtls/xray-core/proxy/vless/encoding\xaa\x02\x19Xray.Proxy.Vless.Encodingb\x06proto3"
+	"\x1dcom.xray.proxy.vless.encodingP\x01Z.github.com/kiktor/v2w-core/proxy/vless/encoding\xaa\x02\x19Xray.Proxy.Vless.Encodingb\x06proto3"
 
 var (
 	file_proxy_vless_encoding_addons_proto_rawDescOnce sync.Once

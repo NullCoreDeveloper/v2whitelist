@@ -1,11 +1,11 @@
 // Package crypto provides common crypto libraries for Xray.
-package crypto // import "github.com/xtls/xray-core/common/crypto"
+package crypto // import "github.com/kiktor/v2w-core/common/crypto"
 
 import (
 	"crypto/rand"
 	"math/big"
 
-	"github.com/xtls/xray-core/common"
+	"github.com/kiktor/v2w-core/common"
 )
 
 // [,)

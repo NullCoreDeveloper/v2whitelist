@@ -118,7 +118,7 @@ const file_common_net_address_proto_rawDesc = "" +
 	"\x02ip\x18\x01 \x01(\fH\x00R\x02ip\x12\x18\n" +
 	"\x06domain\x18\x02 \x01(\tH\x00R\x06domainB\t\n" +
 	"\aaddressBO\n" +
-	"\x13com.xray.common.netP\x01Z$github.com/xtls/xray-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
+	"\x13com.xray.common.netP\x01Z$github.com/kiktor/v2w-core/common/net\xaa\x02\x0fXray.Common.Netb\x06proto3"
 
 var (
 	file_common_net_address_proto_rawDescOnce sync.Once

@@ -131,7 +131,7 @@ const file_common_protocol_headers_proto_rawDesc = "" +
 	"\n" +
 	"AES128_GCM\x10\x03\x12\x15\n" +
 	"\x11CHACHA20_POLY1305\x10\x04B^\n" +
-	"\x18com.xray.common.protocolP\x01Z)github.com/xtls/xray-core/common/protocol\xaa\x02\x14Xray.Common.Protocolb\x06proto3"
+	"\x18com.xray.common.protocolP\x01Z)github.com/kiktor/v2w-core/common/protocol\xaa\x02\x14Xray.Common.Protocolb\x06proto3"
 
 var (
 	file_common_protocol_headers_proto_rawDescOnce sync.Once

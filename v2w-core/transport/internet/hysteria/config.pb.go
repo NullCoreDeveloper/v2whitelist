@@ -167,7 +167,7 @@ const file_transport_internet_hysteria_config_proto_rawDesc = "" +
 	"\x16MasqStringHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x01\x10\x02B\x82\x01\n" +
-	"$com.xray.transport.internet.hysteriaP\x01Z5github.com/xtls/xray-core/transport/internet/hysteria\xaa\x02 Xray.Transport.Internet.Hysteriab\x06proto3"
+	"$com.xray.transport.internet.hysteriaP\x01Z5github.com/kiktor/v2w-core/transport/internet/hysteria\xaa\x02 Xray.Transport.Internet.Hysteriab\x06proto3"
 
 var (
 	file_transport_internet_hysteria_config_proto_rawDescOnce sync.Once
