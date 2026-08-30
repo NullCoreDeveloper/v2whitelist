@@ -4,7 +4,8 @@ import android.content.Context
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.dto.ProfileItem
-import libv2ray.Libv2ray
+import v2wscanner.V2wscanner
+import v2wscanner.V2WScanCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -41,7 +42,7 @@ object V2WScannerEngine {
 
         val channel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
 
-        val callback = object : libv2ray.V2WScanCallback {
+        val callback = object : v2wscanner.V2WScanCallback {
             override fun onServerSuccess(configUrl: String?, delay: Long) {
                 if (configUrl != null) {
                     val item = urlToGuid[configUrl]
@@ -59,7 +60,7 @@ object V2WScannerEngine {
         // Run scanner in background thread
         launch(Dispatchers.IO) {
             try {
-                libv2ray.Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
+                v2wscanner.V2wscanner.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
             } catch (e: Exception) {
                 GeekModeLogger.log("SmartConnect", "v2w-core error: ${e.message}")
                 channel.close()
@@ -75,7 +76,7 @@ object V2WScannerEngine {
             if (profileCheckEnabled) {
                 if (NodeTesterManager.run { verifyProfile(context, candidatePair.first) }) {
                     // Working node found! Stop the Go scanner to save resources
-                    libv2ray.Libv2ray.stopV2WScanner()
+                    v2wscanner.V2wscanner.stopV2WScanner()
                     
                     connectToBest(candidatePair, isStartup)
                     connected = true
@@ -85,7 +86,7 @@ object V2WScannerEngine {
                 }
             } else {
                 // Working node found! Stop the Go scanner to save resources
-                libv2ray.Libv2ray.stopV2WScanner()
+                v2wscanner.V2wscanner.stopV2WScanner()
                 
                 connectToBest(candidatePair, isStartup)
                 connected = true
@@ -95,7 +96,7 @@ object V2WScannerEngine {
 
         // Make sure scanner is stopped if we exhausted the channel without connecting
         if (!connected) {
-            libv2ray.Libv2ray.stopV2WScanner()
+            v2wscanner.V2wscanner.stopV2WScanner()
         } else {
             // Drain the channel for any extra servers that succeeded before we stopped the scanner
             val leftovers = mutableListOf<Triple<String, ProfileItem, Long>>()
