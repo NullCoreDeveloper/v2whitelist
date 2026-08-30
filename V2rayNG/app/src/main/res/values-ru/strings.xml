@@ -284,6 +284,14 @@
     <string name="summary_pref_chunk_size">Сколько серверов тестировать за один проход (по умолчанию: 20)</string>
     <string name="title_pref_chunk_preset">Пресет распределения по умолчанию</string>
 
+    <string name="title_smartconnect_settings">Настройка SmartConnect</string>
+    <string name="title_pref_v2w_core_enabled">Использовать ядро v2w-core</string>
+    <string name="summary_pref_v2w_core_enabled">Экспериментально. Массовое параллельное сканирование серверов для обхода DDoS-защиты и поиска лучших узлов в реальном времени.</string>
+    <string name="title_pref_v2w_core_batch_size">Размер батча v2w-core</string>
+    <string name="summary_pref_v2w_core_batch_size">Сколько серверов тестировать одновременно через новое ядро (по умолчанию: 100)</string>
+    <string name="title_pref_v2w_core_concurrency">Количество сокетов v2w-core</string>
+    <string name="summary_pref_v2w_core_concurrency">Максимальное количество параллельных подключений для сканирования (по умолчанию: 20)</string>
+
     <string name="title_logcat">Журнал</string>
     <string name="logcat_copy">Копировать</string>
     <string name="logcat_clear">Очистить</string>

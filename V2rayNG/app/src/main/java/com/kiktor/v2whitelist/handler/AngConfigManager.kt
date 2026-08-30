@@ -129,7 +129,7 @@ object AngConfigManager {
      * @param guid The GUID of the configuration.
      * @return The configuration string.
      */
-    private fun shareConfig(guid: String): String {
+    fun shareConfig(guid: String): String {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
 

@@ -6,6 +6,7 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	gotls "crypto/tls"
@@ -141,17 +142,19 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 		uConn.BuildHandshakeState()
 		hello := uConn.HandshakeState.Hello
 		hello.SessionId = make([]byte, 32)
-		copy(hello.Raw[39:], hello.SessionId) // the fixed location of `Session ID`
+		copy(hello.Raw[39:], hello.SessionId) // zero out SessionId in hello.Raw for AEAD signature
 		hello.SessionId[0] = 1                // core.Version_x
 		hello.SessionId[1] = 8                // core.Version_y
-		hello.SessionId[2] = 4                // core.Version_z
+		hello.SessionId[2] = 8                // core.Version_z
 		hello.SessionId[3] = 0                // reserved
-		// VM is currently in 2026-08-30, real world is 2024-08-30.
-		// 730 days exactly (365 * 2) = 63072000 seconds
-		offsetSec := int64(63072000)
-		realTime := time.Now().Unix() - offsetSec
-		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(realTime))
+		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(time.Now().Unix()))
 		copy(hello.SessionId[8:], config.ShortId)
+		// Randomize the rest of the SessionId to prevent identical replays in the same second
+		if len(config.ShortId) < 24 {
+			randBytes := make([]byte, 24-len(config.ShortId))
+			rand.Read(randBytes)
+			copy(hello.SessionId[8+len(config.ShortId):], randBytes)
+		}
 		if config.Show {
 			fmt.Printf("REALITY localAddr: %v\thello.SessionId[:16]: %v\n", localAddr, hello.SessionId[:16])
 		}

@@ -9,6 +9,9 @@
             android:summary="@string/summary_pref_manage_subs"
             android:title="@string/title_pref_manage_subs" />
 
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/title_smartconnect_settings">
         <!-- SmartConnect Server Chunking -->
         <EditTextPreference
             android:inputType="number"
@@ -25,6 +28,28 @@
             android:summary="%s"
             android:title="@string/title_pref_chunk_preset" />
 
+        <CheckBoxPreference
+            android:key="pref_v2w_core_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_v2w_core_enabled"
+            android:title="@string/title_pref_v2w_core_enabled" />
+
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_v2w_core_batch_size"
+            android:defaultValue="100"
+            android:summary="@string/summary_pref_v2w_core_batch_size"
+            android:title="@string/title_pref_v2w_core_batch_size" />
+
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_v2w_core_concurrency"
+            android:defaultValue="20"
+            android:summary="@string/summary_pref_v2w_core_concurrency"
+            android:title="@string/title_pref_v2w_core_concurrency" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/title_v2whitelist_settings_misc">
         <!-- Auto failover -->
         <CheckBoxPreference
             android:key="pref_auto_failover"

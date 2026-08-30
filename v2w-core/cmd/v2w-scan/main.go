@@ -18,6 +18,7 @@ import (
 
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
+	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/common/serial"
 	"github.com/xtls/xray-core/proxy/hysteria"
 	"github.com/xtls/xray-core/proxy/hysteria/account"
@@ -25,6 +26,7 @@ import (
 	vless_outbound "github.com/xtls/xray-core/proxy/vless/outbound"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/grpc"
+	hysteria_transport "github.com/xtls/xray-core/transport/internet/hysteria"
 	"github.com/xtls/xray-core/transport/internet/httpupgrade"
 	"github.com/xtls/xray-core/transport/internet/reality"
 	"github.com/xtls/xray-core/transport/internet/splithttp"
@@ -64,7 +66,10 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 			sni = q.Get("host")
 		}
 		streamSettings := &internet.MemoryStreamConfig{
-			ProtocolName: "hysteria2",
+			ProtocolName: "hysteria",
+			ProtocolSettings: &hysteria_transport.Config{
+				Auth: password,
+			},
 			SecurityType: "tls",
 			SecuritySettings: &tls.Config{
 				ServerName:    sni,
@@ -243,7 +248,7 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 			ShortIds:    [][]byte{shortId},
 			ShortId:     shortId,
 			PublicKey:   pbkBytes,
-			Fingerprint: "hellofirefox_102",
+			Fingerprint: q.Get("fp"),
 			SpiderX:     q.Get("spx"),
 			SpiderY:     []int64{100, 1000, 1, 3, 2, 4, 10, 50, 10, 50},
 		}
@@ -311,7 +316,7 @@ func main() {
 	var successfulLinks []string
 	var linksMu sync.Mutex
 
-	sem := make(chan struct{}, 10)
+	sem := make(chan struct{}, 20)
 
 	for _, link := range links {
 		wg.Add(1)
@@ -335,7 +340,7 @@ func main() {
 				}
 				handler = h
 			} else if outboundConfig, ok := config.(*hysteria.ClientConfig); ok {
-				h, err := hysteria.NewClient(context.Background(), outboundConfig)
+				h, err := hysteria.NewClient(session.ContextWithStreamSettings(context.Background(), stream), outboundConfig)
 				if err != nil || h == nil {
 					atomic.AddInt32(&failCount, 1)
 					return
@@ -356,10 +361,20 @@ func main() {
 			}
 
 			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 443)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
-			
+			var res core.ScanResult
+			for attempt := 1; attempt <= 3; attempt++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				res = coreScanner.TestNode(ctx, handler, dialer, targetDest)
+				cancel()
+				
+				if res.Error == nil {
+					break // Success!
+				}
+				if attempt < 3 {
+					time.Sleep(1 * time.Second) // Wait before retrying to bypass rate-limits
+				}
+			}
+
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
 				linksMu.Lock()

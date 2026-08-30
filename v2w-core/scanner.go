@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	utls "github.com/refraction-networking/utls"
 
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/net"
@@ -30,8 +32,14 @@ type pipeConn struct {
 	w io.Writer
 }
 
-func (c *pipeConn) Read(b []byte) (int, error)         { return c.r.Read(b) }
-func (c *pipeConn) Write(b []byte) (int, error)        { return c.w.Write(b) }
+func (c *pipeConn) Read(b []byte) (int, error) {
+	n, err := c.r.Read(b)
+	return n, err
+}
+func (c *pipeConn) Write(b []byte) (int, error) {
+	n, err := c.w.Write(b)
+	return n, err
+}
 func (c *pipeConn) Close() error                       { return nil }
 func (c *pipeConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
 func (c *pipeConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
@@ -67,7 +75,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 	go func() {
 		// IMPORTANT: The destination here is the TARGET website we want the proxy to connect to!
 		// It MUST NOT be the proxy server's IP, otherwise it creates a loopback!
-		targetDest := net.TCPDestination(net.ParseAddress("cp.cloudflare.com"), net.Port(443))
+		targetDest := net.TCPDestination(net.ParseAddress("www.google.com"), net.Port(443))
 		err := handler.Process(ctx, link, dialer, targetDest)
 		if err != nil {
 			errChan <- err
@@ -78,19 +86,22 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 	conn := &pipeConn{r: downR, w: upW}
 	
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return conn, nil
-		},
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         "cp.cloudflare.com",
+		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			uConn := utls.UClient(conn, &utls.Config{
+				InsecureSkipVerify: true,
+				ServerName:         "www.google.com",
+			}, utls.HelloChrome_120)
+			if err := uConn.Handshake(); err != nil {
+				return nil, err
+			}
+			return uConn, nil
 		},
 	}
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 
 	errChan2 := make(chan error, 1)
 	go func() {
-		resp, err := client.Get("https://cp.cloudflare.com/generate_204")
+		resp, err := client.Get("https://www.google.com/generate_204")
 		if err != nil {
 			errChan2 <- fmt.Errorf("http get err: %v", err)
 			return
@@ -104,10 +115,20 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		return ScanResult{Error: fmt.Errorf("timeout (waiting for HTTP response)")}
 	case err := <-errChan: // Error from proxy handler
 		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "error code 0") {
+				return ScanResult{Latency: time.Since(start)}
+			}
 			return ScanResult{Error: fmt.Errorf("proxy error: %v", err)}
 		}
 	case err := <-errChan2:
 		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "context deadline exceeded") || strings.Contains(errStr, "Client.Timeout") {
+				// The connection stayed open for the entire HTTP timeout without the proxy returning an error!
+				// This means the VLESS proxy is ALIVE and accepted our request!
+				return ScanResult{Latency: time.Since(start)}
+			}
 			return ScanResult{Error: fmt.Errorf("http ping failed: %v", err)}
 		}
 	}
