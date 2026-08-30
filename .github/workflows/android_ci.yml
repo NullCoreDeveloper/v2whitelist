@@ -73,6 +73,10 @@ jobs:
         go get -tool golang.org/x/mobile/cmd/gobind
         popd
         
+        # Download all dependencies to populate the module cache
+        pushd AndroidLibXrayLite && go mod download && popd
+        pushd v2w-core && go mod download && popd
+        
         # Patch anet to fix Go 1.26 incompatibility
         # net.zoneCache was removed in Go 1.26; the linkname trick no longer works.
         # The cache calls are not critical — interfaces still enumerate correctly.
