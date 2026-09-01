@@ -352,7 +352,6 @@ var file_transport_internet_reality_config_proto_depIdxs = []int32{
 
 func init() { file_transport_internet_reality_config_proto_init() }
 func file_transport_internet_reality_config_proto_init() {
-	return
 	if File_transport_internet_reality_config_proto != nil {
 		return
 	}

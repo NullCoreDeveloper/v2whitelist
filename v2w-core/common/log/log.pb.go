@@ -115,7 +115,6 @@ var file_common_log_log_proto_depIdxs = []int32{
 
 func init() { file_common_log_log_proto_init() }
 func file_common_log_log_proto_init() {
-	return
 	if File_common_log_log_proto != nil {
 		return
 	}

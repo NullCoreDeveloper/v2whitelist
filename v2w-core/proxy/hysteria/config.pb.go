@@ -152,7 +152,6 @@ var file_proxy_hysteria_config_proto_depIdxs = []int32{
 
 func init() { file_proxy_hysteria_config_proto_init() }
 func file_proxy_hysteria_config_proto_init() {
-	return
 	if File_proxy_hysteria_config_proto != nil {
 		return
 	}

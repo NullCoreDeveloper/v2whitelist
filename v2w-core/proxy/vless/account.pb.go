@@ -13,6 +13,7 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/kiktor/v2w-core/common/serial"
 )
 
 const (
@@ -234,9 +235,11 @@ var file_proxy_vless_account_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_proxy_vless_account_proto_init() }
+func init() {
+	file_proxy_vless_account_proto_init()
+	serial.RegisterCreator("xray.proxy.vless.Account", func() interface{} { return &Account{} })
+}
 func file_proxy_vless_account_proto_init() {
-	return
 	if File_proxy_vless_account_proto != nil {
 		return
 	}
