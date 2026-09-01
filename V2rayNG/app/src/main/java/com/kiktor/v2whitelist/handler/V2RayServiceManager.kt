@@ -500,6 +500,19 @@ object V2RayServiceManager {
                     serviceControl.stopService()
                 }
 
+                AppConfig.MSG_STATE_PAUSE -> {
+                    Log.i(AppConfig.TAG, "Pause Service")
+                    val currentGuid = MmkvManager.getSelectServer()
+                    if (!currentGuid.isNullOrBlank()) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_PAUSED_SERVER_GUID, currentGuid)
+                    }
+                    MmkvManager.encodeSettings(AppConfig.PREF_IS_PAUSED, true)
+                    val remarks = currentConfig?.remarks
+                    val serviceContext = serviceControl.getService().applicationContext
+                    serviceControl.stopService()
+                    NotificationManager.showPausedNotification(serviceContext, remarks)
+                }
+
                 AppConfig.MSG_STATE_RESTART -> {
                     Log.i(AppConfig.TAG, "Restart Service")
                     serviceControl.stopService()

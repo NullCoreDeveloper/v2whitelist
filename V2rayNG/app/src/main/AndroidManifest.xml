@@ -218,6 +218,11 @@
             </intent-filter>
         </receiver>
         <receiver
+            android:name=".receiver.NotificationReceiver"
+            android:exported="false"
+            android:process=":RunSoLibV2RayDaemon" />
+
+        <receiver
             android:name=".receiver.BootReceiver"
             android:exported="true"
             android:label="BootReceiver">

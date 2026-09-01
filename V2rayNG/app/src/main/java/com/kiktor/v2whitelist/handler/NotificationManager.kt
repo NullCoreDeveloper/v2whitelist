@@ -26,9 +26,12 @@ import kotlin.math.min
 
 object NotificationManager {
     private const val NOTIFICATION_ID = 1
+    private const val NOTIFICATION_ID_PAUSED = 2
     private const val NOTIFICATION_PENDING_INTENT_CONTENT = 0
     private const val NOTIFICATION_PENDING_INTENT_STOP_V2RAY = 1
     private const val NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2
+    private const val NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY = 3
+    private const val NOTIFICATION_PENDING_INTENT_RESUME_V2RAY = 4
     private const val NOTIFICATION_ICON_THRESHOLD = 3000
 
     private var lastQueryTime = 0L
@@ -97,6 +100,8 @@ object NotificationManager {
      */
     fun showNotification(currentConfig: ProfileItem?, providedService: Service? = null) {
         val service = providedService ?: getService() ?: return
+        cancelPausedNotification(service.applicationContext)
+
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
         val startMainIntent = Intent(service, MainActivity::class.java)
@@ -111,6 +116,11 @@ object NotificationManager {
         restartV2RayIntent.`package` = service.packageName
         restartV2RayIntent.putExtra("key", AppConfig.MSG_STATE_RESTART)
         val restartV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags)
+
+        val pauseIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_PAUSE
+        }
+        val pausePendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY, pauseIntent, flags)
 
         val channelId =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -131,6 +141,11 @@ object NotificationManager {
             .setContentIntent(contentPendingIntent)
             .addAction(
                 R.drawable.ic_delete_24dp,
+                service.getString(R.string.notification_action_pause),
+                pausePendingIntent
+            )
+            .addAction(
+                R.drawable.ic_delete_24dp,
                 service.getString(R.string.notification_action_stop_v2ray),
                 stopV2RayPendingIntent
             )
@@ -141,6 +156,67 @@ object NotificationManager {
             )
 
         service.startForeground(NOTIFICATION_ID, mBuilder?.build())
+    }
+
+    /**
+     * Shows a standalone notification when VPN is paused.
+     */
+    fun showPausedNotification(context: Context, serverRemarks: String?) {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+
+        val startMainIntent = Intent(context, MainActivity::class.java)
+        val contentPendingIntent = PendingIntent.getActivity(context, NOTIFICATION_PENDING_INTENT_CONTENT, startMainIntent, flags)
+
+        val resumeIntent = Intent(context, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_RESUME
+        }
+        val resumePendingIntent = PendingIntent.getBroadcast(context, NOTIFICATION_PENDING_INTENT_RESUME_V2RAY, resumeIntent, flags)
+
+        val stopIntent = Intent(context, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getBroadcast(context, NOTIFICATION_PENDING_INTENT_STOP_V2RAY, stopIntent, flags)
+
+        val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            createNotificationChannel(context)
+        } else {
+            ""
+        }
+
+        val title = serverRemarks ?: context.getString(R.string.app_name)
+        val text = context.getString(R.string.notification_content_paused)
+
+        val pausedBuilder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_name)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(false)
+            .setAutoCancel(false)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(contentPendingIntent)
+            .addAction(
+                R.drawable.ic_delete_24dp,
+                context.getString(R.string.notification_action_resume),
+                resumePendingIntent
+            )
+            .addAction(
+                R.drawable.ic_delete_24dp,
+                context.getString(R.string.notification_action_stop_v2ray),
+                stopPendingIntent
+            )
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+        nm?.notify(NOTIFICATION_ID_PAUSED, pausedBuilder.build())
+    }
+
+    /**
+     * Cancels the paused notification.
+     */
+    fun cancelPausedNotification(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+        nm?.cancel(NOTIFICATION_ID_PAUSED)
     }
 
     /**

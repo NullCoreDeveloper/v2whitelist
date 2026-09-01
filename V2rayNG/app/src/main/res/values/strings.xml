@@ -13,6 +13,9 @@
 
     <!-- Notifications -->
     <string name="notification_action_stop_v2ray">Stop</string>
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_content_paused">VPN connection paused</string>
     <string name="notification_content_connecting">Connecting…</string>
     <string name="toast_permission_denied">Unable to obtain the permission</string>
     <string name="toast_permission_denied_notification">Unable to obtain the notification permission</string>
@@ -544,6 +547,7 @@
     <string name="title_profile_check_settings">Profile Verification</string>
     <!-- v2w-core scanner section title -->
     <string name="title_v2w_core_settings">v2w-core Scanner Engine</string>
+    <string name="title_v2whitelist_settings_misc">Miscellaneous Settings</string>
     <!-- Speed check prefs -->
     <string name="title_pref_profile_speed_check">Speed test during profile check</string>
     <string name="summary_pref_profile_speed_check">Downloads a small amount of data through the server to measure real throughput. Enabled by default.</string>

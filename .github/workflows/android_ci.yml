@@ -64,49 +64,37 @@ jobs:
         go install golang.org/x/mobile/cmd/gobind@latest
         gomobile init
         
-        # Add golang.org/x/mobile to both the tool and require sections
-        # gomobile bind checks 'require', not just 'tool' directives
+        # Patch anet to fix Go 1.26 incompatibility (must download first)
         pushd AndroidLibXrayLite
-        go get -tool golang.org/x/mobile/cmd/gobind
-        go get golang.org/x/mobile@latest
+        go mod download
         popd
-        
         pushd v2w-core
-        go get -tool golang.org/x/mobile/cmd/gobind
-        go get golang.org/x/mobile@latest
+        go mod download
         popd
         
-        # Download all dependencies to populate the module cache
-        pushd AndroidLibXrayLite && go mod download && popd
-        pushd v2w-core && go mod download && popd
-        
-        # Patch anet to fix Go 1.26 incompatibility
-        # net.zoneCache was removed in Go 1.26; the linkname trick no longer works.
-        # The cache calls are not critical — interfaces still enumerate correctly.
         ANET_DIR="$(go env GOPATH)/pkg/mod/github.com/wlynxg/anet@v0.0.5"
         chmod -R u+w "$ANET_DIR" 2>/dev/null || true
-        # Remove linkname declarations
-        sed -i '/\/\/go:linkname zoneCache/d'   "$ANET_DIR/interface_android.go"
-        sed -i '/var zoneCache ipv6ZoneCache/d'  "$ANET_DIR/interface_android.go"
-        sed -i '/\/\/go:linkname zoneCacheX/d'  "$ANET_DIR/interface_android.go"
-        sed -i '/var zoneCacheX ipv6ZoneCache/d' "$ANET_DIR/interface_android.go"
-        # Remove calls to now-nonexistent variables
-        sed -i '/zoneCache\.update/d'   "$ANET_DIR/interface_android.go"
-        sed -i '/zoneCacheX\.update/d'  "$ANET_DIR/interface_android.go"
+        sed -i '/\/\/go:linkname zoneCache/d'   "$ANET_DIR/interface_android.go" || true
+        sed -i '/var zoneCache ipv6ZoneCache/d'  "$ANET_DIR/interface_android.go" || true
+        sed -i '/\/\/go:linkname zoneCacheX/d'  "$ANET_DIR/interface_android.go" || true
+        sed -i '/var zoneCacheX ipv6ZoneCache/d' "$ANET_DIR/interface_android.go" || true
+        sed -i '/zoneCache\.update/d'            "$ANET_DIR/interface_android.go" || true
+        sed -i '/zoneCacheX\.update/d'           "$ANET_DIR/interface_android.go" || true
         
-        # Create a workspace to bind both modules together
-        cat << 'EOF' > go.work
-        go 1.26
-        use (
-          ./AndroidLibXrayLite
-          ./v2w-core
-        )
-        EOF
+        # Run gomobile from within AndroidLibXrayLite so it is the "current module"
+        # Use replace directive to reference our local v2w-core scanner
+        # GOWORK=off: отключаем workspace-режим, gomobile смотрит go.mod модуля, а не go.work
+        pushd AndroidLibXrayLite
+        go mod edit -replace github.com/kiktor/v2w-core=../v2w-core
+        GOWORK=off go get golang.org/x/mobile@latest
+        GOWORK=off go get -tool golang.org/x/mobile/cmd/gobind
+        GOWORK=off go get github.com/kiktor/v2w-core/v2wscanner
+        GOWORK=off gomobile bind -v -androidapi 21 -target=android \
+          -o ../libv2ray.aar \
+          . \
+          github.com/kiktor/v2w-core/v2wscanner
+        popd
         
-        # Compile a single AAR containing both libv2ray and v2wscanner
-        gomobile bind -v -androidapi 21 -target=android -o libv2ray.aar ./AndroidLibXrayLite ./v2w-core/v2wscanner
-        
-        # Move to libs
         mv libv2ray.aar V2rayNG/app/libs/
 
     - name: Grant execute permission for gradlew

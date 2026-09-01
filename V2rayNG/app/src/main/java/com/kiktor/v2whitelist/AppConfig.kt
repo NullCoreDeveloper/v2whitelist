@@ -92,6 +92,10 @@ object AppConfig {
     const val PREF_PROFILE_SPEED_CHECK_TIMEOUT = "pref_profile_speed_check_timeout_ms"
     /** URL для теста скорости */
     const val SPEED_CHECK_URL = "https://speed.cloudflare.com/__down?bytes="
+    /** GUID сервера, к которому подключились перед паузой */
+    const val PREF_PAUSED_SERVER_GUID = "pref_paused_server_guid"
+    /** Флаг: VPN на паузе (остановлен пользователем через кнопку Pause) */
+    const val PREF_IS_PAUSED = "pref_is_paused"
 
     /** Custom Endpoint (Proxy Chain) */
     const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"
@@ -196,6 +200,10 @@ object AppConfig {
     const val MSG_MEASURE_CONFIG_NOTIFY = 73
     const val MSG_MEASURE_CONFIG_FINISH = 74
     const val MSG_UI_STATUS_UPDATE = 80
+    /** Пауза VPN (сохранить guid, остановить сервис) */
+    const val MSG_STATE_PAUSE = 91
+    /** Возобновить VPN (восстановить сохранённый guid и поднять туннель) */
+    const val MSG_STATE_RESUME = 92
 
     /** Notification channel IDs and names. */
     const val RAY_NG_CHANNEL_ID = "RAY_NG_M_CH_ID"
