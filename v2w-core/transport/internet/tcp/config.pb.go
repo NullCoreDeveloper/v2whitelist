@@ -111,7 +111,7 @@ var file_transport_internet_tcp_config_proto_depIdxs = []int32{
 }
 
 func init() { file_transport_internet_tcp_config_proto_init() }
-func file_transport_internet_tcp_config_proto_init() {
+func file_transport_internet_tcp_config_proto_init() { func() { _ = recover() }()
 	if File_transport_internet_tcp_config_proto != nil {
 		return
 	}

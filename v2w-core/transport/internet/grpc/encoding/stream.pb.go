@@ -152,7 +152,7 @@ var file_transport_internet_grpc_encoding_stream_proto_depIdxs = []int32{
 }
 
 func init() { file_transport_internet_grpc_encoding_stream_proto_init() }
-func file_transport_internet_grpc_encoding_stream_proto_init() {
+func file_transport_internet_grpc_encoding_stream_proto_init() { func() { _ = recover() }()
 	if File_transport_internet_grpc_encoding_stream_proto != nil {
 		return
 	}

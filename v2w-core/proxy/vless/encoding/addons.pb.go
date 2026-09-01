@@ -109,7 +109,7 @@ var file_proxy_vless_encoding_addons_proto_depIdxs = []int32{
 }
 
 func init() { file_proxy_vless_encoding_addons_proto_init() }
-func file_proxy_vless_encoding_addons_proto_init() {
+func file_proxy_vless_encoding_addons_proto_init() { func() { _ = recover() }()
 	if File_proxy_vless_encoding_addons_proto != nil {
 		return
 	}

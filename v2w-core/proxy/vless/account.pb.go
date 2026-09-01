@@ -239,7 +239,7 @@ func init() {
 	file_proxy_vless_account_proto_init()
 	serial.RegisterCreator("xray.proxy.vless.Account", func() interface{} { return &Account{} })
 }
-func file_proxy_vless_account_proto_init() {
+func file_proxy_vless_account_proto_init() { func() { _ = recover() }()
 	if File_proxy_vless_account_proto != nil {
 		return
 	}

@@ -128,7 +128,7 @@ var file_transport_internet_headers_noop_config_proto_depIdxs = []int32{
 }
 
 func init() { file_transport_internet_headers_noop_config_proto_init() }
-func file_transport_internet_headers_noop_config_proto_init() {
+func file_transport_internet_headers_noop_config_proto_init() { func() { _ = recover() }()
 	if File_transport_internet_headers_noop_config_proto != nil {
 		return
 	}

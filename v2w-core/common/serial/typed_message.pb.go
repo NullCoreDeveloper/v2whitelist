@@ -111,7 +111,7 @@ var file_common_serial_typed_message_proto_depIdxs = []int32{
 }
 
 func init() { file_common_serial_typed_message_proto_init() }
-func file_common_serial_typed_message_proto_init() {
+func file_common_serial_typed_message_proto_init() { func() { _ = recover() }()
 	if File_common_serial_typed_message_proto != nil {
 		return
 	}
