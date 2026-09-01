@@ -90,6 +90,8 @@ object AppConfig {
     const val PREF_PROFILE_SPEED_CHECK_BYTES   = "pref_profile_speed_check_bytes"
     /** Таймаут теста скорости, мс (default: 8 сек) */
     const val PREF_PROFILE_SPEED_CHECK_TIMEOUT = "pref_profile_speed_check_timeout_ms"
+    /** Минимально допустимая скорость для прохождения проверки профиля, Мбит/с (default: 1.0) */
+    const val PREF_PROFILE_MIN_SPEED_MBPS = "pref_profile_min_speed_mbps"
     /** URL для теста скорости */
     const val SPEED_CHECK_URL = "https://speed.cloudflare.com/__down?bytes="
     /** GUID сервера, к которому подключились перед паузой */

@@ -510,7 +510,9 @@ object V2RayServiceManager {
                     val remarks = currentConfig?.remarks
                     val serviceContext = serviceControl.getService().applicationContext
                     serviceControl.stopService()
-                    NotificationManager.showPausedNotification(serviceContext, remarks)
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        NotificationManager.showPausedNotification(serviceContext, remarks)
+                    }, 300L)
                 }
 
                 AppConfig.MSG_STATE_RESTART -> {

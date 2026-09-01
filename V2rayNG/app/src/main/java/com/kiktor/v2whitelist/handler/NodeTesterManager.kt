@@ -155,6 +155,8 @@ object NodeTesterManager {
                                        ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L
                     val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "8000")
                                        ?.toIntOrNull()?.takeIf { it > 0 } ?: 8_000
+                    val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
+                    val minMbps = minSpeedStr?.toDoubleOrNull() ?: 1.0
 
                     MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                         context.getString(R.string.status_speed_check_running))
@@ -162,11 +164,21 @@ object NodeTesterManager {
                     val mbps = SpeedtestManager.measureSpeedThroughProxy(port, bytes, timeout)
                     if (mbps != null) {
                         val mbpsStr = "%.1f".format(mbps)
+                        if (minMbps > 0 && mbps < minMbps) {
+                            GeekModeLogger.log("NodeTester", "verifyProfile: speed for $guid = ${mbpsStr} Mbps is below minimum threshold ${minMbps} Mbps, rejecting server")
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                                context.getString(R.string.status_profile_speed_too_low, mbpsStr, "%.1f".format(minMbps)))
+                            return false
+                        }
                         GeekModeLogger.log("NodeTester", "verifyProfile: speed for $guid = ${mbpsStr} Мбит/с")
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_profile_check_passed_speed, mbpsStr))
                     } else {
                         GeekModeLogger.log("NodeTester", "verifyProfile: speed test failed for $guid (timeout or no data)")
+                        if (minMbps > 0) {
+                            GeekModeLogger.log("NodeTester", "verifyProfile: speed check failed and minMbps > 0, rejecting server $guid")
+                            return false
+                        }
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_profile_check_passed))
                     }

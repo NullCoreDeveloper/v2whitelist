@@ -96,6 +96,14 @@
             android:summary="@string/summary_pref_profile_speed_check_timeout"
             android:title="@string/title_pref_profile_speed_check_timeout" />
 
+        <!-- Минимальная скорость, Мбит/с -->
+        <EditTextPreference
+            android:inputType="numberDecimal"
+            android:key="pref_profile_min_speed_mbps"
+            android:defaultValue="1.0"
+            android:summary="@string/summary_pref_profile_min_speed_mbps"
+            android:title="@string/title_pref_profile_min_speed_mbps" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_v2whitelist_settings_misc">
