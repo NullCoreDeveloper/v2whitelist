@@ -536,7 +536,21 @@
     <string name="status_verifying_profile">Verifying profile stability\u2026</string>
     <string name="status_profile_check_failed">Profile check failed, trying another\u2026</string>
     <string name="status_profile_check_passed">Profile passed check ✔</string>
+    <string name="status_profile_check_passed_speed">Profile OK ✔ · %s Mbps</string>
+    <string name="status_speed_check_running">Measuring connection speed\u2026</string>
     <string name="status_speed_test">Speed test: %.1f KB/s</string>
+
+    <!-- Profile Check settings section title -->
+    <string name="title_profile_check_settings">Profile Verification</string>
+    <!-- v2w-core scanner section title -->
+    <string name="title_v2w_core_settings">v2w-core Scanner Engine</string>
+    <!-- Speed check prefs -->
+    <string name="title_pref_profile_speed_check">Speed test during profile check</string>
+    <string name="summary_pref_profile_speed_check">Downloads a small amount of data through the server to measure real throughput. Enabled by default.</string>
+    <string name="title_pref_profile_speed_check_bytes">Download size (bytes)</string>
+    <string name="summary_pref_profile_speed_check_bytes">Amount of data to download for speed measurement. Default: 2 000 000 (≈2 MB)</string>
+    <string name="title_pref_profile_speed_check_timeout">Speed test timeout (ms)</string>
+    <string name="summary_pref_profile_speed_check_timeout">If the download does not complete within this time, the speed test is skipped. Default: 8000 ms</string>
 
     <!-- Custom Endpoint (Proxy Chain) -->
     <string name="title_pref_custom_endpoint_enabled">Use custom proxy as final endpoint</string>

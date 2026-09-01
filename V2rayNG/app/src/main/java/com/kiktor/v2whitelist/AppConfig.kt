@@ -84,6 +84,14 @@ object AppConfig {
 
     /** Profile verification (beta) */
     const val PREF_PROFILE_CHECK_ENABLED = "pref_profile_check_enabled"
+    /** Тест скорости в проверке профиля */
+    const val PREF_PROFILE_SPEED_CHECK_ENABLED = "pref_profile_speed_check_enabled"
+    /** Объём загрузки для замера скорости, байт (default: 2 МБ) */
+    const val PREF_PROFILE_SPEED_CHECK_BYTES   = "pref_profile_speed_check_bytes"
+    /** Таймаут теста скорости, мс (default: 8 сек) */
+    const val PREF_PROFILE_SPEED_CHECK_TIMEOUT = "pref_profile_speed_check_timeout_ms"
+    /** URL для теста скорости */
+    const val SPEED_CHECK_URL = "https://speed.cloudflare.com/__down?bytes="
 
     /** Custom Endpoint (Proxy Chain) */
     const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"

@@ -11,7 +11,11 @@
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_smartconnect_settings">
+    <!-- SmartConnect — разворачивается -->
+    <PreferenceCategory
+        android:title="@string/title_smartconnect_settings"
+        app:initialExpandedChildrenCount="0">
+
         <!-- SmartConnect Server Chunking -->
         <EditTextPreference
             android:inputType="number"
@@ -27,6 +31,13 @@
             android:key="pref_chunk_preset"
             android:summary="%s"
             android:title="@string/title_pref_chunk_preset" />
+
+    </PreferenceCategory>
+
+    <!-- Ядро сканера v2w-core — разворачивается -->
+    <PreferenceCategory
+        android:title="@string/title_v2w_core_settings"
+        app:initialExpandedChildrenCount="0">
 
         <CheckBoxPreference
             android:key="pref_v2w_core_enabled"
@@ -47,6 +58,44 @@
             android:defaultValue="35"
             android:summary="@string/summary_pref_v2w_core_concurrency"
             android:title="@string/title_pref_v2w_core_concurrency" />
+
+    </PreferenceCategory>
+
+    <!-- Проверка профиля — разворачивается -->
+    <PreferenceCategory
+        android:title="@string/title_profile_check_settings"
+        app:initialExpandedChildrenCount="0">
+
+        <!-- Включить проверку профиля перед подключением -->
+        <CheckBoxPreference
+            android:key="pref_profile_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_profile_check"
+            android:title="@string/title_pref_profile_check" />
+
+        <!-- Тест скорости в составе проверки -->
+        <CheckBoxPreference
+            android:key="pref_profile_speed_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_profile_speed_check"
+            android:title="@string/title_pref_profile_speed_check" />
+
+        <!-- Объём загрузки для замера скорости -->
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_profile_speed_check_bytes"
+            android:defaultValue="2000000"
+            android:summary="@string/summary_pref_profile_speed_check_bytes"
+            android:title="@string/title_pref_profile_speed_check_bytes" />
+
+        <!-- Таймаут теста скорости, мс -->
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_profile_speed_check_timeout_ms"
+            android:defaultValue="8000"
+            android:summary="@string/summary_pref_profile_speed_check_timeout"
+            android:title="@string/title_pref_profile_speed_check_timeout" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_v2whitelist_settings_misc">
@@ -77,13 +126,6 @@
             android:defaultValue="true"
             android:summary="@string/summary_pref_auto_check_update"
             android:title="@string/title_pref_auto_check_update" />
-
-        <!-- Profile Check -->
-        <CheckBoxPreference
-            android:key="pref_profile_check_enabled"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_profile_check"
-            android:title="@string/title_pref_profile_check" />
 
         <!-- Custom Endpoint (Proxy Chain) -->
         <CheckBoxPreference

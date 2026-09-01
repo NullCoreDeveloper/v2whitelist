@@ -6,13 +6,17 @@ import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.dto.IPAPIInfo
+import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.util.HttpUtil
 import com.kiktor.v2whitelist.util.JsonUtil
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import java.io.IOException
+import java.io.InputStream
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.Socket
+import java.net.URL
 import java.net.UnknownHostException
 
 object SpeedtestManager {
@@ -80,6 +84,58 @@ object SpeedtestManager {
                 it?.close()
             }
             tcpTestingSockets.clear()
+        }
+    }
+
+    /**
+     * Замеряет скорость скачивания через локальный SOCKS-прокси ядра на [socksPort].
+     * Скачивает [bytes] байт с Cloudflare и возвращает скорость в Мбит/с,
+     * или null если соединение не прошло / таймаут / ошибка.
+     *
+     * @param socksPort  локальный порт SOCKS5 поднятого ядра
+     * @param bytes      объём загрузки в байтах (default: 2 МБ)
+     * @param timeoutMs  таймаут в мс (default: 8 сек)
+     */
+    fun measureSpeedThroughProxy(
+        socksPort: Int,
+        bytes: Long = 2_000_000L,
+        timeoutMs: Int = 8_000
+    ): Double? {
+        return try {
+            val url = URL(AppConfig.SPEED_CHECK_URL + bytes)
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(AppConfig.LOOPBACK, socksPort))
+            val conn = url.openConnection(proxy) as java.net.HttpURLConnection
+            conn.connectTimeout = timeoutMs
+            conn.readTimeout = timeoutMs
+            conn.requestMethod = "GET"
+
+            val start = SystemClock.elapsedRealtime()
+            conn.connect()
+            val stream: InputStream = conn.inputStream
+            val buf = ByteArray(8192)
+            var totalRead = 0L
+            try {
+                var n: Int
+                while (stream.read(buf).also { n = it } != -1) {
+                    totalRead += n
+                }
+            } catch (_: IOException) {
+                // Таймаут чтения считаем нормой — данные уже прочли частично
+            } finally {
+                stream.close()
+                conn.disconnect()
+            }
+
+            val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
+            if (elapsedSec <= 0 || totalRead == 0L) return null
+
+            // байт / сек * 8 / 1_000_000 = Мбит/с
+            val mbps = (totalRead.toDouble() / elapsedSec) * 8.0 / 1_000_000.0
+            GeekModeLogger.log("SpeedTest", "Скачано $totalRead байт за %.2f сек → %.2f Мбит/с".format(elapsedSec, mbps))
+            mbps
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "measureSpeedThroughProxy error: ${e.message}")
+            null
         }
     }
 

@@ -147,7 +147,34 @@ object NodeTesterManager {
             } else {
                 GeekModeLogger.log("NodeTester", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_profile_check_passed))
+
+                // --- Тест скорости (если включён) ---
+                val speedCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
+                if (speedCheckEnabled) {
+                    val bytes    = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
+                                       ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L
+                    val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "8000")
+                                       ?.toIntOrNull()?.takeIf { it > 0 } ?: 8_000
+
+                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                        context.getString(R.string.status_speed_check_running))
+
+                    val mbps = SpeedtestManager.measureSpeedThroughProxy(port, bytes, timeout)
+                    if (mbps != null) {
+                        val mbpsStr = "%.1f".format(mbps)
+                        GeekModeLogger.log("NodeTester", "verifyProfile: speed for $guid = ${mbpsStr} Мбит/с")
+                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                            context.getString(R.string.status_profile_check_passed_speed, mbpsStr))
+                    } else {
+                        GeekModeLogger.log("NodeTester", "verifyProfile: speed test failed for $guid (timeout or no data)")
+                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                            context.getString(R.string.status_profile_check_passed))
+                    }
+                } else {
+                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                        context.getString(R.string.status_profile_check_passed))
+                }
+
                 true
             }
         } catch (e: Exception) {
