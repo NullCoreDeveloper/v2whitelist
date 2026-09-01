@@ -7,7 +7,7 @@
 package splithttp
 
 import (
-	internet "github.com/xtls/xray-core/transport/internet"
+	internet "github.com/kiktor/v2w-core/transport/internet"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
