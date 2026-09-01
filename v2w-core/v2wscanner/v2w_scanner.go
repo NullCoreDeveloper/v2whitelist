@@ -35,7 +35,21 @@ import (
 
 type V2WScanCallback interface {
 	OnServerSuccess(configUrl string, delay int64)
-	OnScanComplete(totalSuccess int, totalFailed int)
+	OnScanComplete(totalSuccess int64, totalFailed int64)
+}
+
+type V2WScanner struct{}
+
+func NewV2WScanner() *V2WScanner {
+	return &V2WScanner{}
+}
+
+func (s *V2WScanner) Run(configs string, maxConcurrency int64, callback V2WScanCallback) {
+	RunV2WScanner(configs, maxConcurrency, callback)
+}
+
+func (s *V2WScanner) Stop() {
+	StopV2WScanner()
 }
 
 type customDialer struct {
@@ -63,7 +77,7 @@ func StopV2WScanner() {
 	}
 }
 
-func RunV2WScanner(configs string, maxConcurrency int, callback V2WScanCallback) {
+func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {
 	if maxConcurrency <= 0 {
 		maxConcurrency = 20
 	}
@@ -170,7 +184,7 @@ func RunV2WScanner(configs string, maxConcurrency int, callback V2WScanCallback)
 	go func() {
 		wg.Wait()
 		if callback != nil {
-			callback.OnScanComplete(int(atomic.LoadInt32(&successCount)), int(atomic.LoadInt32(&failCount)))
+			callback.OnScanComplete(atomic.LoadInt32(&successCount), atomic.LoadInt32(&failCount))
 		}
 	}()
 }
