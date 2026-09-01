@@ -109,8 +109,8 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 
 	var wg sync.WaitGroup
 	coreScanner := core.NewScanner()
-	var successCount int32
-	var failCount int32
+	var successCount int64
+	var failCount int64
 
 	sem := make(chan struct{}, maxConcurrency)
 
@@ -134,7 +134,7 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 
 			config, stream, dest, err := parseVlessURL(linkStr)
 			if err != nil {
-				atomic.AddInt32(&failCount, 1)
+				atomic.AddInt64(&failCount, 1)
 				return
 			}
 			_ = dest
@@ -143,21 +143,21 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 			if outboundConfig, ok := config.(*vless_outbound.Config); ok {
 				h, err := vless_outbound.New(context.Background(), outboundConfig)
 				if err != nil || h == nil {
-					atomic.AddInt32(&failCount, 1)
+					atomic.AddInt64(&failCount, 1)
 					return
 				}
 				handler = h
 			} else if outboundConfig, ok := config.(*hysteria.ClientConfig); ok {
 				h, err := hysteria.NewClient(session.ContextWithStreamSettings(context.Background(), stream), outboundConfig)
 				if err != nil || h == nil {
-					atomic.AddInt32(&failCount, 1)
+					atomic.AddInt64(&failCount, 1)
 					return
 				}
 				handler = h
 			}
 
 			if handler == nil {
-				atomic.AddInt32(&failCount, 1)
+				atomic.AddInt64(&failCount, 1)
 				return
 			}
 
@@ -170,21 +170,21 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 			cancel()
 
 			if res.Error == nil {
-				atomic.AddInt32(&successCount, 1)
+				atomic.AddInt64(&successCount, 1)
 				delayMs := time.Since(startT).Milliseconds()
 				if callback != nil {
 					callback.OnServerSuccess(linkStr, delayMs)
 				}
 			} else {
-				atomic.AddInt32(&failCount, 1)
-			}
+				atomic.AddInt64(&failCount, 1)
+				}
 		}(l)
 	}
 
 	go func() {
 		wg.Wait()
 		if callback != nil {
-			callback.OnScanComplete(atomic.LoadInt32(&successCount), atomic.LoadInt32(&failCount))
+			callback.OnScanComplete(atomic.LoadInt64(&successCount), atomic.LoadInt64(&failCount))
 		}
 	}()
 }
