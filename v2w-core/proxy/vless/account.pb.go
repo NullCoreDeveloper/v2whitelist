@@ -236,6 +236,7 @@ var file_proxy_vless_account_proto_depIdxs = []int32{
 
 func init() { file_proxy_vless_account_proto_init() }
 func file_proxy_vless_account_proto_init() {
+	return
 	if File_proxy_vless_account_proto != nil {
 		return
 	}

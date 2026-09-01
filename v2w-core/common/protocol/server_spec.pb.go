@@ -123,6 +123,7 @@ var file_common_protocol_server_spec_proto_depIdxs = []int32{
 
 func init() { file_common_protocol_server_spec_proto_init() }
 func file_common_protocol_server_spec_proto_init() {
+	return
 	if File_common_protocol_server_spec_proto != nil {
 		return
 	}
