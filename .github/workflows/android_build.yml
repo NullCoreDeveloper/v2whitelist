@@ -79,21 +79,36 @@ jobs:
         sed -i '/zoneCache\.update/d'            "$ANET_DIR/interface_android.go" || true
         sed -i '/zoneCacheX\.update/d'           "$ANET_DIR/interface_android.go" || true
         
-        # Run gomobile from within AndroidLibXrayLite so it is the "current module"
-        # Use replace directive to reference our local v2w-core scanner
-        # GOWORK=off: отключаем workspace-режим, gomobile смотрит go.mod модуля, а не go.work
-        pushd AndroidLibXrayLite
-        go mod edit -replace github.com/kiktor/v2w-core=../v2w-core
-        GOWORK=off go get golang.org/x/mobile@latest
-        GOWORK=off go get -tool golang.org/x/mobile/cmd/gobind
-        GOWORK=off go get github.com/kiktor/v2w-core/v2wscanner
-        GOWORK=off gomobile bind -v -androidapi 21 -target=android \
-          -o ../libv2ray.aar \
-          . \
-          github.com/kiktor/v2w-core/v2wscanner
-        popd
+        # Patch libv2ray_main.go to include V2W scanner bindings
+        if ! grep -q "RunV2WScanner" AndroidLibXrayLite/libv2ray_main.go; then
+          sed -i '/mobasset "golang.org\/x\/mobile\/asset"/a \ \t"github.com/kiktor/v2w-core/v2wscanner"' AndroidLibXrayLite/libv2ray_main.go
+          cat << 'EOF' >> AndroidLibXrayLite/libv2ray_main.go
+
+type V2WScanCallback interface {
+	OnServerSuccess(configUrl string, delay int64)
+	OnScanComplete(totalSuccess int64, totalFailed int64)
+}
+
+func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {
+	v2wscanner.RunV2WScanner(configs, maxConcurrency, callback)
+}
+
+func StopV2WScanner() {
+	v2wscanner.StopV2WScanner()
+}
+EOF
+        fi
         
-        mv libv2ray.aar V2rayNG/app/libs/
+        # Run gomobile from within AndroidLibXrayLite so it is the "current module"
+        pushd AndroidLibXrayLite
+        V2W_ABS="$(readlink -f ../v2w-core)"
+        go mod edit -require github.com/kiktor/v2w-core@v0.0.0
+        go mod edit -replace "github.com/kiktor/v2w-core=$V2W_ABS"
+        GOWORK=off go mod tidy
+        GOWORK=off gomobile bind -v -androidapi 21 -target=android \
+          -o ../V2rayNG/app/libs/libv2ray.aar \
+          .
+        popd
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
