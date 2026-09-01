@@ -61,13 +61,16 @@ jobs:
         go install golang.org/x/mobile/cmd/gobind@latest
         gomobile init
         
-        # Add tool directive required by Go 1.26+
+        # Add golang.org/x/mobile to both the tool and require sections
+        # gomobile bind checks 'require', not just 'tool' directives
         pushd AndroidLibXrayLite
         go get -tool golang.org/x/mobile/cmd/gobind
+        go get golang.org/x/mobile@latest
         popd
         
         pushd v2w-core
         go get -tool golang.org/x/mobile/cmd/gobind
+        go get golang.org/x/mobile@latest
         popd
         
         # Download all dependencies to populate the module cache
