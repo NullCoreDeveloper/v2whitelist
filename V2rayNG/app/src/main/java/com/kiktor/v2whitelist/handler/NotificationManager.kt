@@ -249,7 +249,7 @@ object NotificationManager {
      * @return The channel ID.
      */
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun createNotificationChannel(providedService: Service? = null): String {
+    private fun createNotificationChannel(providedContext: Context? = null): String {
         val channelId = AppConfig.RAY_NG_CHANNEL_ID
         val channelName = AppConfig.RAY_NG_CHANNEL_NAME
         val chan = NotificationChannel(
@@ -259,7 +259,7 @@ object NotificationManager {
         chan.lightColor = Color.DKGRAY
         chan.importance = NotificationManager.IMPORTANCE_NONE
         chan.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        getNotificationManager(providedService)?.createNotificationChannel(chan)
+        getNotificationManager(providedContext)?.createNotificationChannel(chan)
         return channelId
     }
 
@@ -288,10 +288,10 @@ object NotificationManager {
      * Gets the notification manager.
      * @return The notification manager.
      */
-    private fun getNotificationManager(providedService: Service? = null): NotificationManager? {
+    private fun getNotificationManager(providedContext: Context? = null): NotificationManager? {
         if (mNotificationManager == null) {
-            val service = providedService ?: getService() ?: return null
-            mNotificationManager = service.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val context = providedContext ?: getService() ?: return null
+            mNotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         }
         return mNotificationManager
     }

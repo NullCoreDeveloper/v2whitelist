@@ -67,7 +67,7 @@ object BackupManager {
                         // Clear current data completely
                         MmkvManager.removeAllServer()
                         MmkvManager.decodeSubscriptions().forEach { 
-                            MmkvManager.removeSubscription(it.id)
+                            MmkvManager.removeSubscription(it.guid)
                         }
 
                         // Restore Settings
@@ -75,7 +75,7 @@ object BackupManager {
 
                         // Restore Subscriptions
                         backupData.subscriptions?.forEach { subCache ->
-                            MmkvManager.encodeSubscription(subCache.id, subCache.subscriptionItem)
+                            MmkvManager.encodeSubscription(subCache.guid, subCache.subscription)
                         }
 
                         // Restore Servers
