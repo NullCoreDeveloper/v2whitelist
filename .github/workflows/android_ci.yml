@@ -50,7 +50,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: V2rayNG/app/libs/libv2ray.aar
-        key: ${{ runner.os }}-libv2ray-ci-${{ hashFiles('AndroidLibXrayLite/**/*.go', 'v2w-core/**/*.go', 'AndroidLibXrayLite/go.sum', 'v2w-core/go.sum') }}
+        key: ${{ runner.os }}-libv2ray-ci-v3-${{ hashFiles('AndroidLibXrayLite/**/*.go', 'v2w-core/**/*.go', 'AndroidLibXrayLite/go.sum', 'v2w-core/go.sum') }}
     - name: Set up Go
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
