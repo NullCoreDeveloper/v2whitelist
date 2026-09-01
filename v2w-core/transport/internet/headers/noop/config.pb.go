@@ -9,6 +9,7 @@ package noop
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/kiktor/v2w-core/common/protoinit"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -128,7 +129,7 @@ var file_transport_internet_headers_noop_config_proto_depIdxs = []int32{
 }
 
 func init() { file_transport_internet_headers_noop_config_proto_init() }
-func file_transport_internet_headers_noop_config_proto_init() { func() { _ = recover() }()
+func file_transport_internet_headers_noop_config_proto_init() {
 	if File_transport_internet_headers_noop_config_proto != nil {
 		return
 	}
@@ -141,7 +142,9 @@ func file_transport_internet_headers_noop_config_proto_init() { func() { _ = rec
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
+			FileRegistry:  protoinit.NoopRegistry{},
 		},
+		TypeRegistry:      protoinit.NoopRegistry{},
 		GoTypes:           file_transport_internet_headers_noop_config_proto_goTypes,
 		DependencyIndexes: file_transport_internet_headers_noop_config_proto_depIdxs,
 		MessageInfos:      file_transport_internet_headers_noop_config_proto_msgTypes,

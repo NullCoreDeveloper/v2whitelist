@@ -13,6 +13,7 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/kiktor/v2w-core/common/protoinit"
 	"github.com/kiktor/v2w-core/common/serial"
 )
 
@@ -239,7 +240,7 @@ func init() {
 	file_proxy_vless_account_proto_init()
 	serial.RegisterCreator("xray.proxy.vless.Account", func() interface{} { return &Account{} })
 }
-func file_proxy_vless_account_proto_init() { func() { _ = recover() }()
+func file_proxy_vless_account_proto_init() {
 	if File_proxy_vless_account_proto != nil {
 		return
 	}
@@ -252,7 +253,9 @@ func file_proxy_vless_account_proto_init() { func() { _ = recover() }()
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
+			FileRegistry:  protoinit.NoopRegistry{},
 		},
+		TypeRegistry:      protoinit.NoopRegistry{},
 		GoTypes:           file_proxy_vless_account_proto_goTypes,
 		DependencyIndexes: file_proxy_vless_account_proto_depIdxs,
 		MessageInfos:      file_proxy_vless_account_proto_msgTypes,

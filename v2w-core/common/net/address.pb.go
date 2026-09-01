@@ -9,6 +9,7 @@ package net
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/kiktor/v2w-core/common/protoinit"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -144,7 +145,7 @@ var file_common_net_address_proto_depIdxs = []int32{
 }
 
 func init() { file_common_net_address_proto_init() }
-func file_common_net_address_proto_init() { func() { _ = recover() }()
+func file_common_net_address_proto_init() {
 	if File_common_net_address_proto != nil {
 		return
 	}
@@ -161,7 +162,9 @@ func file_common_net_address_proto_init() { func() { _ = recover() }()
 			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
+			FileRegistry:  protoinit.NoopRegistry{},
 		},
+		TypeRegistry:      protoinit.NoopRegistry{},
 		GoTypes:           file_common_net_address_proto_goTypes,
 		DependencyIndexes: file_common_net_address_proto_depIdxs,
 		MessageInfos:      file_common_net_address_proto_msgTypes,

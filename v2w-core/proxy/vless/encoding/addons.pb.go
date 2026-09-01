@@ -13,6 +13,7 @@ import (
 
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	"github.com/kiktor/v2w-core/common/protoinit"
 )
 
 const (
@@ -109,7 +110,7 @@ var file_proxy_vless_encoding_addons_proto_depIdxs = []int32{
 }
 
 func init() { file_proxy_vless_encoding_addons_proto_init() }
-func file_proxy_vless_encoding_addons_proto_init() { func() { _ = recover() }()
+func file_proxy_vless_encoding_addons_proto_init() {
 	if File_proxy_vless_encoding_addons_proto != nil {
 		return
 	}
@@ -122,7 +123,9 @@ func file_proxy_vless_encoding_addons_proto_init() { func() { _ = recover() }()
 			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
+			FileRegistry:  protoinit.NoopRegistry{},
 		},
+		TypeRegistry:      protoinit.NoopRegistry{},
 		GoTypes:           file_proxy_vless_encoding_addons_proto_goTypes,
 		DependencyIndexes: file_proxy_vless_encoding_addons_proto_depIdxs,
 		MessageInfos:      file_proxy_vless_encoding_addons_proto_msgTypes,
