@@ -11,8 +11,8 @@ import (
 	sync "sync"
 	unsafe "unsafe"
 
-	net "github.com/kiktor/v2w-core/common/net"
-	protocol "github.com/kiktor/v2w-core/common/protocol"
+	net "github.com/xtls/xray-core/common/net"
+	protocol "github.com/xtls/xray-core/common/protocol"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -257,7 +257,7 @@ const file_proxy_shadowsocks_config_proto_rawDesc = "" +
 	"\vAES_256_GCM\x10\x06\x12\x15\n" +
 	"\x11CHACHA20_POLY1305\x10\a\x12\x16\n" +
 	"\x12XCHACHA20_POLY1305\x10\bBd\n" +
-	"\x1acom.xray.proxy.shadowsocksP\x01Z+github.com/kiktor/v2w-core/proxy/shadowsocks\xaa\x02\x16Xray.Proxy.Shadowsocksb\x06proto3"
+	"\x1acom.xray.proxy.shadowsocksP\x01Z+github.com/xtls/xray-core/proxy/shadowsocks\xaa\x02\x16Xray.Proxy.Shadowsocksb\x06proto3"
 
 var (
 	file_proxy_shadowsocks_config_proto_rawDescOnce sync.Once
