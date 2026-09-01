@@ -60,8 +60,9 @@ jobs:
     - name: Build Unified libv2ray (Original Core + Scanner Core)
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       run: |
-        go install golang.org/x/mobile/cmd/gomobile@latest
-        go install golang.org/x/mobile/cmd/gobind@latest
+        export GOPROXY=https://proxy.golang.org,direct
+        go install golang.org/x/mobile/cmd/gomobile@latest || (sleep 5 && go install golang.org/x/mobile/cmd/gomobile@latest)
+        go install golang.org/x/mobile/cmd/gobind@latest || (sleep 5 && go install golang.org/x/mobile/cmd/gobind@latest)
         gomobile init
         
         # Patch anet to fix Go 1.26 incompatibility (must download first)
