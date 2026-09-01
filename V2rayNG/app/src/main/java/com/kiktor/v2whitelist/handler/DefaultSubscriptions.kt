@@ -92,12 +92,6 @@ object DefaultSubscriptions {
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
-            id = "def_etoneya",
-            name = "etoneya (Специально для YouTube / YTUnblock)",
-            url = "https://etoneya.su/whitelist",
-            enabled = false
-        ),
-        SubscriptionHelper.CustomSubData(
             id = "def_hiztin_gribi",
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
