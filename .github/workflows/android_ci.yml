@@ -85,21 +85,7 @@ jobs:
         # Patch libv2ray_main.go to include V2W scanner bindings
         if ! grep -q "RunV2WScanner" AndroidLibXrayLite/libv2ray_main.go; then
           sed -i '/mobasset "golang.org\/x\/mobile\/asset"/a \ \t"github.com/kiktor/v2w-core/v2wscanner"' AndroidLibXrayLite/libv2ray_main.go
-          cat << 'EOF' >> AndroidLibXrayLite/libv2ray_main.go
-
-type V2WScanCallback interface {
-	OnServerSuccess(configUrl string, delay int64)
-	OnScanComplete(totalSuccess int64, totalFailed int64)
-}
-
-func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {
-	v2wscanner.RunV2WScanner(configs, maxConcurrency, callback)
-}
-
-func StopV2WScanner() {
-	v2wscanner.StopV2WScanner()
-}
-EOF
+          printf '\ntype V2WScanCallback interface {\n\tOnServerSuccess(configUrl string, delay int64)\n\tOnScanComplete(totalSuccess int64, totalFailed int64)\n}\n\nfunc RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {\n\tv2wscanner.RunV2WScanner(configs, maxConcurrency, callback)\n}\n\nfunc StopV2WScanner() {\n\tv2wscanner.StopV2WScanner()\n}\n' >> AndroidLibXrayLite/libv2ray_main.go
         fi
         
         # Run gomobile from within AndroidLibXrayLite so it is the "current module"
