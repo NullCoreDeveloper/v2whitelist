@@ -52,12 +52,14 @@ object V2WScannerEngine {
                     if (configUrl != null) {
                         val item = urlToGuid[configUrl]
                         if (item != null) {
+                            GeekModeLogger.log("v2w-core", "Node responded: ${item.second.remarks} (${delay}ms)")
                             channel.trySend(Triple(item.first, item.second, delay))
                         }
                     }
                 }
 
                 override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
+                    GeekModeLogger.log("v2w-core", "Batch scan complete. Success: $totalSuccess, Failed: $totalFailed")
                     channel.close()
                 }
             }
@@ -66,11 +68,32 @@ object V2WScannerEngine {
             
             try {
                 coroutineScope {
-                    launch(Dispatchers.IO) {
+                    val scannerJob = launch(Dispatchers.IO) {
                         try {
-                            Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
+                            kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
+                                cont.invokeOnCancellation {
+                                    GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
+                                    Libv2ray.stopV2WScanner()
+                                }
+                                
+                                kotlin.concurrent.thread {
+                                    try {
+                                        Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
+                                        if (cont.isActive) {
+                                            cont.resume(Unit) { }
+                                        }
+                                    } catch (e: Exception) {
+                                        if (cont.isActive) {
+                                            cont.resumeWithException(e)
+                                        }
+                                    }
+                                }
+                            }
                         } catch (e: Exception) {
-                            GeekModeLogger.log("SmartConnect", "v2w-core error: ${e.message}")
+                            if (e !is kotlinx.coroutines.CancellationException) {
+                                GeekModeLogger.log("v2w-core", "error: ${e.message}")
+                            }
+                        } finally {
                             channel.close()
                         }
                     }
@@ -80,6 +103,7 @@ object V2WScannerEngine {
                         
                         if (profileCheckEnabled) {
                             if (NodeTesterManager.verifyProfile(context, candidatePair.first, showStatus = (internetStatus == 0))) {
+                                GeekModeLogger.log("v2w-core", "Connecting to verified node: ${candidatePair.second.remarks}")
                                 Libv2ray.stopV2WScanner()
                                 connectToBest(candidatePair, isStartup)
                                 connected = true
@@ -90,6 +114,7 @@ object V2WScannerEngine {
                                 }
                             }
                         } else {
+                            GeekModeLogger.log("v2w-core", "Connecting to node (no profile check): ${candidatePair.second.remarks}")
                             Libv2ray.stopV2WScanner()
                             connectToBest(candidatePair, isStartup)
                             connected = true
