@@ -79,7 +79,7 @@ object V2WScannerEngine {
                         val candidatePair = Pair(candidate.first, candidate.second)
                         
                         if (profileCheckEnabled) {
-                            if (NodeTesterManager.run { verifyProfile(context, candidatePair.first) }) {
+                            if (NodeTesterManager.verifyProfile(context, candidatePair.first, showStatus = (internetStatus == 0))) {
                                 Libv2ray.stopV2WScanner()
                                 connectToBest(candidatePair, isStartup)
                                 connected = true

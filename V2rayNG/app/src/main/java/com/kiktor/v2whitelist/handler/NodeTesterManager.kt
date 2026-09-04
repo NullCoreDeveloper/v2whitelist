@@ -105,7 +105,7 @@ object NodeTesterManager {
      * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
      * и делает реальный HTTP-запрос через него.
      */
-    suspend fun verifyProfile(context: Context, guid: String): Boolean {
+    suspend fun verifyProfile(context: Context, guid: String, showStatus: Boolean = true): Boolean {
         // Выделяем свободный локальный порт для SOCKS-прокси
         val port = try {
             ServerSocket(0).use { it.localPort }
@@ -121,7 +121,9 @@ object NodeTesterManager {
             return false
         }
 
-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_profile))
+        if (showStatus) {
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_profile))
+        }
 
         var coreController: CoreController? = null
         return try {
@@ -159,33 +161,43 @@ object NodeTesterManager {
                     val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
                     val minMbps = minSpeedStr?.toDoubleOrNull() ?: 1.0
 
-                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
-                        context.getString(R.string.status_speed_check_running))
+                    if (showStatus) {
+                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                            context.getString(R.string.status_speed_check_running))
+                    }
 
                     val mbps = SpeedtestManager.measureSpeedThroughProxy(port, bytes, timeout)
                     if (mbps != null) {
                         val mbpsStr = "%.1f".format(mbps)
                         if (minMbps > 0 && mbps < minMbps) {
                             GeekModeLogger.log("NodeTester", "verifyProfile: speed for $guid = ${mbpsStr} Mbps is below minimum threshold ${minMbps} Mbps, rejecting server")
-                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
-                                context.getString(R.string.status_profile_speed_too_low, mbpsStr, "%.1f".format(minMbps)))
+                            if (showStatus) {
+                                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                                    context.getString(R.string.status_profile_speed_too_low, mbpsStr, "%.1f".format(minMbps)))
+                            }
                             return false
                         }
                         GeekModeLogger.log("NodeTester", "verifyProfile: speed for $guid = ${mbpsStr} Мбит/с")
-                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
-                            context.getString(R.string.status_profile_check_passed_speed, mbpsStr))
+                        if (showStatus) {
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                                context.getString(R.string.status_profile_check_passed_speed, mbpsStr))
+                        }
                     } else {
                         GeekModeLogger.log("NodeTester", "verifyProfile: speed test failed for $guid (timeout or no data)")
                         if (minMbps > 0) {
                             GeekModeLogger.log("NodeTester", "verifyProfile: speed check failed and minMbps > 0, rejecting server $guid")
                             return false
                         }
+                        if (showStatus) {
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                                context.getString(R.string.status_profile_check_passed))
+                        }
+                    }
+                } else {
+                    if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_profile_check_passed))
                     }
-                } else {
-                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
-                        context.getString(R.string.status_profile_check_passed))
                 }
 
                 true
@@ -202,12 +214,12 @@ object NodeTesterManager {
     }
 
     fun verifyAndCacheLeftovers(context: Context, candidates: List<Triple<String, ProfileItem, Long>>) {
-        GlobalScope.launch(Dispatchers.IO) {
+        CoroutineScope(Dispatchers.IO).launch {
             val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
             for (candidate in candidates) {
                 if (MmkvManager.getVipCache().size >= MmkvManager.getVipCacheLimit()) break
                 if (profileCheckEnabled) {
-                    if (verifyProfile(context, candidate.first)) {
+                    if (verifyProfile(context, candidate.first, showStatus = false)) {
                         GeekModeLogger.log("NodeTester", "Background: added ${candidate.second.remarks} to VIP cache")
                         MmkvManager.addVipServer(candidate.first)
                     }

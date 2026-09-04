@@ -175,67 +175,7 @@ object SmartConnectManager {
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
     const val UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
 
-    /**
-     * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
-     * и делает реальный HTTP-запрос через него.
-     * Только так можно достоверно убедиться, что сервер рабочий — проверка протокольного
-     * рукопожатия, авторизации и прохождения трафика, а не просто TCP-доступности.
-     */
-    private suspend fun NodeTesterManager.verifyProfile(context: Context, guid: String): Boolean {
-        // Выделяем свободный локальный порт для SOCKS-прокси
-        val port = try {
-            ServerSocket(0).use { it.localPort }
-        } catch (e: Exception) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: failed to allocate port for $guid")
-            return false
-        }
 
-        // Получаем конфиг с реальным SOCKS inbound на выделенном порту
-        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
-        if (!configResult.status) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: failed to create speedtest config for $guid")
-            return false
-        }
-
-        sendStatus(context, context.getString(R.string.status_verifying_profile))
-
-        var coreController: CoreController? = null
-        return try {
-            // Запускаем отдельный экземпляр ядра V2Ray
-            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
-                override fun startup(): Long = 0
-                override fun shutdown(): Long = 0
-                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
-            })
-
-            // fd=0: запуск без TUN (только SOCKS прокси на локальном порту)
-            coreController.startLoop(configResult.content, 0)
-
-            // Ждём пока ядро поднимется и установит соединение с сервером
-            delay(500L)
-
-            // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
-            // testConnection делает запрос к gstatic.com/generate_204 и ожидает HTTP 204
-            val (elapsed, _) = SpeedtestManager.testConnection(context, port)
-
-            if (elapsed <= 0) {
-                GeekModeLogger.log("SmartConnect", "verifyProfile: traffic did not pass through server for $guid")
-                false
-            } else {
-                GeekModeLogger.log("SmartConnect", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
-                sendStatus(context, context.getString(R.string.status_profile_check_passed))
-                true
-            }
-        } catch (e: Exception) {
-            GeekModeLogger.log("SmartConnect", "verifyProfile: exception for $guid: ${e.message}")
-            false
-        } finally {
-            // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
-            try {
-                coreController?.stopLoop()
-            } catch (_: Exception) {}
-        }
-    }
 
     /**
      * Быстрый путь (Fast Path): проверяем серверы из VIP-кэша.
