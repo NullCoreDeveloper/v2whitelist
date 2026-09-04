@@ -375,14 +375,15 @@ object SmartConnectManager {
 
             val results = NodeTesterManager.testServers(context, chunk)
 
-            // Если включена проверка профиля — проверяем кандидатов по порядку
             if (profileCheckEnabled) {
                 for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                    if (NodeTesterManager.verifyProfile(context, candidate.first, showStatus = (internetStatus == 0))) {
                         best = candidate
                         break
                     } else {
-                        sendStatus(context, context.getString(R.string.status_profile_check_failed))
+                        if (internetStatus == 0) {
+                            sendStatus(context, context.getString(R.string.status_profile_check_failed))
+                        }
                     }
                 }
             } else {
@@ -400,23 +401,15 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
         }
 
-        // Fallback: if no server found in time, just pick the first one from list
-        if (best == null && filteredServers.isNotEmpty()) {
-            GeekModeLogger.log("SmartConnect", "No servers found within timeout, picking first available")
-            best = Triple(filteredServers[0].first, filteredServers[0].second, Long.MAX_VALUE)
-        }
-
         if (best != null) {
-            if (!chunkedServers.any { chunk -> chunk.any { it.first == best!!.first } }) {
-                connectToBest(context, best, isStartup = true)
-            }
+            connectToBest(context, best, isStartup = true)
             NotificationManager.cancelFailoverNotification()
             return@withContext true
-        } else {
-            GeekModeLogger.log("SmartConnect", "Critical: No servers available to connect")
-            sendStatus(context, context.getString(R.string.status_no_servers))
-            return@withContext false
         }
+
+        GeekModeLogger.log("SmartConnect", "No working server found after checking all chunks")
+        sendStatus(context, context.getString(R.string.status_no_servers))
+        return@withContext false
     }
 
     /**
@@ -494,17 +487,14 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
         }
 
-        if (nextBest == null && filteredServers.isNotEmpty()) {
-            nextBest = Triple(filteredServers[Random.nextInt(filteredServers.size)].first, filteredServers[0].second, Long.MAX_VALUE)
-        }
-
         if (nextBest != null) {
-            if (!chunkedServers.any { chunk -> chunk.any { it.first == nextBest!!.first } }) {
-                connectToBest(context, nextBest, isStartup = false)
-            }
+            connectToBest(context, nextBest, isStartup = false)
             NotificationManager.cancelFailoverNotification()
             return@withContext true
         }
+
+        GeekModeLogger.log("SmartConnect", "switchServer: No working server found")
+        sendStatus(context, context.getString(R.string.status_no_servers))
         return@withContext false
     }
 
