@@ -138,8 +138,11 @@ object NodeTesterManager {
             // Ждём пока ядро поднимется и установит соединение с сервером
             delay(500L)
 
+            val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "8000")
+                               ?.toIntOrNull()?.takeIf { it > 0 } ?: 8_000
+
             // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
-            val (elapsed, _) = SpeedtestManager.testConnection(context, port)
+            val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)
 
             if (elapsed <= 0) {
                 GeekModeLogger.log("NodeTester", "verifyProfile: traffic did not pass through server for $guid")
@@ -153,8 +156,6 @@ object NodeTesterManager {
                 if (speedCheckEnabled) {
                     val bytes    = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
                                        ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L
-                    val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "8000")
-                                       ?.toIntOrNull()?.takeIf { it > 0 } ?: 8_000
                     val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
                     val minMbps = minSpeedStr?.toDoubleOrNull() ?: 1.0
 
