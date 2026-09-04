@@ -116,13 +116,8 @@ object V2WScannerEngine {
             }
         }
 
-        // Fallback: if no working server was found across all chunks, pick the first server
-        if (servers.isNotEmpty()) {
-            GeekModeLogger.log("SmartConnect", "v2w-core: No working server found in all chunks, falling back to first available server")
-            connectToBest(servers[0], isStartup)
-            return@coroutineScope true
-        }
-
+        // If no working server was found across all chunks, report status and return false
+        sendStatus(context.getString(R.string.status_no_servers))
         return@coroutineScope false
     }
 }
