@@ -83,8 +83,10 @@ object V2WScannerEngine {
                         try {
                             kotlinx.coroutines.delay(Long.MAX_VALUE)
                         } catch (e: kotlinx.coroutines.CancellationException) {
-                            GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
-                            Libv2ray.stopV2WScanner()
+                            if (e.message != "NaturalComplete") {
+                                GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
+                                Libv2ray.stopV2WScanner()
+                            }
                         }
                     }
 
@@ -111,7 +113,7 @@ object V2WScannerEngine {
                             break
                         }
                     }
-                    watcherJob.cancel() // Clean up watcher if scan finishes naturally
+                    watcherJob.cancel(kotlinx.coroutines.CancellationException("NaturalComplete")) // Clean up watcher if scan finishes naturally
                 }
             } finally {
                 Libv2ray.stopV2WScanner()
