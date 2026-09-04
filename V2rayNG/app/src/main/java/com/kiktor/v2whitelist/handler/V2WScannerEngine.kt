@@ -18,6 +18,7 @@ object V2WScannerEngine {
         context: Context,
         servers: List<Pair<String, ProfileItem>>,
         isStartup: Boolean,
+        internetStatus: Int = 0,
         sendStatus: (String) -> Unit,
         connectToBest: suspend (Pair<String, ProfileItem>, Boolean) -> Unit
     ): Boolean = coroutineScope {
@@ -29,7 +30,9 @@ object V2WScannerEngine {
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
         for ((index, chunk) in chunks.withIndex()) {
-            sendStatus(context.getString(R.string.v2w_core_init) + " (${index + 1}/${chunks.size})")
+            if (internetStatus == 0) {
+                sendStatus(context.getString(R.string.v2w_core_init) + " (${index + 1}/${chunks.size})")
+            }
 
             val sb = java.lang.StringBuilder()
             val urlToGuid = mutableMapOf<String, Pair<String, ProfileItem>>()
@@ -82,7 +85,9 @@ object V2WScannerEngine {
                                 connected = true
                                 break
                             } else {
-                                sendStatus(context.getString(R.string.status_profile_check_failed))
+                                if (internetStatus == 0) {
+                                    sendStatus(context.getString(R.string.status_profile_check_failed))
+                                }
                             }
                         } else {
                             Libv2ray.stopV2WScanner()
@@ -109,6 +114,13 @@ object V2WScannerEngine {
                 }
                 return@coroutineScope true
             }
+        }
+
+        // Fallback: if no working server was found across all chunks, pick the first server
+        if (servers.isNotEmpty()) {
+            GeekModeLogger.log("SmartConnect", "v2w-core: No working server found in all chunks, falling back to first available server")
+            connectToBest(servers[0], isStartup)
+            return@coroutineScope true
         }
 
         return@coroutineScope false

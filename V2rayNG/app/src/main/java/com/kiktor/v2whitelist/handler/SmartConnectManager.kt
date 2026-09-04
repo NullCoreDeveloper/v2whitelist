@@ -414,6 +414,7 @@ object SmartConnectManager {
                 context, 
                 filteredServers, 
                 isStartup = true,
+                internetStatus = internetStatus,
                 sendStatus = { status -> sendStatus(context, status) },
                 connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
             )
