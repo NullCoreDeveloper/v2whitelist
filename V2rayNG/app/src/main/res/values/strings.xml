@@ -277,7 +277,7 @@
     <string name="title_pref_auto_check_update">Auto check for app updates</string>
     <string name="summary_pref_auto_check_update">Check for new versions on GitHub when the app starts</string>
     <string name="title_pref_check_update_pre_release">Receive Pre-release (Beta) updates</string>
-    <string name="summary_pref_check_update_pre_release">Allow updating to experimental versions (for testing purposes only)</string>
+    <string name="summary_pref_check_update_pre_release">⚠️ FOR DEVELOPERS AND TESTERS ONLY! Experimental builds. The app may work unstably or fail to function after updating.</string>
 
     <string name="title_pref_auto_update_subscription">Automatic update subscriptions</string>
     <string name="summary_pref_auto_update_subscription">Update your subscriptions automatically at set intervals in the background. Depending on the device, this feature may not always work</string>
