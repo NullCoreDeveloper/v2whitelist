@@ -795,11 +795,6 @@ object MmkvManager {
         return decodeSettingsBool("pref_v2w_core_enabled", false)
     }
 
-    fun getV2wCoreBatchSize(): Int {
-        val sizeStr = decodeSettingsString("pref_v2w_core_batch_size", "100")
-        return sizeStr?.toIntOrNull() ?: 100
-    }
-
     fun getV2wCoreConcurrency(): Int {
         val concStr = decodeSettingsString("pref_v2w_core_concurrency", "20")
         return concStr?.toIntOrNull() ?: 20

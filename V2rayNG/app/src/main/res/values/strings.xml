@@ -312,8 +312,6 @@
     <string name="title_smartconnect_settings">SmartConnect Settings</string>
     <string name="title_pref_v2w_core_enabled">Use v2w-core engine</string>
     <string name="summary_pref_v2w_core_enabled">Experimental. Mass parallel server scanning to bypass DDoS protection and find the best nodes in real-time.</string>
-    <string name="title_pref_v2w_core_batch_size">v2w-core batch size</string>
-    <string name="summary_pref_v2w_core_batch_size">Number of servers to test simultaneously using the new engine (Default: 100)</string>
     <string name="title_pref_v2w_core_concurrency">v2w-core socket concurrency</string>
     <string name="summary_pref_v2w_core_concurrency">Maximum number of concurrent connections for scanning (Default: 20)</string>
 

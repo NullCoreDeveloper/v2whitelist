@@ -47,13 +47,6 @@
 
         <EditTextPreference
             android:inputType="number"
-            android:key="pref_v2w_core_batch_size"
-            android:defaultValue="100"
-            android:summary="@string/summary_pref_v2w_core_batch_size"
-            android:title="@string/title_pref_v2w_core_batch_size" />
-
-        <EditTextPreference
-            android:inputType="number"
             android:key="pref_v2w_core_concurrency"
             android:defaultValue="35"
             android:summary="@string/summary_pref_v2w_core_concurrency"
