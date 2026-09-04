@@ -71,31 +71,20 @@ object V2WScannerEngine {
                 coroutineScope {
                     val scannerJob = launch(Dispatchers.IO) {
                         try {
-                            kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
-                                cont.invokeOnCancellation {
-                                    GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
-                                    Libv2ray.stopV2WScanner()
-                                }
-                                
-                                kotlin.concurrent.thread {
-                                    try {
-                                        Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
-                                        if (cont.isActive) {
-                                            cont.resume(Unit) { }
-                                        }
-                                    } catch (e: Exception) {
-                                        if (cont.isActive) {
-                                            cont.resumeWithException(e)
-                                        }
-                                    }
-                                }
-                            }
+                            Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
                         } catch (e: Exception) {
-                            if (e !is kotlinx.coroutines.CancellationException) {
-                                GeekModeLogger.log("v2w-core", "error: ${e.message}")
-                            }
+                            GeekModeLogger.log("v2w-core", "error: ${e.message}")
                         } finally {
                             channel.close()
+                        }
+                    }
+                    
+                    val watcherJob = launch {
+                        try {
+                            kotlinx.coroutines.delay(Long.MAX_VALUE)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
+                            Libv2ray.stopV2WScanner()
                         }
                     }
 
@@ -122,6 +111,7 @@ object V2WScannerEngine {
                             break
                         }
                     }
+                    watcherJob.cancel() // Clean up watcher if scan finishes naturally
                 }
             } finally {
                 Libv2ray.stopV2WScanner()
