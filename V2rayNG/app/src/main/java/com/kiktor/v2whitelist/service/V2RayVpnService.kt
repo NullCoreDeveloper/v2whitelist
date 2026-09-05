@@ -15,6 +15,11 @@ import android.os.ParcelFileDescriptor
 import android.os.StrictMode
 import android.util.Log
 import androidx.annotation.RequiresApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.LOOPBACK
 import com.kiktor.v2whitelist.BuildConfig
@@ -32,6 +37,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     private var mInterface: ParcelFileDescriptor? = null
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**destroy
      * Unfortunately registerDefaultNetworkCallback is going to return our VPN interface: https://android.googlesource.com/platform/frameworks/base/+/dda156ab0c5d66ad82bdcf76cda07cbc0a9c8a2e
@@ -92,6 +98,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         NotificationManager.cancelNotification()
     }
 
@@ -99,16 +106,19 @@ class V2RayVpnService : VpnService(), ServiceControl {
         Log.i(AppConfig.TAG, "onStartCommand: VPN service starting (pid=${android.os.Process.myPid()})")
         NotificationManager.showNotification(null, this)
 
-        if (!setupVpnService()) {
-            Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, service will stop")
-            return START_NOT_STICKY
-        }
+        serviceScope.launch {
+            if (!setupVpnService()) {
+                Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, service will stop")
+                stopSelf()
+                return@launch
+            }
 
-        try {
-            startService()
-        } catch (t: Throwable) {
-            Log.e(AppConfig.TAG, "onStartCommand: startService() threw exception", t)
-            stopAllService()
+            try {
+                startService()
+            } catch (t: Throwable) {
+                Log.e(AppConfig.TAG, "onStartCommand: startService() threw exception", t)
+                stopAllService()
+            }
         }
         return START_STICKY
     }

@@ -43,6 +43,7 @@ object V2WScannerEngine {
         if (urlToGuid.isEmpty()) return@coroutineScope false
 
         val channel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
+        var scanContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
         val callback = object : V2WScanCallback {
             override fun onServerSuccess(configUrl: String?, delay: Long) {
                 if (configUrl != null) {
@@ -57,6 +58,9 @@ object V2WScannerEngine {
             override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
                 GeekModeLogger.log("v2w-core", "Scan complete. Success: $totalSuccess, Failed: $totalFailed")
                 channel.close()
+                if (scanContinuation?.isActive == true) {
+                    scanContinuation?.resume(Unit) { }
+                }
             }
         }
 
@@ -67,6 +71,7 @@ object V2WScannerEngine {
                 val scannerJob = launch(Dispatchers.IO) {
                     try {
                         kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
+                            scanContinuation = cont
                             cont.invokeOnCancellation {
                                 GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
                                 Libv2ray.stopV2WScanner()
@@ -75,9 +80,6 @@ object V2WScannerEngine {
                             kotlin.concurrent.thread {
                                 try {
                                     Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
-                                    if (cont.isActive) {
-                                        cont.resume(Unit) { }
-                                    }
                                 } catch (e: Exception) {
                                     if (cont.isActive) {
                                         cont.resumeWithException(e)
