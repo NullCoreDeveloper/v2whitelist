@@ -85,7 +85,7 @@
         <EditTextPreference
             android:inputType="number"
             android:key="pref_profile_speed_check_timeout_ms"
-            android:defaultValue="8000"
+            android:defaultValue="5000"
             android:summary="@string/summary_pref_profile_speed_check_timeout"
             android:title="@string/title_pref_profile_speed_check_timeout" />
 

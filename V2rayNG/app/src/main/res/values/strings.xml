@@ -553,7 +553,7 @@
     <string name="title_pref_profile_speed_check_bytes">Download size (bytes)</string>
     <string name="summary_pref_profile_speed_check_bytes">Amount of data to download for speed measurement. Default: 2 000 000 (≈2 MB)</string>
     <string name="title_pref_profile_speed_check_timeout">Speed test timeout (ms)</string>
-    <string name="summary_pref_profile_speed_check_timeout">If the download does not complete within this time, the speed test is skipped. Default: 8000 ms</string>
+    <string name="summary_pref_profile_speed_check_timeout">If the download does not complete within this time, the speed test is skipped. Default: 5000 ms</string>
     <string name="title_pref_profile_min_speed_mbps">Minimum speed threshold (Mbps)</string>
     <string name="summary_pref_profile_min_speed_mbps">Servers with speed below this threshold will be rejected during profile check. Default: 1.0 Mbps (0 to disable)</string>
     <string name="status_profile_speed_too_low">Speed too low (%1$s Mbps &lt; %2$s Mbps), searching next…</string>

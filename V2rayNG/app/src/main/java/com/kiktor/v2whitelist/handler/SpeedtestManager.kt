@@ -101,7 +101,7 @@ object SpeedtestManager {
     suspend fun measureSpeedThroughProxy(
         socksPort: Int,
         bytes: Long = 2_000_000L,
-        timeoutMs: Int = 8_000
+        timeoutMs: Int = 5_000
     ): Double? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         return@withContext try {
             val url = URL(AppConfig.SPEED_CHECK_URL + bytes)
