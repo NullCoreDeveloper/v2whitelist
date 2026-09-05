@@ -340,6 +340,9 @@ class MainActivity : HelperBaseActivity() {
                 var success = false
                 try {
                     success = SmartConnectManager.smartConnect(this@MainActivity)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    success = true // Предотвращаем показ красного экрана с ошибкой при отмене
+                    throw e
                 } finally {
                     // withContext(NonCancellable) гарантирует выполнение даже если job отменён
                     withContext(NonCancellable) {
@@ -384,6 +387,9 @@ class MainActivity : HelperBaseActivity() {
             var success = false
             try {
                 success = SmartConnectManager.switchServer(this@MainActivity)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                success = true
+                throw e
             } finally {
                 withContext(NonCancellable) {
                     if (!success) {

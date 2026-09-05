@@ -214,6 +214,7 @@ object NodeTesterManager {
                 true
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             GeekModeLogger.log("NodeTester", "verifyProfile: exception for $guid: ${e.message}")
             false
         } finally {

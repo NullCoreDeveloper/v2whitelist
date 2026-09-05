@@ -140,6 +140,7 @@ object SpeedtestManager {
             GeekModeLogger.log("SpeedTest", "Скачано $totalRead байт за %.2f сек → %.2f Мбит/с".format(elapsedSec, mbps))
             mbps
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(AppConfig.TAG, "measureSpeedThroughProxy error: ${e.message}")
             null
         }
@@ -179,6 +180,7 @@ object SpeedtestManager {
             Log.e(AppConfig.TAG, "Connection test IOException", e)
             result = context.getString(R.string.connection_test_error, e.message)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(AppConfig.TAG, "Connection test Exception", e)
             result = context.getString(R.string.connection_test_error, e.message)
         } finally {

@@ -89,9 +89,8 @@ object V2WScannerEngine {
                             }
                         }
                     } catch (e: Exception) {
-                        if (e !is kotlinx.coroutines.CancellationException) {
-                            GeekModeLogger.log("v2w-core", "error: ${e.message}")
-                        }
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        GeekModeLogger.log("v2w-core", "error: ${e.message}")
                     } finally {
                         channel.close()
                     }
