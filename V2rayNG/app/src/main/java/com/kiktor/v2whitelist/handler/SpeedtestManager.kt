@@ -1,4 +1,8 @@
 package com.kiktor.v2whitelist.handler
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 
 import android.content.Context
 import android.os.SystemClock
@@ -9,8 +13,6 @@ import com.kiktor.v2whitelist.dto.IPAPIInfo
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.util.HttpUtil
 import com.kiktor.v2whitelist.util.JsonUtil
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import java.io.IOException
 import java.io.InputStream
 import java.net.InetSocketAddress
@@ -100,8 +102,8 @@ object SpeedtestManager {
         socksPort: Int,
         bytes: Long = 2_000_000L,
         timeoutMs: Int = 8_000
-    ): Double? {
-        return try {
+    ): Double? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        return@withContext try {
             val url = URL(AppConfig.SPEED_CHECK_URL + bytes)
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(AppConfig.LOOPBACK, socksPort))
             val conn = url.openConnection(proxy) as java.net.HttpURLConnection
@@ -109,33 +111,38 @@ object SpeedtestManager {
             conn.readTimeout = timeoutMs
             conn.requestMethod = "GET"
 
+            val job = launch {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    Thread { try { conn.disconnect() } catch (e: Exception) {} }.start()
+                }
+            }
+
             val start = SystemClock.elapsedRealtime()
-            conn.connect()
-            val stream: InputStream = conn.inputStream
-            val buf = ByteArray(8192)
             var totalRead = 0L
+            var stream: InputStream? = null
             try {
+                conn.connect()
+                stream = conn.inputStream
+                val buf = ByteArray(8192)
                 var n: Int
                 while (stream.read(buf).also { n = it } != -1) {
-                    if (!currentCoroutineContext().isActive) {
-                        break
-                    }
-                    if (SystemClock.elapsedRealtime() - start > timeoutMs) {
-                        break
-                    }
+                    if (!isActive) break
+                    if (SystemClock.elapsedRealtime() - start > timeoutMs) break
                     totalRead += n
                 }
             } catch (_: IOException) {
                 // Таймаут чтения считаем нормой — данные уже прочли частично
             } finally {
-                stream.close()
+                job.cancel()
+                try { stream?.close() } catch (e: Exception) {}
                 conn.disconnect()
             }
 
             val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
-            if (elapsedSec <= 0 || totalRead == 0L) return null
+            if (elapsedSec <= 0 || totalRead == 0L) return@withContext null
 
-            // байт / сек * 8 / 1_000_000 = Мбит/с
             val mbps = (totalRead.toDouble() / elapsedSec) * 8.0 / 1_000_000.0
             GeekModeLogger.log("SpeedTest", "Скачано $totalRead байт за %.2f сек → %.2f Мбит/с".format(elapsedSec, mbps))
             mbps
@@ -153,28 +160,36 @@ object SpeedtestManager {
      * @param port The port to connect to.
      * @return A pair containing the elapsed time in milliseconds and the result message.
      */
-    suspend fun testConnection(context: Context, port: Int, timeoutMs: Int = 15000): Pair<Long, String> {
-        var result: String
+    suspend fun testConnection(context: Context, port: Int, timeoutMs: Int = 15000): Pair<Long, String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        var result = ""
         var elapsed = -1L
 
-        val conn = HttpUtil.createProxyConnection(SettingsManager.getDelayTestUrl(), port, timeoutMs, timeoutMs) ?: return Pair(elapsed, "")
+        val conn = HttpUtil.createProxyConnection(SettingsManager.getDelayTestUrl(), port, timeoutMs, timeoutMs) ?: return@withContext Pair(elapsed, "")
+        
+        val job = launch {
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } finally {
+                Thread { try { conn.disconnect() } catch (e: Exception) {} }.start()
+            }
+        }
+
         try {
             val start = SystemClock.elapsedRealtime()
-            
-            // To be interruptible, we could do blocking call in an interruptible way or check isActive
-            if (!currentCoroutineContext().isActive) return Pair(-1L, "")
+            if (!isActive) return@withContext Pair(-1L, "")
 
             val code = conn.responseCode
             elapsed = SystemClock.elapsedRealtime() - start
 
-            if (!currentCoroutineContext().isActive) return Pair(-1L, "")
+            if (!isActive) return@withContext Pair(-1L, "")
 
             result = when (code) {
                 204 -> context.getString(R.string.connection_test_available, elapsed)
-                200 if conn.contentLengthLong == 0L -> context.getString(R.string.connection_test_available, elapsed)
-                else -> throw IOException(
-                    context.getString(R.string.connection_test_error_status_code, code)
-                )
+                200 -> {
+                    if (conn.contentLengthLong == 0L) context.getString(R.string.connection_test_available, elapsed)
+                    else throw IOException(context.getString(R.string.connection_test_error_status_code, code))
+                }
+                else -> throw IOException(context.getString(R.string.connection_test_error_status_code, code))
             }
         } catch (e: IOException) {
             Log.e(AppConfig.TAG, "Connection test IOException", e)
@@ -184,10 +199,11 @@ object SpeedtestManager {
             Log.e(AppConfig.TAG, "Connection test Exception", e)
             result = context.getString(R.string.connection_test_error, e.message)
         } finally {
+            job.cancel()
             conn.disconnect()
         }
 
-        return Pair(elapsed, result)
+        return@withContext Pair(elapsed, result)
     }
 
     fun getRemoteIPInfo(): String? {

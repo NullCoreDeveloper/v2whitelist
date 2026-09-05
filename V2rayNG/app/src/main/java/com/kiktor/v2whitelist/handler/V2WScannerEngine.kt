@@ -47,6 +47,8 @@ object V2WScannerEngine {
         var scanContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
         val callback = object : V2WScanCallback {
             override fun onServerSuccess(configUrl: String?, delay: Long) {
+                if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
+                
                 if (configUrl != null) {
                     val item = urlToGuid[configUrl]
                     if (item != null) {
@@ -57,6 +59,8 @@ object V2WScannerEngine {
             }
 
             override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
+                if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
+                
                 GeekModeLogger.log("v2w-core", "Scan complete. Success: $totalSuccess, Failed: $totalFailed")
                 channel.close()
                 if (scanContinuation?.isActive == true) {
