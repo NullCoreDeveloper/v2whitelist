@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import java.net.ServerSocket
@@ -107,6 +109,8 @@ object NodeTesterManager {
      * и делает реальный HTTP-запрос через него.
      */
     suspend fun verifyProfile(context: Context, guid: String, showStatus: Boolean = true): Boolean {
+        if (!currentCoroutineContext().isActive) return false
+        
         // Выделяем свободный локальный порт для SOCKS-прокси
         val port = try {
             ServerSocket(0).use { it.localPort }
@@ -140,12 +144,15 @@ object NodeTesterManager {
 
             // Ждём пока ядро поднимется и установит соединение с сервером
             delay(500L)
+            if (!currentCoroutineContext().isActive) return false
 
             val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "8000")
                                ?.toIntOrNull()?.takeIf { it > 0 } ?: 8_000
 
             // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
             val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)
+            
+            if (!currentCoroutineContext().isActive) return false
 
             if (elapsed <= 0) {
                 GeekModeLogger.log("NodeTester", "verifyProfile: traffic did not pass through server for $guid")
@@ -168,6 +175,9 @@ object NodeTesterManager {
                     }
 
                     val mbps = SpeedtestManager.measureSpeedThroughProxy(port, bytes, timeout)
+                    
+                    if (!currentCoroutineContext().isActive) return false
+                    
                     if (mbps != null) {
                         val mbpsStr = "%.1f".format(mbps)
                         if (minMbps > 0 && mbps < minMbps) {

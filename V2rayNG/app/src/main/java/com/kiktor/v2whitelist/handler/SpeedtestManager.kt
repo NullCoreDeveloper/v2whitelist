@@ -96,7 +96,7 @@ object SpeedtestManager {
      * @param bytes      объём загрузки в байтах (default: 2 МБ)
      * @param timeoutMs  таймаут в мс (default: 8 сек)
      */
-    fun measureSpeedThroughProxy(
+    suspend fun measureSpeedThroughProxy(
         socksPort: Int,
         bytes: Long = 2_000_000L,
         timeoutMs: Int = 8_000
@@ -117,6 +117,12 @@ object SpeedtestManager {
             try {
                 var n: Int
                 while (stream.read(buf).also { n = it } != -1) {
+                    if (!currentCoroutineContext().isActive) {
+                        break
+                    }
+                    if (SystemClock.elapsedRealtime() - start > timeoutMs) {
+                        break
+                    }
                     totalRead += n
                 }
             } catch (_: IOException) {
@@ -146,15 +152,21 @@ object SpeedtestManager {
      * @param port The port to connect to.
      * @return A pair containing the elapsed time in milliseconds and the result message.
      */
-    fun testConnection(context: Context, port: Int, timeoutMs: Int = 15000): Pair<Long, String> {
+    suspend fun testConnection(context: Context, port: Int, timeoutMs: Int = 15000): Pair<Long, String> {
         var result: String
         var elapsed = -1L
 
         val conn = HttpUtil.createProxyConnection(SettingsManager.getDelayTestUrl(), port, timeoutMs, timeoutMs) ?: return Pair(elapsed, "")
         try {
             val start = SystemClock.elapsedRealtime()
+            
+            // To be interruptible, we could do blocking call in an interruptible way or check isActive
+            if (!currentCoroutineContext().isActive) return Pair(-1L, "")
+
             val code = conn.responseCode
             elapsed = SystemClock.elapsedRealtime() - start
+
+            if (!currentCoroutineContext().isActive) return Pair(-1L, "")
 
             result = when (code) {
                 204 -> context.getString(R.string.connection_test_available, elapsed)

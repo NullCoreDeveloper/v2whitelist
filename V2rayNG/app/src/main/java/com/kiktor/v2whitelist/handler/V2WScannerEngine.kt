@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlin.coroutines.resumeWithException
 
 object V2WScannerEngine {
@@ -97,6 +98,7 @@ object V2WScannerEngine {
                 }
 
                 for (candidate in channel) {
+                    if (!isActive) break
                     val candidatePair = Pair(candidate.first, candidate.second)
                     
                     if (profileCheckEnabled) {

@@ -97,7 +97,7 @@ class RealPingWorkerService(
             // Give it a bit of time to start
             Thread.sleep(300)
             
-            val (delay, _) = SpeedtestManager.testConnection(context, port)
+            val (delay, _) = kotlinx.coroutines.runBlocking { SpeedtestManager.testConnection(context, port) }
             return delay
         } catch (e: Exception) {
             return -1L
