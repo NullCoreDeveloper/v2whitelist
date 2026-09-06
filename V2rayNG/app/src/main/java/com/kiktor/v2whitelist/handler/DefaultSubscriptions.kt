@@ -167,6 +167,76 @@ object DefaultSubscriptions {
             url = "https://warp-gen.cyb-portal.org/CP-042",
             groupRegex = "(?i)(White\\s*Keys)",
             enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_etoneya_whitelist",
+            name = "ЭтоНеЯ (Только белые списки)",
+            url = listOf(
+                "https://etoneya.su/whitelist",
+                "https://etoneya.best/whitelist",
+                "https://alley.serv00.net/whitelist",
+                "https://internet-tenshi.kangel.tech/whitelist",
+                "https://whitelist.etoneya.baby",
+                "https://etoskam.ru/whitelist",
+                "https://xn--e1apcp8cq.xn--p1ai/whitelist"
+            ).joinToString("|"),
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_etoneya_blacklist",
+            name = "ЭтоНеЯ (Черные списки)",
+            url = listOf(
+                "https://etoneya.su/other",
+                "https://etoneya.best/other",
+                "https://alley.serv00.net/other",
+                "https://internet-tenshi.kangel.tech/other",
+                "https://blacklist.etoneya.baby",
+                "https://etoskam.ru/other",
+                "https://xn--e1apcp8cq.xn--p1ai/other"
+            ).joinToString("|"),
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_etoneya_gemini",
+            name = "ЭтоНеЯ (Работает Gemini)",
+            url = listOf(
+                "https://etoneya.su/gemini",
+                "https://etoneya.best/gemini",
+                "https://alley.serv00.net/gemini",
+                "https://internet-tenshi.kangel.tech/gemini",
+                "https://gemini.etoneya.baby",
+                "https://etoskam.ru/gemini",
+                "https://xn--e1apcp8cq.xn--p1ai/gemini"
+            ).joinToString("|"),
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_etoneya_youtube",
+            name = "ЭтоНеЯ (Работает YouTube)",
+            url = listOf(
+                "https://etoneya.su/youtube",
+                "https://etoneya.best/youtube",
+                "https://alley.serv00.net/youtube",
+                "https://internet-tenshi.kangel.tech/youtube",
+                "https://yt.etoneya.baby",
+                "https://etoskam.ru/youtube",
+                "https://xn--e1apcp8cq.xn--p1ai/youtube"
+            ).joinToString("|"),
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_etoneya_ytm",
+            name = "ЭтоНеЯ (Работает YouTube Музыка)",
+            url = listOf(
+                "https://etoneya.su/ytm",
+                "https://etoneya.best/ytm",
+                "https://alley.serv00.net/ytm",
+                "https://internet-tenshi.kangel.tech/ytm",
+                "https://ytm.etoneya.baby",
+                "https://etoskam.ru/ytm",
+                "https://xn--e1apcp8cq.xn--p1ai/ytm"
+            ).joinToString("|"),
+            enabled = false
         )
     )
 }
