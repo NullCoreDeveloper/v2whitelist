@@ -68,31 +68,9 @@ class LocationFilterActivity : BaseActivity() {
 
         for (guid in allServers) {
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            var tag: String? = null
-            
             val regexStr = groupRegexMap[profile.subscriptionId]
-            if (!regexStr.isNullOrEmpty()) {
-                try {
-                    val match = Regex(regexStr).find(profile.remarks)
-                    if (match != null && match.groupValues.size > 1) {
-                        tag = match.groupValues[1].trim()
-                    }
-                } catch (e: Exception) {
-                    // Ignore regex error
-                }
-            }
-
-            if (tag.isNullOrEmpty()) {
-                tag = extractFirstFlagEmoji(profile.remarks)
-            }
-            
-            if (tag.isNullOrEmpty()) {
-                tag = TAG_UNKNOWN // Fallback tag for UI grouping
-            }
-
-            if (!tag.isNullOrEmpty()) {
-                emojiCountMap[tag] = (emojiCountMap[tag] ?: 0) + 1
-            }
+            val tag = resolveServerTag(profile.remarks, regexStr)
+            emojiCountMap[tag] = (emojiCountMap[tag] ?: 0) + 1
         }
 
         if (emojiCountMap.isEmpty()) {
@@ -136,18 +114,53 @@ class LocationFilterActivity : BaseActivity() {
         const val TAG_UNKNOWN = "🌐 Неизвестные"
 
         fun getGroupRegexMap(): Map<String, String> {
-            val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
-            val customSubs = if (!customSubsJson.isNullOrEmpty()) {
-                try {
-                    com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SubscriptionHelper.CustomSubData>::class.java)?.toList() ?: emptyList()
-                } catch (e: Exception) {
-                    emptyList()
+            val map = mutableMapOf<String, String>()
+
+            // 1. Дефолтные регулярные выражения из DefaultSubscriptions.PREPOPULATED_SUBS (доступны всегда)
+            for (sub in com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS) {
+                if (sub.groupRegex.isNotEmpty()) {
+                    map["custom_sub_${sub.id}"] = sub.groupRegex
+                    map[sub.id] = sub.groupRegex
                 }
-            } else {
-                emptyList()
             }
-            return customSubs.filter { it.groupRegex.isNotEmpty() }
-                .associate { "custom_sub_${it.id}" to it.groupRegex }
+
+            // 2. Настройки кастомных подписок из MMKV (пользовательские переопределения)
+            val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+            if (!customSubsJson.isNullOrEmpty()) {
+                try {
+                    val subs = com.kiktor.v2whitelist.util.JsonUtil.fromJson(customSubsJson, Array<com.kiktor.v2whitelist.handler.SubscriptionHelper.CustomSubData>::class.java)
+                    subs?.forEach { sub ->
+                        if (sub.groupRegex.isNotEmpty()) {
+                            map["custom_sub_${sub.id}"] = sub.groupRegex
+                            map[sub.id] = sub.groupRegex
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+
+            // 3. Сопоставляем реальные подписки из MMKV (если у них GUID не custom_sub_*, а UUID)
+            try {
+                val allRealSubs = MmkvManager.decodeSubscriptions()
+                for (realSub in allRealSubs) {
+                    val guid = realSub.guid
+                    if (map.containsKey(guid)) continue
+                    val url = realSub.subscription.url
+                    val remarks = realSub.subscription.remarks
+                    val matchedDefault = com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS.find {
+                        (it.url.isNotEmpty() && url.contains(it.url.substringBefore("|"))) ||
+                        (it.name.isNotEmpty() && remarks == it.name)
+                    }
+                    if (matchedDefault != null && matchedDefault.groupRegex.isNotEmpty()) {
+                        map[guid] = matchedDefault.groupRegex
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+
+            return map
         }
 
         /** Дефолтный набор фильтруемых флагов (Россия + Украина) */
@@ -165,6 +178,104 @@ class LocationFilterActivity : BaseActivity() {
                 }
             }
             return null
+        }
+
+        private val COUNTRY_PATTERNS = listOf(
+            Regex("(?i)\\b(Россия|РФ|Russia|Russian|Moscow|RU)\\b") to "🇷🇺",
+            Regex("(?i)\\b(Германия|Germany|Frankfurt|Berlin|DE)\\b") to "🇩🇪",
+            Regex("(?i)\\b(Нидерланды|Голландия|Netherlands|The Netherlands|Amsterdam|NL)\\b") to "🇳🇱",
+            Regex("(?i)\\b(США|Соединенные Штаты|United States|USA|America|US)\\b") to "🇺🇸",
+            Regex("(?i)\\b(Финляндия|Finland|Helsinki|FI)\\b") to "🇫🇮",
+            Regex("(?i)\\b(Франция|France|Paris|Lyon|FR)\\b") to "🇫🇷",
+            Regex("(?i)\\b(Польша|Poland|Warsaw|PL)\\b") to "🇵🇱",
+            Regex("(?i)\\b(Швеция|Sweden|Stockholm|SE)\\b") to "🇸🇪",
+            Regex("(?i)\\b(Япония|Japan|Tokyo|JP)\\b") to "🇯🇵",
+            Regex("(?i)\\b(Сингапур|Singapore|SG)\\b") to "🇸🇬",
+            Regex("(?i)\\b(Гонконг|Hong\\s*Kong|HongKong|HK)\\b") to "🇭🇰",
+            Regex("(?i)\\b(Южная Корея|Корея|Korea|Seoul|KR)\\b") to "🇰🇷",
+            Regex("(?i)\\b(Турция|Turkey|Istanbul|TR)\\b") to "🇹🇷",
+            Regex("(?i)\\b(Казахстан|Kazakhstan|Almaty|Astana|KZ)\\b") to "🇰🇿",
+            Regex("(?i)\\b(Украина|Ukraine|Kyiv|Kiev|UA)\\b") to "🇺🇦",
+            Regex("(?i)\\b(Великобритания|Англия|United Kingdom|UK|London|GB)\\b") to "🇬🇧",
+            Regex("(?i)\\b(Канада|Canada|Toronto|CA)\\b") to "🇨🇦",
+            Regex("(?i)\\b(Швейцария|Switzerland|Zurich|CH)\\b") to "🇨🇭",
+            Regex("(?i)\\b(Австрия|Austria|Vienna|AT)\\b") to "🇦🇹",
+            Regex("(?i)\\b(Италия|Italy|Rome|Milano|IT)\\b") to "🇮🇹",
+            Regex("(?i)\\b(Испания|Spain|Madrid|ES)\\b") to "🇪🇸",
+            Regex("(?i)\\b(ОАЭ|Эмираты|UAE|Dubai|AE)\\b") to "🇦🇪",
+            Regex("(?i)\\b(Чехия|Czech|Prague|CZ)\\b") to "🇨🇿",
+            Regex("(?i)\\b(Болгария|Bulgaria|Sofia|BG)\\b") to "🇧🇬",
+            Regex("(?i)\\b(Тайвань|Taiwan|Taipei|TW)\\b") to "🇹🇼",
+            Regex("(?i)\\b(Сейшелы|Seychelles|SC)\\b") to "🇸🇨",
+            Regex("(?i)\\b(Джерси|Jersey|JE)\\b") to "🇯🇪",
+            Regex("(?i)\\b(Кюрасао|Curacao|CW)\\b") to "🇨🇼",
+            Regex("(?i)\\b(Норвегия|Norway|Oslo|NO)\\b") to "🇳🇴",
+            Regex("(?i)\\b(Индия|India|Mumbai|IN)\\b") to "🇮🇳",
+            Regex("(?i)\\b(Таиланд|Тайланд|Thailand|Bangkok|TH)\\b") to "🇹🇭",
+            Regex("(?i)\\b(Австралия|Australia|Sydney|AU)\\b") to "🇦🇺",
+            Regex("(?i)\\b(Венгрия|Hungary|Budapest|HU)\\b") to "🇭🇺",
+            Regex("(?i)\\b(Ирландия|Ireland|Dublin|IE)\\b") to "🇮🇪",
+            Regex("(?i)\\b(Румыния|Romania|Bucharest|RO)\\b") to "🇷🇴",
+            Regex("(?i)\\b(Малайзия|Malaysia|MY)\\b") to "🇲🇾",
+            Regex("(?i)\\b(Армения|Armenia|AM)\\b") to "🇦🇲",
+            Regex("(?i)\\b(Грузия|Georgia|GE)\\b") to "🇬🇪",
+            Regex("(?i)\\b(Молдова|Молдавия|Moldova|MD)\\b") to "🇲🇩",
+            Regex("(?i)\\b(Сербия|Serbia|RS)\\b") to "🇷🇸",
+            Regex("(?i)\\b(Эстония|Estonia|EE)\\b") to "🇪🇪",
+            Regex("(?i)\\b(Латвия|Latvia|LV)\\b") to "🇱🇻",
+            Regex("(?i)\\b(Литва|Lithuania|LT)\\b") to "🇱🇹",
+            Regex("(?i)\\b(Маршалловы Острова|MH)\\b") to "🇲🇭"
+        )
+
+        fun extractTextCountryTag(text: String): String? {
+            for ((regex, flag) in COUNTRY_PATTERNS) {
+                if (regex.containsMatchIn(text)) {
+                    return flag
+                }
+            }
+            return null
+        }
+
+        private val PROTOCOL_FALLBACK_REGEX = Regex("(?i)\\b(VLESS|VMESS|HYSTERIA2|HY2|TROJAN|SHADOWSOCKS|SS|WIREGUARD|WARP)\\b")
+
+        /**
+         * Универсальное определение тега сервера:
+         * 1. Приоритет: реальный эмодзи-флаг страны (🇷🇺, 🇩🇪, 🇺🇸 и др.).
+         * 2. Текстовое название страны или ISO-код (Россия, Germany, NL, Taiwan...) -> эмодзи-флаг.
+         * 3. Если страна не определена — применяется индивидуальный groupRegex подписки (White List, White Keys, Cloudflare, CIDR-*, SNI-*, Dynamic и др.).
+         * 4. Fallback: группировка по типу протокола (VLESS, HYSTERIA2, TROJAN, VMESS, SS).
+         * 5. Fallback: TAG_UNKNOWN ("🌐 Неизвестные").
+         */
+        fun resolveServerTag(remarks: String, regexStr: String?): String {
+            val flag = extractFirstFlagEmoji(remarks)
+            if (!flag.isNullOrEmpty()) {
+                return flag
+            }
+
+            val textTag = extractTextCountryTag(remarks)
+            if (!textTag.isNullOrEmpty()) {
+                return textTag
+            }
+
+            if (!regexStr.isNullOrEmpty()) {
+                try {
+                    val match = Regex(regexStr).find(remarks)
+                    if (match != null && match.groupValues.size > 1) {
+                        val tag = match.groupValues[1].trim()
+                        if (tag.isNotEmpty()) return tag
+                    }
+                } catch (e: Exception) {
+                    // Ignore regex error
+                }
+            }
+
+            // Если страна и regex не определили тег, но в названии указан протокол — группируем по протоколу
+            val protoMatch = PROTOCOL_FALLBACK_REGEX.find(remarks)
+            if (protoMatch != null) {
+                return protoMatch.groupValues[1].uppercase()
+            }
+
+            return TAG_UNKNOWN
         }
     }
 

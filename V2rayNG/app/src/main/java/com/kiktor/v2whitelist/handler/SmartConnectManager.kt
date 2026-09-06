@@ -97,22 +97,8 @@ object SmartConnectManager {
                 // Фильтр по локациям (эмодзи-флаги или кастомные группы)
                 if (filterSet.isEmpty()) return@filter true
                 
-                var tag: String? = null
                 val regexStr = groupRegexMap[it.second.subscriptionId]
-                if (!regexStr.isNullOrEmpty()) {
-                    try {
-                        val match = Regex(regexStr).find(it.second.remarks)
-                        if (match != null && match.groupValues.size > 1) {
-                            tag = match.groupValues[1]
-                        }
-                    } catch (e: Exception) {}
-                }
-                if (tag.isNullOrEmpty()) {
-                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
-                }
-                if (tag.isNullOrEmpty()) {
-                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.TAG_UNKNOWN // Fallback tag for servers without any emojis or regex match
-                }
+                val tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.resolveServerTag(it.second.remarks, regexStr)
                 
                 when (filterMode) {
                     AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {

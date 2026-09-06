@@ -17,12 +17,12 @@ object SubscriptionHelper {
     /** Дата-класс для JSON-десериализации кастомных подписок */
     data class CustomSubData(
         val id: String = "",
-        val name: String = "",
-        val url: String = "",
-        val filter: String = "",
-        val groupRegex: String = "",
-        val enabled: Boolean = true,
-        val sharePercent: Int? = null
+        var name: String = "",
+        var url: String = "",
+        var filter: String = "",
+        var groupRegex: String = "",
+        var enabled: Boolean = true,
+        var sharePercent: Int? = null
     )
 
     /**
@@ -54,10 +54,21 @@ object SubscriptionHelper {
         val customSubs = loadCustomSubs().toMutableList()
         var changed = false
         for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            if (customSubs.none { it.id == defaultSub.id || it.name == defaultSub.name }) {
+            val existing = customSubs.find { it.id == defaultSub.id || it.name == defaultSub.name }
+            if (existing == null) {
                 Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
                 customSubs.add(defaultSub)
                 changed = true
+            } else {
+                if (existing.groupRegex != defaultSub.groupRegex) {
+                    Log.d(AppConfig.TAG, "Updating groupRegex for ${defaultSub.name}: '${existing.groupRegex}' -> '${defaultSub.groupRegex}'")
+                    existing.groupRegex = defaultSub.groupRegex
+                    changed = true
+                }
+                if (existing.url != defaultSub.url) {
+                    existing.url = defaultSub.url
+                    changed = true
+                }
             }
         }
         if (changed) {

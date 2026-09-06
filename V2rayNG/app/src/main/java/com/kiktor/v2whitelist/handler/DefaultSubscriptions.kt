@@ -29,7 +29,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt"
             ).joinToString("|"),
-            groupRegex = "(🌐)\\s*Anycast-IP",
+            groupRegex = "\\[(BL)\\]",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -41,21 +41,20 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
             ).joinToString("|"),
-            groupRegex = "(🌐)\\s*Anycast-IP",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_avencores_goida",
             name = "AvenCores/goida (Сборник обхода черных списков)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
-            groupRegex = "(Dynamic|wlrustg|V\\.O\\.I\\.D|oneclickvpnkeys|EbraSha|ShatakVPN)",
+            groupRegex = "(Dynamic)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_avencores_goida_bypass",
             name = "AvenCores/goida (Сборник обхода белых списков SNI/CIDR)",
             url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
-            groupRegex = "(Dynamic|wlrustg|V\\.O\\.I\\.D|oneclickvpnkeys|EbraSha|ShatakVPN)",
+            groupRegex = "(V\\.O\\.I\\.D|Яндекс|VK|Ozon|XHTTP|WS|Channel|kurdconfig|AarazV2ray|EPODONIOS|wlrustg|EbraSha|ShatakVPN|canfing[A-Za-z0-9_-]+|@[A-Za-z0-9_]+|oneclickvpnkeys|NetFlowTools|Reality|gRPC|TCP|TLS|Dynamic)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -75,14 +74,14 @@ object DefaultSubscriptions {
             id = "def_rkp_whitelist",
             name = "RKP (Анти-РосКомПозор: Белые списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
-            groupRegex = "(🌐)\\s*Неизвестно",
+            groupRegex = "(Неизвестно)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_blacklist",
             name = "RKP (Анти-РосКомПозор: Черные списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
-            groupRegex = "(🌐)\\s*Неизвестно",
+            groupRegex = "(Неизвестно)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -95,7 +94,7 @@ object DefaultSubscriptions {
             id = "def_hiztin_gribi",
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
-            groupRegex = "(@[A-Za-z0-9_]+)",
+            groupRegex = "(@[A-Za-z0-9_]+|SERDNS\\s*VIP|t\\.me/[A-Za-z0-9_]+)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -107,7 +106,6 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt"
             ).joinToString("|"),
-            groupRegex = "(?i)(Обход\\s*БС|🛸)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -119,7 +117,7 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt",
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt"
             ).joinToString("|"),
-            groupRegex = "(?i)(Обход\\s*БС|🛸)",
+            groupRegex = "\\[(🏳️LTE|LTE)\\]",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -131,7 +129,7 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt"
             ).joinToString("|"),
-            groupRegex = "(🛸)",
+            groupRegex = "\\[(🏴BL|BL)\\]",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -151,14 +149,12 @@ object DefaultSubscriptions {
             id = "def_cyberportal_cp006",
             name = "CYBERPORTAL (CIDR White All RU)",
             url = "https://warp-gen.cyb-portal.org/CP-006",
-            groupRegex = "(?i)(CIDR\\s*White)(?!.*\\|)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp008",
             name = "CYBERPORTAL (SNI White All RU)",
             url = "https://warp-gen.cyb-portal.org/CP-008",
-            groupRegex = "(?i)(SNI\\s*White)(?!.*\\|)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -180,6 +176,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/whitelist",
                 "https://xn--e1apcp8cq.xn--p1ai/whitelist"
             ).joinToString("|"),
+            groupRegex = "(CIDR-[A-Za-z0-9_-]+|SNI-[A-Za-z0-9_-]+)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
@@ -194,6 +191,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/other",
                 "https://xn--e1apcp8cq.xn--p1ai/other"
             ).joinToString("|"),
+            groupRegex = "(☁️\\s*Cloudflare|Cloudflare|VLESS|HYSTERIA2|VMESS|TROJAN|SS)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
