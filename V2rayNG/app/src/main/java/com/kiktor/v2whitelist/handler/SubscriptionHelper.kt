@@ -51,22 +51,19 @@ object SubscriptionHelper {
             MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
         }
 
-        val defaultsAdded = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
-        if (!defaultsAdded) {
-            val customSubs = loadCustomSubs().toMutableList()
-            var changed = false
-            for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-                if (customSubs.none { it.name == defaultSub.name }) {
-                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
-                    customSubs.add(defaultSub)
-                    changed = true
-                }
+        val customSubs = loadCustomSubs().toMutableList()
+        var changed = false
+        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            if (customSubs.none { it.id == defaultSub.id || it.name == defaultSub.name }) {
+                Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
+                customSubs.add(defaultSub)
+                changed = true
             }
-            if (changed) {
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
-            }
-            MmkvManager.encodeSettings("pref_defaults_added_v1", true)
         }
+        if (changed) {
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+        }
+        MmkvManager.encodeSettings("pref_defaults_added_v1", true)
 
         // Обработка кастомных подписок (zieng2/wl теперь обычная кастомная подписка)
         setupCustomSubscriptions(context)

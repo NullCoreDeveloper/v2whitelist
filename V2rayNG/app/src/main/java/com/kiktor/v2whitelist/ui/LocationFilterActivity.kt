@@ -87,7 +87,7 @@ class LocationFilterActivity : BaseActivity() {
             }
             
             if (tag.isNullOrEmpty()) {
-                tag = "🌐 Неизвестные" // Fallback tag for UI grouping
+                tag = TAG_UNKNOWN // Fallback tag for UI grouping
             }
 
             if (!tag.isNullOrEmpty()) {
@@ -133,6 +133,8 @@ class LocationFilterActivity : BaseActivity() {
     }
 
     companion object {
+        const val TAG_UNKNOWN = "🌐 Неизвестные"
+
         fun getGroupRegexMap(): Map<String, String> {
             val customSubsJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
             val customSubs = if (!customSubsJson.isNullOrEmpty()) {

@@ -97,6 +97,76 @@ object DefaultSubscriptions {
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
             groupRegex = "(@[A-Za-z0-9_]+)",
             enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_kizyak_white",
+            name = "КIЗЯК VPN (Обход белых списков / Mobile)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta7.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)(Обход\\s*БС|🛸)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_kizyak_white_v6",
+            name = "КIЗЯК VPN v6 (Обход белых списков / Резерв)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)(Обход\\s*БС|🛸)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_kizyak_black",
+            name = "КIЗЯК VPN (Обход черных списков / Проводной)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6BL.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt"
+            ).joinToString("|"),
+            groupRegex = "(🛸)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp002",
+            name = "CYBERPORTAL (VLESS Black All RU)",
+            url = "https://warp-gen.cyb-portal.org/CP-002",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp035",
+            name = "CYBERPORTAL (VLESS White List)",
+            url = "https://warp-gen.cyb-portal.org/CP-035",
+            groupRegex = "(?i)(White\\s*List)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp006",
+            name = "CYBERPORTAL (CIDR White All RU)",
+            url = "https://warp-gen.cyb-portal.org/CP-006",
+            groupRegex = "(?i)(CIDR\\s*White)(?!.*\\|)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp008",
+            name = "CYBERPORTAL (SNI White All RU)",
+            url = "https://warp-gen.cyb-portal.org/CP-008",
+            groupRegex = "(?i)(SNI\\s*White)(?!.*\\|)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp042",
+            name = "CYBERPORTAL (White Keys)",
+            url = "https://warp-gen.cyb-portal.org/CP-042",
+            groupRegex = "(?i)(White\\s*Keys)",
+            enabled = false
         )
     )
 }

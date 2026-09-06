@@ -111,7 +111,7 @@ object SmartConnectManager {
                     tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.extractFirstFlagEmoji(it.second.remarks)
                 }
                 if (tag.isNullOrEmpty()) {
-                    tag = "🌐" // Fallback tag for servers without any emojis or regex match
+                    tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.TAG_UNKNOWN // Fallback tag for servers without any emojis or regex match
                 }
                 
                 when (filterMode) {
