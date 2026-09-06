@@ -1,6 +1,7 @@
 package com.kiktor.v2whitelist.handler
 
 import com.tencent.mmkv.MMKV
+import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.PREF_IS_BOOTED
 import com.kiktor.v2whitelist.AppConfig.PREF_ROUTING_RULESET
 import com.kiktor.v2whitelist.dto.AssetUrlCache
@@ -30,7 +31,7 @@ object MmkvManager {
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
     private const val KEY_SUB_IDS = "SUB_IDS"
     private const val KEY_WEBDAV_CONFIG = "WEBDAV_CONFIG"
-    private const val KEY_BATTERY_ASKED = "BATTERY_ASKED"
+    const val KEY_BATTERY_ASKED = "BATTERY_ASKED"
 
     //private val profileStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_CONFIG, MMKV.MULTI_PROCESS_MODE) }
     private val mainStorage by lazy { MMKV.mmkvWithID(ID_MAIN, MMKV.MULTI_PROCESS_MODE) }
@@ -748,11 +749,77 @@ object MmkvManager {
         return settingsStorage.decodeStringSet(key)
     }
 
+    private val BOOLEAN_SETTINGS_KEYS: Set<String> = setOf(
+        AppConfig.PREF_SNIFFING_ENABLED,
+        AppConfig.PREF_ROUTE_ONLY_ENABLED,
+        AppConfig.PREF_PER_APP_PROXY,
+        AppConfig.PREF_BYPASS_RU_APPS,
+        AppConfig.PREF_BYPASS_APPS,
+        AppConfig.PREF_LOCAL_DNS_ENABLED,
+        AppConfig.PREF_FAKE_DNS_ENABLED,
+        AppConfig.PREF_APPEND_HTTP_PROXY,
+        AppConfig.PREF_VPN_BYPASS_LAN,
+        AppConfig.PREF_MUX_ENABLED,
+        AppConfig.PREF_MUX_XUDP_QUIC,
+        AppConfig.PREF_FRAGMENT_ENABLED,
+        AppConfig.SUBSCRIPTION_AUTO_UPDATE,
+        AppConfig.PREF_AUTO_FAILOVER,
+        AppConfig.PREF_SPEED_ENABLED,
+        AppConfig.PREF_CONFIRM_REMOVE,
+        AppConfig.PREF_START_SCAN_IMMEDIATE,
+        AppConfig.PREF_DOUBLE_COLUMN_DISPLAY,
+        AppConfig.PREF_PREFER_IPV6,
+        AppConfig.PREF_PROXY_SHARING,
+        AppConfig.PREF_ALLOW_INSECURE,
+        AppConfig.PREF_IS_BOOTED,
+        AppConfig.PREF_AUTO_CHECK_UPDATE,
+        AppConfig.PREF_CHECK_UPDATE_PRE_RELEASE,
+        AppConfig.PREF_USE_HEV_TUNNEL,
+        AppConfig.PREF_AUTO_REMOVE_INVALID_AFTER_TEST,
+        AppConfig.PREF_AUTO_SORT_AFTER_TEST,
+        AppConfig.PREF_PROFILE_CHECK_ENABLED,
+        AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED,
+        AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED,
+        AppConfig.PREF_USE_BUILTIN_SUB,
+        AppConfig.PREF_IS_PAUSED,
+        "pref_v2w_core_enabled",
+        "pref_defaults_added_v1",
+        "hysteria2_pin_sha256_migrated",
+        KEY_BATTERY_ASKED
+    )
+
+    private val STRING_SET_SETTINGS_KEYS: Set<String> = setOf(
+        AppConfig.PREF_PER_APP_PROXY_SET,
+        AppConfig.PREF_LOCATION_FILTER_SET
+    )
+
     /**
      * Gets all settings as a map.
      */
-    fun getAllSettings(): Map<String, *>? {
-        return settingsStorage.all
+    fun getAllSettings(): Map<String, Any> {
+        val keys = settingsStorage.allKeys() ?: return emptyMap()
+        val result = LinkedHashMap<String, Any>()
+        for (key in keys) {
+            when {
+                STRING_SET_SETTINGS_KEYS.contains(key) -> {
+                    settingsStorage.decodeStringSet(key)?.let {
+                        result[key] = it
+                    }
+                }
+                BOOLEAN_SETTINGS_KEYS.contains(key) -> {
+                    result[key] = settingsStorage.decodeBool(key)
+                }
+                else -> {
+                    val str = settingsStorage.decodeString(key)
+                    if (str != null) {
+                        result[key] = str
+                    } else {
+                        result[key] = settingsStorage.decodeBool(key)
+                    }
+                }
+            }
+        }
+        return result
     }
 
     /**
@@ -768,7 +835,10 @@ object MmkvManager {
                 is Float -> encodeSettings(key, value)
                 is Double -> encodeSettings(key, value.toFloat()) // GSON sometimes parses numbers as Double
                 is Number -> encodeSettings(key, value.toDouble().toLong()) // Try fallback for generic Numbers
-                is MutableSet<*> -> encodeSettings(key, value as MutableSet<String>)
+                is Collection<*> -> {
+                    val set = value.mapNotNull { it?.toString() }.toMutableSet()
+                    encodeSettings(key, set)
+                }
             }
         }
     }

@@ -14,14 +14,28 @@ object BackupManager {
 
     private val gson = Gson()
 
+    private val EXCLUDED_SETTINGS_KEYS = setOf(
+        "ANG_CONFIGS",
+        "SUB_IDS",
+        "SELECTED_SERVER",
+        com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECTED_SERVER,
+        com.kiktor.v2whitelist.AppConfig.PREF_LAST_CONNECT_TIME,
+        com.kiktor.v2whitelist.AppConfig.PREF_PAUSED_SERVER_GUID,
+        com.kiktor.v2whitelist.AppConfig.PREF_IS_PAUSED,
+        com.kiktor.v2whitelist.AppConfig.PREF_IS_BOOTED,
+        com.kiktor.v2whitelist.AppConfig.CACHE_SUBSCRIPTION_ID,
+        com.kiktor.v2whitelist.AppConfig.CACHE_KEYWORD_FILTER,
+        com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE,
+        MmkvManager.KEY_BATTERY_ASKED
+    )
+
     /**
      * Exports all settings, subscriptions, and servers to the specified URI.
      */
     fun exportData(context: Context, uri: Uri): Boolean {
         return try {
-            val settings = MmkvManager.getAllSettings()?.filterKeys { 
-                // Filter out keys we don't want to export, if any
-                it != "ANG_CONFIGS" && it != "SUB_IDS" && it != "SELECTED_SERVER"
+            val settings = MmkvManager.getAllSettings().filterKeys { key ->
+                !EXCLUDED_SETTINGS_KEYS.contains(key)
             }
             val subscriptions = MmkvManager.decodeSubscriptions()
             
@@ -42,13 +56,16 @@ object BackupManager {
                 routing = routing
             )
 
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                OutputStreamWriter(outputStream, StandardCharsets.UTF_8).use { writer ->
+            val outputStream = context.contentResolver.openOutputStream(uri) ?: return false
+            outputStream.use { stream ->
+                OutputStreamWriter(stream, StandardCharsets.UTF_8).use { writer ->
                     gson.toJson(backupData, writer)
+                    writer.flush()
                 }
             }
             true
         } catch (e: Exception) {
+            android.util.Log.e(com.kiktor.v2whitelist.AppConfig.TAG, "Failed to export data", e)
             e.printStackTrace()
             false
         }
@@ -59,9 +76,10 @@ object BackupManager {
      */
     fun importData(context: Context, uri: Uri): Boolean {
         return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                InputStreamReader(inputStream, StandardCharsets.UTF_8).use { reader ->
-                    val backupData = gson.fromJson(reader, BackupData::class.java)
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return false
+            inputStream.use { stream ->
+                InputStreamReader(stream, StandardCharsets.UTF_8).use { reader ->
+                    val backupData = gson.fromJson(reader, BackupData::class.java) ?: return false
                     
                     if (backupData.version >= 1) {
                         // Clear current data completely
@@ -92,6 +110,7 @@ object BackupManager {
             }
             true
         } catch (e: Exception) {
+            android.util.Log.e(com.kiktor.v2whitelist.AppConfig.TAG, "Failed to import data", e)
             e.printStackTrace()
             false
         }
