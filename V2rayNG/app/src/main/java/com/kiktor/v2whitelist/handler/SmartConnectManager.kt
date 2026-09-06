@@ -391,8 +391,7 @@ object SmartConnectManager {
             }
 
             if (best != null) {
-                connectToBest(context, best, isStartup = true)
-                val leftovers = results.filter { it.first != best!!.first && it.third < Long.MAX_VALUE }
+                val leftovers = results.filter { it.first != best.first && it.third < Long.MAX_VALUE }
                 if (leftovers.isNotEmpty()) {
                     NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                 }
@@ -477,8 +476,7 @@ object SmartConnectManager {
             }
 
             if (nextBest != null) {
-                connectToBest(context, nextBest, isStartup = false)
-                val leftovers = results.filter { it.first != nextBest!!.first && it.third < Long.MAX_VALUE }
+                val leftovers = results.filter { it.first != nextBest.first && it.third < Long.MAX_VALUE }
                 if (leftovers.isNotEmpty()) {
                     NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
                 }

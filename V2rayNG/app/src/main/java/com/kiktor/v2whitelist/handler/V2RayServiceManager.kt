@@ -528,8 +528,17 @@ object V2RayServiceManager {
                     Log.d(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: vpnInterface=${vpnInterface?.fd}")
                     val guid = MmkvManager.getSelectServer()
                     Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: target guid=$guid")
-                    stopCoreLoop()
-                    Thread.sleep(1000L) // Wait for core to fully release resources
+                    failoverMonitorJob?.cancel()
+                    failoverMonitorJob = null
+                    if (coreController.isRunning) {
+                        try {
+                            coreController.stopLoop()
+                            Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: old core stopped")
+                        } catch (e: Exception) {
+                            Log.e(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: failed to stop existing core", e)
+                        }
+                    }
+                    Thread.sleep(500L) // Wait for core to fully release resources
                     Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: starting core loop after switch")
                     val success = startCoreLoop(vpnInterface)
                     Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop result=$success")

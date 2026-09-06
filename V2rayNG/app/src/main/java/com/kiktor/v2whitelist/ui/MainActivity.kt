@@ -61,9 +61,15 @@ class MainActivity : HelperBaseActivity() {
     // true пока мы показываем сообщение об ошибке после провала SmartConnect (2.5с задержка)
     private var isShowingError = false
 
+    private var isVpnPermissionPending = false
+    private var pendingActionAfterVpnPermission: (() -> Unit)? = null
+
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isVpnPermissionPending = false
+        val action = pendingActionAfterVpnPermission
+        pendingActionAfterVpnPermission = null
         if (it.resultCode == RESULT_OK) {
-            startV2Ray()
+            action?.invoke() ?: startV2Ray()
         }
     }
     private val requestActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -342,43 +348,58 @@ class MainActivity : HelperBaseActivity() {
         if (mainViewModel.isRunning.value == true) {
             V2RayServiceManager.stopVService(this)
         } else {
-            activeJob = lifecycleScope.launch {
-                setConnectingState()
-                var success = false
-                try {
-                    success = SmartConnectManager.smartConnect(this@MainActivity)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    success = true // Предотвращаем показ красного экрана с ошибкой при отмене
-                    throw e
-                } finally {
-                    // withContext(NonCancellable) гарантирует выполнение даже если job отменён
-                    withContext(NonCancellable) {
-                        if (!success) {
-                            // Показываем ошибку 2.5с, чтобы пользователь успел прочитать
+            if (SettingsManager.isVpnMode()) {
+                val intent = android.net.VpnService.prepare(this)
+                if (intent != null) {
+                    if (!isVpnPermissionPending) {
+                        isVpnPermissionPending = true
+                        pendingActionAfterVpnPermission = { startConnectFlow() }
+                        requestVpnPermission.launch(intent)
+                    }
+                    return
+                }
+            }
+            startConnectFlow()
+        }
+    }
+
+    private fun startConnectFlow() {
+        activeJob = lifecycleScope.launch {
+            setConnectingState()
+            var success = false
+            try {
+                success = SmartConnectManager.smartConnect(this@MainActivity)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                success = true // Предотвращаем показ красного экрана с ошибкой при отмене
+                throw e
+            } finally {
+                // withContext(NonCancellable) гарантирует выполнение даже если job отменён
+                withContext(NonCancellable) {
+                    if (!success) {
+                        // Показываем ошибку 2.5с, чтобы пользователь успел прочитать
+                        isTaskRunning = false
+                        isShowingError = true
+                        delay(2500)
+                        isShowingError = false
+                        updateUIState(mainViewModel.isRunning.value == true)
+                    } else {
+                        if (mainViewModel.isRunning.value == true) {
                             isTaskRunning = false
-                            isShowingError = true
-                            delay(2500)
-                            isShowingError = false
-                            updateUIState(mainViewModel.isRunning.value == true)
+                            updateUIState(true)
                         } else {
-                            if (mainViewModel.isRunning.value == true) {
-                                isTaskRunning = false
-                                updateUIState(true)
-                            } else {
-                                // Сервис еще запускается. Оставляем интерфейс оранжевым!
-                                // Observer сам переведет его в зеленый, когда придет MSG_STATE_START_SUCCESS
-                                // Ставим предохранитель 15 секунд на случай тихого падения
-                                lifecycleScope.launch {
-                                    delay(15000)
-                                    if (isTaskRunning && activeJob == null) {
-                                        isTaskRunning = false
-                                        updateUIState(mainViewModel.isRunning.value == true)
-                                    }
+                            // Сервис еще запускается. Оставляем интерфейс оранжевым!
+                            // Observer сам переведет его в зеленый, когда придет MSG_STATE_START_SUCCESS
+                            // Ставим предохранитель 15 секунд на случай тихого падения
+                            lifecycleScope.launch {
+                                delay(15000)
+                                if (isTaskRunning && activeJob == null) {
+                                    isTaskRunning = false
+                                    updateUIState(mainViewModel.isRunning.value == true)
                                 }
                             }
                         }
-                        activeJob = null
                     }
+                    activeJob = null
                 }
             }
         }
@@ -531,7 +552,11 @@ class MainActivity : HelperBaseActivity() {
         if (SettingsManager.isVpnMode()) {
             val intent = android.net.VpnService.prepare(this)
             if (intent != null) {
-                requestVpnPermission.launch(intent)
+                if (!isVpnPermissionPending) {
+                    isVpnPermissionPending = true
+                    pendingActionAfterVpnPermission = { startV2Ray() }
+                    requestVpnPermission.launch(intent)
+                }
                 return
             }
         }
