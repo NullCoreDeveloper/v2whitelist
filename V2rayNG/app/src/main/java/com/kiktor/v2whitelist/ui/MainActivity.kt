@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.view.Window
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
@@ -129,6 +130,9 @@ class MainActivity : HelperBaseActivity() {
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
         binding.btnShareQuick.setOnClickListener { handleShareApp() }
+        findViewById<View>(R.id.layout_last_update)?.setOnClickListener {
+            startActivity(Intent(this, CustomSubscriptionsActivity::class.java))
+        }
 
         // QR-код текущего подключённого сервера
         binding.btnShowQr.setOnClickListener { showCurrentServerQr() }
@@ -322,6 +326,9 @@ class MainActivity : HelperBaseActivity() {
             if (isTaskRunning || isShowingError) {
                 binding.tvStatusDetail.text = status
             }
+        }
+        mainViewModel.updateListAction.observe(this) {
+            updateSubscriptionStatusUI()
         }
         mainViewModel.startListenBroadcast()
         mainViewModel.initAssets(assets)
@@ -547,6 +554,34 @@ class MainActivity : HelperBaseActivity() {
 
         val tvStatus = findViewById<android.widget.TextView>(R.id.tv_update_status) ?: return
         val tvTime = findViewById<android.widget.TextView>(R.id.tv_update_time) ?: return
+
+        // Проверяем подписки, обновление которых завершилось ошибкой
+        val failedCount = subs.count { it.subscription.enabled && it.subscription.lastUpdateFailed }
+        if (failedCount > 0) {
+            tvStatus.text = getString(R.string.status_update_failed, failedCount)
+            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+
+            if (lastUpdateTime > 0) {
+                val currentCal = java.util.Calendar.getInstance()
+                val elapsedMs = currentCal.timeInMillis - lastUpdateTime
+                val elapsedMins = elapsedMs / (60 * 1000)
+
+                val timeStr = if (elapsedMins < 60) {
+                    getString(R.string.time_min, elapsedMins.toString())
+                } else {
+                    val h = elapsedMins / 60
+                    val m = elapsedMins % 60
+                    getString(R.string.time_h_m, h.toString(), m.toString())
+                }
+
+                val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
+                tvTime.text = getString(R.string.status_passed_time, updateTimeStr, timeStr)
+            } else {
+                tvTime.text = ""
+            }
+            return
+        }
 
         if (lastUpdateTime <= 0) {
             tvStatus.text = getString(R.string.status_no_subscription)

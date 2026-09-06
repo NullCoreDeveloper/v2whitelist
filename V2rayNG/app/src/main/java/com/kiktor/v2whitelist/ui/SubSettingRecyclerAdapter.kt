@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.contracts.BaseAdapterListener
 import com.kiktor.v2whitelist.databinding.ItemRecyclerSubSettingBinding
 import com.kiktor.v2whitelist.helper.ItemTouchHelperAdapter
@@ -27,7 +28,18 @@ class SubSettingRecyclerAdapter(
         holder.itemSubSettingBinding.tvName.text = subItem.remarks
         holder.itemSubSettingBinding.tvUrl.text = subItem.url
         holder.itemSubSettingBinding.chkEnable.isChecked = subItem.enabled
-        holder.itemSubSettingBinding.tvLastUpdated.text = Utils.formatTimestamp(subItem.lastUpdated)
+
+        if (subItem.lastUpdateFailed && subItem.enabled) {
+            val redColor = androidx.core.content.ContextCompat.getColor(holder.itemView.context, android.R.color.holo_red_light)
+            holder.itemSubSettingBinding.tvLastUpdated.text = holder.itemView.context.getString(R.string.sub_update_failed)
+            holder.itemSubSettingBinding.tvLastUpdated.setTextColor(redColor)
+            holder.itemSubSettingBinding.tvName.setTextColor(redColor)
+        } else {
+            holder.itemSubSettingBinding.tvLastUpdated.setTextColor(holder.defaultUpdatedColors)
+            holder.itemSubSettingBinding.tvName.setTextColor(holder.defaultNameColors)
+            holder.itemSubSettingBinding.tvLastUpdated.text = Utils.formatTimestamp(subItem.lastUpdated)
+        }
+
         holder.itemView.setBackgroundColor(Color.TRANSPARENT)
 
         holder.itemSubSettingBinding.layoutEdit.setOnClickListener {
@@ -71,7 +83,10 @@ class SubSettingRecyclerAdapter(
     }
 
     class MainViewHolder(val itemSubSettingBinding: ItemRecyclerSubSettingBinding) :
-        BaseViewHolder(itemSubSettingBinding.root), ItemTouchHelperViewHolder
+        BaseViewHolder(itemSubSettingBinding.root), ItemTouchHelperViewHolder {
+        val defaultNameColors = itemSubSettingBinding.tvName.textColors
+        val defaultUpdatedColors = itemSubSettingBinding.tvLastUpdated.textColors
+    }
 
     open class BaseViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         fun onItemSelected() {

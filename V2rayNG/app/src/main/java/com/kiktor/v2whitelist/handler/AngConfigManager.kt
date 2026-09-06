@@ -559,19 +559,28 @@ object AngConfigManager {
 
             if (configText.isEmpty()) {
                 Log.w(AppConfig.TAG, "Update subscription: all mirrors failed for ${it.subscription.remarks}")
+                it.subscription.lastUpdateFailed = true
+                MmkvManager.encodeSubscription(it.guid, it.subscription)
                 return 0
             }
             
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
+                it.subscription.lastUpdateFailed = false
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
                 MmkvManager.removeDuplicateServer() // Авто-очистка дубликатов
                 Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs (duplicates cleaned)")
+            } else {
+                Log.w(AppConfig.TAG, "Update subscription: parsed 0 configs for ${it.subscription.remarks}")
+                it.subscription.lastUpdateFailed = true
+                MmkvManager.encodeSubscription(it.guid, it.subscription)
             }
             return count
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to update config via subscription", e)
+            it.subscription.lastUpdateFailed = true
+            MmkvManager.encodeSubscription(it.guid, it.subscription)
             return 0
         }
     }

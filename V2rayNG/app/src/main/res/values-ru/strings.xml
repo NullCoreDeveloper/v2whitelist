@@ -554,6 +554,8 @@
     <string name="time_h_m">%1$s ч %2$s мин</string>
     <string name="status_actual">Актуальна</string>
     <string name="status_stale">Устарела</string>
+    <string name="status_update_failed">Не удалось обновить: %1$d</string>
+    <string name="sub_update_failed">⚠️ Ошибка обновления</string>
     <string name="status_passed_time">%1$s (прошло %2$s)</string>
 
     <!-- Backup & Restore -->

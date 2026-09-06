@@ -594,6 +594,8 @@
     <string name="time_h_m">%1$s h %2$s m</string>
     <string name="status_actual">Up to date</string>
     <string name="status_stale">Stale</string>
+    <string name="status_update_failed">Failed to update: %1$d</string>
+    <string name="sub_update_failed">⚠️ Update failed</string>
     <string name="status_passed_time">%1$s (updated %2$s ago)</string>
     <string name="title_pref_logcat" translatable="false">Logs</string>
     <string name="summary_pref_logcat" translatable="false">View v2ray core and app logs</string>

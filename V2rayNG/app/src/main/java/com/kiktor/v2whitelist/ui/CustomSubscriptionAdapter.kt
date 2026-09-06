@@ -6,7 +6,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.helper.ItemTouchHelperAdapter
@@ -22,6 +24,7 @@ class CustomSubscriptionAdapter(
 ) : RecyclerView.Adapter<CustomSubscriptionAdapter.ViewHolder>(), ItemTouchHelperAdapter {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view), ItemTouchHelperViewHolder {
+        val cardView: MaterialCardView = view as MaterialCardView
         val tvName: TextView = view.findViewById(R.id.tv_sub_name)
         val tvUrl: TextView = view.findViewById(R.id.tv_sub_url)
         val tvLastUpdate: TextView = view.findViewById(R.id.tv_sub_last_update)
@@ -48,13 +51,24 @@ class CustomSubscriptionAdapter(
         holder.tvName.text = item.name
         holder.tvUrl.text = item.url
         
-        if (item.lastUpdated > 0) {
-            val dateStr = com.kiktor.v2whitelist.util.Utils.formatTimestamp(item.lastUpdated)
-            holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update, dateStr)
+        if (item.lastUpdateFailed && item.enabled) {
+            val redColor = ContextCompat.getColor(holder.itemView.context, android.R.color.holo_red_light)
+            holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.sub_update_failed)
+            holder.tvLastUpdate.setTextColor(redColor)
             holder.tvLastUpdate.visibility = View.VISIBLE
+            holder.cardView.strokeColor = redColor
+            holder.cardView.strokeWidth = (holder.itemView.context.resources.displayMetrics.density * 1.5f).toInt()
         } else {
-            holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update_never)
-            holder.tvLastUpdate.visibility = View.VISIBLE
+            holder.cardView.strokeWidth = 0
+            holder.tvLastUpdate.setTextColor(holder.tvUrl.textColors)
+            if (item.lastUpdated > 0) {
+                val dateStr = com.kiktor.v2whitelist.util.Utils.formatTimestamp(item.lastUpdated)
+                holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update, dateStr)
+                holder.tvLastUpdate.visibility = View.VISIBLE
+            } else {
+                holder.tvLastUpdate.text = holder.itemView.context.getString(R.string.title_last_update_never)
+                holder.tvLastUpdate.visibility = View.VISIBLE
+            }
         }
 
         holder.switchEnabled.setOnCheckedChangeListener(null)

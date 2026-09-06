@@ -123,6 +123,14 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     existingItem.filter = filter
                     existingItem.groupRegex = groupRegex
                     existingItem.sharePercent = sharePercent
+                    existingItem.lastUpdateFailed = false
+                    val allSubs = MmkvManager.decodeSubscriptions()
+                    allSubs.find { it.guid == "custom_sub_${existingItem.id}" }?.let {
+                        it.subscription.remarks = name
+                        it.subscription.url = url
+                        it.subscription.lastUpdateFailed = false
+                        MmkvManager.encodeSubscription(it.guid, it.subscription)
+                    }
                     adapter.notifyDataSetChanged()
                 } else {
                     val sub = CustomSubItem(
@@ -159,6 +167,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     customSubs.forEach { sub ->
                         val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" }
                         sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
+                        sub.lastUpdateFailed = (realSub?.subscription?.lastUpdateFailed ?: false) && sub.enabled
                     }
 
                     // Авто-очистка призрачных подписок (удаленных до фикса бага)
@@ -187,21 +196,31 @@ class CustomSubscriptionsActivity : BaseActivity() {
             items = customSubs,
             onToggle = { position, isEnabled ->
                 customSubs[position].enabled = isEnabled
+                val subId = customSubs[position].id
+                val guid = "custom_sub_$subId"
+                val allSubs = MmkvManager.decodeSubscriptions()
+                val realSub = allSubs.find { it.guid == guid }
+
                 if (!isEnabled) {
-                    val subId = customSubs[position].id
-                    val guid = "custom_sub_$subId"
+                    customSubs[position].lastUpdateFailed = false
                     MmkvManager.removeServerViaSubid(guid)
                     customSubs[position].lastUpdated = 0L
                     
-                    val allSubs = MmkvManager.decodeSubscriptions()
-                    allSubs.find { it.guid == guid }?.let {
+                    realSub?.let {
                         it.subscription.lastUpdated = 0L
+                        it.subscription.enabled = false
+                        it.subscription.lastUpdateFailed = false
                         MmkvManager.encodeSubscription(it.guid, it.subscription)
                     }
                     
                     // Обновляем UI, чтобы сразу сбросить "Обновлено N минут назад"
                     rvSubscriptions.post {
                         adapter.notifyItemChanged(position)
+                    }
+                } else {
+                    realSub?.let {
+                        it.subscription.enabled = true
+                        MmkvManager.encodeSubscription(it.guid, it.subscription)
                     }
                 }
                 saveCustomSubs()
@@ -250,6 +269,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         var groupRegex: String = "",
         var enabled: Boolean = true,
         var lastUpdated: Long = 0L,
-        var sharePercent: Int? = null
+        var sharePercent: Int? = null,
+        var lastUpdateFailed: Boolean = false
     )
 }

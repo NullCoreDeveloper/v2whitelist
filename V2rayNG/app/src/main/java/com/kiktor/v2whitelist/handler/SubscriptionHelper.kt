@@ -177,6 +177,7 @@ object SubscriptionHelper {
             val subscriptions = MmkvManager.decodeSubscriptions()
             val existing = subscriptions.find { it.guid == subId }
             if (existing != null) {
+                existing.subscription.enabled = true
                 Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
                 AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
             } else {

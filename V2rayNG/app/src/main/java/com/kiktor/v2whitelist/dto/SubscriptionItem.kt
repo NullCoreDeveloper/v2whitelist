@@ -13,6 +13,7 @@ data class SubscriptionItem(
     var filter: String? = null,
     var allowInsecureUrl: Boolean = false,
     var userAgent: String? = null,
-    var sharePercent: Int? = null
+    var sharePercent: Int? = null,
+    var lastUpdateFailed: Boolean = false
 )
 
