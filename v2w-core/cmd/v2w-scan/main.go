@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	stdnet "net"
 	"net/http"
 	"net/url"
 	"os"
@@ -330,6 +331,19 @@ func main() {
 			if err != nil {
 				atomic.AddInt32(&failCount, 1)
 				return
+			}
+
+			// Fast TCP pre-check (800ms) to rapidly drop dead/blackholed endpoints
+			// before heavy Xray in-memory initialization and TLS handshake.
+			if dest.Network == net.Network_TCP {
+				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
+				tcpDialer := stdnet.Dialer{Timeout: 800 * time.Millisecond}
+				tcpConn, tcpErr := tcpDialer.DialContext(context.Background(), "tcp", targetAddr)
+				if tcpErr != nil {
+					atomic.AddInt32(&failCount, 1)
+					return
+				}
+				_ = tcpConn.Close()
 			}
 
 			var handler core.ProxyHandler

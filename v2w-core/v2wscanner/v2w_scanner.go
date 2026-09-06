@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	stdnet "net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -138,6 +139,19 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 				return
 			}
 			_ = dest
+
+			// Fast TCP pre-check (800ms) to rapidly drop dead/blackholed endpoints
+			// before heavy Xray in-memory initialization and TLS handshake.
+			if dest.Network == net.Network_TCP {
+				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
+				tcpDialer := stdnet.Dialer{Timeout: 800 * time.Millisecond}
+				tcpConn, tcpErr := tcpDialer.DialContext(globalCtx, "tcp", targetAddr)
+				if tcpErr != nil {
+					atomic.AddInt64(&failCount, 1)
+					return
+				}
+				_ = tcpConn.Close()
+			}
 
 			var handler core.ProxyHandler
 			if outboundConfig, ok := config.(*vless_outbound.Config); ok {
