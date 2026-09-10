@@ -133,6 +133,12 @@ object DefaultSubscriptions {
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
+            id = "def_cyberportal_cp001",
+            name = "CYBERPORTAL (Black MIX RU)",
+            url = "https://warp-gen.cyb-portal.org/CP-001",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp002",
             name = "CYBERPORTAL (VLESS Black All RU)",
             url = "https://warp-gen.cyb-portal.org/CP-002",

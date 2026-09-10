@@ -64,12 +64,9 @@ object SubscriptionHelper {
 
             val existing = customSubs.find { it.id == defaultSub.id || it.name == defaultSub.name }
             if (existing == null) {
-                // Добавляем дефолтные подписки только при первой инициализации!
-                if (!isAlreadyInitialized) {
-                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
-                    customSubs.add(defaultSub)
-                    changed = true
-                }
+                Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
+                customSubs.add(defaultSub)
+                changed = true
             } else {
                 if (existing.groupRegex != defaultSub.groupRegex) {
                     Log.d(AppConfig.TAG, "Updating groupRegex for ${defaultSub.name}: '${existing.groupRegex}' -> '${defaultSub.groupRegex}'")
@@ -185,13 +182,15 @@ object SubscriptionHelper {
                 "def_igareck_black",
                 "def_kizyak_black",
                 "def_cyberportal_cp002",
-                "def_rkp_blacklist"
+                "def_rkp_blacklist",
+                "def_etoneya_blacklist"
             )
             AppScenario.WHITELIST -> setOf(
                 "def_zieng2",
                 "def_igareck_white",
                 "def_kizyak_white",
                 "def_kizyak_white_v6",
+                "def_cyberportal_cp001",
                 "def_cyberportal_cp035",
                 "def_cyberportal_cp006",
                 "def_cyberportal_cp008",
