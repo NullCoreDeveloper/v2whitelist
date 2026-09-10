@@ -3,16 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ПроБел — Свободный VPN-клиент для Android (v2whitelist)</title>
-    <meta name="description" content="Бесплатный минималистичный Open-Source VPN-клиент на базе ядра Xray и v2w-core для Android. Умное подключение SmartConnect, обход белых списков и сплит-туннелинг для банков.">
-    <meta name="keywords" content="пробел впн, v2whitelist, v2ray android, xray vpn, обход тспу, белые списки впн, smartconnect vpn">
+    <title>ПроБел — Бесплатный VPN для обхода белых списков (БС) на Android</title>
+    <meta name="description" content="ПроБел — быстрый бесплатный VPN для обхода белых списков (БС) и ТСПУ на Android. Умное подключение SmartConnect, автоматический подбор серверов и раздельный туннель для банков.">
+    <meta name="keywords" content="пробел впн, пробел, впн для обхода белых списков, бесплатный впн для обхода бс, бесплатный впн, впн для бс, v2whitelist, xray vpn android, обход тспу">
     <meta name="author" content="NullCoreDeveloper">
 
-    <meta property="og:title" content="ПроБел — Свободный VPN-клиент для Android">
-    <meta property="og:description" content="Установил и нажал одну кнопку. Автоматический подбор лучших серверов, устойчивость к блокировкам и защита от ТСПУ.">
+    <meta property="og:title" content="ПроБел — Бесплатный VPN для обхода белых списков (БС) на Android">
+    <meta property="og:description" content="Бесплатный VPN-клиент ПроБел: обход белых списков (БС) и блокировок ТСПУ в один клик. Без рекламы и подписок.">
     <meta property="og:image" content="https://nullcoredeveloper.github.io/v2whitelist/icon.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nullcoredeveloper.github.io/v2whitelist/">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "ПроБел (v2whitelist)",
+      "operatingSystem": "Android",
+      "applicationCategory": "UtilitiesApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "RUB"
+      },
+      "description": "Бесплатный VPN для обхода белых списков (БС) и блокировок ТСПУ на Android"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Что такое ПроБел и почему это лучший бесплатный VPN для обхода белых списков (БС)?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "ПроБел (v2whitelist) — это бесплатный VPN-клиент для Android на базе ядра Xray, спроектированный для стабильной работы в условиях жестких блокировок и обхода белых списков (БС)."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "ПроБел — это действительно бесплатный VPN без рекламы и подписок?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Да, ПроБел — полностью бесплатный Open-Source проект под лицензией GPL-3.0. В приложении нет платных подписок, рекламы и ограничений скорости."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Как работает VPN для БС и обхода ТСПУ?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Приложение маскирует трафик с помощью протоколов VLESS Reality и алгоритма SmartConnect с честной HTTP 204 проверкой, отсекая заблокированные узлы."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Работают ли российские банки и Госуслуги при включенном VPN?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Да, встроенный раздельный туннель (сплит-туннелинг) автоматически пускает банковские приложения и сервисы Госуслуг в обход VPN."
+          }
+        }
+      ]
+    }
+    </script>
 
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -352,6 +408,66 @@
             font-size: 0.85em;
         }
 
+        .faq-section {
+            padding: 20px 0 80px;
+        }
+        .faq-list {
+            max-width: 860px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 18px;
+            backdrop-filter: blur(16px);
+            overflow: hidden;
+            transition: all 0.25s ease;
+        }
+        .faq-item[open] {
+            border-color: var(--border-card-hover);
+            background: var(--bg-card-hover);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+        .faq-question {
+            padding: 20px 24px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            color: #f1f5f9;
+            user-select: none;
+        }
+        .faq-question::-webkit-details-marker {
+            display: none;
+        }
+        .faq-arrow {
+            font-size: 0.8rem;
+            color: var(--accent-primary);
+            transition: transform 0.25s ease;
+            flex-shrink: 0;
+        }
+        .faq-item[open] .faq-arrow {
+            transform: rotate(180deg);
+        }
+        .faq-answer {
+            padding: 0 24px 22px;
+            color: var(--text-secondary);
+            font-size: 0.96rem;
+            line-height: 1.65;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            padding-top: 16px;
+        }
+        .faq-answer strong {
+            color: #f8fafc;
+        }
+
         footer {
             border-top: 1px solid var(--border-card);
             padding: 40px 0;
@@ -396,7 +512,7 @@
                 </div>
             </a>
             <div class="nav-links">
-                <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" class="nav-btn" target="_blank">📖 FAQ</a>
+                <a href="#faq" class="nav-btn">❓ FAQ</a>
                 <a href="https://github.com/NullCoreDeveloper/v2whitelist" class="nav-btn" target="_blank">⭐ GitHub</a>
                 <a href="https://t.me/NullCoreDeveloper" class="nav-btn" target="_blank">✈️ Telegram</a>
             </div>
@@ -405,7 +521,7 @@
         <section class="hero">
             <div class="badge">
                 <span class="badge-dot"></span>
-                <span>Надёжный обход ТСПУ и белых списков</span>
+                <span>Надёжный бесплатный VPN для обхода белых списков (БС) и ТСПУ</span>
             </div>
             <h1>Свободный интернет в <br><span class="gradient-text">одно нажатие</span></h1>
             <p class="hero-desc">
@@ -552,6 +668,66 @@
                 <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest" target="_blank" style="color: #a5b4fc; text-decoration: none; font-size: 0.9rem; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;">
                     <span>Все релизы и исходные коды на GitHub →</span>
                 </a>
+            </div>
+        </section>
+
+        <section class="faq-section" id="faq">
+            <div class="section-header">
+                <h2 class="section-title">Часто задаваемые вопросы</h2>
+                <p style="color: var(--text-secondary);">Всё о работе ПроБела, обходе ограничений и безопасности</p>
+            </div>
+
+            <div class="faq-list">
+                <details class="faq-item" open>
+                    <summary class="faq-question">
+                        <span>Что такое ПроБел и почему это эффективный VPN для обхода белых списков (БС)?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p><strong>ПроБел (v2whitelist)</strong> — это бесплатный Open-Source VPN-клиент для Android на базе ядра Xray. В отличие от обычных сервисов, приложение изначально оптимизировано для работы в условиях жестких сетевых ограничений и блокировок, включая доступ только к доверенным адресам («белые списки» / БС). Клиент автоматически отбирает проверенные конфигурации, обходящие фильтрацию мобильных операторов и провайдеров.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>ПроБел — это действительно бесплатный VPN без скрытых подписок?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p>Да. ПроБел — полностью бесплатный проект, распространяемый по свободной лицензии GPL-3.0. Здесь нет платных премиум-тарифов, ограничений по скорости, рекламы или сбора персональных данных (Zero Telemetry). Проект развивается сообществом энтузиастов и существует благодаря добровольным донатам «на чай».</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>Как работает этот VPN для БС и обхода ТСПУ на техническом уровне?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p>Приложение использует актуальное ядро <strong>Xray</strong> и передовые протоколы маскировки (VLESS Reality, Vision, XTLS, Shadowsocks), которые маскируют трафик под обычные разрешенные HTTPS-соединения. Собственный механизм <strong>SmartConnect</strong> проверяет каждый сервер реальным запросом с кодом HTTP 204: если DPI или ТСПУ оператора отсекает узел, приложение сразу отбрасывает его и переключает вас на рабочий маршрут.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>Будут ли работать российские банки и Госуслуги при включенном VPN?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p>Да, без проблем. В ПроБел внедрен умный раздельный туннель (сплит-туннелинг): приложения Сбера, Т-Банка, ВТБ, Госуслуг, маркетплейсов, а также сервисы Яндекса и VK по умолчанию идут мимо VPN напрямую через вашего провайдера. Вам больше не придется отключать VPN каждый раз, когда нужно оплатить покупку или проверить баланс.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
+                        <span>Чем ПроБел VPN отличается от стандартного v2rayNG?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p>В обычном v2rayNG пользователю нужно вручную искать ключи, вставлять подписки, пинговать сотни неработающих узлов и терпеть частые обрывы. <strong>ПроБел</strong> автоматизирует всю рутину: он сам забирает свежие конфигурации из пулов зеркал (даже если GitHub заблокирован), отсекает нерабочие серверы, кэширует лучшие узлы в «горячий» VIP-кэш и переключается за 1 секунду при сбоях.</p>
+                        <p style="margin-top: 10px;">Подробную техническую документацию по настройке регулярных выражений и серверов можно прочитать в <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" target="_blank" style="color: #a5b4fc; text-decoration: underline;">полной базе знаний FAQ на GitHub</a>.</p>
+                    </div>
+                </details>
             </div>
         </section>
 
