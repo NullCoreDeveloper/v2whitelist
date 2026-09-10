@@ -400,6 +400,7 @@
     <string name="update_now">Update now</string>
     <string name="update_check_pre_release">Check Pre-release</string>
     <string name="update_checking_for_update">Checking for update…</string>
+    <string name="title_downloading_update">Downloading update…</string>
 
     <string name="title_policy_group_type">Policy group type</string>
     <string name="title_policy_group_subscription_id">From subscription group</string>

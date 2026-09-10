@@ -298,7 +298,7 @@ class MainActivity : HelperBaseActivity() {
             setPadding(pad, pad, pad, pad)
         }
         val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle(R.string.status_updating_subscription) // "Обновление..."
+            .setTitle(R.string.title_downloading_update)
             .setView(progressBar)
             .setCancelable(false)
             .create()

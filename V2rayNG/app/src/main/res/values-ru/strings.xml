@@ -376,6 +376,7 @@
     <string name="update_now">Обновить</string>
     <string name="update_check_pre_release">Искать предварительный выпуск</string>
     <string name="update_checking_for_update">Проверка обновления…</string>
+    <string name="title_downloading_update">Загрузка обновления…</string>
 
     <string name="title_policy_group_type">Тип группы политик</string>
     <string name="title_policy_group_subscription_id">Из группы подписки</string>
