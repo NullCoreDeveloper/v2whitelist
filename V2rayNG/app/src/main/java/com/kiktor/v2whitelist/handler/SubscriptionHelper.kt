@@ -183,7 +183,9 @@ object SubscriptionHelper {
         val targetSubIds = when (scenario) {
             AppScenario.VPN_BLACKLIST -> setOf(
                 "def_igareck_black",
-                "def_kizyak_black"
+                "def_kizyak_black",
+                "def_cyberportal_cp002",
+                "def_rkp_blacklist"
             )
             AppScenario.WHITELIST -> setOf(
                 "def_zieng2",
