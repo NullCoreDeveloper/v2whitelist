@@ -74,14 +74,28 @@ func DestIpAddress() net.IP {
 // DNS and Routing dependencies removed for v2w-core
 
 func LookupForIP(domain string, strategy DomainStrategy, localAddr net.Address) ([]net.IP, error) {
-	// Replaced with standard Go DNS resolution for v2w-core
 	ips, err := stdnet.LookupIP(domain)
 	if err != nil {
 		return nil, err
 	}
 	var res []net.IP
 	for _, ip := range ips {
-		res = append(res, ip)
+		if strategy.PreferIP4() || strategy == DomainStrategy_USE_IP4 || strategy == DomainStrategy_FORCE_IP4 {
+			if ip.To4() != nil {
+				res = append(res, ip)
+			}
+		} else if strategy.PreferIP6() || strategy == DomainStrategy_USE_IP6 || strategy == DomainStrategy_FORCE_IP6 {
+			if ip.To4() == nil {
+				res = append(res, ip)
+			}
+		} else {
+			res = append(res, ip)
+		}
+	}
+	if len(res) == 0 {
+		for _, ip := range ips {
+			res = append(res, ip)
+		}
 	}
 	return res, nil
 }
@@ -186,7 +200,17 @@ func DialSystem(ctx context.Context, dest net.Destination, sockopt *SocketConfig
 				return nil, err
 			}
 		} else if len(ips) > 0 {
-			dest.Address = net.IPAddress(ips[0]) // just take the first IP for scanner
+			var lastErr error
+			for _, ip := range ips {
+				curDest := dest
+				curDest.Address = net.IPAddress(ip)
+				conn, dialErr := effectiveSystemDialer.Dial(ctx, nil, curDest, sockopt)
+				if dialErr == nil {
+					return conn, nil
+				}
+				lastErr = dialErr
+			}
+			return nil, lastErr
 		}
 	}
 

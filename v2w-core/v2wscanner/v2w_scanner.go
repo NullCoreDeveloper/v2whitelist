@@ -145,7 +145,11 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 			if dest.Network == net.Network_TCP {
 				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
 				tcpDialer := stdnet.Dialer{Timeout: 2500 * time.Millisecond}
-				tcpConn, tcpErr := tcpDialer.DialContext(globalCtx, "tcp", targetAddr)
+				network := "tcp"
+				if dest.Address.Family().IsDomain() {
+					network = "tcp4"
+				}
+				tcpConn, tcpErr := tcpDialer.DialContext(globalCtx, network, targetAddr)
 				if tcpErr != nil {
 					atomic.AddInt64(&failCount, 1)
 					return
@@ -290,10 +294,15 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		fallthrough
 	case "websocket":
 		streamSettings.ProtocolName = "websocket"
+		host := q.Get("host")
+		if host == "" {
+			host = q.Get("sni")
+		}
 		streamSettings.ProtocolSettings = &websocket.Config{
 			Path: q.Get("path"),
+			Host: host,
 			Header: map[string]string{
-				"Host": q.Get("host"),
+				"Host": host,
 			},
 		}
 	case "xhttp":
@@ -356,6 +365,10 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		return nil, nil, net.Destination{}, fmt.Errorf("unsupported network type: %s", netType)
 	}
 
+	streamSettings.SocketSettings = &internet.SocketConfig{
+		DomainStrategy: internet.DomainStrategy_USE_IP4,
+	}
+
 	switch security {
 	case "tls":
 		streamSettings.SecurityType = "tls"
@@ -366,9 +379,17 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 				nextProtocol = append(nextProtocol, strings.TrimSpace(p))
 			}
 		}
+		if netType == "ws" || netType == "websocket" {
+			// Gorilla websocket in Xray core requires HTTP/1.1; h2 ALPN negotiation breaks websocket handshake.
+			nextProtocol = []string{"http/1.1"}
+		}
 		sni := q.Get("sni")
 		if sni == "" {
 			sni = q.Get("host")
+		} else if host := q.Get("host"); host != "" && strings.HasSuffix(host, "."+sni) {
+			// If SNI is base domain (often blocked by DPI as BL/SNI) while host is a subdomain,
+			// prefer the subdomain for SNI. Cloudflare/CDN wildcard certificates cover *.domain.
+			sni = host
 		}
 		streamSettings.SecuritySettings = &tls.Config{
 			ServerName:   sni,
