@@ -82,7 +82,10 @@
 
 * Подробные ответы на вопросы, тонкости настройки регулярных выражений и архитектура расписаны в [**FAQ.md**](https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md).
 * Официальный канал и обратная связь: [**Telegram: @NullCoreDeveloper**](https://t.me/NullCoreDeveloper).
-* Поддержать проект (на чай): [**CloudTips**](https://pay.cloudtips.ru/p/798a4196).
+* **Поддержать разработку (на чай)**:
+  * **Банковские карты / СБП**: [CloudTips](https://pay.cloudtips.ru/p/798a4196)
+  * **USDT (TON)**: `UQD9-I3xl80QTYGEzTAAkz87a5Fcnwc6VOuBIeoXiYfTtPXr`
+  * **Monero (XMR)**: `89t1WUDwwYSFzvo5U92tqriposbNxwbHkKkrkRWf3QCx4vJhWdvfmLBbqEHBuMzsss1dwq8ErS2HDa7JT52eWkVkDsQhTAd`
 
 ---
 
