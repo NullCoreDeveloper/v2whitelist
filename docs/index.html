@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ПроБел — Свободный VPN-клиент для Android (v2whitelist)</title>
+    <meta name="description" content="Бесплатный минималистичный Open-Source VPN-клиент на базе ядра Xray и v2w-core для Android. Умное подключение SmartConnect, обход белых списков и сплит-туннелинг для банков.">
+    <meta name="keywords" content="пробел впн, v2whitelist, v2ray android, xray vpn, обход тспу, белые списки впн, smartconnect vpn">
+    <meta name="author" content="NullCoreDeveloper">
+
+    <meta property="og:title" content="ПроБел — Свободный VPN-клиент для Android">
+    <meta property="og:description" content="Установил и нажал одну кнопку. Автоматический подбор лучших серверов, устойчивость к блокировкам и защита от ТСПУ.">
+    <meta property="og:image" content="https://nullcoredeveloper.github.io/v2whitelist/icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nullcoredeveloper.github.io/v2whitelist/">
+
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-base: #0a0c10;
+            --bg-card: rgba(18, 22, 32, 0.75);
+            --bg-card-hover: rgba(26, 32, 46, 0.9);
+            --border-card: rgba(255, 255, 255, 0.08);
+            --border-card-hover: rgba(99, 102, 241, 0.4);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            --success: #10b981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .bg-glow {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            filter: blur(140px);
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.35;
+        }
+        .glow-1 {
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, #6366f1, #4338ca 70%);
+        }
+        .glow-2 {
+            bottom: -150px;
+            right: 10%;
+            background: radial-gradient(circle, #8b5cf6, #3b82f6 70%);
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+        header {
+            padding: 24px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-card);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        .brand img {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .brand-title {
+            font-weight: 800;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand-subtitle { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+
+        .nav-links { display: flex; gap: 16px; align-items: center; }
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-card);
+            background: rgba(255, 255, 255, 0.03);
+            transition: all 0.2s ease;
+        }
+        .nav-btn:hover {
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .hero { padding: 80px 0 60px; text-align: center; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse-dot 2s infinite ease-in-out;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 4.2rem);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 20px;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-desc {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 680px;
+            margin: 0 auto 40px;
+            font-weight: 400;
+        }
+
+        .cta-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1.05rem;
+            border-radius: 14px;
+            text-decoration: none;
+            box-shadow: 0 8px 24px var(--accent-glow);
+            transition: all 0.25s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
+            filter: brightness(1.08);
+        }
+        .btn-telegram {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 28px;
+            background: rgba(40, 167, 237, 0.12);
+            border: 1px solid rgba(40, 167, 237, 0.35);
+            color: #38bdf8;
+            font-weight: 600;
+            font-size: 1.05rem;
+            border-radius: 14px;
+            text-decoration: none;
+            transition: all 0.25s ease;
+        }
+        .btn-telegram:hover {
+            background: rgba(40, 167, 237, 0.22);
+            border-color: #38bdf8;
+            transform: translateY(-2px);
+            color: #ffffff;
+        }
+        .btn-donate {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 24px;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #fbbf24;
+            font-weight: 600;
+            font-size: 1.05rem;
+            border-radius: 14px;
+            text-decoration: none;
+            transition: all 0.25s ease;
+        }
+        .btn-donate:hover {
+            background: rgba(245, 158, 11, 0.22);
+            border-color: #fbbf24;
+            transform: translateY(-2px);
+        }
+
+        .version-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .version-tag {
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.1);
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+
+        .features { padding: 50px 0 80px; }
+        .section-header { text-align: center; margin-bottom: 48px; }
+        .section-title { font-size: 2rem; font-weight: 700; margin-bottom: 12px; }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            padding: 32px;
+            border-radius: 20px;
+            backdrop-filter: blur(16px);
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-card-hover);
+            background: var(--bg-card-hover);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+        }
+        .card-icon { font-size: 2.2rem; margin-bottom: 20px; display: inline-block; }
+        .card-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 12px; color: #f1f5f9; }
+        .card-desc { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.6; }
+
+        .download-box {
+            background: linear-gradient(145deg, rgba(26, 32, 46, 0.8), rgba(15, 23, 42, 0.9));
+            border: 1px solid var(--border-card);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 80px;
+        }
+        .download-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; }
+        .download-subtitle { color: var(--text-secondary); margin-bottom: 28px; }
+        .apk-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .apk-item {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+        .apk-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+        .apk-arch {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .apk-badge {
+            font-size: 0.75rem;
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+        .apk-desc { font-size: 0.85rem; color: var(--text-muted); }
+
+        footer {
+            border-top: 1px solid var(--border-card);
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .footer-link:hover { color: #a5b4fc; }
+
+        @media (max-width: 640px) {
+            header { flex-direction: column; gap: 16px; }
+            .hero { padding: 40px 0; }
+            .cta-group { flex-direction: column; width: 100%; }
+            .btn-primary, .btn-telegram, .btn-donate { width: 100%; justify-content: center; }
+            .download-box { padding: 24px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <div class="container">
+        <header>
+            <a href="#" class="brand">
+                <img src="icon.png" alt="ПроБел Логотип">
+                <div class="brand-text">
+                    <span class="brand-title">ПроБел</span>
+                    <span class="brand-subtitle">v2whitelist • Open-Source VPN</span>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" class="nav-btn" target="_blank">📖 FAQ</a>
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist" class="nav-btn" target="_blank">⭐ GitHub</a>
+                <a href="https://t.me/NullCoreDeveloper" class="nav-btn" target="_blank">✈️ Telegram</a>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="badge">
+                <span class="badge-dot"></span>
+                <span>Надёжный обход ТСПУ и белых списков</span>
+            </div>
+            <h1>Свободный интернет в <br><span class="gradient-text">одно нажатие</span></h1>
+            <p class="hero-desc">
+                Продвинутый Android-клиент на базе ядра Xray и нативного движка v2w-core. Без сложной настройки: приложение само отсекает мертвые ноды, находит самый быстрый сервер и бережет ваш трафик.
+            </p>
+
+            <div class="cta-group">
+                <a href="#downloads" class="btn-primary" id="download-btn">
+                    <span id="hero-download-text">⚡ Скачать APK (<span class="version-tag">v1.2.1</span>)</span>
+                </a>
+                <a href="https://t.me/NullCoreDeveloper" class="btn-telegram" target="_blank">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.63 3.72-.53.36-1.02.54-1.45.53-.48-.01-1.4-.27-2.09-.49-.84-.27-1.51-.42-1.45-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.89 8.01-3.46 3.82-1.61 4.62-1.89 5.14-1.9.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.03.22z"/></svg>
+                    <span>Канал разработчика</span>
+                </a>
+                <a href="https://t.me/NullCoreDeveloper/3" class="btn-donate" target="_blank">
+                    <span>☕ На чай</span>
+                </a>
+            </div>
+
+            <div class="version-info">
+                <span>Последняя версия: <strong class="version-tag">v1.2.1</strong></span>
+                <span>•</span>
+                <span>Лицензия: <strong>GPL-3.0</strong></span>
+                <span>•</span>
+                <span>Zero Telemetry</span>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="section-header">
+                <h2 class="section-title">Создан для суровых условий блокировок</h2>
+                <p style="color: var(--text-secondary);">Никаких мучений с ручным импортом и проверкой сотен конфигов</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="card-icon">🧠</div>
+                    <h3 class="card-title">Умный SmartConnect</h3>
+                    <p class="card-desc">
+                        Честная проверка доступности узлов через реальные HTTP 204 запросы. Приложение само находит работающий сервер менее чем за 1 секунду.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-icon">🚀</div>
+                    <h3 class="card-title">Нативное Go-ядро v2w-core</h3>
+                    <p class="card-desc">
+                        Высокопроизводительный движок на Go для параллельного сканирования сотен узлов с предварительным 800-мс TCP-фильтром без нагрузки на батарею.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-icon">🏦</div>
+                    <h3 class="card-title">Сплит-туннель для банков</h3>
+                    <p class="card-desc">
+                        Сбер, Т-Банк, ВТБ, Госуслуги и российские сервисы автоматически идут в обход туннеля. Больше не нужно отключать VPN для оплаты.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-icon">⚡</div>
+                    <h3 class="card-title">VIP-кэш и мгновенный Failover</h3>
+                    <p class="card-desc">
+                        Топ лучших серверов сохраняется в горячем кэше. При обрыве соединения или нажатии кнопки смена узла происходит мгновенно без пауз.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-icon">🛡️</div>
+                    <h3 class="card-title">Аварийные пулы (Mirror Racing)</h3>
+                    <p class="card-desc">
+                        Поддержка зеркал GitLab, Codeberg и CDN. Даже если GitHub заблокирован полностью, клиент поднимет соединение и заберёт свежие настройки.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-icon">🔒</div>
+                    <h3 class="card-title">Криптографические OTA</h3>
+                    <p class="card-desc">
+                        Встроенное обновление «по воздуху» с валидацией SHA-256 хешей на лету. Защита от поврежденных файлов и MITM-атак.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="download-box" id="downloads">
+            <h2 class="download-title">Прямые ссылки на установку</h2>
+            <p class="download-subtitle">Выберите подходящую сборку для вашего Android-устройства:</p>
+
+            <div class="apk-list">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1_arm64-v8a.apk" class="apk-item" id="apk-arm64">
+                    <div class="apk-arch">
+                        <span>arm64-v8a.apk</span>
+                        <span class="apk-badge">Рекомендуется</span>
+                    </div>
+                    <span class="apk-desc" id="apk-arm64-desc">Для 95% современных смартфонов (~30 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1_universal.apk" class="apk-item" id="apk-universal">
+                    <div class="apk-arch">
+                        <span>universal.apk</span>
+                    </div>
+                    <span class="apk-desc" id="apk-universal-desc">Универсальная сборка под все архитектуры (~68 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_arm64-v8a.apk" class="apk-item" id="apk-fdroid-arm64">
+                    <div class="apk-arch">
+                        <span>fdroid_arm64.apk</span>
+                        <span class="apk-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc;">Libre</span>
+                    </div>
+                    <span class="apk-desc" id="apk-fdroid-arm64-desc">Чистая сборка без сервисов Google Play (~30 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_universal.apk" class="apk-item" id="apk-fdroid-universal">
+                    <div class="apk-arch">
+                        <span>fdroid_universal.apk</span>
+                        <span class="apk-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc;">Libre</span>
+                    </div>
+                    <span class="apk-desc" id="apk-fdroid-universal-desc">Универсальная Libre-сборка без Google (~68 МБ)</span>
+                </a>
+            </div>
+            <div style="margin-top: 24px; text-align: center;">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest" target="_blank" style="color: #a5b4fc; text-decoration: none; font-size: 0.9rem; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;">
+                    <span>Все релизы и исходные коды на GitHub →</span>
+                </a>
+            </div>
+        </section>
+
+        <footer>
+            <div class="footer-links">
+                <a href="https://t.me/NullCoreDeveloper" class="footer-link" target="_blank">Telegram-канал</a>
+                <a href="https://t.me/NullCoreDeveloper/3" class="footer-link" target="_blank">Поддержать проект (На чай)</a>
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" class="footer-link" target="_blank">База знаний (FAQ)</a>
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist" class="footer-link" target="_blank">Исходный код на GitHub</a>
+                <a href="https://keepandroidopen.org/" class="footer-link" target="_blank">Keep Android Open</a>
+            </div>
+            <p>© 2026 ПроБел (v2whitelist) • Свободное ПО под лицензией GPL-3.0</p>
+        </footer>
+    </div>
+
+    <script>
+        // Плавный скролл к секции скачивания
+        document.getElementById('download-btn')?.addEventListener('click', (e) => {
+            const downloadSection = document.getElementById('downloads');
+            if (downloadSection) {
+                e.preventDefault();
+                downloadSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+
+        // Динамическое получение данных о последнем релизе через GitHub API
+        async function fetchLatestRelease() {
+            try {
+                const res = await fetch('https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases/latest');
+                if (!res.ok) return;
+                const data = await res.json();
+                const tagName = data.tag_name;
+                if (!tagName) return;
+
+                // Обновление бейджей с версией
+                const versionTags = document.querySelectorAll('.version-tag');
+                versionTags.forEach(el => el.textContent = tagName);
+
+                // Обновление прямых ссылок на APK при наличии ассетов
+                if (Array.isArray(data.assets) && data.assets.length > 0) {
+                    const formatSize = (bytes) => {
+                        if (!bytes) return '';
+                        return ` (~${(bytes / (1024 * 1024)).toFixed(0)} МБ)`;
+                    };
+
+                    data.assets.forEach(asset => {
+                        const name = asset.name.toLowerCase();
+                        const url = asset.browser_download_url;
+                        const sizeStr = formatSize(asset.size);
+
+                        if (name.endsWith('.apk')) {
+                            if (name.includes('fdroid')) {
+                                if (name.includes('arm64')) {
+                                    const el = document.getElementById('apk-fdroid-arm64');
+                                    const desc = document.getElementById('apk-fdroid-arm64-desc');
+                                    if (el) el.href = url;
+                                    if (desc && sizeStr) desc.textContent = `Чистая сборка без сервисов Google Play${sizeStr}`;
+                                } else if (name.includes('universal')) {
+                                    const el = document.getElementById('apk-fdroid-universal');
+                                    const desc = document.getElementById('apk-fdroid-universal-desc');
+                                    if (el) el.href = url;
+                                    if (desc && sizeStr) desc.textContent = `Универсальная Libre-сборка без Google${sizeStr}`;
+                                }
+                            } else {
+                                if (name.includes('arm64')) {
+                                    const el = document.getElementById('apk-arm64');
+                                    const desc = document.getElementById('apk-arm64-desc');
+                                    if (el) el.href = url;
+                                    if (desc && sizeStr) desc.textContent = `Для 95% современных смартфонов${sizeStr}`;
+                                } else if (name.includes('universal')) {
+                                    const el = document.getElementById('apk-universal');
+                                    const desc = document.getElementById('apk-universal-desc');
+                                    if (el) el.href = url;
+                                    if (desc && sizeStr) desc.textContent = `Универсальная сборка под все архитектуры${sizeStr}`;
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (err) {
+                console.debug('GitHub release API fetch fallback', err);
+            }
+        }
+
+        fetchLatestRelease();
+    </script>
+</body>
+</html>

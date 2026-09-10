@@ -1,5 +1,6 @@
 # ПроБел (v2whitelist)
 
+[![Официальный сайт](https://img.shields.io/badge/Сайт-GitHub_Pages-6366f1?style=for-the-badge&logo=githubpages&logoColor=white)](https://nullcoredeveloper.github.io/v2whitelist/)
 [![Telegram channel](https://img.shields.io/badge/Telegram-Канал_разработчика-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/NullCoreDeveloper)
 [![GitHub release](https://img.shields.io/github/v/release/NullCoreDeveloper/v2whitelist?style=for-the-badge&color=blue)](https://github.com/NullCoreDeveloper/v2whitelist/releases/latest)
 ![visitors](https://visitor-badge.laobi.icu/badge?page_id=kiktor12358.v2whitelist)
