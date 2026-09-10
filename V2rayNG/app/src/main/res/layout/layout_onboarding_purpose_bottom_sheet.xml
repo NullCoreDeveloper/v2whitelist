@@ -189,7 +189,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="Для ускорения и обхода замедления сервисов YouTube.\nВключает: ЭтоНеЯ YouTube, Музыка, Aetris"
+                        android:text="Для ускорения и обхода замедления YouTube (больше под черные списки).\nВключает: ЭтоНеЯ YouTube, Музыка, Aetris"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>

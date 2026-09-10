@@ -571,6 +571,8 @@
     <string name="summary_pref_use_builtin_sub">ПроБел Official built-in subscription</string>
     <string name="title_pref_manage_subs">Manage Subscriptions</string>
     <string name="summary_pref_manage_subs">Add or remove custom subscriptions</string>
+    <string name="title_subscription_setup_wizard">Setup Wizard</string>
+    <string name="summary_subscription_setup_wizard">Choose a subscription preset (Just VPN, Whitelist, YouTube)</string>
     <string name="custom_sub_add">Add subscription</string>
     <string name="custom_sub_name_hint">Subscription name</string>
     <string name="custom_sub_url_hint">Subscription URL</string>

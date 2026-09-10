@@ -9,6 +9,12 @@
             android:summary="@string/summary_pref_manage_subs"
             android:title="@string/title_pref_manage_subs" />
 
+        <!-- Subscription Setup Wizard -->
+        <Preference
+            android:key="pref_subscription_setup_wizard"
+            android:summary="@string/summary_subscription_setup_wizard"
+            android:title="@string/title_subscription_setup_wizard" />
+
     </PreferenceCategory>
 
     <!-- SmartConnect — разворачивается -->

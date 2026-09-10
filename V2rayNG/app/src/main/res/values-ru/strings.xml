@@ -543,6 +543,8 @@
     <string name="summary_pref_use_builtin_sub">Встроенная подписка ПроБел Official</string>
     <string name="title_pref_manage_subs">Управление подписками</string>
     <string name="summary_pref_manage_subs">Добавить или удалить пользовательские подписки</string>
+    <string name="title_subscription_setup_wizard">Мастер настройки</string>
+    <string name="summary_subscription_setup_wizard">Выбрать готовый сценарий подписок (Просто VPN, БС, YouTube)</string>
     <string name="custom_sub_add">Добавить подписку</string>
     <string name="custom_sub_name_hint">Название подписки</string>
     <string name="custom_sub_url_hint">Ссылка на подписку (URL)</string>

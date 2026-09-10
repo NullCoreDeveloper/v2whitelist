@@ -157,6 +157,12 @@ class SettingsActivity : BaseActivity() {
                 true
             }
 
+            // Мастер настройки подписок (пресеты)
+            findPreference<androidx.preference.Preference>("pref_subscription_setup_wizard")?.setOnPreferenceClickListener {
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.showSetupWizard(requireActivity())
+                true
+            }
+
             // Логи
             findPreference<androidx.preference.Preference>("pref_logcat")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), LogcatActivity::class.java))

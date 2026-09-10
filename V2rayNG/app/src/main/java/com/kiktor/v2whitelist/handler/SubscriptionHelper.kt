@@ -1,13 +1,20 @@
 package com.kiktor.v2whitelist.handler
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
+import android.view.View
+import android.widget.Toast
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.dto.SubscriptionCache
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.util.MessageUtil
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object SubscriptionHelper {
@@ -62,12 +69,17 @@ object SubscriptionHelper {
                 continue
             }
 
-            val existing = customSubs.find { it.id == defaultSub.id || it.name == defaultSub.name }
+            val existing = customSubs.find { it.id == defaultSub.id }
+                ?: customSubs.find { it.name == defaultSub.name }
             if (existing == null) {
                 Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
                 customSubs.add(defaultSub)
                 changed = true
             } else {
+                if (existing.id == defaultSub.id && existing.name != defaultSub.name) {
+                    existing.name = defaultSub.name
+                    changed = true
+                }
                 if (existing.groupRegex != defaultSub.groupRegex) {
                     Log.d(AppConfig.TAG, "Updating groupRegex for ${defaultSub.name}: '${existing.groupRegex}' -> '${defaultSub.groupRegex}'")
                     existing.groupRegex = defaultSub.groupRegex
@@ -267,6 +279,59 @@ object SubscriptionHelper {
             Log.e(AppConfig.TAG, "Failed to update subscriptions after applying scenario: ${e.message}")
         }
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+    }
+
+    /**
+     * Отображает BottomSheet диалог с мастером выбора сценария (пресета) подписок.
+     */
+    fun showSetupWizard(activity: Activity, onApplied: (() -> Unit)? = null) {
+        val bottomSheetDialog = BottomSheetDialog(activity)
+        val view = activity.layoutInflater.inflate(R.layout.layout_onboarding_purpose_bottom_sheet, null)
+
+        view.findViewById<View>(R.id.card_scenario_vpn)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            Toast.makeText(activity, "Применяем сценарий «Просто VPN»...", Toast.LENGTH_SHORT).show()
+            CoroutineScope(Dispatchers.Main).launch {
+                applyScenario(activity, AppScenario.VPN_BLACKLIST)
+                onApplied?.invoke()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_whitelist)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            Toast.makeText(activity, "Применяем сценарий «Белые списки»...", Toast.LENGTH_SHORT).show()
+            CoroutineScope(Dispatchers.Main).launch {
+                applyScenario(activity, AppScenario.WHITELIST)
+                onApplied?.invoke()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_youtube)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            Toast.makeText(activity, "Применяем сценарий «YouTube и Музыка»...", Toast.LENGTH_SHORT).show()
+            CoroutineScope(Dispatchers.Main).launch {
+                applyScenario(activity, AppScenario.YOUTUBE)
+                onApplied?.invoke()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_keep)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            Toast.makeText(
+                activity,
+                "Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        bottomSheetDialog.setCancelable(true)
+        bottomSheetDialog.setCanceledOnTouchOutside(true)
+        bottomSheetDialog.setOnCancelListener {
+            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+        }
+        bottomSheetDialog.setContentView(view)
+        bottomSheetDialog.show()
     }
 
     /**

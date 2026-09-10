@@ -216,7 +216,7 @@ object DefaultSubscriptions {
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_youtube",
-            name = "ЭтоНеЯ (Работает YouTube)",
+            name = "ЭтоНеЯ (Работает YouTube / Больше под черные списки)",
             url = listOf(
                 "https://etoneya.su/youtube",
                 "https://etoneya.best/youtube",
@@ -230,7 +230,7 @@ object DefaultSubscriptions {
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_ytm",
-            name = "ЭтоНеЯ (Работает YouTube Музыка)",
+            name = "ЭтоНеЯ (Работает YouTube Музыка / Больше под черные списки)",
             url = listOf(
                 "https://etoneya.su/ytm",
                 "https://etoneya.best/ytm",
