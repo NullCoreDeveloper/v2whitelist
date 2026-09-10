@@ -6,7 +6,6 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	gotls "crypto/tls"
@@ -143,18 +142,12 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 		hello := uConn.HandshakeState.Hello
 		hello.SessionId = make([]byte, 32)
 		copy(hello.Raw[39:], hello.SessionId) // zero out SessionId in hello.Raw for AEAD signature
-		hello.SessionId[0] = 1                // core.Version_x
-		hello.SessionId[1] = 8                // core.Version_y
-		hello.SessionId[2] = 8                // core.Version_z
+		hello.SessionId[0] = 26               // core.Version_x
+		hello.SessionId[1] = 7                // core.Version_y
+		hello.SessionId[2] = 28               // core.Version_z
 		hello.SessionId[3] = 0                // reserved
 		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(time.Now().Unix()))
 		copy(hello.SessionId[8:], config.ShortId)
-		// Randomize the rest of the SessionId to prevent identical replays in the same second
-		if len(config.ShortId) < 24 {
-			randBytes := make([]byte, 24-len(config.ShortId))
-			rand.Read(randBytes)
-			copy(hello.SessionId[8+len(config.ShortId):], randBytes)
-		}
 		if config.Show {
 			fmt.Printf("REALITY localAddr: %v\thello.SessionId[:16]: %v\n", localAddr, hello.SessionId[:16])
 		}

@@ -156,8 +156,10 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 			Path: q.Get("path"),
 			Host: host,
 			Mode: mode,
-			Headers: map[string]string{
-				"Host": host,
+			Xmux: &splithttp.XmuxConfig{
+				MaxConnections:   &splithttp.RangeConfig{From: 3, To: 3},
+				HMaxRequestTimes: &splithttp.RangeConfig{From: 600, To: 900},
+				HMaxReusableSecs: &splithttp.RangeConfig{From: 1800, To: 3000},
 			},
 		}
 		parseRange := func(s string) *splithttp.RangeConfig {
@@ -230,10 +232,15 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		}
 		
 		sidStr := q.Get("sid")
-		shortId, err := hex.DecodeString(sidStr)
-		if err != nil && len(sidStr) > 0 {
-			// If sid is invalid hex, we just use it as bytes
-			shortId = []byte(sidStr)
+		shortId := make([]byte, 8)
+		if sidStr != "" {
+			if len(sidStr)%2 != 0 {
+				sidStr = "0" + sidStr
+			}
+			decoded, err := hex.DecodeString(sidStr)
+			if err == nil {
+				copy(shortId, decoded)
+			}
 		}
 		sni := q.Get("sni")
 		if sni == "" {
@@ -333,11 +340,11 @@ func main() {
 				return
 			}
 
-			// Fast TCP pre-check (800ms) to rapidly drop dead/blackholed endpoints
+			// Fast TCP pre-check to rapidly drop dead/blackholed endpoints
 			// before heavy Xray in-memory initialization and TLS handshake.
 			if dest.Network == net.Network_TCP {
 				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
-				tcpDialer := stdnet.Dialer{Timeout: 800 * time.Millisecond}
+				tcpDialer := stdnet.Dialer{Timeout: 2500 * time.Millisecond}
 				tcpConn, tcpErr := tcpDialer.DialContext(context.Background(), "tcp", targetAddr)
 				if tcpErr != nil {
 					atomic.AddInt32(&failCount, 1)
