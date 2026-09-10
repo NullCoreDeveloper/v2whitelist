@@ -330,6 +330,28 @@
         }
         .apk-desc { font-size: 0.85rem; color: var(--text-muted); }
 
+        .download-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            padding: 14px 18px;
+            border-radius: 14px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        .download-notice code {
+            color: #a5b4fc;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+        }
+
         footer {
             border-top: 1px solid var(--border-card);
             padding: 40px 0;
@@ -473,6 +495,11 @@
             <h2 class="download-title">Прямые ссылки на установку</h2>
             <p class="download-subtitle">Выберите подходящую сборку для вашего Android-устройства:</p>
 
+            <div class="download-notice">
+                <span>💡</span>
+                <span><strong>Обычная и F-Droid версии полностью идентичны</strong> по коду и функциям: в обеих сборках на 100% отсутствуют сервисы Google Play, трекеры и аналитика. Различие заключается исключительно в названии файла и техническом идентификаторе пакета (<code>applicationId</code>) для совместимости с каталогами.</span>
+            </div>
+
             <div class="apk-list">
                 <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1_arm64-v8a.apk" class="apk-item" id="apk-arm64">
                     <div class="apk-arch">
@@ -492,17 +519,17 @@
                 <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_arm64-v8a.apk" class="apk-item" id="apk-fdroid-arm64">
                     <div class="apk-arch">
                         <span>fdroid_arm64.apk</span>
-                        <span class="apk-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc;">Libre</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Идентична</span>
                     </div>
-                    <span class="apk-desc" id="apk-fdroid-arm64-desc">Чистая сборка без сервисов Google Play (~30 МБ)</span>
+                    <span class="apk-desc" id="apk-fdroid-arm64-desc">То же самое, что arm64-v8a (другое имя пакета) (~30 МБ)</span>
                 </a>
 
                 <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_universal.apk" class="apk-item" id="apk-fdroid-universal">
                     <div class="apk-arch">
                         <span>fdroid_universal.apk</span>
-                        <span class="apk-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc;">Libre</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Идентична</span>
                     </div>
-                    <span class="apk-desc" id="apk-fdroid-universal-desc">Универсальная Libre-сборка без Google (~68 МБ)</span>
+                    <span class="apk-desc" id="apk-fdroid-universal-desc">То же самое, что universal (другое имя пакета) (~68 МБ)</span>
                 </a>
             </div>
             <div style="margin-top: 24px; text-align: center;">
@@ -565,12 +592,12 @@
                                     const el = document.getElementById('apk-fdroid-arm64');
                                     const desc = document.getElementById('apk-fdroid-arm64-desc');
                                     if (el) el.href = url;
-                                    if (desc && sizeStr) desc.textContent = `Чистая сборка без сервисов Google Play${sizeStr}`;
+                                    if (desc && sizeStr) desc.textContent = `То же самое, что arm64-v8a (другое имя пакета)${sizeStr}`;
                                 } else if (name.includes('universal')) {
                                     const el = document.getElementById('apk-fdroid-universal');
                                     const desc = document.getElementById('apk-fdroid-universal-desc');
                                     if (el) el.href = url;
-                                    if (desc && sizeStr) desc.textContent = `Универсальная Libre-сборка без Google${sizeStr}`;
+                                    if (desc && sizeStr) desc.textContent = `То же самое, что universal (другое имя пакета)${sizeStr}`;
                                 }
                             } else {
                                 if (name.includes('arm64')) {
