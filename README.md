@@ -82,6 +82,7 @@
 
 * Подробные ответы на вопросы, тонкости настройки регулярных выражений и архитектура расписаны в [**FAQ.md**](https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md).
 * Официальный канал и обратная связь: [**Telegram: @NullCoreDeveloper**](https://t.me/NullCoreDeveloper).
+* Поддержать проект (на чай): [**CloudTips**](https://pay.cloudtips.ru/p/798a4196).
 
 ---
 
