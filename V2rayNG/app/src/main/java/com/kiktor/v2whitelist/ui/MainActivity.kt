@@ -184,6 +184,65 @@ class MainActivity : HelperBaseActivity() {
         
         checkBatteryOptimization()
         checkAppUpdate()
+        checkAndShowOnboardingPurpose()
+    }
+
+    private fun checkAndShowOnboardingPurpose() {
+        val alreadyShown = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, false)
+        if (alreadyShown) return
+
+        val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.layout_onboarding_purpose_bottom_sheet, null)
+
+        view.findViewById<View>(R.id.card_scenario_vpn)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            toast("Применяем сценарий «Просто VPN»...")
+            lifecycleScope.launch {
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.applyScenario(this@MainActivity, com.kiktor.v2whitelist.handler.SubscriptionHelper.AppScenario.VPN_BLACKLIST)
+                mainViewModel.reloadServerList()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_whitelist)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            toast("Применяем сценарий «Белые списки»...")
+            lifecycleScope.launch {
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.applyScenario(this@MainActivity, com.kiktor.v2whitelist.handler.SubscriptionHelper.AppScenario.WHITELIST)
+                mainViewModel.reloadServerList()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_youtube)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            toast("Применяем сценарий «YouTube и Музыка»...")
+            lifecycleScope.launch {
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.applyScenario(this@MainActivity, com.kiktor.v2whitelist.handler.SubscriptionHelper.AppScenario.YOUTUBE)
+                mainViewModel.reloadServerList()
+            }
+        }
+
+        view.findViewById<View>(R.id.card_scenario_keep)?.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            com.kiktor.v2whitelist.handler.MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            android.widget.Toast.makeText(
+                this,
+                "Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+
+        bottomSheetDialog.setCancelable(false)
+        bottomSheetDialog.setCanceledOnTouchOutside(false)
+        bottomSheetDialog.setOnCancelListener {
+            com.kiktor.v2whitelist.handler.MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            android.widget.Toast.makeText(
+                this,
+                "Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+        bottomSheetDialog.setContentView(view)
+        bottomSheetDialog.show()
     }
 
     private fun checkAppUpdate() {

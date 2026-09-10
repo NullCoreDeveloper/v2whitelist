@@ -227,7 +227,10 @@ class CustomSubscriptionsActivity : BaseActivity() {
             },
             onDelete = { position ->
                 val subId = customSubs[position].id
-                MmkvManager.removeSubscription("custom_sub_$subId")
+                val subGuid = "custom_sub_$subId"
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.markSubRemoved(subId)
+                MmkvManager.removeSubscription(subGuid)
+                MmkvManager.removeServerViaSubid(subGuid)
                 customSubs.removeAt(position)
                 saveCustomSubs()
                 adapter.notifyItemRemoved(position)

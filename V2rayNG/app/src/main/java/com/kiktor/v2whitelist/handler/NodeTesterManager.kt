@@ -23,6 +23,9 @@ import kotlinx.coroutines.isActive
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import java.net.ServerSocket
+import java.net.Socket
+import java.net.InetSocketAddress
+import com.kiktor.v2whitelist.enums.EConfigType
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.random.Random
 
@@ -31,7 +34,9 @@ object NodeTesterManager {
     private val testSemaphore = Semaphore(48)
 
     /**
-     * Тестирует серверы параллельно и возвращает результаты, отсортированные по задержке.
+     * Тестирует серверы батча параллельно в 2 этапа и возвращает результаты, отсортированные по задержке.
+     * Этап 1: Быстрый TCP пинг (800 мс). Если ни один сервер не ответил, чанк сразу пропускается.
+     * Этап 2: HTTP 204 проверка задержки через ядро только для живых серверов.
      */
     suspend fun testServers(
         context: Context,
@@ -39,7 +44,50 @@ object NodeTesterManager {
         totalTimeoutMs: Long = 6000,
         perServerTimeoutMs: Long = 1500
     ): List<Triple<String, ProfileItem, Long>> {
-        GeekModeLogger.log("NodeTester", "testServers: starting TCP ping check for chunk of ${servers.size} servers")
+        if (servers.isEmpty()) return emptyList()
+
+        GeekModeLogger.log("NodeTester", "testServers: Phase 1: TCP ping pre-check (800ms) for chunk of ${servers.size} servers")
+
+        // ── Этап 1: Быстрый параллельный TCP pre-check (800 мс) ──────────────────
+        val tcpAliveServers = coroutineScope {
+            servers.map { (guid, profile) ->
+                async(Dispatchers.IO) {
+                    if (!currentCoroutineContext().isActive) return@async null
+                    val isUdpProtocol = profile.configType == EConfigType.WIREGUARD ||
+                                        profile.configType == EConfigType.HYSTERIA2
+                    if (isUdpProtocol) {
+                        // Для UDP протоколов TCP сокет неприменим — пропускаем на этап 204
+                        Pair(guid, profile)
+                    } else {
+                        val host = profile.server
+                        val port = profile.serverPort?.trim()?.toIntOrNull()
+                        if (host.isNullOrBlank() || port == null || port <= 0 || port > 65535) {
+                            null
+                        } else {
+                            val ok = try {
+                                Socket().use { socket ->
+                                    socket.tcpNoDelay = true
+                                    socket.connect(InetSocketAddress(host, port), 800)
+                                    true
+                                }
+                            } catch (e: Exception) {
+                                false
+                            }
+                            if (ok) Pair(guid, profile) else null
+                        }
+                    }
+                }
+            }.awaitAll().filterNotNull()
+        }
+
+        // Если ни один сервер не прошёл TCP пинг — не тратим время на Xray и сразу переходим к следующему батчу!
+        if (tcpAliveServers.isEmpty()) {
+            GeekModeLogger.log("NodeTester", "testServers: 0/${servers.size} servers passed TCP pre-check (800ms), skipping chunk")
+            return emptyList()
+        }
+
+        GeekModeLogger.log("NodeTester", "testServers: Phase 2: ${tcpAliveServers.size}/${servers.size} servers alive by TCP, checking HTTP 204 delay")
+
         val testUrls = listOf(
             AppConfig.DELAY_TEST_URL,
             "https://www.google.com/generate_204",
@@ -53,7 +101,7 @@ object NodeTesterManager {
 
         withTimeoutOrNull(totalTimeoutMs) {
             coroutineScope {
-                val jobs = servers.map { (guid, profile) ->
+                val jobs = tcpAliveServers.map { (guid, profile) ->
                     async {
                         testSemaphore.withPermit {
                             // Ранний выход если уже нашли хороший сервер — не через cancelChildren!

@@ -52,13 +52,24 @@ object SubscriptionHelper {
         }
 
         val customSubs = loadCustomSubs().toMutableList()
+        val removedSubIds = getRemovedSubIds()
+        val isAlreadyInitialized = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
         var changed = false
+
         for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            // Если пользователь явно удалил эту подписку, никогда не воскрешаем её
+            if (removedSubIds.contains(defaultSub.id)) {
+                continue
+            }
+
             val existing = customSubs.find { it.id == defaultSub.id || it.name == defaultSub.name }
             if (existing == null) {
-                Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
-                customSubs.add(defaultSub)
-                changed = true
+                // Добавляем дефолтные подписки только при первой инициализации!
+                if (!isAlreadyInitialized) {
+                    Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
+                    customSubs.add(defaultSub)
+                    changed = true
+                }
             } else {
                 if (existing.groupRegex != defaultSub.groupRegex) {
                     Log.d(AppConfig.TAG, "Updating groupRegex for ${defaultSub.name}: '${existing.groupRegex}' -> '${defaultSub.groupRegex}'")
@@ -126,6 +137,135 @@ object SubscriptionHelper {
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /**
+     * Возвращает набор ID подписок, которые пользователь намеренно удалил.
+     */
+    fun getRemovedSubIds(): Set<String> {
+        val json = MmkvManager.decodeSettingsString(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS)
+        if (json.isNullOrEmpty()) return emptySet()
+        return try {
+            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<String>::class.java)?.toSet() ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    /**
+     * Помечает ID подписки как удалённый пользователем, чтобы она никогда не воскрешалась при авто-обновлениях.
+     */
+    fun markSubRemoved(subId: String) {
+        val current = getRemovedSubIds().toMutableSet()
+        current.add(subId)
+        MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(current.toList()))
+    }
+
+    /**
+     * Сценарии работы для стартового опросника
+     */
+    enum class AppScenario {
+        VPN_BLACKLIST, // 1. Просто VPN (igareck чс, кизяк чс)
+        WHITELIST,     // 2. БС (zieng2, igareck бс, кизяк бс обе, киберпортал все бс, это не я бс)
+        YOUTUBE,       // 3. YouTube и Музыка (ЭтоНеЯ YouTube, Музыка, Aetris)
+        KEEP_CURRENT   // 4. Оставить как есть
+    }
+
+    /**
+     * Применяет выбранный сценарий подписок из стартового опросника.
+     */
+    suspend fun applyScenario(context: Context, scenario: AppScenario) = withContext(Dispatchers.IO) {
+        if (scenario == AppScenario.KEEP_CURRENT) {
+            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            return@withContext
+        }
+
+        val targetSubIds = when (scenario) {
+            AppScenario.VPN_BLACKLIST -> setOf(
+                "def_igareck_black",
+                "def_kizyak_black"
+            )
+            AppScenario.WHITELIST -> setOf(
+                "def_zieng2",
+                "def_igareck_white",
+                "def_kizyak_white",
+                "def_kizyak_white_v6",
+                "def_cyberportal_cp035",
+                "def_cyberportal_cp006",
+                "def_cyberportal_cp008",
+                "def_cyberportal_cp042",
+                "def_etoneya_whitelist"
+            )
+            AppScenario.YOUTUBE -> setOf(
+                "def_etoneya_youtube",
+                "def_etoneya_ytm",
+                "def_aetris"
+            )
+            AppScenario.KEEP_CURRENT -> emptySet()
+        }
+
+        val customSubs = loadCustomSubs().toMutableList()
+        val allSubs = MmkvManager.decodeSubscriptions()
+
+        // Добавляем целевые подписки из DefaultSubscriptions, если их еще не было в customSubs
+        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            if (targetSubIds.contains(defaultSub.id) && customSubs.none { it.id == defaultSub.id }) {
+                customSubs.add(defaultSub.copy(enabled = true))
+            }
+        }
+
+        // Если выбранные подписки были в списке удаленных, возвращаем их
+        val removedSet = getRemovedSubIds().toMutableSet()
+        var removedModified = false
+        for (id in targetSubIds) {
+            if (removedSet.remove(id)) {
+                removedModified = true
+            }
+        }
+        if (removedModified) {
+            MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(removedSet.toList()))
+        }
+
+        for (sub in customSubs) {
+            val shouldEnable = targetSubIds.contains(sub.id)
+            sub.enabled = shouldEnable
+            val guid = "custom_sub_${sub.id}"
+            val realSub = allSubs.find { it.guid == guid }
+
+            if (!shouldEnable) {
+                MmkvManager.removeServerViaSubid(guid)
+                realSub?.let {
+                    it.subscription.lastUpdated = 0L
+                    it.subscription.enabled = false
+                    it.subscription.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(it.guid, it.subscription)
+                }
+            } else {
+                if (realSub == null) {
+                    val subItem = SubscriptionItem().apply {
+                        remarks = sub.name
+                        url = sub.url
+                        filter = sub.filter
+                        enabled = true
+                        sharePercent = sub.sharePercent
+                    }
+                    MmkvManager.encodeSubscription(guid, subItem)
+                } else {
+                    realSub.subscription.enabled = true
+                    MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                }
+            }
+        }
+
+        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+
+        try {
+            updateSubscription(context)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to update subscriptions after applying scenario: ${e.message}")
+        }
+        MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
     }
 
     /**

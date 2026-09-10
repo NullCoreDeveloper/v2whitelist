@@ -106,6 +106,8 @@ object AppConfig {
     /** Custom subscriptions */
     const val PREF_USE_BUILTIN_SUB = "pref_use_builtin_sub"
     const val PREF_CUSTOM_SUB_URLS = "pref_custom_sub_urls" // JSON array of custom sub configs
+    const val PREF_REMOVED_CUSTOM_SUB_IDS = "pref_removed_custom_sub_ids" // JSON array of removed sub IDs
+    const val PREF_ONBOARDING_PURPOSE_SHOWN = "pref_onboarding_purpose_shown_v1" // Флаг разового показа опросника сценария
 
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
