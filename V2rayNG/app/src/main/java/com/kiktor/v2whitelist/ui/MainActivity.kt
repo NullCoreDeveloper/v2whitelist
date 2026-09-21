@@ -155,25 +155,53 @@ class MainActivity : HelperBaseActivity() {
         }
 
         binding.btnAboutQuick.setOnClickListener {
-            val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
-
             bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_version)?.text = "Версия: v${com.kiktor.v2whitelist.BuildConfig.VERSION_NAME}"
 
-            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_tg)?.setOnClickListener {
+            var dismissAction: () -> Unit = {}
+
+            val tvLinkTg = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_tg)
+            val tvLinkRepo = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_repo)
+            val tvLinkProfile = bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_profile)
+
+            tvLinkTg?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://t.me/NullCoreDeveloper")
-                bottomSheetDialog.dismiss()
+                dismissAction()
             }
-            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_repo)?.setOnClickListener {
+            tvLinkRepo?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/NullCoreDeveloper/v2whitelist")
-                bottomSheetDialog.dismiss()
+                dismissAction()
             }
-            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_link_profile)?.setOnClickListener {
+            tvLinkProfile?.setOnClickListener {
                 com.kiktor.v2whitelist.util.Utils.openUri(this, "https://github.com/NullCoreDeveloper")
-                bottomSheetDialog.dismiss()
+                dismissAction()
             }
-            bottomSheetDialog.setContentView(bottomSheetView)
-            bottomSheetDialog.show()
+
+            if (com.kiktor.v2whitelist.util.Utils.isTv(this)) {
+                listOfNotNull(tvLinkTg, tvLinkRepo, tvLinkProfile).forEach {
+                    it.isFocusable = true
+                    it.isFocusableInTouchMode = true
+                }
+                val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                    .setView(bottomSheetView)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .create()
+                dismissAction = { dialog.dismiss() }
+                dialog.show()
+                dialog.window?.let { window ->
+                    val displayMetrics = resources.displayMetrics
+                    val targetWidth = (displayMetrics.widthPixels * 0.7).toInt().coerceAtMost(com.kiktor.v2whitelist.util.Utils.dp2px(this, 600))
+                    window.setLayout(targetWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+                }
+                bottomSheetView.post { tvLinkTg?.requestFocus() }
+            } else {
+                val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+                bottomSheetDialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                bottomSheetDialog.behavior.skipCollapsed = true
+                dismissAction = { bottomSheetDialog.dismiss() }
+                bottomSheetDialog.setContentView(bottomSheetView)
+                bottomSheetDialog.show()
+            }
         }
 
         setupViewModel()

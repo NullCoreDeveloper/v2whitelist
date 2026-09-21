@@ -16,6 +16,7 @@
 
         <!-- Drag Handle Indicator -->
         <View
+            android:id="@+id/drag_handle"
             android:layout_width="40dp"
             android:layout_height="4dp"
             android:layout_gravity="center_horizontal"
@@ -25,7 +26,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Для чего вам v2whitelist?"
+            android:text="Для чего вам ПроБел?"
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="?android:attr/textColorPrimary" />
@@ -51,7 +52,7 @@
             app:cardCornerRadius="14dp"
             app:cardElevation="1dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant">
+            app:strokeColor="@color/card_stroke_color_selector">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -103,7 +104,7 @@
             app:cardCornerRadius="14dp"
             app:cardElevation="1dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant">
+            app:strokeColor="@color/card_stroke_color_selector">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -155,7 +156,7 @@
             app:cardCornerRadius="14dp"
             app:cardElevation="1dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant">
+            app:strokeColor="@color/card_stroke_color_selector">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -206,7 +207,7 @@
             app:cardCornerRadius="14dp"
             app:cardElevation="1dp"
             app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant">
+            app:strokeColor="@color/card_stroke_color_selector">
 
             <LinearLayout
                 android:layout_width="match_parent"

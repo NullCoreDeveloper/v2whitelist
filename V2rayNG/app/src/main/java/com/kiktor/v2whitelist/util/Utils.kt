@@ -58,6 +58,27 @@ object Utils {
     }
 
     /**
+     * Checks whether the current device is a TV, TV Box, or non-touchscreen device.
+     */
+    fun isTv(context: Context): Boolean {
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        if (uiModeManager?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) {
+            return true
+        }
+        val pm = context.packageManager
+        return pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+               pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEVISION) ||
+               !pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
+    }
+
+    /**
+     * Converts dp to pixels.
+     */
+    fun dp2px(context: Context, dp: Int): Int {
+        return (dp * context.resources.displayMetrics.density + 0.5f).toInt()
+    }
+
+    /**
      * Parse a string to an integer with a default value.
      *
      * @param str The string to parse.

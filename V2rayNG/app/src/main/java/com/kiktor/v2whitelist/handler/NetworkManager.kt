@@ -59,4 +59,62 @@ object NetworkManager {
             else -> 2                   // Интернета нет совсем
         }
     }
+
+    /**
+     * Проверяет доступность заданного HTTP/HTTPS URL (возвращает true, если код 200..399).
+     */
+    fun checkHttpAccess(urlString: String, timeoutMs: Int = 3500): Boolean {
+        var conn: java.net.HttpURLConnection? = null
+        return try {
+            val url = java.net.URL(urlString)
+            conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "v2whitelist/${com.kiktor.v2whitelist.BuildConfig.VERSION_NAME}")
+            }
+            val responseCode = conn.responseCode
+            responseCode in 200..399
+        } catch (_: Exception) {
+            false
+        } finally {
+            try { conn?.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    @Volatile
+    private var lastFailureReportCheckTime = 0L
+    @Volatile
+    private var lastFailureReportCheckResult = false
+
+    /**
+     * Проверяет, следует ли фиксировать и отображать ошибку обновления подписки.
+     * 
+     * Логика:
+     * - Проверяем доступность ya.ru и google.com.
+     * - Если ОБА доступны (ya.ru && google.com) -> интернет полноценный, ошибка в самой подписке -> true (выводим ошибку).
+     * - Если доступен только ya.ru (а google.com нет) -> белые списки / глушат зарубежный трафик -> false (игнорируем).
+     * - Если оба не прошли -> интернета нет -> false (игнорируем).
+     */
+    fun shouldReportSubscriptionFailure(forceRefresh: Boolean = false): Boolean {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && (now - lastFailureReportCheckTime < 10_000L)) {
+            return lastFailureReportCheckResult
+        }
+
+        val yaOk = checkHttpAccess("https://ya.ru")
+        val result = if (!yaOk) {
+            // ya.ru не доступен -> условие "оба доступны" уже не выполнено
+            false
+        } else {
+            // ya.ru доступен, теперь проверяем google.com
+            checkHttpAccess("https://www.google.com/generate_204") || checkHttpAccess("https://google.com")
+        }
+
+        lastFailureReportCheckTime = now
+        lastFailureReportCheckResult = result
+        GeekModeLogger.log("Network", "shouldReportSubscriptionFailure: yaOk=$yaOk, bothOk=$result")
+        return result
+    }
 }

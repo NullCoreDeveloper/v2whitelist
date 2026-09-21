@@ -11,6 +11,7 @@ import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.dto.SubscriptionCache
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.util.MessageUtil
+import com.kiktor.v2whitelist.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -282,14 +283,37 @@ object SubscriptionHelper {
     }
 
     /**
-     * Отображает BottomSheet диалог с мастером выбора сценария (пресета) подписок.
+     * Отображает диалог с мастером выбора сценария (пресета) подписок.
+     * На ТВ-устройствах отображается как центрированный диалог с поддержкой D-pad пульта.
      */
     fun showSetupWizard(activity: Activity, onApplied: (() -> Unit)? = null) {
-        val bottomSheetDialog = BottomSheetDialog(activity)
         val view = activity.layoutInflater.inflate(R.layout.layout_onboarding_purpose_bottom_sheet, null)
+        val isTvMode = Utils.isTv(activity)
 
-        view.findViewById<View>(R.id.card_scenario_vpn)?.setOnClickListener {
-            bottomSheetDialog.dismiss()
+        val cardVpn = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_vpn)
+        val cardWhitelist = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_whitelist)
+        val cardYoutube = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_youtube)
+        val cardKeep = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_keep)
+
+        val cards = listOfNotNull(cardVpn, cardWhitelist, cardYoutube, cardKeep)
+
+        // На ТВ настраиваем D-pad фокус и убираем полоску свайпа
+        if (isTvMode) {
+            view.findViewById<View>(R.id.drag_handle)?.visibility = View.GONE
+            for (card in cards) {
+                card.isFocusable = true
+                card.isFocusableInTouchMode = true
+                card.setOnFocusChangeListener { _, hasFocus ->
+                    card.strokeWidth = Utils.dp2px(activity, if (hasFocus) 3 else 1)
+                    card.cardElevation = Utils.dp2px(activity, if (hasFocus) 6 else 1).toFloat()
+                }
+            }
+        }
+
+        var dismissAction: () -> Unit = {}
+
+        cardVpn?.setOnClickListener {
+            dismissAction()
             Toast.makeText(activity, "Применяем сценарий «Просто VPN»...", Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.VPN_BLACKLIST)
@@ -297,8 +321,8 @@ object SubscriptionHelper {
             }
         }
 
-        view.findViewById<View>(R.id.card_scenario_whitelist)?.setOnClickListener {
-            bottomSheetDialog.dismiss()
+        cardWhitelist?.setOnClickListener {
+            dismissAction()
             Toast.makeText(activity, "Применяем сценарий «Белые списки»...", Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.WHITELIST)
@@ -306,8 +330,8 @@ object SubscriptionHelper {
             }
         }
 
-        view.findViewById<View>(R.id.card_scenario_youtube)?.setOnClickListener {
-            bottomSheetDialog.dismiss()
+        cardYoutube?.setOnClickListener {
+            dismissAction()
             Toast.makeText(activity, "Применяем сценарий «YouTube и Музыка»...", Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.YOUTUBE)
@@ -315,8 +339,8 @@ object SubscriptionHelper {
             }
         }
 
-        view.findViewById<View>(R.id.card_scenario_keep)?.setOnClickListener {
-            bottomSheetDialog.dismiss()
+        cardKeep?.setOnClickListener {
+            dismissAction()
             MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
             Toast.makeText(
                 activity,
@@ -325,13 +349,40 @@ object SubscriptionHelper {
             ).show()
         }
 
-        bottomSheetDialog.setCancelable(true)
-        bottomSheetDialog.setCanceledOnTouchOutside(true)
-        bottomSheetDialog.setOnCancelListener {
-            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+        if (isTvMode) {
+            val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                .setView(view)
+                .setCancelable(true)
+                .setOnCancelListener {
+                    MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+                }
+                .create()
+
+            dismissAction = { dialog.dismiss() }
+            dialog.show()
+
+            dialog.window?.let { window ->
+                val displayMetrics = activity.resources.displayMetrics
+                val targetWidth = (displayMetrics.widthPixels * 0.7).toInt().coerceAtMost(Utils.dp2px(activity, 640))
+                window.setLayout(targetWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+
+            view.post {
+                cardVpn?.requestFocus()
+            }
+        } else {
+            val bottomSheetDialog = BottomSheetDialog(activity)
+            bottomSheetDialog.setCancelable(true)
+            bottomSheetDialog.setCanceledOnTouchOutside(true)
+            bottomSheetDialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+            bottomSheetDialog.behavior.skipCollapsed = true
+            bottomSheetDialog.setOnCancelListener {
+                MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            }
+            dismissAction = { bottomSheetDialog.dismiss() }
+            bottomSheetDialog.setContentView(view)
+            bottomSheetDialog.show()
         }
-        bottomSheetDialog.setContentView(view)
-        bottomSheetDialog.show()
     }
 
     /**
@@ -458,6 +509,23 @@ object SubscriptionHelper {
                 } else {
                     MmkvManager.clearVipCache()
                     Log.w(AppConfig.TAG, "updateSubscription: все VIP-серверы исчезли после обновления, кэш очищен")
+                }
+            }
+        }
+
+        // ── Контрольная проверка ошибок обновления подписок ──
+        // Если какие-то подписки помечены как ошибочные, но интернет ограничен
+        // (нет доступа одновременно к ya.ru и google.com), подавляем ошибки,
+        // чтобы не тревожить пользователя ложными алертами при изоляции сети.
+        val allSubs = MmkvManager.decodeSubscriptions()
+        val failedSubs = allSubs.filter { it.subscription.enabled && it.subscription.lastUpdateFailed }
+        if (failedSubs.isNotEmpty()) {
+            val shouldReport = NetworkManager.shouldReportSubscriptionFailure()
+            if (!shouldReport) {
+                Log.i(AppConfig.TAG, "updateSubscription: suppression of failure alert (only local or no internet access)")
+                for (sub in failedSubs) {
+                    sub.subscription.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(sub.guid, sub.subscription)
                 }
             }
         }
