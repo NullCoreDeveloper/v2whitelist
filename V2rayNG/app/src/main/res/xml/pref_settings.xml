@@ -47,9 +47,16 @@
 
         <CheckBoxPreference
             android:key="pref_v2w_core_enabled"
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:summary="@string/summary_pref_v2w_core_enabled"
             android:title="@string/title_pref_v2w_core_enabled" />
+
+        <CheckBoxPreference
+            android:key="pref_v2w_core_fallback"
+            android:defaultValue="true"
+            android:dependency="pref_v2w_core_enabled"
+            android:summary="@string/summary_pref_v2w_core_fallback"
+            android:title="@string/title_pref_v2w_core_fallback" />
 
         <EditTextPreference
             android:inputType="number"

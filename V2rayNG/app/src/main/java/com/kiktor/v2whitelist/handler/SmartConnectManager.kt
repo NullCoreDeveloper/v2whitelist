@@ -336,7 +336,7 @@ object SmartConnectManager {
         }
 
         if (MmkvManager.isV2wCoreEnabled()) {
-            return@withContext V2WScannerEngine.runV2WCoreScan(
+            val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
                 context, 
                 filteredServers, 
                 isStartup = true,
@@ -344,6 +344,15 @@ object SmartConnectManager {
                 sendStatus = { status -> sendStatus(context, status) },
                 connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
             )
+            if (v2wSuccess) {
+                return@withContext true
+            }
+            if (!MmkvManager.isV2wFallbackEnabled()) {
+                return@withContext false
+            }
+            GeekModeLogger.log("SmartConnect", "v2w-core found no working servers, falling back to classic scanner")
+            sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
+            delay(1000)
         }
 
         val chunkedServers = buildProportionalChunks(filteredServers)
@@ -423,13 +432,22 @@ object SmartConnectManager {
         }
 
         if (MmkvManager.isV2wCoreEnabled()) {
-            return@withContext V2WScannerEngine.runV2WCoreScan(
+            val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
                 context, 
                 filteredServers, 
                 isStartup = false,
                 sendStatus = { status -> sendStatus(context, status) },
                 connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
             )
+            if (v2wSuccess) {
+                return@withContext true
+            }
+            if (!MmkvManager.isV2wFallbackEnabled()) {
+                return@withContext false
+            }
+            GeekModeLogger.log("SmartConnect", "v2w-core found no working servers in switchToNextServer, falling back to classic scanner")
+            sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
+            delay(1000)
         }
 
         // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────

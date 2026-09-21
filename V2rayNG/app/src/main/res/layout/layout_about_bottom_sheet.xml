@@ -26,7 +26,7 @@
 
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="ПроБел (ex. v2Whitelist) представляет собой минималистичный и оптимизированный клиент. Главная цель проекта — обеспечить надежный обход ТСПУ (технических средств противодействия угрозам) и глушилок мобильной связи, предоставляя быстрый и бесперебойный доступ."
+        android:text="@string/about_app_description"
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary"
         android:lineSpacingExtra="4dp"
@@ -35,7 +35,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Лицензия проекта: GNU GPLv3"
+        android:text="@string/about_app_license"
         android:textSize="14sp"
         android:textStyle="bold"
         android:textColor="?android:attr/textColorSecondary"
@@ -44,7 +44,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Telegram-канал"
+        android:text="@string/about_app_tg_channel"
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary" />
         
@@ -63,7 +63,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Исходный код (GitHub):"
+        android:text="@string/about_app_source_code"
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary" />
         
@@ -82,7 +82,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Профиль разработчика:"
+        android:text="@string/about_app_dev_profile"
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary" />
         

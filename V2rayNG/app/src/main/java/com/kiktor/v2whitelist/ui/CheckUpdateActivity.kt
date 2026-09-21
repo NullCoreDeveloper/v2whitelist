@@ -100,28 +100,28 @@ class CheckUpdateActivity : BaseActivity() {
 
     private fun downloadAndInstall(result: CheckUpdateResult) {
         showLoading()
-        toast("Downloading update...")
+        toast(R.string.update_downloading)
         lifecycleScope.launch {
             try {
                 val apkFile = UpdateCheckerManager.downloadApk(this@CheckUpdateActivity, result.downloadUrl!!)
                 if (apkFile != null && apkFile.exists()) {
                     if (result.checksumUrl != null && result.apkFileName != null) {
-                        toast("Verifying security signature...")
+                        toast(R.string.update_verifying_signature)
                         val isValid = UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
                         if (!isValid) {
                             apkFile.delete()
-                            toastError("Security check failed! APK might be corrupted or compromised.")
+                            toastError(getString(R.string.update_signature_failed))
                             hideLoading()
                             return@launch
                         }
                     }
                     installApk(apkFile)
                 } else {
-                    toastError("Failed to download APK")
+                    toastError(getString(R.string.update_failed_download))
                 }
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Update failed: ${e.message}")
-                toastError(e.message ?: "Download failed")
+                toastError(e.message ?: getString(R.string.update_failed_download))
             } finally {
                 hideLoading()
             }

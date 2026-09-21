@@ -143,8 +143,10 @@ object V2WScannerEngine {
             return@coroutineScope true
         }
 
-        // If no working server was found across all servers, report status and return false
-        sendStatus(context.getString(R.string.status_no_servers))
+        // If no working server was found across all servers, report status if fallback is disabled
+        if (!MmkvManager.isV2wFallbackEnabled()) {
+            sendStatus(context.getString(R.string.status_no_servers))
+        }
         return@coroutineScope false
     }
 }

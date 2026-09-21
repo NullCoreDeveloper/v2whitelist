@@ -9,7 +9,7 @@
         android:id="@+id/tv_update_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="New version available"
+        android:text="@string/update_dialog_title"
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
@@ -18,7 +18,7 @@
         android:id="@+id/tv_update_changelog_toggle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="▼ Show Changelog"
+        android:text="@string/update_dialog_changelog_toggle"
         android:textColor="?attr/colorPrimary"
         android:textSize="16sp"
         android:layout_marginBottom="8dp"

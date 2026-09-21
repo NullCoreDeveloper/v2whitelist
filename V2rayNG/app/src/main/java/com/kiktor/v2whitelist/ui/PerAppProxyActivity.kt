@@ -232,7 +232,7 @@ class PerAppProxyActivity : BaseActivity() {
 
     private fun exportProxyApp() {
         val sharedSplit = com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling(
-            name = "Свой пресет",
+            name = getString(R.string.per_app_proxy_custom_preset),
             bypassMode = binding.switchBypassApps.isChecked,
             packages = viewModel.getAll().toList()
         )
@@ -248,7 +248,7 @@ class PerAppProxyActivity : BaseActivity() {
                 setPadding(32, 32, 32, 32)
             }
             androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("QR код пресета")
+                .setTitle(R.string.title_preset_qr_code)
                 .setView(iv)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()

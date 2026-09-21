@@ -156,7 +156,7 @@ class MainActivity : HelperBaseActivity() {
 
         binding.btnAboutQuick.setOnClickListener {
             val bottomSheetView = layoutInflater.inflate(R.layout.layout_about_bottom_sheet, null)
-            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_version)?.text = "Версия: v${com.kiktor.v2whitelist.BuildConfig.VERSION_NAME}"
+            bottomSheetView.findViewById<android.widget.TextView>(R.id.tv_version)?.text = getString(R.string.about_version_format, com.kiktor.v2whitelist.BuildConfig.VERSION_NAME)
 
             var dismissAction: () -> Unit = {}
 
@@ -293,11 +293,11 @@ class MainActivity : HelperBaseActivity() {
                 progressDialog.dismiss()
                 if (apkFile != null && apkFile.exists()) {
                     if (result.checksumUrl != null && result.apkFileName != null) {
-                        toast("Verifying security signature...")
+                        toast(R.string.update_verifying_signature)
                         val isValid = com.kiktor.v2whitelist.handler.UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
                         if (!isValid) {
                             apkFile.delete()
-                            toast("Security check failed! APK might be corrupted or compromised.")
+                            toast(R.string.update_signature_failed)
                             return@launch
                         }
                     }
@@ -326,7 +326,7 @@ class MainActivity : HelperBaseActivity() {
             startActivity(intent)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to start install intent: ${e.message}")
-            toast("Failed to start installer")
+            toast(R.string.update_failed_installer)
         }
     }
 
@@ -698,7 +698,7 @@ class MainActivity : HelperBaseActivity() {
                     try {
                         startActivity(intent)
                     } catch (e: Exception) {
-                        toast("Could not open battery settings")
+                        toast(R.string.toast_battery_settings_error)
                     }
                 }
                 .setNegativeButton(R.string.dialog_battery_optimization_no_remind) { _, _ ->
@@ -794,8 +794,8 @@ class MainActivity : HelperBaseActivity() {
                 val sub = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSubscription::class.java)
                 if (sub != null) {
                     androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle("Добавить кастомную подписку?")
-                        .setMessage("Название: ${sub.name}\nURL: ${sub.url}")
+                        .setTitle(R.string.dialog_add_custom_sub_title)
+                        .setMessage(getString(R.string.dialog_add_custom_sub_msg, sub.name, sub.url))
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             val newItem = com.kiktor.v2whitelist.ui.CustomSubscriptionsActivity.CustomSubItem(
                                 id = System.currentTimeMillis().toString(),
@@ -814,7 +814,7 @@ class MainActivity : HelperBaseActivity() {
                             }
                             customSubs.add(newItem)
                             MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
-                            toast("Подписка добавлена! Зайдите в меню 'Мои подписки'")
+                            toast(R.string.dialog_add_custom_sub_success)
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
@@ -824,13 +824,13 @@ class MainActivity : HelperBaseActivity() {
                 val split = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling::class.java)
                 if (split != null) {
                     androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle("Применить пресет маршрутизации?")
-                        .setMessage("Пакет: ${split.name}\nПриложений: ${split.packages.size}")
+                        .setTitle(R.string.dialog_apply_routing_preset_title)
+                        .setMessage(getString(R.string.dialog_apply_routing_preset_msg, split.name, split.packages.size))
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY, true)
                             MmkvManager.encodeSettings(AppConfig.PREF_BYPASS_APPS, split.bypassMode)
                             MmkvManager.encodeSettings(AppConfig.PREF_PER_APP_PROXY_SET, split.packages.toMutableSet())
-                            toast("Пресет применен! Перезапустите VPN")
+                            toast(R.string.dialog_apply_routing_preset_success)
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()

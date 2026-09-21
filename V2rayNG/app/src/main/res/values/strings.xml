@@ -314,6 +314,9 @@
     <string name="summary_pref_v2w_core_enabled">Experimental. Mass parallel server scanning to bypass DDoS protection and find the best nodes in real-time.</string>
     <string name="title_pref_v2w_core_concurrency">v2w-core socket concurrency</string>
     <string name="summary_pref_v2w_core_concurrency">Maximum number of concurrent connections for scanning (Default: 20)</string>
+    <string name="title_pref_v2w_core_fallback">Fallback to classic scanner</string>
+    <string name="summary_pref_v2w_core_fallback">If v2w-core finds no available servers, automatically switch to classic scanner</string>
+    <string name="status_v2w_fallback_to_classic">v2w-core: falling back to classic scanner…</string>
 
     <string name="title_logcat">Logcat</string>
     <string name="logcat_copy">Copy</string>
@@ -600,8 +603,8 @@
     <string name="status_update_failed">Failed to update: %1$d</string>
     <string name="sub_update_failed">⚠️ Update failed</string>
     <string name="status_passed_time">%1$s (updated %2$s ago)</string>
-    <string name="title_pref_logcat" translatable="false">Logs</string>
-    <string name="summary_pref_logcat" translatable="false">View v2ray core and app logs</string>
+    <string name="title_pref_logcat">Logs</string>
+    <string name="summary_pref_logcat">View v2ray core and app logs</string>
 
     <!-- Backup & Restore -->
     <string name="title_backup_restore">Backup &amp; Restore</string>
@@ -613,4 +616,50 @@
     <string name="msg_export_fail">Failed to export data</string>
     <string name="msg_import_success">Data imported successfully. The app might need to be restarted to apply all changes.</string>
     <string name="msg_import_fail">Failed to import data</string>
+
+    <!-- Update Dialog & OTA Notifications -->
+    <string name="update_dialog_title">New version available</string>
+    <string name="update_dialog_changelog_toggle">▼ Show Changelog</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_verifying_signature">Verifying security signature…</string>
+    <string name="update_signature_failed">Security check failed! APK might be corrupted or compromised.</string>
+    <string name="update_failed_installer">Failed to start installer</string>
+    <string name="update_failed_download">Failed to download APK</string>
+
+    <!-- About Screen & Dialog -->
+    <string name="about_app_description">ПроБел is a lightweight and optimized client designed to bypass network censorship, throttling, and whitelist-only restrictions, providing fast and uninterrupted access.</string>
+    <string name="about_app_license">Project License: GNU GPLv3</string>
+    <string name="about_app_tg_channel">Telegram Channel</string>
+    <string name="about_app_source_code">Source Code (GitHub):</string>
+    <string name="about_app_dev_profile">Developer Profile:</string>
+    <string name="about_version_format">Version: v%s</string>
+
+    <!-- Onboarding / Setup Wizard -->
+    <string name="onboarding_purpose_title">What do you need ПроБел for?</string>
+    <string name="onboarding_purpose_subtitle">Choose your primary scenario. The app will automatically configure suitable subscriptions (you can always adjust them in Settings).</string>
+    <string name="scenario_vpn_title">1. Standard VPN</string>
+    <string name="scenario_vpn_desc">For accessing blocked websites and social media.\nIncludes: igareck Blacklist, KIZYAK Blacklist, CYBERPORTAL Blacklist, RKP Blacklist, EtoneYa Blacklist</string>
+    <string name="scenario_whitelist_title">2. Whitelist Bypass (Anti-throttling)</string>
+    <string name="scenario_whitelist_desc">For connectivity during internet shutdowns, jamming, or whitelist-only access.\nIncludes: zieng2, igareck Whitelist, KIZYAK Whitelist (both), CYBERPORTAL Whitelist, EtoneYa Whitelist</string>
+    <string name="scenario_youtube_title">3. YouTube &amp; Music</string>
+    <string name="scenario_youtube_desc">For accelerating and unblocking YouTube and streaming services.\nIncludes: EtoneYa YouTube, Music, Aetris</string>
+    <string name="scenario_keep_title">4. Keep As Is</string>
+    <string name="scenario_keep_desc">Do not change current settings and configure subscriptions manually in the subscription manager.</string>
+    <string name="scenario_toast_vpn_applied">Applying \"Standard VPN\" scenario…</string>
+    <string name="scenario_toast_whitelist_applied">Applying \"Whitelist Bypass\" scenario…</string>
+    <string name="scenario_toast_youtube_applied">Applying \"YouTube &amp; Music\" scenario…</string>
+    <string name="scenario_toast_manual_hint">You can configure subscriptions manually in \"Settings -> Manage Subscriptions\" at any time</string>
+
+    <!-- Deep Links & Sharing -->
+    <string name="toast_link_copied">Link copied to clipboard!</string>
+    <string name="title_sub_qr_code">Subscription QR Code</string>
+    <string name="per_app_proxy_custom_preset">Custom preset</string>
+    <string name="title_preset_qr_code">Routing Preset QR Code</string>
+    <string name="dialog_add_custom_sub_title">Add custom subscription?</string>
+    <string name="dialog_add_custom_sub_msg">Name: %1$s\nURL: %2$s</string>
+    <string name="dialog_add_custom_sub_success">Subscription added! Check \"Manage Subscriptions\" menu</string>
+    <string name="dialog_apply_routing_preset_title">Apply routing preset?</string>
+    <string name="dialog_apply_routing_preset_msg">Package: %1$s\nApps: %2$d</string>
+    <string name="dialog_apply_routing_preset_success">Preset applied! Please restart VPN</string>
+    <string name="toast_battery_settings_error">Could not open battery settings</string>
 </resources>

@@ -427,11 +427,28 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_MUX_XUDP_CONCURRENCY, "8")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_LENGTH, "50-100")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
+        ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
+        ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
     }
 
     private fun ensureDefaultValue(key: String, default: String) {
         if (!MmkvManager.containsSettings(key)) {
             MmkvManager.encodeSettings(key, default)
+        }
+    }
+
+    private fun ensureDefaultValue(key: String, default: Boolean) {
+        if (!MmkvManager.containsSettings(key)) {
+            MmkvManager.encodeSettings(key, default)
+        }
+    }
+
+    fun migrateV2wCoreDefaults() {
+        val migrationKey = AppConfig.PREF_V2W_CORE_MIGRATION_V1
+        if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            MmkvManager.encodeSettings(AppConfig.PREF_V2W_CORE_ENABLED, true)
+            MmkvManager.encodeSettings(AppConfig.PREF_V2W_CORE_FALLBACK, true)
+            MmkvManager.encodeSettings(migrationKey, true)
         }
     }
 

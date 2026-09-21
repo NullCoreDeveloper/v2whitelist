@@ -314,7 +314,7 @@ object SubscriptionHelper {
 
         cardVpn?.setOnClickListener {
             dismissAction()
-            Toast.makeText(activity, "Применяем сценарий «Просто VPN»...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, R.string.scenario_toast_vpn_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.VPN_BLACKLIST)
                 onApplied?.invoke()
@@ -323,7 +323,7 @@ object SubscriptionHelper {
 
         cardWhitelist?.setOnClickListener {
             dismissAction()
-            Toast.makeText(activity, "Применяем сценарий «Белые списки»...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, R.string.scenario_toast_whitelist_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.WHITELIST)
                 onApplied?.invoke()
@@ -332,7 +332,7 @@ object SubscriptionHelper {
 
         cardYoutube?.setOnClickListener {
             dismissAction()
-            Toast.makeText(activity, "Применяем сценарий «YouTube и Музыка»...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, R.string.scenario_toast_youtube_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
                 applyScenario(activity, AppScenario.YOUTUBE)
                 onApplied?.invoke()
@@ -344,7 +344,7 @@ object SubscriptionHelper {
             MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
             Toast.makeText(
                 activity,
-                "Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную",
+                R.string.scenario_toast_manual_hint,
                 Toast.LENGTH_LONG
             ).show()
         }

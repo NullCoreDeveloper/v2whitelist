@@ -70,7 +70,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
             .setView(dialogView)
             
         if (existingItem != null) {
-            builder.setNeutralButton("Поделиться") { _, _ ->
+            builder.setNeutralButton(R.string.btn_label_share) { _, _ ->
                 val sharedSub = com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSubscription(
                     name = existingItem.name,
                     url = existingItem.url,
@@ -82,7 +82,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 
                 // Show QR and Link
                 com.kiktor.v2whitelist.util.Utils.setClipboard(this, link)
-                toast("Ссылка скопирована в буфер!")
+                toast(R.string.toast_link_copied)
                 
                 // Optionally we could show a QR code dialog, but for now we copy to clipboard.
                 val qrBitmap = com.kiktor.v2whitelist.util.QRCodeDecoder.createQRCode(link)
@@ -92,7 +92,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                         setPadding(32, 32, 32, 32)
                     }
                     AlertDialog.Builder(this)
-                        .setTitle("QR код подписки")
+                        .setTitle(R.string.title_sub_qr_code)
                         .setView(iv)
                         .setPositiveButton(android.R.string.ok, null)
                         .show()

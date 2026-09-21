@@ -71,6 +71,7 @@ class AngApplication : MultiDexApplication() {
 
             SettingsManager.initRoutingRulesets(this)
             SettingsManager.migrateHysteria2PinSHA256()
+            SettingsManager.migrateV2wCoreDefaults()
 
             es.dmoral.toasty.Toasty.Config.getInstance()
                 .setGravity(android.view.Gravity.BOTTOM, 0, 200)

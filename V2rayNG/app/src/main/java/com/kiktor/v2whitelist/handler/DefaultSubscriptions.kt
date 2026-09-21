@@ -58,13 +58,6 @@ object DefaultSubscriptions {
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
-            id = "def_jsxta_whitelist",
-            name = "jsxta (Динамические авто-тестируемые сервера)",
-            url = "https://gbr.mydan.online/configs",
-            groupRegex = "(ShatakVPN|V\\.O\\.I\\.D|EbraSha)",
-            enabled = false
-        ),
-        SubscriptionHelper.CustomSubData(
             id = "def_mifa_bobrik",
             name = "mifa/bobrik (Резервные сервера)",
             url = "https://mifa.world/bobrik",

@@ -26,7 +26,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Для чего вам ПроБел?"
+            android:text="@string/onboarding_purpose_title"
             android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="?android:attr/textColorPrimary" />
@@ -36,7 +36,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="16dp"
-            android:text="Выберите основной сценарий работы. Приложение автоматически включит подходящие подписки (их всегда можно изменить в настройках)."
+            android:text="@string/onboarding_purpose_subtitle"
             android:textSize="13sp"
             android:textColor="?android:attr/textColorSecondary"
             android:lineSpacingExtra="2dp" />
@@ -77,7 +77,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="1. Просто VPN"
+                        android:text="@string/scenario_vpn_title"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="?android:attr/textColorPrimary" />
@@ -86,7 +86,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="Для доступа к заблокированным сайтам и соцсетям.\nВключает: igareck ЧС, КIЗЯК ЧС, CYBERPORTAL ЧС, RKP ЧС, ЭтоНеЯ ЧС"
+                        android:text="@string/scenario_vpn_desc"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>
@@ -129,7 +129,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="2. Обход белых списков (БС)"
+                        android:text="@string/scenario_whitelist_title"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="?android:attr/textColorPrimary" />
@@ -138,7 +138,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="Для работы при глушилках и изоляции интернета.\nВключает: zieng2, igareck БС, КIЗЯК БС (обе), CYBERPORTAL БС, ЭтоНеЯ БС"
+                        android:text="@string/scenario_whitelist_desc"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>
@@ -181,7 +181,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="3. YouTube и Музыка"
+                        android:text="@string/scenario_youtube_title"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="?android:attr/textColorPrimary" />
@@ -190,7 +190,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="Для ускорения и обхода замедления YouTube (больше под черные списки).\nВключает: ЭтоНеЯ YouTube, Музыка, Aetris"
+                        android:text="@string/scenario_youtube_desc"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>
@@ -232,7 +232,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="4. Оставить как есть"
+                        android:text="@string/scenario_keep_title"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="?android:attr/textColorPrimary" />
@@ -241,7 +241,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="3dp"
-                        android:text="Не менять текущие настройки и настроить подписки вручную в менеджере подписок."
+                        android:text="@string/scenario_keep_desc"
                         android:textSize="12sp"
                         android:textColor="?android:attr/textColorSecondary" />
                 </LinearLayout>

@@ -290,6 +290,9 @@
     <string name="v2w_core_init">Инициализация v2w-core сканера…</string>
     <string name="title_pref_v2w_core_concurrency">Количество сокетов v2w-core</string>
     <string name="summary_pref_v2w_core_concurrency">Максимальное количество параллельных подключений для сканирования (по умолчанию: 20)</string>
+    <string name="title_pref_v2w_core_fallback">Резервный классический сканер</string>
+    <string name="summary_pref_v2w_core_fallback">Если v2w-core не найдет доступных серверов, автоматически переключаться на старый сканер</string>
+    <string name="status_v2w_fallback_to_classic">v2w-core: переключение на старый сканер…</string>
 
     <string name="title_logcat">Журнал</string>
     <string name="logcat_copy">Копировать</string>
@@ -571,4 +574,84 @@
     <string name="msg_export_fail">Ошибка экспорта данных</string>
     <string name="msg_import_success">Данные успешно импортированы. Возможно, потребуется перезапуск приложения.</string>
     <string name="msg_import_fail">Ошибка импорта данных</string>
+
+    <!-- UI & Notifications -->
+    <string name="app_name">ПроБел</string>
+    <string name="btn_show_qr">QR</string>
+    <string name="title_qr_code">QR-код</string>
+    <string name="notification_action_pause">Пауза</string>
+    <string name="notification_action_resume">Возобновить</string>
+    <string name="notification_content_connecting">Подключение…</string>
+    <string name="notification_content_paused">VPN-соединение на паузе</string>
+
+    <!-- Preferences Categories & Keys -->
+    <string name="title_v2w_core_settings">Сканирующее ядро v2w-core</string>
+    <string name="title_profile_check_settings">Проверка профилей</string>
+    <string name="title_v2whitelist_settings_misc">Дополнительные настройки</string>
+    <string name="title_pref_vip_cache_limit">Лимит VIP-кэша</string>
+    <string name="summary_pref_vip_cache_limit">Максимальное число серверов в кэше быстрого переподключения VIP</string>
+    <string name="title_pref_logcat">Журнал логов</string>
+    <string name="summary_pref_logcat">Просмотр системных логов ядра v2ray и приложения</string>
+
+    <!-- Speed check during profile verification -->
+    <string name="title_pref_profile_speed_check">Тест скорости при проверке профиля</string>
+    <string name="summary_pref_profile_speed_check">Загружает небольшой объем данных через сервер для проверки реальной пропускной способности. Включено по умолчанию.</string>
+    <string name="title_pref_profile_speed_check_bytes">Объем загрузки (байт)</string>
+    <string name="summary_pref_profile_speed_check_bytes">Количество данных для замера скорости. По умолчанию: 2 000 000 (≈2 МБ)</string>
+    <string name="title_pref_profile_speed_check_timeout">Таймаут замера скорости (мс)</string>
+    <string name="summary_pref_profile_speed_check_timeout">Если замер не успел завершиться за это время, он пропускается. По умолчанию: 5000 мс</string>
+    <string name="status_profile_check_passed_speed">Профиль проверен ✔ · %s Мбит/с</string>
+    <string name="status_speed_check_running">Замер скорости соединения\u2026</string>
+    <string name="status_speed_test">Тест скорости: %.1f КБ/с</string>
+
+    <!-- Custom Subscriptions -->
+    <string name="custom_sub_empty">Нет добавленных подписок</string>
+    <string name="custom_sub_added">Подписка добавлена</string>
+    <string name="custom_sub_removed">Подписка удалена</string>
+
+    <!-- Update Dialog & OTA Notifications -->
+    <string name="update_dialog_title">Доступна новая версия</string>
+    <string name="update_dialog_changelog_toggle">▼ Список изменений</string>
+    <string name="update_downloading">Загрузка обновления…</string>
+    <string name="update_verifying_signature">Проверка цифровой подписи…</string>
+    <string name="update_signature_failed">Проверка подписи не удалась! Файл поврежден или модифицирован.</string>
+    <string name="update_failed_installer">Не удалось запустить установщик</string>
+    <string name="update_failed_download">Не удалось скачать файл обновления</string>
+
+    <!-- About Screen & Dialog -->
+    <string name="about_app_description">ПроБел представляет собой минималистичный и оптимизированный клиент. Главная цель проекта — обеспечить надежный обход ТСПУ (технических средств противодействия угрозам) и глушилок мобильной связи, предоставляя быстрый и бесперебойный доступ.</string>
+    <string name="about_app_license">Лицензия проекта: GNU GPLv3</string>
+    <string name="about_app_tg_channel">Telegram-канал</string>
+    <string name="about_app_source_code">Исходный код (GitHub):</string>
+    <string name="about_app_dev_profile">Профиль разработчика:</string>
+    <string name="about_version_format">Версия: v%s</string>
+
+    <!-- Onboarding / Setup Wizard -->
+    <string name="onboarding_purpose_title">Для чего вам ПроБел?</string>
+    <string name="onboarding_purpose_subtitle">Выберите основной сценарий работы. Приложение автоматически включит подходящие подписки (их всегда можно изменить в настройках).</string>
+    <string name="scenario_vpn_title">1. Просто VPN</string>
+    <string name="scenario_vpn_desc">Для доступа к заблокированным сайтам и соцсетям.\nВключает: igareck ЧС, КIЗЯК ЧС, CYBERPORTAL ЧС, RKP ЧС, ЭтоНеЯ ЧС</string>
+    <string name="scenario_whitelist_title">2. Обход белых списков (БС)</string>
+    <string name="scenario_whitelist_desc">Для работы при глушилках и изоляции интернета.\nВключает: zieng2, igareck БС, КIЗЯК БС (обе), CYBERPORTAL БС, ЭтоНеЯ БС</string>
+    <string name="scenario_youtube_title">3. YouTube и Музыка</string>
+    <string name="scenario_youtube_desc">Для ускорения и обхода замедления YouTube (больше под черные списки).\nВключает: ЭтоНеЯ YouTube, Музыка, Aetris</string>
+    <string name="scenario_keep_title">4. Оставить как есть</string>
+    <string name="scenario_keep_desc">Не менять текущие настройки и настроить подписки вручную в менеджере подписок.</string>
+    <string name="scenario_toast_vpn_applied">Применяем сценарий «Просто VPN»…</string>
+    <string name="scenario_toast_whitelist_applied">Применяем сценарий «Белые списки»…</string>
+    <string name="scenario_toast_youtube_applied">Применяем сценарий «YouTube и Музыка»…</string>
+    <string name="scenario_toast_manual_hint">Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную</string>
+
+    <!-- Deep Links & Sharing -->
+    <string name="toast_link_copied">Ссылка скопирована в буфер!</string>
+    <string name="title_sub_qr_code">QR-код подписки</string>
+    <string name="per_app_proxy_custom_preset">Свой пресет</string>
+    <string name="title_preset_qr_code">QR-код пресета</string>
+    <string name="dialog_add_custom_sub_title">Добавить кастомную подписку?</string>
+    <string name="dialog_add_custom_sub_msg">Название: %1$s\nURL: %2$s</string>
+    <string name="dialog_add_custom_sub_success">Подписка добавлена! Зайдите в меню \'Мои подписки\'</string>
+    <string name="dialog_apply_routing_preset_title">Применить пресет маршрутизации?</string>
+    <string name="dialog_apply_routing_preset_msg">Пакет: %1$s\nПриложений: %2$d</string>
+    <string name="dialog_apply_routing_preset_success">Пресет применен! Перезапустите VPN</string>
+    <string name="toast_battery_settings_error">Не удалось открыть настройки батареи</string>
 </resources>

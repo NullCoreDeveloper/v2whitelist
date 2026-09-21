@@ -109,6 +109,12 @@ object AppConfig {
     const val PREF_REMOVED_CUSTOM_SUB_IDS = "pref_removed_custom_sub_ids" // JSON array of removed sub IDs
     const val PREF_ONBOARDING_PURPOSE_SHOWN = "pref_onboarding_purpose_shown_v1" // Флаг разового показа опросника сценария
 
+    /** v2w-core settings */
+    const val PREF_V2W_CORE_ENABLED = "pref_v2w_core_enabled"
+    const val PREF_V2W_CORE_CONCURRENCY = "pref_v2w_core_concurrency"
+    const val PREF_V2W_CORE_FALLBACK = "pref_v2w_core_fallback"
+    const val PREF_V2W_CORE_MIGRATION_V1 = "v2w_core_default_enabled_migrated_v1"
+
     /** Cache keys. */
     const val CACHE_SUBSCRIPTION_ID = "cache_subscription_id"
     const val CACHE_KEYWORD_FILTER = "cache_keyword_filter"

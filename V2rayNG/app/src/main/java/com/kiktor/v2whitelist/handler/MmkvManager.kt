@@ -782,7 +782,9 @@ object MmkvManager {
         AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED,
         AppConfig.PREF_USE_BUILTIN_SUB,
         AppConfig.PREF_IS_PAUSED,
-        "pref_v2w_core_enabled",
+        AppConfig.PREF_V2W_CORE_ENABLED,
+        AppConfig.PREF_V2W_CORE_FALLBACK,
+        AppConfig.PREF_V2W_CORE_MIGRATION_V1,
         "pref_defaults_added_v1",
         "hysteria2_pin_sha256_migrated",
         KEY_BATTERY_ASKED
@@ -862,12 +864,16 @@ object MmkvManager {
     }
 
     fun isV2wCoreEnabled(): Boolean {
-        return decodeSettingsBool("pref_v2w_core_enabled", false)
+        return decodeSettingsBool(AppConfig.PREF_V2W_CORE_ENABLED, true)
+    }
+
+    fun isV2wFallbackEnabled(): Boolean {
+        return decodeSettingsBool(AppConfig.PREF_V2W_CORE_FALLBACK, true)
     }
 
     fun getV2wCoreConcurrency(): Int {
-        val concStr = decodeSettingsString("pref_v2w_core_concurrency", "20")
-        return concStr?.toIntOrNull() ?: 20
+        val concStr = decodeSettingsString(AppConfig.PREF_V2W_CORE_CONCURRENCY, "35")
+        return concStr?.toIntOrNull() ?: 35
     }
 
     //endregion

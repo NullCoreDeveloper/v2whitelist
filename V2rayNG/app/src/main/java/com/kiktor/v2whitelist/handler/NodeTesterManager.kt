@@ -215,7 +215,7 @@ object NodeTesterManager {
                     val bytes    = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
                                        ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L
                     val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
-                    val minMbps = minSpeedStr?.toDoubleOrNull() ?: 1.0
+                    val minMbps = minSpeedStr?.trim()?.replace(',', '.')?.toDoubleOrNull() ?: 1.0
 
                     if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
