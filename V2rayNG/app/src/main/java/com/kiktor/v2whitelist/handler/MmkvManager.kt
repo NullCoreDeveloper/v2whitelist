@@ -938,12 +938,20 @@ object MmkvManager {
      * Возвращает список VIP-серверов (кэш проверенных серверов, до 5 штук).
      */
     fun getVipCache(): MutableList<String> {
-        val json = settingsStorage.decodeString(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE)
-        return if (json.isNullOrBlank()) {
-            mutableListOf()
-        } else {
-            JsonUtil.fromJson(json, Array<String>::class.java)?.toMutableList() ?: mutableListOf()
+        val str = settingsStorage.decodeString(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE)
+        if (str.isNullOrBlank()) return mutableListOf()
+        
+        // Backward compatibility for old JSON format
+        if (str.startsWith("[")) {
+            return try {
+                val type = object : com.google.gson.reflect.TypeToken<MutableList<String>>() {}.type
+                com.google.gson.Gson().fromJson<MutableList<String>>(str, type) ?: mutableListOf()
+            } catch (e: Exception) {
+                mutableListOf()
+            }
         }
+        
+        return str.split(",").filter { it.isNotBlank() }.toMutableList()
     }
 
     /**
@@ -967,7 +975,7 @@ object MmkvManager {
         while (cache.size > limit) {
             cache.removeAt(cache.size - 1)
         }
-        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(cache))
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, cache.joinToString(","))
     }
 
     /**
@@ -977,7 +985,7 @@ object MmkvManager {
         if (guid.isBlank()) return
         val cache = getVipCache()
         if (cache.remove(guid)) {
-            settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(cache))
+            settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, cache.joinToString(","))
         }
     }
 
@@ -999,7 +1007,7 @@ object MmkvManager {
             return
         }
         val trimmed = guids.take(5)
-        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, JsonUtil.toJson(trimmed))
+        settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, trimmed.joinToString(","))
     }
 
     /**
