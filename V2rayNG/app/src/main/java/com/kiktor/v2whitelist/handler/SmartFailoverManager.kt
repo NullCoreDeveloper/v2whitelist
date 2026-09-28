@@ -226,14 +226,15 @@ object SmartFailoverManager {
      */
     fun selectNextServer(currentGuid: String?): String? {
         val allServers = MmkvManager.decodeServerList()
-        if (allServers.isEmpty()) return null
-        if (allServers.size == 1) return allServers.first()
+        if (allServers.size <= 1) return null
 
         // 1. VIP Cache
         val vipGuids = MmkvManager.getVipCache()
         for (guid in vipGuids) {
             if (guid == currentGuid) continue
-            GeekModeLogger.log("Failover", "Selected next server from VIP cache: $guid")
+            val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+            if (!allServers.contains(guid)) continue
+            GeekModeLogger.log("Failover", "Selected next server from VIP cache: ${profile.remarks} ($guid)")
             return guid
         }
 
