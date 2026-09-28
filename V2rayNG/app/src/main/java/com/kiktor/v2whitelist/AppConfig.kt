@@ -44,6 +44,10 @@ object AppConfig {
     const val SUBSCRIPTION_AUTO_UPDATE = "pref_auto_update_subscription"
     const val SUBSCRIPTION_AUTO_UPDATE_INTERVAL = "pref_auto_update_interval"
     const val PREF_AUTO_FAILOVER = "pref_auto_failover"
+    const val PREF_SMART_FAILOVER_ENABLED = "pref_smart_failover_enabled"
+    const val PREF_AUTO_FAILOVER_INTERVAL_SEC = "pref_auto_failover_interval_sec"
+    const val PREF_SMART_FAILOVER_THRESHOLD_KBPS = "pref_smart_failover_threshold_kbps"
+    const val PREF_SMART_FAILOVER_STALL_SEC = "pref_smart_failover_stall_sec"
     const val PREF_CHUNK_SIZE = "pref_chunk_size"
     const val PREF_CHUNK_PRESET = "pref_chunk_preset"
     const val SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL = "60" // Default is 1 hour

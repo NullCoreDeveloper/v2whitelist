@@ -110,22 +110,56 @@
             android:summary="@string/summary_pref_profile_min_speed_mbps"
             android:title="@string/title_pref_profile_min_speed_mbps" />
 
+        <!-- Настройки авто-переключения -->
+
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_v2whitelist_settings_misc">
-        <EditTextPreference
-            android:inputType="number"
-            android:key="pref_vip_cache_limit"
-            android:defaultValue="5"
-            android:summary="@string/summary_pref_vip_cache_limit"
-            android:title="@string/title_pref_vip_cache_limit" />
+    <!-- Настройки авто-переключения (Failover) -->
+    <PreferenceCategory
+        android:title="@string/title_auto_failover_settings"
+        app:initialExpandedChildrenCount="0">
 
-        <!-- Auto failover -->
+        <!-- Включить авто-переключение -->
         <CheckBoxPreference
             android:key="pref_auto_failover"
             android:defaultValue="false"
             android:summary="@string/summary_pref_auto_failover"
             android:title="@string/title_pref_auto_failover" />
+
+        <!-- Интервал плановой проверки (сек) -->
+        <EditTextPreference
+            android:dependency="pref_auto_failover"
+            android:inputType="number"
+            android:key="pref_auto_failover_interval_sec"
+            android:defaultValue="30"
+            android:summary="@string/summary_pref_auto_failover_interval"
+            android:title="@string/title_pref_auto_failover_interval" />
+
+        <!-- Smart Failover (пассивный мониторинг трафика) -->
+        <CheckBoxPreference
+            android:dependency="pref_auto_failover"
+            android:key="pref_smart_failover_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_smart_failover"
+            android:title="@string/title_pref_smart_failover" />
+
+        <!-- Порог деградации трафика (КБ/с) -->
+        <EditTextPreference
+            android:dependency="pref_smart_failover_enabled"
+            android:inputType="number"
+            android:key="pref_smart_failover_threshold_kbps"
+            android:defaultValue="3"
+            android:summary="@string/summary_pref_smart_failover_threshold"
+            android:title="@string/title_pref_smart_failover_threshold" />
+
+        <!-- Время фиксации затыка (сек) -->
+        <EditTextPreference
+            android:dependency="pref_smart_failover_enabled"
+            android:inputType="number"
+            android:key="pref_smart_failover_stall_sec"
+            android:defaultValue="3"
+            android:summary="@string/summary_pref_smart_failover_stall"
+            android:title="@string/title_pref_smart_failover_stall" />
 
         <!-- Bypass RU Apps -->
         <CheckBoxPreference

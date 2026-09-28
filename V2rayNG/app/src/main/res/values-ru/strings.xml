@@ -274,8 +274,17 @@
     <string name="summary_pref_use_hev_tunnel">Если включено, TUN будет использовать hev-socks5-tunnel; иначе будет использован xray-core</string>
     <string name="title_pref_hev_tunnel_loglevel">Подробность журнала HevTun</string>
     <string name="title_pref_hev_tunnel_rw_timeout">Ожидание чтения/записи HevTun (секунд, по умолчанию TCP,UDP 300,60)</string>
+    <string name="title_auto_failover_settings">Настройки авто-переключения</string>
     <string name="title_pref_auto_failover">Авто-переключение (Failover)</string>
     <string name="summary_pref_auto_failover">Автоматически переключаться на следующий сервер, если текущий не отвечает</string>
+    <string name="title_pref_auto_failover_interval">Интервал проверки Heartbeat (секунд)</string>
+    <string name="summary_pref_auto_failover_interval">Периодичность плановой проверки туннеля. По умолчанию: 30с</string>
+    <string name="title_pref_smart_failover">Smart Failover (Бета)</string>
+    <string name="summary_pref_smart_failover">Быстрое обнаружение затыков по трафику и арбитраж сети (ya.ru vs google.com) без долгих таймаутов</string>
+    <string name="title_pref_smart_failover_threshold">Порог деградации трафика (КБ/с)</string>
+    <string name="summary_pref_smart_failover_threshold">Запускает экспресс-проверку если входящий трафик упал ниже порога при наличии исходящего. По умолчанию: 3 КБ/с</string>
+    <string name="title_pref_smart_failover_stall">Время фиксации затыка (секунд)</string>
+    <string name="summary_pref_smart_failover_stall">Сколько секунд должен длиться затык трафика перед запуском проверки. По умолчанию: 3с</string>
     <string name="failover_notification_title">Связь с сервером потеряна</string>
     <string name="failover_notification_content">Ищем новый сервер и переподключаемся...</string>
     <string name="title_v2whitelist_settings">Фишки ПроБел</string>

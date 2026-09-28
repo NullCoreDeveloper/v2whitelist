@@ -34,7 +34,6 @@ object V2RayServiceManager {
     private val coreController: CoreController = V2RayNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private var currentConfig: ProfileItem? = null
-    private var failoverMonitorJob: Job? = null
 
     var serviceControl: SoftReference<ServiceControl>? = null
         set(value) {
@@ -88,6 +87,17 @@ object V2RayServiceManager {
      * @return The name of the running server.
      */
     fun getRunningServerName() = currentConfig?.remarks.orEmpty()
+
+    fun getCurrentConfig(): ProfileItem? = currentConfig
+
+    fun measureDelay(url: String = SettingsManager.getDelayTestUrl()): Long {
+        if (!coreController.isRunning) return -1L
+        return try {
+            coreController.measureDelay(url)
+        } catch (e: Exception) {
+            -1L
+        }
+    }
 
     /**
      * Starts the context service for V2Ray.
@@ -228,8 +238,7 @@ object V2RayServiceManager {
     fun stopCoreLoop(): Boolean {
         Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
         
-        failoverMonitorJob?.cancel()
-        failoverMonitorJob = null
+        SmartFailoverManager.stopFailoverMonitor()
         
         val service = getService() ?: run {
             Log.w(AppConfig.TAG, "stopCoreLoop: service is null")
@@ -319,103 +328,12 @@ object V2RayServiceManager {
     }
 
     /**
-     * Starts a background job that periodically checks the server connection.
-     * If the server is unresponsive (timeout > 5s or error), it triggers a failover.
+     * Starts a background job that monitors server connectivity and triggers failover.
+     * Delegated to SmartFailoverManager.
      */
     private fun startFailoverMonitor() {
-        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER)) return
-
-        failoverMonitorJob?.cancel()
-        failoverMonitorJob = CoroutineScope(Dispatchers.IO).launch {
-            delay(10000) // Wait 10 seconds before starting checks
-            while (isActive && coreController.isRunning) {
-                delay(30000) // 30 seconds interval
-                val service = getService() ?: break
-                var time = -1L
-                try {
-                    time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
-                } catch (e: Exception) {
-                    Log.e(AppConfig.TAG, "Failover monitor: delay test failed", e)
-                }
-
-                if (time == -1L || time > 5000L) {
-                    // Дополнительная проверка через 3 секунды от случайных потерь пакетов
-                    Log.w(AppConfig.TAG, "Failover monitor: Server ping failed, waiting 3s for a double check...")
-                    kotlinx.coroutines.delay(3000)
-                    try {
-                        time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
-                    } catch (e: Exception) {
-                        Log.e(AppConfig.TAG, "Failover monitor: second delay test failed", e)
-                    }
-
-                    if (time == -1L || time > 5000L) {
-                        val hasInternet = checkDirectInternet(service)
-                        if (!hasInternet) {
-                            Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive, but direct internet is also down. Ignoring failover.")
-                            continue
-                        }
-
-                        Log.w(AppConfig.TAG, "Failover monitor: Server unresponsive and internet is UP, initiating failover...")
-                        NotificationManager.showFailoverNotification()
-                    
-                    val serverList = MmkvManager.decodeServerList()
-                    val currentGuid = MmkvManager.getSelectServer()
-                    if (serverList.size > 1 && currentGuid != null) {
-                        val currentIndex = serverList.indexOf(currentGuid)
-                        if (currentIndex != -1) {
-                            val nextIndex = (currentIndex + 1) % serverList.size
-                            val nextGuid = serverList[nextIndex]
-                            Log.i(AppConfig.TAG, "Failover monitor: Switching from $currentGuid to $nextGuid")
-                            MmkvManager.setSelectServer(nextGuid)
-                            MmkvManager.saveLastConnectedServer(nextGuid) // ВАЖНО: обновляем кэш Fast Path!
-                            MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
-                            break // Stop monitoring for the old server, a new loop will be started by the switch
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-    /**
-     * Checks if there is a working direct internet connection bypassing the VPN.
-     * @param context Context to access ConnectivityManager
-     * @return True if direct connection to yandex is successful, false otherwise.
-     */
-    private fun checkDirectInternet(context: Context): Boolean {
-        try {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-            val networks = cm.allNetworks
-            for (network in networks) {
-                val caps = cm.getNetworkCapabilities(network)
-                if (caps != null && 
-                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                    caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
-                    !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {
-                    
-                    try {
-                        val url = java.net.URL("https://ya.ru")
-                        val connection = network.openConnection(url) as java.net.HttpURLConnection
-                        connection.connectTimeout = 3000
-                        connection.readTimeout = 3000
-                        connection.requestMethod = "HEAD"
-                        val responseCode = connection.responseCode
-                        connection.disconnect()
-                        if (responseCode in 200..399) {
-                            return true
-                        }
-                    } catch (e: Exception) {
-                        Log.d(AppConfig.TAG, "Direct internet check failed on a network", e)
-                    }
-                }
-            }
-            return false
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "checkDirectInternet error", e)
-            return false
-        }
+        val service = getService() ?: return
+        SmartFailoverManager.startFailoverMonitor(service)
     }
 
     /**
@@ -528,8 +446,7 @@ object V2RayServiceManager {
                     Log.d(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: vpnInterface=${vpnInterface?.fd}")
                     val guid = MmkvManager.getSelectServer()
                     Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: target guid=$guid")
-                    failoverMonitorJob?.cancel()
-                    failoverMonitorJob = null
+                    SmartFailoverManager.stopFailoverMonitor()
                     if (coreController.isRunning) {
                         try {
                             coreController.stopLoop()

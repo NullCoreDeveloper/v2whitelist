@@ -47,49 +47,76 @@ object NotificationManager {
      * @param currentConfig The current profile configuration.
      */
     fun startSpeedNotification(currentConfig: ProfileItem?) {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) return
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) {
+            // Если уведомление скорости выключено, но Smart Failover активен — всё равно запускаем сборщик
+            val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, false) &&
+                    MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, false)
+            if (!smartFailoverActive) return
+        }
         if (speedNotificationJob != null || V2RayServiceManager.isRunning() == false) return
+
+        val showSpeedNotification = MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED, false)
+        val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, false) &&
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, false)
+        val loopIntervalMs = if (smartFailoverActive) 1000L else 3000L
 
         lastQueryTime = System.currentTimeMillis()
         var lastZeroSpeed = false
         val outboundTags = currentConfig?.getAllOutboundTags()
         outboundTags?.remove(AppConfig.TAG_DIRECT)
+        var tickCount = 0
 
         speedNotificationJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
                 val queryTime = System.currentTimeMillis()
-                val sinceLastQueryInSeconds = (queryTime - lastQueryTime) / 1000.0
+                val sinceLastQueryInSeconds = ((queryTime - lastQueryTime) / 1000.0).coerceAtLeast(0.1)
                 var proxyTotal = 0L
+                var proxyUpSum = 0L
+                var proxyDownSum = 0L
                 val text = StringBuilder()
                 outboundTags?.forEach {
                     val up = V2RayServiceManager.queryStats(it, AppConfig.UPLINK)
                     val down = V2RayServiceManager.queryStats(it, AppConfig.DOWNLINK)
                     if (up + down > 0) {
-                        appendSpeedString(text, it, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
+                        if (showSpeedNotification) {
+                            appendSpeedString(text, it, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
+                        }
                         proxyTotal += up + down
                     }
+                    proxyUpSum += up
+                    proxyDownSum += down
                 }
                 val directUplink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.UPLINK)
                 val directDownlink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.DOWNLINK)
                 val zeroSpeed = proxyTotal == 0L && directUplink == 0L && directDownlink == 0L
 
-                // Emit live speed for Geek Mode
+                val proxyUpRate = proxyUpSum / sinceLastQueryInSeconds
+                val proxyDownRate = proxyDownSum / sinceLastQueryInSeconds
+
+                // Live traffic sampling for Smart Failover stall detection
+                SmartFailoverManager.onTrafficSample(getService(), proxyUpRate, proxyDownRate)
+
+                // Emit live speed for Geek Mode (every 1s if smart failover is active)
                 val rxSpeed = (proxyTotal + directDownlink) / sinceLastQueryInSeconds
-                val txSpeed = (directUplink) / sinceLastQueryInSeconds
+                val txSpeed = (directUplink + proxyUpSum) / sinceLastQueryInSeconds
                 speedFlow.tryEmit(Pair(rxSpeed, txSpeed))
-                if (!zeroSpeed || !lastZeroSpeed) {
-                    if (proxyTotal == 0L) {
-                        appendSpeedString(text, outboundTags?.firstOrNull(), 0.0, 0.0)
+
+                tickCount++
+                if (showSpeedNotification && (tickCount % 3 == 0 || !smartFailoverActive)) {
+                    if (!zeroSpeed || !lastZeroSpeed) {
+                        if (proxyTotal == 0L) {
+                            appendSpeedString(text, outboundTags?.firstOrNull(), 0.0, 0.0)
+                        }
+                        appendSpeedString(
+                            text, AppConfig.TAG_DIRECT, directUplink / sinceLastQueryInSeconds,
+                            directDownlink / sinceLastQueryInSeconds
+                        )
+                        updateNotification(text.toString(), proxyTotal, directDownlink + directUplink)
                     }
-                    appendSpeedString(
-                        text, AppConfig.TAG_DIRECT, directUplink / sinceLastQueryInSeconds,
-                        directDownlink / sinceLastQueryInSeconds
-                    )
-                    updateNotification(text.toString(), proxyTotal, directDownlink + directUplink)
                 }
                 lastZeroSpeed = zeroSpeed
                 lastQueryTime = queryTime
-                delay(3000)
+                delay(loopIntervalMs)
             }
         }
     }
