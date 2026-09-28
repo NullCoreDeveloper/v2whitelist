@@ -530,12 +530,6 @@ object V2rayConfigManager {
                         domain = arrayListOf("geosite:category-ru")
                     )
                 )
-                v2rayConfig.routing.rules.add(
-                    RulesBean(
-                        outboundTag = AppConfig.TAG_DIRECT,
-                        ip = arrayListOf("geoip:ru")
-                    )
-                )
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to configure routing", e)

@@ -191,7 +191,7 @@ object SmartFailoverManager {
      * Обрабатывает подтверждённый сбой сервера.
      * Проводит арбитраж физической сети и переключает сервер если интернет есть.
      */
-    private fun handleServerFailure(service: Service, reason: String) {
+    private suspend fun handleServerFailure(service: Service, reason: String) {
         val physicalState = arbitratePhysicalNetwork(service)
         GeekModeLogger.log("Failover", "Physical network arbitration result: $physicalState (Trigger: $reason)")
 
@@ -257,7 +257,7 @@ object SmartFailoverManager {
      * Физический арбитраж сети в обход VPN.
      * Проверяет ya.ru и google.com через реальные сетевые адаптеры устройства.
      */
-    fun arbitratePhysicalNetwork(context: Context): PhysicalNetworkState {
+    suspend fun arbitratePhysicalNetwork(context: Context): PhysicalNetworkState {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return PhysicalNetworkState.NO_INTERNET
 
@@ -278,7 +278,7 @@ object SmartFailoverManager {
         var googleOk = false
         val net = physicalNet
 
-        runBlocking(Dispatchers.IO) {
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             val yaDef = async { checkDirectUrl(net, "https://ya.ru", "HEAD", 1500) }
             val googleDef = async { checkDirectUrl(net, "https://www.google.com/generate_204", "GET", 1500) }
             yaOk = yaDef.await()
