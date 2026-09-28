@@ -379,43 +379,39 @@ class V2RayVpnService : VpnService(), ServiceControl {
         
         if (bypassRuApps && !isProxyMode) {
             try {
-                if (cachedRuApps == null) {
+                if (cachedInstalledPackages == null) {
                     val pm = packageManager
                     val packages = pm.getInstalledPackages(0)
-                    val ruApps = mutableListOf<String>()
-                    
-                    packages.forEach { pkg ->
-                        val pName = pkg.packageName.lowercase()
-                        val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
-
-                        if (isBroadRuRule || 
-                            pName.contains("yandex") || 
-                            pName.contains("tinkoff") || 
-                            pName.contains("sberbank") || 
-                            pName.contains("vkontakte") || 
-                            pName.contains("vk.store") || 
-                            pName.contains("ozon") || 
-                            pName.contains("wildberries") || 
-                            pName.contains("avito") || 
-                            pName.contains("alfabank") || 
-                            pName.contains("mail.ru") || 
-                            pName.contains("kinopoisk") || 
-                            pName.contains("rostel") || 
-                            pName.contains("vtb")
-                        ) {
-                            ruApps.add(pkg.packageName)
-                        }
-                    }
-                    cachedRuApps = ruApps
+                    cachedInstalledPackages = packages.map { it.packageName }
                 }
                 
-                cachedRuApps?.forEach { pkgName ->
-                    try {
-                        builder.addDisallowedApplication(pkgName)
-                    } catch (e: PackageManager.NameNotFoundException) {
-                    } catch (e: IllegalArgumentException) {
+                cachedInstalledPackages?.forEach { pkgName ->
+                    val pName = pkgName.lowercase()
+                    val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
+
+                    if (isBroadRuRule || 
+                        pName.contains("yandex") || 
+                        pName.contains("tinkoff") || 
+                        pName.contains("sberbank") || 
+                        pName.contains("vkontakte") || 
+                        pName.contains("vk.store") || 
+                        pName.contains("ozon") || 
+                        pName.contains("wildberries") || 
+                        pName.contains("avito") || 
+                        pName.contains("alfabank") || 
+                        pName.contains("mail.ru") || 
+                        pName.contains("kinopoisk") || 
+                        pName.contains("rostel") || 
+                        pName.contains("vtb")
+                    ) {
+                        try {
+                            builder.addDisallowedApplication(pkgName)
+                        } catch (e: PackageManager.NameNotFoundException) {
+                        } catch (e: IllegalArgumentException) {
+                        }
                     }
                 }
+
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to scan packages for RU bypass", e)
             }
@@ -481,9 +477,10 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
             }
         }
+        cachedInstalledPackages = null
     }
 
     companion object {
-        var cachedRuApps: List<String>? = null
+        var cachedInstalledPackages: List<String>? = null
     }
 }
