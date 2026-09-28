@@ -65,11 +65,13 @@ object NodeTesterManager {
                             null
                         } else {
                             val ok = try {
-                                Socket().use { socket ->
-                                    socket.tcpNoDelay = true
-                                    socket.connect(InetSocketAddress(host, port), 800)
-                                    true
-                                }
+                                kotlinx.coroutines.withTimeoutOrNull(800L) {
+                                    Socket().use { socket ->
+                                        socket.tcpNoDelay = true
+                                        socket.connect(InetSocketAddress(host, port), 800)
+                                        true
+                                    }
+                                } ?: false
                             } catch (e: Exception) {
                                 false
                             }

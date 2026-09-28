@@ -19,13 +19,11 @@ object NetworkManager {
     suspend fun waitForInternet(context: Context) {
         var isWaiting = false
         while (true) {
-            val dzenOk = try {
-                Socket().use { it.connect(InetSocketAddress("dzen.ru", 443), 1500); true }
-            } catch (_: Exception) { false }
+            val hasInternet = checkInternetStatus() != 2
 
-            if (dzenOk) {
+            if (hasInternet) {
                 if (isWaiting) {
-                    GeekModeLogger.log("Network", "waitForInternet: Интернет появился (dzen.ru ответил)")
+                    GeekModeLogger.log("Network", "waitForInternet: Интернет появился")
                 }
                 break
             }
@@ -46,11 +44,11 @@ object NetworkManager {
      */
     fun checkInternetStatus(): Int {
         val googleOk = try {
-            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 53), 1500); true }
+            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 443), 1500); true }
         } catch (_: Exception) { false }
 
         val yandexOk = try {
-            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 53), 1500); true }
+            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 443), 1500); true }
         } catch (_: Exception) { false }
 
         return when {
