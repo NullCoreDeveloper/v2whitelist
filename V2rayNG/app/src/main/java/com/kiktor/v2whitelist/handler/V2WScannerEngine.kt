@@ -44,10 +44,11 @@ object V2WScannerEngine {
         if (urlToGuid.isEmpty()) return@coroutineScope false
 
         val channel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
-        @Volatile var scanContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
+        val scanContinuation = java.util.concurrent.atomic.AtomicReference<kotlinx.coroutines.CancellableContinuation<Unit>?>(null)
         val callback = object : V2WScanCallback {
             override fun onServerSuccess(configUrl: String?, delay: Long) {
-                if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
+                val cont = scanContinuation.get()
+                if (cont?.isActive != true) return // Жесткий игнор после отмены
                 
                 if (configUrl != null) {
                     val item = urlToGuid[configUrl]
@@ -59,11 +60,12 @@ object V2WScannerEngine {
             }
 
             override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
-                if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
+                val cont = scanContinuation.get()
+                if (cont?.isActive != true) return // Жесткий игнор после отмены
                 
                 GeekModeLogger.log("v2w-core", "Scan complete. Success: $totalSuccess, Failed: $totalFailed")
-                if (scanContinuation?.isActive == true) {
-                    scanContinuation?.resume(Unit) { }
+                if (cont.isActive) {
+                    cont.resume(Unit) { }
                 }
             }
         }
@@ -75,7 +77,7 @@ object V2WScannerEngine {
                 val scannerJob = launch(Dispatchers.IO) {
                     try {
                         kotlinx.coroutines.suspendCancellableCoroutine<Unit> { cont ->
-                            scanContinuation = cont
+                            scanContinuation.set(cont)
                             cont.invokeOnCancellation {
                                 GeekModeLogger.log("v2w-core", "Scan cancelled by user, forcing stop...")
                                 Libv2ray.stopV2WScanner()

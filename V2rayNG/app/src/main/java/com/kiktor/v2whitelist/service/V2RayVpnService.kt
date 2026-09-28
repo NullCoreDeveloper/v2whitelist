@@ -481,7 +481,6 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
             }
         }
-        }
     }
 
     companion object {

@@ -281,7 +281,7 @@ object NodeTesterManager {
             kotlinx.coroutines.withTimeoutOrNull(30_000L) {
                 val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
                 for (candidate in limitedCandidates) {
-                    if (!kotlinx.coroutines.isActive) break
+                    if (!isActive) break
                     if (MmkvManager.getVipCache().size >= MmkvManager.getVipCacheLimit()) break
                     if (profileCheckEnabled) {
                         if (verifyProfile(context, candidate.first, showStatus = false)) {

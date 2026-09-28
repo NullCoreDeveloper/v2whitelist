@@ -4,7 +4,10 @@ plugins {
     id("com.jaredsburrows.license")
 }
 
-fun getVersionNameFromGit(): String {
+fun getVersionName(project: Project): String {
+    val override = (project.findProperty("VERSION_NAME") as? String)?.removePrefix("v")
+        ?: (project.findProperty("versionName") as? String)?.removePrefix("v")
+    if (!override.isNullOrEmpty()) return override
     return try {
         val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0", "--match", "v*").start()
         val version = process.inputStream.bufferedReader().readText().trim().removePrefix("v")
@@ -38,7 +41,7 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = getVersionCodeFromGit()
-        versionName = getVersionNameFromGit()
+        versionName = getVersionName(project)
         multiDexEnabled = true
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
