@@ -77,7 +77,11 @@ class SubscriptionUpdaterWorker(
             .setSilent(true)
             .build()
 
-        notifManager.notify(notifId, notification)
+        try {
+            notifManager.notify(notifId, notification)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to show notification", e)
+        }
     }
 
     companion object {
@@ -146,10 +150,7 @@ class SubscriptionUpdaterWorker(
                 .build()
 
             return PeriodicWorkRequestBuilder<SubscriptionUpdaterWorker>(
-                finalInterval, TimeUnit.MINUTES,
-                // Flex-период: задача может запуститься в любой момент внутри последних 5 минут интервала.
-                // Это помогает Android планировать задачу батарейно-эффективно.
-                5, TimeUnit.MINUTES
+                finalInterval, TimeUnit.MINUTES
             )
                 .setConstraints(constraints)
                 .build() // Убираем setBackoffCriteria — retry больше не используется

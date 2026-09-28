@@ -1,10 +1,11 @@
 package com.kiktor.v2whitelist
 
 import android.app.ActivityManager
+import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.Process
 import android.util.Log
-import androidx.multidex.MultiDexApplication
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.tencent.mmkv.MMKV
@@ -18,7 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
-class AngApplication : MultiDexApplication() {
+class AngApplication : Application(), Configuration.Provider {
     companion object {
         lateinit var application: AngApplication
     }
@@ -32,14 +33,16 @@ class AngApplication : MultiDexApplication() {
         application = this
     }
 
-    private val workManagerConfiguration: Configuration = Configuration.Builder()
-        .setDefaultProcessName("${ANG_PACKAGE}:bg")
-        .build()
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
 
     /**
      * Checks if the current process is the main application process.
      */
     private fun isMainProcess(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return getProcessName() == packageName
+        }
         val pid = Process.myPid()
         val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
         return am.runningAppProcesses?.any { it.pid == pid && it.processName == packageName } == true
@@ -62,8 +65,6 @@ class AngApplication : MultiDexApplication() {
         // Initialize V2Ray core environment globally (needed in all processes)
         V2RayNativeManager.initCoreEnv(this)
         
-        // Initialize WorkManager globally (needed for background processes too)
-        WorkManager.initialize(this, workManagerConfiguration)
 
         // The rest only runs in the main process
         if (isMain) {

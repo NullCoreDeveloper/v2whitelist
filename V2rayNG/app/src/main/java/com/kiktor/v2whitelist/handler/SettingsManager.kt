@@ -408,7 +408,17 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_MODE, AppConfig.VPN)
         ensureDefaultValue(AppConfig.PREF_VPN_DNS, AppConfig.DNS_VPN)
         ensureDefaultValue(AppConfig.PREF_VPN_MTU, AppConfig.VPN_MTU.toString())
-        ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE, "true")
+        // Migrate SUBSCRIPTION_AUTO_UPDATE from String to Boolean if needed
+        try {
+            val isString = MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE) != null
+            if (isString) {
+                val strVal = MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE)
+                MmkvManager.encodeSettings(AppConfig.SUBSCRIPTION_AUTO_UPDATE, strVal == "true")
+            }
+        } catch (e: Exception) {
+            // Already a boolean or missing
+        }
+        ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
         ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
         
         // Randomize SOCKS port once per installation/update to protect against local proxy scanning
