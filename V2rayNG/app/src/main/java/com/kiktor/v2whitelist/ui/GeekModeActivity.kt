@@ -81,8 +81,9 @@ class GeekModeActivity : BaseActivity() {
                                         if (changed) {
                                             // Останавливаем сервис и запускаем заново для применения нового конфига
                                             V2RayServiceManager.stopVService(this@GeekModeActivity)
-                                            Thread.sleep(300L) // Небольшая задержка перед стартом
-                                            V2RayServiceManager.startVService(this@GeekModeActivity)
+                                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                                V2RayServiceManager.startVService(this@GeekModeActivity)
+                                            }, 300L) // Небольшая задержка перед стартом
                                         }
                                     } else {
                                         // Включаем VPN, если он был выключен

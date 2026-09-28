@@ -15,6 +15,7 @@ object GeekModeLogger {
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
+    @Synchronized
     fun log(tag: String, message: String) {
         val time = timeFormat.format(Date())
         val formattedMsg = "[$time] [$tag] $message"
@@ -28,6 +29,7 @@ object GeekModeLogger {
         _logs.value = current
     }
 
+    @Synchronized
     fun clear() {
         _logs.value = emptyList()
     }

@@ -436,8 +436,9 @@ object V2RayServiceManager {
                 AppConfig.MSG_STATE_RESTART -> {
                     Log.i(AppConfig.TAG, "Restart Service")
                     serviceControl.stopService()
-                    Thread.sleep(500L)
-                    startVService(serviceControl.getService())
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        startVService(serviceControl.getService())
+                    }, 500L)
                 }
 
                 AppConfig.MSG_STATE_SWITCH_SERVER -> {
@@ -455,10 +456,11 @@ object V2RayServiceManager {
                             Log.e(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: failed to stop existing core", e)
                         }
                     }
-                    Thread.sleep(500L) // Wait for core to fully release resources
-                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: starting core loop after switch")
-                    val success = startCoreLoop(vpnInterface)
-                    Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop result=$success")
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: starting core loop after switch")
+                        val success = startCoreLoop(vpnInterface)
+                        Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop result=$success")
+                    }, 500L) // Wait for core to fully release resources
                 }
 
                 AppConfig.MSG_MEASURE_DELAY -> {

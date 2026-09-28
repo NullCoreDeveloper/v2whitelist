@@ -44,7 +44,7 @@ object V2WScannerEngine {
         if (urlToGuid.isEmpty()) return@coroutineScope false
 
         val channel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
-        var scanContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
+        @Volatile var scanContinuation: kotlinx.coroutines.CancellableContinuation<Unit>? = null
         val callback = object : V2WScanCallback {
             override fun onServerSuccess(configUrl: String?, delay: Long) {
                 if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
@@ -62,7 +62,6 @@ object V2WScannerEngine {
                 if (scanContinuation?.isActive != true) return // Жесткий игнор после отмены
                 
                 GeekModeLogger.log("v2w-core", "Scan complete. Success: $totalSuccess, Failed: $totalFailed")
-                channel.close()
                 if (scanContinuation?.isActive == true) {
                     scanContinuation?.resume(Unit) { }
                 }
@@ -107,7 +106,7 @@ object V2WScannerEngine {
                     if (profileCheckEnabled) {
                         if (NodeTesterManager.verifyProfile(context, candidatePair.first, showStatus = (internetStatus == 0))) {
                             GeekModeLogger.log("v2w-core", "Connecting to verified node: ${candidatePair.second.remarks}")
-                            Libv2ray.stopV2WScanner()
+                            scannerJob.cancel()
                             connectToBest(candidatePair, isStartup)
                             connected = true
                             break
@@ -118,7 +117,7 @@ object V2WScannerEngine {
                         }
                     } else {
                         GeekModeLogger.log("v2w-core", "Connecting to node (no profile check): ${candidatePair.second.remarks}")
-                        Libv2ray.stopV2WScanner()
+                        scannerJob.cancel()
                         connectToBest(candidatePair, isStartup)
                         connected = true
                         break
