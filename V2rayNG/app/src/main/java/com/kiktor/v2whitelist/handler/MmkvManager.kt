@@ -278,7 +278,7 @@ object MmkvManager {
         }
         val serverList = decodeServerList()
         var changed = false
-        val keysToRemove = mutableListOf<String>()
+        val keysToRemove = mutableSetOf<String>()
         
         profileFullStorage.allKeys()?.forEach { key ->
             decodeServerConfig(key)?.let { config ->
@@ -292,9 +292,12 @@ object MmkvManager {
             if (getSelectServer() == key) {
                 mainStorage.remove(KEY_SELECTED_SERVER)
             }
-            if (serverList.remove(key)) changed = true
             profileFullStorage.remove(key)
             serverAffStorage.remove(key)
+        }
+        
+        if (keysToRemove.isNotEmpty()) {
+            if (serverList.removeAll(keysToRemove)) changed = true
         }
         
         if (changed) {

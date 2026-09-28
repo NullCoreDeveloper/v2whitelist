@@ -379,40 +379,41 @@ class V2RayVpnService : VpnService(), ServiceControl {
         
         if (bypassRuApps && !isProxyMode) {
             try {
-                val pm = packageManager
-                val packages = pm.getInstalledPackages(0)
-                
-                packages.forEach { pkg ->
-                    val pName = pkg.packageName.lowercase()
+                if (cachedRuApps == null) {
+                    val pm = packageManager
+                    val packages = pm.getInstalledPackages(0)
+                    val ruApps = mutableListOf<String>()
                     
-                    // Если пользователь включил ручное управление сплит-туннелированием,
-                    // мы отключаем широкое правило ru.*, чтобы не выкашивать невинные приложения вроде 4pda.
-                    // При этом жесткие исключения для банков и магазинов остаются.
-                    val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
+                    packages.forEach { pkg ->
+                        val pName = pkg.packageName.lowercase()
+                        val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
 
-                    // Эвристика определения российских приложений:
-                    if (isBroadRuRule || 
-                        pName.contains("yandex") || 
-                        pName.contains("tinkoff") || 
-                        pName.contains("sberbank") || 
-                        pName.contains("vkontakte") || 
-                        pName.contains("vk.store") || 
-                        pName.contains("ozon") || 
-                        pName.contains("wildberries") || 
-                        pName.contains("avito") || 
-                        pName.contains("alfabank") || 
-                        pName.contains("mail.ru") || 
-                        pName.contains("kinopoisk") || 
-                        pName.contains("rostel") || 
-                        pName.contains("vtb")
-                    ) {
-                        try {
-                            builder.addDisallowedApplication(pkg.packageName)
-                        } catch (e: PackageManager.NameNotFoundException) {
-                            // Ignore if not found
-                        } catch (e: IllegalArgumentException) {
-                            // Already added to disallowed
+                        if (isBroadRuRule || 
+                            pName.contains("yandex") || 
+                            pName.contains("tinkoff") || 
+                            pName.contains("sberbank") || 
+                            pName.contains("vkontakte") || 
+                            pName.contains("vk.store") || 
+                            pName.contains("ozon") || 
+                            pName.contains("wildberries") || 
+                            pName.contains("avito") || 
+                            pName.contains("alfabank") || 
+                            pName.contains("mail.ru") || 
+                            pName.contains("kinopoisk") || 
+                            pName.contains("rostel") || 
+                            pName.contains("vtb")
+                        ) {
+                            ruApps.add(pkg.packageName)
                         }
+                    }
+                    cachedRuApps = ruApps
+                }
+                
+                cachedRuApps?.forEach { pkgName ->
+                    try {
+                        builder.addDisallowedApplication(pkgName)
+                    } catch (e: PackageManager.NameNotFoundException) {
+                    } catch (e: IllegalArgumentException) {
                     }
                 }
             } catch (e: Exception) {
@@ -480,6 +481,10 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
             }
         }
+        }
+    }
+
+    companion object {
+        var cachedRuApps: List<String>? = null
     }
 }
-
