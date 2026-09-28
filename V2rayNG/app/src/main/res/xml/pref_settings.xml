@@ -161,6 +161,8 @@
             android:summary="@string/summary_pref_smart_failover_stall"
             android:title="@string/title_pref_smart_failover_stall" />
 
+    </PreferenceCategory>
+
         <!-- Bypass RU Apps -->
         <CheckBoxPreference
             android:key="pref_bypass_ru_apps"
@@ -190,8 +192,6 @@
             android:key="pref_custom_user_agent"
             android:summary="@string/summary_pref_custom_user_agent"
             android:title="@string/title_pref_custom_user_agent" />
-
-    </PreferenceCategory>
 
     <PreferenceCategory
         android:title="@string/title_sub_setting"
