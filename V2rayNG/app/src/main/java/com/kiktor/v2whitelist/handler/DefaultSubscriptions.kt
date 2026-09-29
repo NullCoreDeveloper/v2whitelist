@@ -128,38 +128,56 @@ object DefaultSubscriptions {
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp001",
             name = "CYBERPORTAL (Black MIX RU)",
-            url = "https://warp-gen.cyb-portal.org/CP-001",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-001.txt",
+                "https://warp-gen.cyb-portal.org/CP-001"
+            ).joinToString("|"),
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp002",
             name = "CYBERPORTAL (VLESS Black All RU)",
-            url = "https://warp-gen.cyb-portal.org/CP-002",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-002.txt",
+                "https://warp-gen.cyb-portal.org/CP-002"
+            ).joinToString("|"),
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp035",
             name = "CYBERPORTAL (VLESS White List)",
-            url = "https://warp-gen.cyb-portal.org/CP-035",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-035.txt",
+                "https://warp-gen.cyb-portal.org/CP-035"
+            ).joinToString("|"),
             groupRegex = "(?i)(White\\s*List)",
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp006",
             name = "CYBERPORTAL (CIDR White All RU)",
-            url = "https://warp-gen.cyb-portal.org/CP-006",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-006.txt",
+                "https://warp-gen.cyb-portal.org/CP-006"
+            ).joinToString("|"),
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp008",
             name = "CYBERPORTAL (SNI White All RU)",
-            url = "https://warp-gen.cyb-portal.org/CP-008",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-008.txt",
+                "https://warp-gen.cyb-portal.org/CP-008"
+            ).joinToString("|"),
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp042",
             name = "CYBERPORTAL (White Keys)",
-            url = "https://warp-gen.cyb-portal.org/CP-042",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-042.txt",
+                "https://warp-gen.cyb-portal.org/CP-042"
+            ).joinToString("|"),
             groupRegex = "(?i)(White\\s*Keys)",
             enabled = false
         ),
