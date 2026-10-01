@@ -196,7 +196,8 @@ object SubscriptionHelper {
                 "def_kizyak_black",
                 "def_cyberportal_cp002",
                 "def_rkp_blacklist",
-                "def_etoneya_blacklist"
+                "def_etoneya_blacklist",
+                "def_rjsxrd_bypass_all"
             )
             AppScenario.WHITELIST -> setOf(
                 "def_zieng2",
@@ -208,7 +209,8 @@ object SubscriptionHelper {
                 "def_cyberportal_cp006",
                 "def_cyberportal_cp008",
                 "def_cyberportal_cp042",
-                "def_etoneya_whitelist"
+                "def_etoneya_whitelist",
+                "def_airlink_whitelist"
             )
             AppScenario.YOUTUBE -> setOf(
                 "def_etoneya_youtube",

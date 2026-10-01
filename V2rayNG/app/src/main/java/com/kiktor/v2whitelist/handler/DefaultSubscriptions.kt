@@ -252,6 +252,29 @@ object DefaultSubscriptions {
                 "https://xn--e1apcp8cq.xn--p1ai/ytm"
             ).joinToString("|"),
             enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_rjsxrd_bypass_all",
+            name = "rjsxrd (Сборник обхода / Bypass All)",
+            url = listOf(
+                "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt",
+                "https://raw.githubusercontent.com/whoahaow/rjsxrd/main/githubmirror/bypass/bypass-all.txt",
+                "https://fastly.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt",
+                "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
+            ).joinToString("|"),
+            groupRegex = "(CF中转|☁️\\s*Cloudflare|Cloudflare|\\[BL\\]|BL)",
+            enabled = false
+        ),
+        SubscriptionHelper.CustomSubData(
+            id = "def_airlink_whitelist",
+            name = "AirLinkVPN (Белые списки РКН)",
+            url = listOf(
+                "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/refs/heads/main/rkn_white_list",
+                "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/main/rkn_white_list",
+                "https://fastly.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list",
+                "https://cdn.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list"
+            ).joinToString("|"),
+            enabled = false
         )
     )
 }

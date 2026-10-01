@@ -554,7 +554,14 @@ class MainActivity : HelperBaseActivity() {
             binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_green_light))
 
             // Показываем имя текущего сервера
-            val serverName = V2RayServiceManager.getRunningServerName()
+            // getRunningServerName() живёт в процессе сервиса и недоступен из UI-процесса,
+            // поэтому читаем напрямую из MMKV по выбранному серверу
+            val selectedGuid = MmkvManager.getSelectServer()
+            val serverName = if (!selectedGuid.isNullOrBlank()) {
+                MmkvManager.decodeServerConfig(selectedGuid)?.remarks.orEmpty()
+            } else {
+                V2RayServiceManager.getRunningServerName()
+            }
             val displayName = serverName.take(16).let { if (serverName.length > 16) "$it…" else it }
             if (serverName.isNotEmpty()) {
                 binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, displayName)
@@ -562,10 +569,11 @@ class MainActivity : HelperBaseActivity() {
                 binding.tvServerName.isVisible = true
                 binding.tvConnectedServerBottom.isVisible = false
             } else {
-                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, "Auto")
+                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, "—")
                 binding.tvServerName.isVisible = false
                 binding.tvConnectedServerBottom.isVisible = false
             }
+
 
             // Подключён: показываем QR кнопку, скрываем кнопку сканирования
             binding.btnShowQr.isVisible = true
