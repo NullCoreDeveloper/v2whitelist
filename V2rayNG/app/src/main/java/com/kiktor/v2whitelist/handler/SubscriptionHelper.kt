@@ -210,7 +210,10 @@ object SubscriptionHelper {
                 "def_cyberportal_cp008",
                 "def_cyberportal_cp042",
                 "def_etoneya_whitelist",
-                "def_airlink_whitelist"
+                "def_airlink_whitelist",
+                "def_rjsxrd_bypass_all",
+                "def_rkp_whitelist",
+                "def_mifa_bobrik"
             )
             AppScenario.YOUTUBE -> setOf(
                 "def_etoneya_youtube",

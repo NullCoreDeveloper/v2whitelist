@@ -44,20 +44,6 @@ object DefaultSubscriptions {
             enabled = false
         ),
         SubscriptionHelper.CustomSubData(
-            id = "def_avencores_goida",
-            name = "AvenCores/goida (Сборник обхода черных списков)",
-            url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt",
-            groupRegex = "(Dynamic)",
-            enabled = false
-        ),
-        SubscriptionHelper.CustomSubData(
-            id = "def_avencores_goida_bypass",
-            name = "AvenCores/goida (Сборник обхода белых списков SNI/CIDR)",
-            url = "https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/26.txt",
-            groupRegex = "(V\\.O\\.I\\.D|Яндекс|VK|Ozon|XHTTP|WS|Channel|kurdconfig|AarazV2ray|EPODONIOS|wlrustg|EbraSha|ShatakVPN|canfing[A-Za-z0-9_-]+|@[A-Za-z0-9_]+|oneclickvpnkeys|NetFlowTools|Reality|gRPC|TCP|TLS|Dynamic)",
-            enabled = false
-        ),
-        SubscriptionHelper.CustomSubData(
             id = "def_mifa_bobrik",
             name = "mifa/bobrik (Резервные сервера)",
             url = "https://mifa.world/bobrik",
