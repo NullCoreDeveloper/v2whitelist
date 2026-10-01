@@ -244,8 +244,9 @@ object MmkvManager {
                 continue
             }
 
-            // Уникальность определяем по техническим параметрам: Адрес + Порт + Пароль (ключ)
-            val key = "${profile.server}:${profile.serverPort}:${profile.password}"
+            // Уникальность определяем по техническим параметрам: Адрес + Порт + Пароль (ключ) + SNI/Host
+            val sniOrHost = profile.sni.orEmpty().ifEmpty { profile.host.orEmpty() }
+            val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
             if (uniqueServers.contains(key)) {
                 toDelete.add(guid)
             } else {
