@@ -185,8 +185,10 @@ object SubscriptionHelper {
      * Применяет выбранный сценарий подписок из стартового опросника.
      */
     suspend fun applyScenario(context: Context, scenario: AppScenario) = withContext(Dispatchers.IO) {
+        MmkvManager.encodeSettings(AppConfig.PREF_CURRENT_APP_SCENARIO, scenario.name)
+        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+
         if (scenario == AppScenario.KEEP_CURRENT) {
-            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
             return@withContext
         }
 
@@ -277,7 +279,6 @@ object SubscriptionHelper {
         }
 
         MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
-        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
 
         try {
             updateSubscription(context)
@@ -315,9 +316,23 @@ object SubscriptionHelper {
             }
         }
 
+        var isExplicitlySelected = false
         var dismissAction: () -> Unit = {}
 
+        val handleDismissOrCancel = {
+            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            if (!isExplicitlySelected) {
+                isExplicitlySelected = true
+                Toast.makeText(activity, R.string.scenario_toast_whitelist_applied, Toast.LENGTH_SHORT).show()
+                CoroutineScope(Dispatchers.Main).launch {
+                    applyScenario(activity, AppScenario.WHITELIST)
+                    onApplied?.invoke()
+                }
+            }
+        }
+
         cardVpn?.setOnClickListener {
+            isExplicitlySelected = true
             dismissAction()
             Toast.makeText(activity, R.string.scenario_toast_vpn_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
@@ -327,6 +342,7 @@ object SubscriptionHelper {
         }
 
         cardWhitelist?.setOnClickListener {
+            isExplicitlySelected = true
             dismissAction()
             Toast.makeText(activity, R.string.scenario_toast_whitelist_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
@@ -336,6 +352,7 @@ object SubscriptionHelper {
         }
 
         cardYoutube?.setOnClickListener {
+            isExplicitlySelected = true
             dismissAction()
             Toast.makeText(activity, R.string.scenario_toast_youtube_applied, Toast.LENGTH_SHORT).show()
             CoroutineScope(Dispatchers.Main).launch {
@@ -345,8 +362,12 @@ object SubscriptionHelper {
         }
 
         cardKeep?.setOnClickListener {
+            isExplicitlySelected = true
             dismissAction()
-            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            CoroutineScope(Dispatchers.Main).launch {
+                applyScenario(activity, AppScenario.KEEP_CURRENT)
+                onApplied?.invoke()
+            }
             Toast.makeText(
                 activity,
                 R.string.scenario_toast_manual_hint,
@@ -358,8 +379,8 @@ object SubscriptionHelper {
             val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
                 .setView(view)
                 .setCancelable(true)
-                .setOnCancelListener {
-                    MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+                .setOnDismissListener {
+                    handleDismissOrCancel()
                 }
                 .create()
 
@@ -381,8 +402,8 @@ object SubscriptionHelper {
             bottomSheetDialog.setCanceledOnTouchOutside(true)
             bottomSheetDialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
             bottomSheetDialog.behavior.skipCollapsed = true
-            bottomSheetDialog.setOnCancelListener {
-                MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+            bottomSheetDialog.setOnDismissListener {
+                handleDismissOrCancel()
             }
             dismissAction = { bottomSheetDialog.dismiss() }
             bottomSheetDialog.setContentView(view)
