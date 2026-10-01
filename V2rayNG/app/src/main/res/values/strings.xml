@@ -517,6 +517,8 @@
     <string name="summary_pref_domain_split_tunneling">Exclude specific domains from VPN tunnel (direct access). Off by default.</string>
     <string name="title_pref_domain_split_tunneling_settings">Manage Excluded Domains</string>
     <string name="summary_pref_domain_split_tunneling_settings">Add domains that should bypass the VPN</string>
+    <string name="title_pref_domain_geo_files">Geo Files</string>
+    <string name="summary_pref_domain_geo_files">Download geosite.dat / geoip.dat by URL or from GitHub for advanced geosite: rules</string>
     <!-- Network check settings section -->
     <string name="title_network_check_settings">Network Status Check</string>
     <string name="btn_show_qr">QR</string>

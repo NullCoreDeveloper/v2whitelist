@@ -157,6 +157,10 @@ class SettingsActivity : BaseActivity() {
                     .show()
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_domain_geo_files")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), UserAssetActivity::class.java))
+                true
+            }
 
             mode?.setOnPreferenceChangeListener { pref, newValue ->
                 val valueStr = newValue.toString()

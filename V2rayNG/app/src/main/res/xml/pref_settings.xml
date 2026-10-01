@@ -302,6 +302,12 @@
             android:summary="@string/summary_pref_domain_split_tunneling_settings"
             android:title="@string/title_pref_domain_split_tunneling_settings" />
 
+        <Preference
+            android:dependency="pref_domain_split_tunneling_enabled"
+            android:key="pref_domain_geo_files"
+            android:summary="@string/summary_pref_domain_geo_files"
+            android:title="@string/title_pref_domain_geo_files" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_vpn_settings">
