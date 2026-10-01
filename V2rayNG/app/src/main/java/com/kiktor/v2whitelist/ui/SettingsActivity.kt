@@ -135,6 +135,29 @@ class SettingsActivity : BaseActivity() {
                 startActivity(android.content.Intent(requireContext(), PerAppProxyActivity::class.java))
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_domain_split_tunneling_settings")?.setOnPreferenceClickListener {
+                val currentDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST) ?: ""
+                val editText = android.widget.EditText(requireContext()).apply {
+                    setText(currentDomains)
+                    hint = "domain.com, sub.example.com, geosite:category-ru"
+                    minLines = 4
+                    gravity = android.view.Gravity.TOP
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                }
+                val padding = (16 * resources.displayMetrics.density).toInt()
+                android.app.AlertDialog.Builder(requireContext())
+                    .setTitle(getString(R.string.title_pref_domain_split_tunneling_settings))
+                    .setMessage(getString(R.string.summary_pref_domain_split_tunneling_settings))
+                    .setView(editText.also { it.setPadding(padding, padding / 2, padding, padding / 2) })
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        val value = editText.text.toString().trim()
+                        MmkvManager.encodeSettings(AppConfig.PREF_DIRECT_DOMAIN_LIST, value)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
+
             mode?.setOnPreferenceChangeListener { pref, newValue ->
                 val valueStr = newValue.toString()
                 (pref as? ListPreference)?.let { lp ->

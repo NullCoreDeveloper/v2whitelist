@@ -221,7 +221,13 @@
         <receiver
             android:name=".receiver.NotificationReceiver"
             android:exported="false"
-            android:process=":RunSoLibV2RayDaemon" />
+            android:process=":RunSoLibV2RayDaemon">
+            <intent-filter>
+                <action android:name="${applicationId}.action.notification.next" />
+                <action android:name="${applicationId}.action.notification.resume" />
+                <action android:name="${applicationId}.action.notification.stop" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".receiver.BootReceiver"

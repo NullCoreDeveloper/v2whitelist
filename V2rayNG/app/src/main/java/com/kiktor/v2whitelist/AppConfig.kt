@@ -48,6 +48,9 @@ object AppConfig {
     const val PREF_AUTO_FAILOVER_INTERVAL_SEC = "pref_auto_failover_interval_sec"
     const val PREF_SMART_FAILOVER_THRESHOLD_KBPS = "pref_smart_failover_threshold_kbps"
     const val PREF_SMART_FAILOVER_STALL_SEC = "pref_smart_failover_stall_sec"
+    const val PREF_NETWORK_CHECK_ENABLED = "pref_network_check_enabled"
+    const val PREF_NETWORK_CHECK_URL_1 = "pref_network_check_url_1"
+    const val PREF_NETWORK_CHECK_URL_2 = "pref_network_check_url_2"
     const val PREF_CHUNK_SIZE = "pref_chunk_size"
     const val PREF_CHUNK_PRESET = "pref_chunk_preset"
     const val SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL = "60" // Default is 1 hour
@@ -106,6 +109,14 @@ object AppConfig {
     /** Custom Endpoint (Proxy Chain) */
     const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"
     const val PREF_CUSTOM_ENDPOINT_URL = "pref_custom_endpoint_url"
+
+    /** DPI Bypass (Geek Mode) */
+    const val PREF_GLOBAL_SNI = "pref_global_sni"
+    const val PREF_CLOUDFLARE_IP = "pref_cloudflare_ip"
+    const val PREF_CUSTOM_USER_AGENT = "pref_custom_user_agent"
+
+    const val PREF_DIRECT_DOMAIN_LIST = "pref_direct_domain_list"
+    const val PREF_DOMAIN_SPLIT_TUNNELING_ENABLED = "pref_domain_split_tunneling_enabled"
 
     /** Custom subscriptions */
     const val PREF_USE_BUILTIN_SUB = "pref_use_builtin_sub"

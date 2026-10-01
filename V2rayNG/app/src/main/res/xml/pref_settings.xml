@@ -163,6 +163,33 @@
 
     </PreferenceCategory>
 
+    <!-- Настройки проверки сети — отдельный раздел -->
+    <PreferenceCategory
+        android:title="@string/title_network_check_settings"
+        app:initialExpandedChildrenCount="0">
+
+        <CheckBoxPreference
+            android:key="pref_network_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_network_check_enabled"
+            android:title="@string/title_pref_network_check_enabled" />
+
+        <EditTextPreference
+            android:dependency="pref_network_check_enabled"
+            android:key="pref_network_check_url_1"
+            android:defaultValue="google.com"
+            android:summary="@string/summary_pref_network_check_url_1"
+            android:title="@string/title_pref_network_check_url_1" />
+
+        <EditTextPreference
+            android:dependency="pref_network_check_enabled"
+            android:key="pref_network_check_url_2"
+            android:defaultValue="ya.ru"
+            android:summary="@string/summary_pref_network_check_url_2"
+            android:title="@string/title_pref_network_check_url_2" />
+
+    </PreferenceCategory>
+
         <!-- Bypass RU Apps -->
         <CheckBoxPreference
             android:key="pref_bypass_ru_apps"
@@ -261,6 +288,19 @@
             android:key="pref_per_app_proxy_settings"
             android:summary="@string/summary_pref_per_app_proxy_settings"
             android:title="@string/title_pref_per_app_proxy_settings" />
+
+        <!-- Domain-based split tunneling — отключено по умолчанию, гранулярная настройка -->
+        <CheckBoxPreference
+            android:key="pref_domain_split_tunneling_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_domain_split_tunneling"
+            android:title="@string/title_pref_domain_split_tunneling" />
+
+        <Preference
+            android:dependency="pref_domain_split_tunneling_enabled"
+            android:key="pref_domain_split_tunneling_settings"
+            android:summary="@string/summary_pref_domain_split_tunneling_settings"
+            android:title="@string/title_pref_domain_split_tunneling_settings" />
 
     </PreferenceCategory>
 

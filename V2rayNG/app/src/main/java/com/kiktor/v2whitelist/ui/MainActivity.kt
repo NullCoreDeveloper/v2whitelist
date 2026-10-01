@@ -502,6 +502,7 @@ class MainActivity : HelperBaseActivity() {
         binding.tvStatus.text = getString(R.string.connection_test_testing)
         binding.tvStatusDetail.text = message ?: getString(R.string.connection_test_testing)
         binding.tvServerName.isVisible = false
+        binding.tvConnectedServerBottom.isVisible = false
         binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_orange_light))
     }
 
@@ -547,7 +548,6 @@ class MainActivity : HelperBaseActivity() {
         if (isRunning) {
             binding.tvStatus.text = getString(R.string.tv_status_protected)
             binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-            binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail)
             binding.btnBigConnect.text = getString(R.string.btn_label_stop)
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
             binding.btnSwitchServer.isVisible = true
@@ -555,11 +555,16 @@ class MainActivity : HelperBaseActivity() {
 
             // Показываем имя текущего сервера
             val serverName = V2RayServiceManager.getRunningServerName()
+            val displayName = serverName.take(16).let { if (serverName.length > 16) "$it…" else it }
             if (serverName.isNotEmpty()) {
+                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, displayName)
                 binding.tvServerName.text = getString(R.string.tv_server_name, serverName)
                 binding.tvServerName.isVisible = true
+                binding.tvConnectedServerBottom.isVisible = false
             } else {
+                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, "Auto")
                 binding.tvServerName.isVisible = false
+                binding.tvConnectedServerBottom.isVisible = false
             }
 
             // Подключён: показываем QR кнопку, скрываем кнопку сканирования
@@ -573,6 +578,7 @@ class MainActivity : HelperBaseActivity() {
             binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
             binding.btnSwitchServer.isVisible = false
             binding.tvServerName.isVisible = false
+            binding.tvConnectedServerBottom.isVisible = false
             binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.darker_gray))
 
             // Отключён: скрываем QR кнопку, показываем кнопку сканирования

@@ -474,8 +474,8 @@
         <item>WebDAV</item>
     </string-array>
 
-    <string name="tv_status_protected">Защищено</string>
-    <string name="tv_status_protected_detail">Соединение активно и защищено</string>
+    <string name="tv_status_protected">Подключено</string>
+    <string name="tv_status_protected_detail">Соединение через %s активно</string>
     <string name="tv_status_disconnected_detail">Нажмите Start для подключения</string>
     <string name="btn_label_start">Старт</string>
     <string name="btn_label_stop">Стоп</string>
@@ -663,4 +663,20 @@
     <string name="dialog_apply_routing_preset_msg">Пакет: %1$s\nПриложений: %2$d</string>
     <string name="dialog_apply_routing_preset_success">Пресет применен! Перезапустите VPN</string>
     <string name="toast_battery_settings_error">Не удалось открыть настройки батареи</string>
+
+    <!-- Сплит-туннелинг по доменам -->
+    <string name="title_pref_domain_split_tunneling">Сплит-туннелинг по доменам</string>
+    <string name="summary_pref_domain_split_tunneling">Исключить отдельные домены из туннеля VPN (прямой доступ). Отключено по умолчанию.</string>
+    <string name="title_pref_domain_split_tunneling_settings">Управление исключениями</string>
+    <string name="summary_pref_domain_split_tunneling_settings">Добавить домены, которые должны обходить VPN</string>
+    <!-- Заголовок раздела проверки сети -->
+    <string name="title_network_check_settings">Проверка статуса сети</string>
+
+    <!-- Настройки проверки сети -->
+    <string name="title_pref_network_check_enabled">Проверка статуса сети</string>
+    <string name="summary_pref_network_check_enabled">Проверять наличие сети перед подключением и для авто-переключения</string>
+    <string name="title_pref_network_check_url_1">Основной домен для проверки</string>
+    <string name="summary_pref_network_check_url_1">По умолчанию: google.com</string>
+    <string name="title_pref_network_check_url_2">Резервный домен для проверки</string>
+    <string name="summary_pref_network_check_url_2">По умолчанию: ya.ru</string>
 </resources>

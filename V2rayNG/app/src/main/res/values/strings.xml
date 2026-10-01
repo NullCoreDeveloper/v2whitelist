@@ -499,8 +499,8 @@
         <item>WebDAV</item>
     </string-array>
 
-    <string name="tv_status_protected">Protected</string>
-    <string name="tv_status_protected_detail">Connection is active and protected</string>
+    <string name="tv_status_protected">Connected</string>
+    <string name="tv_status_protected_detail">Connection via %s is active</string>
     <string name="tv_status_disconnected_detail">Tap Start to connect</string>
     <string name="btn_label_start">Start</string>
     <string name="btn_label_stop">Stop</string>
@@ -512,6 +512,13 @@
     <string name="btn_label_about">About</string>
     <string name="title_check_update">Check for updates</string>
     <string name="tv_server_name">Server: %s</string>
+    <!-- Domain split tunneling -->
+    <string name="title_pref_domain_split_tunneling">Domain Split Tunneling</string>
+    <string name="summary_pref_domain_split_tunneling">Exclude specific domains from VPN tunnel (direct access). Off by default.</string>
+    <string name="title_pref_domain_split_tunneling_settings">Manage Excluded Domains</string>
+    <string name="summary_pref_domain_split_tunneling_settings">Add domains that should bypass the VPN</string>
+    <!-- Network check settings section -->
+    <string name="title_network_check_settings">Network Status Check</string>
     <string name="btn_show_qr">QR</string>
     <string name="btn_scan_add">Scan</string>
     <string name="title_qr_current_server">Current server QR Code</string>
@@ -671,4 +678,12 @@
     <string name="dialog_apply_routing_preset_msg">Package: %1$s\nApps: %2$d</string>
     <string name="dialog_apply_routing_preset_success">Preset applied! Please restart VPN</string>
     <string name="toast_battery_settings_error">Could not open battery settings</string>
+
+    <!-- Network Check Settings -->
+    <string name="title_pref_network_check_enabled">Enable Network Status Check</string>
+    <string name="summary_pref_network_check_enabled">Check connection status before connecting and during failover</string>
+    <string name="title_pref_network_check_url_1">Primary Check Domain</string>
+    <string name="summary_pref_network_check_url_1">Default: google.com</string>
+    <string name="title_pref_network_check_url_2">Secondary Check Domain</string>
+    <string name="summary_pref_network_check_url_2">Default: ya.ru</string>
 </resources>

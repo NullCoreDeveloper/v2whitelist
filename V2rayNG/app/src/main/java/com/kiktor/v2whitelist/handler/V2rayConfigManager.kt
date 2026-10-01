@@ -522,6 +522,28 @@ object V2rayConfigManager {
                 getRoutingUserRule(key, v2rayConfig)
             }
 
+            // Domain split tunneling — применяется только если явно включен пользователем
+            val domainSplitEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_DOMAIN_SPLIT_TUNNELING_ENABLED, false)
+            if (domainSplitEnabled == true) {
+                val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
+                if (!directDomainsStr.isNullOrBlank()) {
+                    val domains = directDomainsStr.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:")) it else "domain:$it" }
+
+                    if (domains.isNotEmpty()) {
+                        v2rayConfig.routing.rules.add(
+                            0,
+                            RulesBean(
+                                outboundTag = AppConfig.TAG_DIRECT,
+                                domain = ArrayList(domains)
+                            )
+                        )
+                    }
+                }
+            }
+
             // Inject RU routing dynamically if Bypass RU apps is enabled
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_RU_APPS, true) == true) {
                 v2rayConfig.routing.rules.add(
@@ -1176,6 +1198,23 @@ object V2rayConfigManager {
         dns.hosts = newHosts
     }
 
+    private fun applyGeekModeOverrides(profile: ProfileItem): ProfileItem {
+        var newProfile = profile
+        val cfIp = MmkvManager.decodeSettingsString(AppConfig.PREF_CLOUDFLARE_IP)
+        val globalSni = MmkvManager.decodeSettingsString(AppConfig.PREF_GLOBAL_SNI)
+        
+        if (!cfIp.isNullOrBlank() || !globalSni.isNullOrBlank()) {
+            newProfile = profile.copy()
+            if (!cfIp.isNullOrBlank() && (newProfile.network == "ws" || newProfile.network == "httpupgrade" || newProfile.network == "grpc")) {
+                newProfile.server = cfIp
+            }
+            if (!globalSni.isNullOrBlank()) {
+                newProfile.sni = globalSni
+            }
+        }
+        return newProfile
+    }
+
     /**
      * Converts a profile item to an outbound configuration.
      *
@@ -1185,16 +1224,17 @@ object V2rayConfigManager {
      * @return OutboundBean configuration for the profile, or null if not supported
      */
     private fun convertProfile2Outbound(profileItem: ProfileItem): OutboundBean? {
-        return when (profileItem.configType) {
-            EConfigType.VMESS -> VmessFmt.toOutbound(profileItem)
+        val p = applyGeekModeOverrides(profileItem)
+        return when (p.configType) {
+            EConfigType.VMESS -> VmessFmt.toOutbound(p)
             EConfigType.CUSTOM -> null
-            EConfigType.SHADOWSOCKS -> ShadowsocksFmt.toOutbound(profileItem)
-            EConfigType.SOCKS -> SocksFmt.toOutbound(profileItem)
-            EConfigType.VLESS -> VlessFmt.toOutbound(profileItem)
-            EConfigType.TROJAN -> TrojanFmt.toOutbound(profileItem)
-            EConfigType.WIREGUARD -> WireguardFmt.toOutbound(profileItem)
-            EConfigType.HYSTERIA2 -> Hysteria2Fmt.toOutbound(profileItem)
-            EConfigType.HTTP -> HttpFmt.toOutbound(profileItem)
+            EConfigType.SHADOWSOCKS -> ShadowsocksFmt.toOutbound(p)
+            EConfigType.SOCKS -> SocksFmt.toOutbound(p)
+            EConfigType.VLESS -> VlessFmt.toOutbound(p)
+            EConfigType.TROJAN -> TrojanFmt.toOutbound(p)
+            EConfigType.WIREGUARD -> WireguardFmt.toOutbound(p)
+            EConfigType.HYSTERIA2 -> Hysteria2Fmt.toOutbound(p)
+            EConfigType.HTTP -> HttpFmt.toOutbound(p)
             EConfigType.POLICYGROUP -> null
             else -> null
         }
@@ -1343,6 +1383,10 @@ object V2rayConfigManager {
             NetworkType.WS.type -> {
                 val wssetting = StreamSettingsBean.WsSettingsBean()
                 wssetting.headers.Host = host.orEmpty()
+                val customUa = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_USER_AGENT, "Auto (Default)")
+                if (!customUa.isNullOrBlank() && customUa != "Auto (Default)") {
+                    wssetting.headers.userAgent = customUa
+                }
                 sni = host
                 wssetting.path = path ?: "/"
                 streamSettings.wsSettings = wssetting
