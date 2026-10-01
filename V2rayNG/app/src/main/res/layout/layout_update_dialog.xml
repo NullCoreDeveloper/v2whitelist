@@ -13,29 +13,33 @@
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
-        
+
     <TextView
         android:id="@+id/tv_update_changelog_toggle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/update_dialog_changelog_toggle"
         android:textColor="?attr/colorPrimary"
-        android:textSize="16sp"
+        android:textSize="15sp"
+        android:textStyle="bold"
         android:layout_marginBottom="8dp"
         android:clickable="true"
         android:focusable="true" />
-        
+
     <ScrollView
+        android:id="@+id/scroll_changelog"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:visibility="gone"
-        android:id="@+id/scroll_changelog">
-        
+        android:overScrollMode="ifContentScrolls">
+
         <TextView
             android:id="@+id/tv_update_changelog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:lineSpacingExtra="3dp"
+            android:textColorLink="?attr/colorPrimary"
             android:textSize="14sp" />
     </ScrollView>
 </LinearLayout>
+

@@ -78,13 +78,13 @@ class CheckUpdateActivity : BaseActivity() {
         val tvChangelog = dialogView.findViewById<TextView>(R.id.tv_update_changelog)
 
         tvTitle.text = getString(R.string.update_new_version_found, result.latestVersion)
-        tvChangelog.text = result.releaseNotes
+        com.kiktor.v2whitelist.util.MarkdownUtil.applyToTextView(tvChangelog, result.releaseNotes)
 
         var isExpanded = false
         tvToggle.setOnClickListener {
             isExpanded = !isExpanded
             scrollChangelog.visibility = if (isExpanded) View.VISIBLE else View.GONE
-            tvToggle.text = if (isExpanded) "▲ Hide Changelog" else "▼ Show Changelog"
+            tvToggle.text = if (isExpanded) getString(R.string.changelog_hide) else getString(R.string.changelog_show)
         }
 
         AlertDialog.Builder(this)

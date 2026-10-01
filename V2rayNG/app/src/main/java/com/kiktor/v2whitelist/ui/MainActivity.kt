@@ -250,7 +250,7 @@ class MainActivity : HelperBaseActivity() {
         val tvChangelog = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_changelog)
 
         tvTitle.text = getString(R.string.update_new_version_found, result.latestVersion)
-        tvChangelog.text = result.releaseNotes
+        com.kiktor.v2whitelist.util.MarkdownUtil.applyToTextView(tvChangelog, result.releaseNotes)
 
         var isExpanded = false
         tvToggle.setOnClickListener {
