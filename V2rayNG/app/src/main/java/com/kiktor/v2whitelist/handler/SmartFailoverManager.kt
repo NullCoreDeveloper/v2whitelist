@@ -258,6 +258,9 @@ object SmartFailoverManager {
      * Проверяет ya.ru и google.com через реальные сетевые адаптеры устройства.
      */
     suspend fun arbitratePhysicalNetwork(context: Context): PhysicalNetworkState {
+        val checkEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
+        if (!checkEnabled) return PhysicalNetworkState.FULL_INTERNET // assume full internet if check is disabled
+
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return PhysicalNetworkState.NO_INTERNET
 
@@ -278,9 +281,18 @@ object SmartFailoverManager {
         var googleOk = false
         val net = physicalNet
 
+        var url1 = MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_1, "google.com") ?: "google.com"
+        var url2 = MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_2, "ya.ru") ?: "ya.ru"
+        if (url1.isBlank()) url1 = "google.com"
+        if (url2.isBlank()) url2 = "ya.ru"
+        
+        // Add scheme if missing
+        if (!url1.startsWith("http")) url1 = "https://$url1"
+        if (!url2.startsWith("http")) url2 = "https://$url2"
+
         kotlinx.coroutines.withContext(Dispatchers.IO) {
-            val yaDef = async { checkDirectUrl(net, "https://ya.ru", "HEAD", 1500) }
-            val googleDef = async { checkDirectUrl(net, "https://www.google.com/generate_204", "GET", 1500) }
+            val yaDef = async { checkDirectUrl(net, url2, "HEAD", 1500) }
+            val googleDef = async { checkDirectUrl(net, url1, "GET", 1500) }
             yaOk = yaDef.await()
             googleOk = googleDef.await()
         }

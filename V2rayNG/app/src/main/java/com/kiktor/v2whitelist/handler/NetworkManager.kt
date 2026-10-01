@@ -17,6 +17,9 @@ object NetworkManager {
      * Защищает кэш серверов от удаления при выключенном WiFi или отсутствии сети.
      */
     suspend fun waitForInternet(context: Context) {
+        val checkEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
+        if (!checkEnabled) return
+
         var isWaiting = false
         while (true) {
             val hasInternet = checkInternetStatus() != 2
@@ -43,12 +46,20 @@ object NetworkManager {
      * @return 0 - OK (всё доступно), 1 - JAMMED (только Яндекс), 2 - NO_INTERNET (ничего не доступно)
      */
     fun checkInternetStatus(): Int {
+        val checkEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
+        if (!checkEnabled) return 0 // OK
+
+        var url1 = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_1, "google.com") ?: "google.com"
+        var url2 = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_2, "ya.ru") ?: "ya.ru"
+        if (url1.isBlank()) url1 = "google.com"
+        if (url2.isBlank()) url2 = "ya.ru"
+
         val googleOk = try {
-            Socket().use { it.connect(InetSocketAddress("8.8.8.8", 443), 1500); true }
+            Socket().use { it.connect(InetSocketAddress(url1, 443), 1500); true }
         } catch (_: Exception) { false }
 
         val yandexOk = try {
-            Socket().use { it.connect(InetSocketAddress("77.88.8.8", 443), 1500); true }
+            Socket().use { it.connect(InetSocketAddress(url2, 443), 1500); true }
         } catch (_: Exception) { false }
 
         return when {
@@ -96,18 +107,26 @@ object NetworkManager {
      * - Если оба не прошли -> интернета нет -> false (игнорируем).
      */
     fun shouldReportSubscriptionFailure(forceRefresh: Boolean = false): Boolean {
+        val checkEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
+        if (!checkEnabled) return true // Assume failure is real if check is disabled
+
         val now = System.currentTimeMillis()
         if (!forceRefresh && (now - lastFailureReportCheckTime < 10_000L)) {
             return lastFailureReportCheckResult
         }
 
-        val yaOk = checkHttpAccess("https://ya.ru")
+        var url1 = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_1, "google.com") ?: "google.com"
+        var url2 = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsString(AppConfig.PREF_NETWORK_CHECK_URL_2, "ya.ru") ?: "ya.ru"
+        if (url1.isBlank()) url1 = "google.com"
+        if (url2.isBlank()) url2 = "ya.ru"
+
+        val yaOk = checkHttpAccess("https://$url2")
         val result = if (!yaOk) {
             // ya.ru не доступен -> условие "оба доступны" уже не выполнено
             false
         } else {
             // ya.ru доступен, теперь проверяем google.com
-            checkHttpAccess("https://www.google.com/generate_204") || checkHttpAccess("https://google.com")
+            checkHttpAccess("https://$url1")
         }
 
         lastFailureReportCheckTime = now

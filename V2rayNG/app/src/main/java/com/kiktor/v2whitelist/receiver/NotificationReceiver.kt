@@ -12,7 +12,7 @@ import com.kiktor.v2whitelist.util.MessageUtil
 
 class NotificationReceiver : BroadcastReceiver() {
     companion object {
-        const val ACTION_PAUSE = "com.kiktor.v2whitelist.action.notification.pause"
+        const val ACTION_NEXT = "com.kiktor.v2whitelist.action.notification.next"
         const val ACTION_RESUME = "com.kiktor.v2whitelist.action.notification.resume"
         const val ACTION_STOP = "com.kiktor.v2whitelist.action.notification.stop"
     }
@@ -21,8 +21,13 @@ class NotificationReceiver : BroadcastReceiver() {
         val action = intent?.action ?: return
         Log.i(AppConfig.TAG, "NotificationReceiver received action: $action")
         when (action) {
-            ACTION_PAUSE -> {
-                MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_PAUSE, "")
+            ACTION_NEXT -> {
+                val currentGuid = MmkvManager.getSelectServer()
+                val nextGuid = com.kiktor.v2whitelist.handler.SmartFailoverManager.selectNextServer(currentGuid)
+                if (nextGuid != null && nextGuid != currentGuid) {
+                    MmkvManager.setSelectServer(nextGuid)
+                    MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                }
             }
             ACTION_RESUME -> {
                 NotificationManager.cancelPausedNotification(context)

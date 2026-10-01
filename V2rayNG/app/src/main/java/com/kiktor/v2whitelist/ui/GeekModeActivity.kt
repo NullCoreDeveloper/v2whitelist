@@ -45,6 +45,39 @@ class GeekModeActivity : BaseActivity() {
 
         updateNodeInfo()
 
+        binding.etGlobalSni.setText(MmkvManager.decodeSettingsString(AppConfig.PREF_GLOBAL_SNI, ""))
+        binding.etCloudflareIp.setText(MmkvManager.decodeSettingsString(AppConfig.PREF_CLOUDFLARE_IP, ""))
+        
+        val userAgents = arrayOf(
+            "Auto (Default)",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.2088.46",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+        )
+        val adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, userAgents)
+        binding.spinnerUserAgent.setAdapter(adapter)
+        val currentUa = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_USER_AGENT, "Auto (Default)")
+        binding.spinnerUserAgent.setText(currentUa, false)
+
+        binding.etGlobalSni.addTextChangedListener(object: android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                MmkvManager.encodeSettings(AppConfig.PREF_GLOBAL_SNI, s?.toString() ?: "")
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+        binding.etCloudflareIp.addTextChangedListener(object: android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                MmkvManager.encodeSettings(AppConfig.PREF_CLOUDFLARE_IP, s?.toString() ?: "")
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+        binding.spinnerUserAgent.setOnItemClickListener { _, _, position, _ ->
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_USER_AGENT, userAgents[position])
+        }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {

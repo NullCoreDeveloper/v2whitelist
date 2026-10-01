@@ -154,6 +154,18 @@
                         app:indicatorColor="@color/color_fab_active"
                         app:indicatorSize="240dp"
                         app:trackThickness="4dp" />
+                        
+                    <TextView
+                        android:id="@+id/tv_connected_server_bottom"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|center_horizontal"
+                        android:layout_marginBottom="16dp"
+                        android:visibility="gone"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?android:attr/textColorSecondary"
+                        tools:text="🇫🇷 Paris - Auto"
+                        tools:visibility="visible" />
                 </FrameLayout>
 
                 <!-- Switch Server Button (Visible only when connected) -->

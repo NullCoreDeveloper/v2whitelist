@@ -212,7 +212,10 @@ data class V2rayConfig(
                 val useBrowserForwarding: Boolean? = null,
                 val acceptProxyProtocol: Boolean? = null
             ) {
-                data class HeadersBean(var Host: String = "")
+                data class HeadersBean(
+                    var Host: String = "",
+                    @com.google.gson.annotations.SerializedName("User-Agent") var userAgent: String? = null
+                )
             }
 
             data class HttpupgradeSettingsBean(

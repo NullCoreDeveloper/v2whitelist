@@ -144,10 +144,10 @@ object NotificationManager {
         restartV2RayIntent.putExtra("key", AppConfig.MSG_STATE_RESTART)
         val restartV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags)
 
-        val pauseIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
-            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_PAUSE
+        val nextIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_NEXT
         }
-        val pausePendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY, pauseIntent, flags)
+        val nextPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY, nextIntent, flags)
 
         val channelId =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -168,8 +168,8 @@ object NotificationManager {
             .setContentIntent(contentPendingIntent)
             .addAction(
                 R.drawable.ic_delete_24dp,
-                service.getString(R.string.notification_action_pause),
-                pausePendingIntent
+                "Next",
+                nextPendingIntent
             )
             .addAction(
                 R.drawable.ic_delete_24dp,
