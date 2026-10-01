@@ -562,17 +562,13 @@ class MainActivity : HelperBaseActivity() {
             } else {
                 V2RayServiceManager.getRunningServerName()
             }
-            val displayName = serverName.take(16).let { if (serverName.length > 16) "$it…" else it }
             if (serverName.isNotEmpty()) {
-                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, displayName)
-                binding.tvServerName.text = getString(R.string.tv_server_name, serverName)
-                binding.tvServerName.isVisible = true
-                binding.tvConnectedServerBottom.isVisible = false
+                binding.tvStatusDetail.text = getString(R.string.tv_server_name, serverName)
             } else {
-                binding.tvStatusDetail.text = getString(R.string.tv_status_protected_detail, "—")
-                binding.tvServerName.isVisible = false
-                binding.tvConnectedServerBottom.isVisible = false
+                binding.tvStatusDetail.text = getString(R.string.tv_status_protected)
             }
+            binding.tvServerName.isVisible = false
+            binding.tvConnectedServerBottom.isVisible = false
 
 
             // Подключён: показываем QR кнопку, скрываем кнопку сканирования
