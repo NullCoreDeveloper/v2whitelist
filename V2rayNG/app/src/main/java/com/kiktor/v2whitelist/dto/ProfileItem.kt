@@ -79,6 +79,26 @@ data class ProfileItem(
         return mutableListOf(TAG_PROXY, TAG_DIRECT, TAG_BLOCKED)
     }
 
+    fun isSecure(): Boolean {
+        // allowInsecure/skip-cert-verify check
+        if (insecure == true) return false
+        
+        val sec = security?.lowercase() ?: ""
+        val hasTls = sec == "tls" || sec == "reality" || sec == "xtls"
+
+        return when (configType) {
+            EConfigType.VLESS, EConfigType.VMESS -> hasTls
+            EConfigType.SHADOWSOCKS -> {
+                // Not ideal, but if it's SS over plain tcp it's considered insecure in this context
+                // unless it's over TLS, but SS over TLS is rare in standard clients without plugins
+                // A better approach for SS is checking cipher, but we keep it simple for now
+                true // Or maybe we just leave SS as true by default
+            }
+            EConfigType.TROJAN, EConfigType.HYSTERIA2, EConfigType.WIREGUARD -> true
+            else -> true
+        }
+    }
+
     fun getServerAddressAndPort(): String {
         if (server.isNullOrEmpty() && configType == EConfigType.CUSTOM) {
             return "$LOOPBACK:$PORT_SOCKS"

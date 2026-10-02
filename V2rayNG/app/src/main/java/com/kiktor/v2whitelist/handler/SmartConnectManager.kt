@@ -82,12 +82,15 @@ object SmartConnectManager {
             ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
             
         val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
+        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
 
         return allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
                 if (disabledSubIds.contains(profile.subscriptionId)) {
                     null // Пропускаем серверы из выключенных подписок
+                } else if (filterInsecure && !profile.isSecure()) {
+                    null // Пропускаем небезопасные профили, если включена опция
                 } else {
                     guid to profile
                 }

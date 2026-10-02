@@ -225,10 +225,17 @@ object AngConfigManager {
             val lines = servers.lines().distinct().reversed()
             val newConfigs = mutableListOf<ProfileItem>()
 
+            val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
+
             for (line in lines) {
                 val config = try {
                     identifyConfigType(line) ?: continue
                 } catch (e: Exception) {
+                    continue
+                }
+                
+                // Проверка на небезопасные профили
+                if (filterInsecure && !config.isSecure()) {
                     continue
                 }
                 
