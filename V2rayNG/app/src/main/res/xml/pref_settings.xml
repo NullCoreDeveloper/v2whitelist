@@ -23,6 +23,11 @@
         app:initialExpandedChildrenCount="0">
 
         <!-- SmartConnect Server Chunking -->
+        <SwitchPreference
+            android:key="pref_filter_insecure_profiles"
+            android:title="Удалять небезопасные профили"
+            android:summary="Не пропускать в балансировщике и удалить профили без шифрования (без TLS/Reality или с allowInsecure)"
+            android:defaultValue="false" />
         <EditTextPreference
             android:inputType="number"
             android:key="pref_chunk_size"
@@ -399,6 +404,16 @@
             android:key="pref_socks_port"
             android:summary="10808"
             android:title="@string/title_pref_socks_port" />
+
+        <EditTextPreference
+            android:key="pref_socks_user"
+            android:title="Логин локального прокси (SOCKS5/HTTP)"
+            android:summary="Оставьте пустым для автогенерации (рекомендуется)" />
+
+        <EditTextPreference
+            android:key="pref_socks_pass"
+            android:title="Пароль локального прокси (SOCKS5/HTTP)"
+            android:summary="Оставьте пустым для автогенерации (рекомендуется)" />
 
         <EditTextPreference
             android:key="pref_remote_dns"

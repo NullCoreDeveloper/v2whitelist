@@ -103,7 +103,11 @@ object V2rayConfigManager {
                     listen = AppConfig.LOOPBACK,
                     tag = "socks-in",
                     settings = V2rayConfig.InboundBean.InSettingsBean(
-                        auth = "noauth",
+                        auth = "password",
+                        accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
+                            user = SettingsManager.getSocksUser(),
+                            pass = SettingsManager.getSocksPass()
+                        )),
                         udp = true
                     ),
                     sniffing = V2rayConfig.InboundBean.SniffingBean(
@@ -209,7 +213,11 @@ object V2rayConfigManager {
                 listen = AppConfig.LOOPBACK,
                 tag = "socks-in",
                 settings = V2rayConfig.InboundBean.InSettingsBean(
-                    auth = "noauth",
+                    auth = "password",
+                    accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
+                        user = SettingsManager.getSocksUser(),
+                        pass = SettingsManager.getSocksPass()
+                    )),
                     udp = true
                 ),
                 sniffing = V2rayConfig.InboundBean.SniffingBean(
@@ -377,7 +385,11 @@ object V2rayConfigManager {
                 listen = AppConfig.LOOPBACK,
                 tag = "socks-in",
                 settings = V2rayConfig.InboundBean.InSettingsBean(
-                    auth = "noauth",
+                    auth = "password",
+                    accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
+                        user = SettingsManager.getSocksUser(),
+                        pass = SettingsManager.getSocksPass()
+                    )),
                     udp = true
                 ),
                 sniffing = V2rayConfig.InboundBean.SniffingBean(
@@ -454,6 +466,11 @@ object V2rayConfigManager {
                 inbound1.listen = AppConfig.LOOPBACK
             }
             inbound1.port = socksPort
+            inbound1.settings?.auth = "password"
+            inbound1.settings?.accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
+                user = SettingsManager.getSocksUser(),
+                pass = SettingsManager.getSocksPass()
+            ))
             val fakedns = MmkvManager.decodeSettingsBool(AppConfig.PREF_FAKE_DNS_ENABLED) == true
             val sniffAllTlsAndHttp =
                 MmkvManager.decodeSettingsBool(AppConfig.PREF_SNIFFING_ENABLED, true) != false

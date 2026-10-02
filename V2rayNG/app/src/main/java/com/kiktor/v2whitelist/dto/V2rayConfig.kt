@@ -42,12 +42,18 @@ data class V2rayConfig(
 
         data class InSettingsBean(
             var auth: String? = null,
+            var accounts: List<AccountsBean>? = null,
             var udp: Boolean? = null,
             var userLevel: Int? = null,
             var name: String? = null,
             @SerializedName("MTU")
             var mtu: Int? = null
-        )
+        ) {
+            data class AccountsBean(
+                var user: String,
+                var pass: String
+            )
+        }
 
         data class SniffingBean(
             var enabled: Boolean,

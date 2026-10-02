@@ -73,6 +73,12 @@ class TProxyService(
             appendLine("  port: ${socksPort}")
             appendLine("  address: ${AppConfig.LOOPBACK}")
             appendLine("  udp: 'udp'")
+            val socksUser = SettingsManager.getSocksUser()
+            val socksPass = SettingsManager.getSocksPass()
+            if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
+                appendLine("  username: '${socksUser}'")
+                appendLine("  password: '${socksPass}'")
+            }
 
             // Read-write timeout settings
             val timeoutSetting = MmkvManager.decodeSettingsString(AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT) ?: AppConfig.HEVTUN_RW_TIMEOUT

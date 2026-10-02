@@ -241,6 +241,30 @@ object SettingsManager {
     }
 
     /**
+     * Get the SOCKS username. Generates a random one if not set.
+     */
+    fun getSocksUser(): String {
+        var user = MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_USER)
+        if (user.isNullOrEmpty()) {
+            user = "v2w_" + kotlin.random.Random.nextInt(1000, 9999)
+            MmkvManager.encodeSettings(AppConfig.PREF_SOCKS_USER, user)
+        }
+        return user
+    }
+
+    /**
+     * Get the SOCKS password. Generates a random one if not set.
+     */
+    fun getSocksPass(): String {
+        var pass = MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PASS)
+        if (pass.isNullOrEmpty()) {
+            pass = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12)
+            MmkvManager.encodeSettings(AppConfig.PREF_SOCKS_PASS, pass)
+        }
+        return pass
+    }
+
+    /**
      * Get the HTTP port.
      * @return The HTTP port.
      */

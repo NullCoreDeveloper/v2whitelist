@@ -65,6 +65,8 @@ object AppConfig {
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"
     const val PREF_ALLOW_INSECURE = "pref_allow_insecure"
     const val PREF_SOCKS_PORT = "pref_socks_port"
+    const val PREF_SOCKS_USER = "pref_socks_user"
+    const val PREF_SOCKS_PASS = "pref_socks_pass"
     const val PREF_REMOTE_DNS = "pref_remote_dns"
     const val PREF_DOMESTIC_DNS = "pref_domestic_dns"
     const val PREF_DNS_HOSTS = "pref_dns_hosts"
@@ -124,6 +126,7 @@ object AppConfig {
     const val PREF_REMOVED_CUSTOM_SUB_IDS = "pref_removed_custom_sub_ids" // JSON array of removed sub IDs
     const val PREF_ONBOARDING_PURPOSE_SHOWN = "pref_onboarding_purpose_shown_v2" // Флаг разового показа опросника сценария
     const val PREF_CURRENT_APP_SCENARIO = "pref_current_app_scenario" // Текущий выбранный сценарий (AppScenario.name)
+    const val PREF_FILTER_INSECURE_PROFILES = "pref_filter_insecure_profiles" // Удалять/фильтровать небезопасные профили
 
     /** v2w-core settings */
     const val PREF_V2W_CORE_ENABLED = "pref_v2w_core_enabled"
