@@ -714,4 +714,16 @@
     <string name="title_pref_warp_regenerate">Regenerate WARP Profile</string>
     <string name="summary_pref_warp_regenerate">Create a fresh WARP profile through active VPN connection</string>
     <string name="warp_vpn_required_to_generate">A connected VPN is required to register WARP because Cloudflare API is blocked directly.</string>
+
+    <!-- Appearance / Theme Settings -->
+    <string name="title_appearance_settings">Appearance</string>
+    <string name="summary_appearance_settings">Theme, Material You, AMOLED black, language</string>
+    <string name="title_theme_mode">Theme</string>
+    <string name="title_pref_theme_palette">Color Palette</string>
+    <string name="theme_palette_material_you">Material You (Dynamic Colors)</string>
+    <string name="theme_palette_classic">Classic (Orange Accent)</string>
+    <string name="title_pref_dynamic_color">Dynamic Colors (Material You)</string>
+    <string name="summary_pref_dynamic_color">Adapt UI colors to system wallpaper (requires Android 12+)</string>
+    <string name="title_pref_amoled_black">Pure Black (AMOLED)</string>
+    <string name="summary_pref_amoled_black">Deep #000000 background for OLED displays in dark mode</string>
 </resources>

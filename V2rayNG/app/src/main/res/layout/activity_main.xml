@@ -131,6 +131,13 @@
                     android:layout_weight="1"
                     android:gravity="center">
 
+                    <com.kiktor.v2whitelist.ui.custom.PulseConnectingView
+                        android:id="@+id/pulse_connecting_view"
+                        android:layout_width="320dp"
+                        android:layout_height="320dp"
+                        android:layout_gravity="center"
+                        android:visibility="gone" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_big_connect"
                         style="@style/Widget.Material3.Button.TonalButton"
@@ -150,7 +157,7 @@
                         android:layout_height="240dp"
                         android:layout_gravity="center"
                         android:indeterminate="true"
-                        android:visibility="invisible"
+                        android:visibility="gone"
                         app:indicatorColor="@color/color_fab_active"
                         app:indicatorSize="240dp"
                         app:trackThickness="4dp" />

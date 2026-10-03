@@ -385,6 +385,28 @@ object SettingsManager {
     }
 
     /**
+     * Checks if dynamic colors (Material You) should be applied.
+     * True by default if available on the device, unless the user switched to classic theme.
+     */
+    fun isDynamicColorEnabled(): Boolean {
+        if (!com.google.android.material.color.DynamicColors.isDynamicColorAvailable()) {
+            return false
+        }
+        val palette = MmkvManager.decodeSettingsString(AppConfig.PREF_THEME_PALETTE, AppConfig.THEME_PALETTE_MATERIAL_YOU)
+        if (palette == AppConfig.THEME_PALETTE_CLASSIC) {
+            return false
+        }
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, true)
+    }
+
+    /**
+     * Checks if pure black AMOLED theme is enabled.
+     */
+    fun isAmoledBlackEnabled(): Boolean {
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_AMOLED_BLACK, false)
+    }
+
+    /**
      * Retrieves the currently selected VPN interface address configuration.
      * This method reads the user's preference for VPN interface addressing and returns
      * the corresponding configuration containing IPv4 and IPv6 addresses.

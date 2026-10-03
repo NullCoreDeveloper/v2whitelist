@@ -63,6 +63,9 @@ class MainActivity : HelperBaseActivity() {
 
     private var isVpnPermissionPending = false
     private var pendingActionAfterVpnPermission: (() -> Unit)? = null
+    private var lastNightMode: String? = null
+    private var lastAmoled: Boolean = false
+    private var lastPalette: String? = null
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isVpnPermissionPending = false
@@ -496,14 +499,17 @@ class MainActivity : HelperBaseActivity() {
         isTaskRunning = true
         binding.btnBigConnect.isEnabled = true
         binding.btnBigConnect.text = getString(R.string.btn_label_cancel)
-        binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+        val orangeColor = ContextCompat.getColor(this, R.color.color_fab_active)
+        binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(orangeColor)
         binding.progressBar.isVisible = true
-        binding.progressBarCircular.isVisible = true
+        binding.progressBarCircular.isVisible = false
+        binding.pulseConnectingView.setColor(orangeColor)
+        binding.pulseConnectingView.startAnimation()
         binding.tvStatus.text = getString(R.string.connection_test_testing)
         binding.tvStatusDetail.text = message ?: getString(R.string.connection_test_testing)
         binding.tvServerName.isVisible = false
         binding.tvConnectedServerBottom.isVisible = false
-        binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+        binding.ivStatusIcon.setColorFilter(orangeColor)
     }
 
     private fun showCurrentServerQr() {
@@ -545,13 +551,15 @@ class MainActivity : HelperBaseActivity() {
         binding.btnBigConnect.isEnabled = true
         binding.progressBar.isVisible = false
         binding.progressBarCircular.isVisible = false
+        binding.pulseConnectingView.stopAnimation()
         if (isRunning) {
+            val greenColor = ContextCompat.getColor(this, R.color.colorPing)
             binding.tvStatus.text = getString(R.string.tv_status_protected)
-            binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.tvStatus.setTextColor(greenColor)
             binding.btnBigConnect.text = getString(R.string.btn_label_stop)
-            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(greenColor)
             binding.btnSwitchServer.isVisible = true
-            binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            binding.ivStatusIcon.setColorFilter(greenColor)
 
             // Показываем имя текущего сервера
             // getRunningServerName() живёт в процессе сервиса и недоступен из UI-процесса,
@@ -575,15 +583,16 @@ class MainActivity : HelperBaseActivity() {
             binding.btnShowQr.isVisible = true
             binding.btnScanAdd.isVisible = false
         } else {
+            val grayColor = ContextCompat.getColor(this, R.color.color_fab_inactive)
             binding.tvStatus.text = getString(R.string.connection_not_connected)
-            binding.tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.tvStatus.setTextColor(grayColor)
             binding.tvStatusDetail.text = getString(R.string.tv_status_disconnected_detail)
             binding.btnBigConnect.text = getString(R.string.btn_label_start)
-            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(grayColor)
             binding.btnSwitchServer.isVisible = false
             binding.tvServerName.isVisible = false
             binding.tvConnectedServerBottom.isVisible = false
-            binding.ivStatusIcon.setColorFilter(ContextCompat.getColor(this, android.R.color.darker_gray))
+            binding.ivStatusIcon.setColorFilter(grayColor)
 
             // Отключён: скрываем QR кнопку, показываем кнопку сканирования
             binding.btnShowQr.isVisible = false
@@ -593,6 +602,21 @@ class MainActivity : HelperBaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        val currentNightMode = MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT)
+        val currentAmoled = SettingsManager.isAmoledBlackEnabled()
+        val currentPalette = MmkvManager.decodeSettingsString(AppConfig.PREF_THEME_PALETTE)
+        if (lastNightMode != null && (
+            lastNightMode != currentNightMode ||
+            lastAmoled != currentAmoled ||
+            lastPalette != currentPalette
+        )) {
+            recreate()
+            return
+        }
+        lastNightMode = currentNightMode
+        lastAmoled = currentAmoled
+        lastPalette = currentPalette
+
         updateSubscriptionStatusUI()
     }
 

@@ -77,6 +77,15 @@ class AngApplication : Application(), Configuration.Provider {
 
             SettingsManager.setNightMode()
 
+            if (com.google.android.material.color.DynamicColors.isDynamicColorAvailable()) {
+                com.google.android.material.color.DynamicColors.applyToActivitiesIfAvailable(
+                    this,
+                    com.google.android.material.color.DynamicColorsOptions.Builder()
+                        .setPrecondition { _, _ -> SettingsManager.isDynamicColorEnabled() }
+                        .build()
+                )
+            }
+
             SettingsManager.initRoutingRulesets(this)
             SettingsManager.migrateHysteria2PinSHA256()
             SettingsManager.migrateV2wCoreDefaults()

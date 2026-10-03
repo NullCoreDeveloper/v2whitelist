@@ -78,4 +78,20 @@
         <item name="colorPrimary">@color/color_fab_active</item>
     </style>
 
+    <!-- AMOLED Pure Black Overlay -->
+    <style name="ThemeOverlay.App.Amoled" parent="">
+        <item name="android:colorBackground">@color/color_amoled_black</item>
+        <item name="colorSurface">@color/color_amoled_black</item>
+        <item name="colorSurfaceVariant">@color/color_amoled_surface_variant</item>
+        <item name="colorSurfaceContainer">@color/color_amoled_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/color_amoled_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/color_amoled_surface_container_highest</item>
+        <item name="colorSurfaceContainerLow">@color/color_amoled_black</item>
+        <item name="colorSurfaceContainerLowest">@color/color_amoled_black</item>
+        <item name="colorSurfaceDim">@color/color_amoled_black</item>
+        <item name="android:windowBackground">@color/color_amoled_black</item>
+        <item name="android:navigationBarColor">@color/color_amoled_black</item>
+        <item name="android:statusBarColor">@color/color_amoled_black</item>
+    </style>
+
 </resources>

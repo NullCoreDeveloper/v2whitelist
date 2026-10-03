@@ -14,14 +14,37 @@ import com.kiktor.v2whitelist.extension.toLongEx
 import com.kiktor.v2whitelist.extension.toast
 import androidx.activity.result.contract.ActivityResultContracts
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.helper.BackupManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
 
 class SettingsActivity : BaseActivity() {
+    private var lastNightMode: String? = null
+    private var lastAmoled: Boolean = false
+    private var lastPalette: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lastNightMode = MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT)
+        lastAmoled = SettingsManager.isAmoledBlackEnabled()
+        lastPalette = MmkvManager.decodeSettingsString(AppConfig.PREF_THEME_PALETTE)
         setContentViewWithToolbar(R.layout.activity_settings, showHomeAsUp = true, title = getString(R.string.title_settings))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val currentNightMode = MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT)
+        val currentAmoled = SettingsManager.isAmoledBlackEnabled()
+        val currentPalette = MmkvManager.decodeSettingsString(AppConfig.PREF_THEME_PALETTE)
+        if (lastNightMode != null && (
+            lastNightMode != currentNightMode ||
+            lastAmoled != currentAmoled ||
+            lastPalette != currentPalette
+        )) {
+            recreate()
+            return
+        }
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
@@ -129,6 +152,10 @@ class SettingsActivity : BaseActivity() {
             findPreference<androidx.preference.Preference>("pref_check_update_now")?.setOnPreferenceClickListener {
                 com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.runOnce(requireContext())
                 requireContext().toast(getString(R.string.status_updating_subscription))
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_appearance_settings")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), AppearanceActivity::class.java))
                 true
             }
             findPreference<androidx.preference.Preference>("pref_per_app_proxy_settings")?.setOnPreferenceClickListener {

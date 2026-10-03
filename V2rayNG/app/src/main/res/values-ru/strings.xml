@@ -705,6 +705,17 @@
     <string name="status_warp_failed_fallback">WARP деградировал, переключаемся на серверы...</string>
     <string name="status_warp_ready_switching">WARP профиль готов, переключение на WARP...</string>
     <string name="title_pref_warp_regenerate">Сгенерировать профиль WARP заново</string>
-    <string name="summary_pref_warp_regenerate">Создать новый профиль WARP через активное VPN-подключение</string>
     <string name="warp_vpn_required_to_generate">Для регистрации WARP необходимо активное VPN-подключение, так как API Cloudflare блокируется напрямую.</string>
+
+    <!-- Appearance / Theme Settings -->
+    <string name="title_appearance_settings">Оформление</string>
+    <string name="summary_appearance_settings">Тема, Material You, AMOLED черный, язык</string>
+    <string name="title_theme_mode">Тема интерфейса</string>
+    <string name="title_pref_theme_palette">Цветовая палитра</string>
+    <string name="theme_palette_material_you">Material You (Цвета системы)</string>
+    <string name="theme_palette_classic">Классическая (Оранжевый акцент)</string>
+    <string name="title_pref_dynamic_color">Динамические цвета (Material You)</string>
+    <string name="summary_pref_dynamic_color">Адаптация цветов интерфейса под системные обои (Android 12+)</string>
+    <string name="title_pref_amoled_black">Чистый черный (AMOLED)</string>
+    <string name="summary_pref_amoled_black">Истинный глубокий черный фон #000000 в темной теме для OLED экранов</string>
 </resources>

@@ -49,9 +49,10 @@
     <color name="md_theme_outline">#79747E</color>
     <color name="md_theme_outlineVariant">#CAC4D0</color>
 
-    <!-- Other colors -->
-    <color name="md_theme_inversePrimary">#C0C0C0</color>
-    <color name="md_theme_shadow">#000000</color>
-    <color name="md_theme_surfaceTint">#000000</color>
-    <color name="md_theme_scrim">#000000</color>
+    <!-- AMOLED colors -->
+    <color name="color_amoled_black">#000000</color>
+    <color name="color_amoled_surface_container">#121212</color>
+    <color name="color_amoled_surface_container_high">#1E1E1E</color>
+    <color name="color_amoled_surface_container_highest">#282828</color>
+    <color name="color_amoled_surface_variant">#1E1E1E</color>
 </resources>

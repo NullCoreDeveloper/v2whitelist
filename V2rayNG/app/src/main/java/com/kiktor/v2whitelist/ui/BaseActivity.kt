@@ -38,13 +38,20 @@ abstract class BaseActivity : AppCompatActivity() {
     private var progressBar: LinearProgressIndicator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyCustomTheme()
         super.onCreate(savedInstanceState)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        if (!Utils.getDarkModeStatus(this)) {
-            WindowCompat.getInsetsController(window, window.decorView).apply {
-                isAppearanceLightStatusBars = true
-            }
+        val isDark = Utils.getDarkModeStatus(this)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !isDark
+            isAppearanceLightNavigationBars = !isDark
+        }
+    }
+
+    private fun applyCustomTheme() {
+        if (Utils.getDarkModeStatus(this) && SettingsManager.isAmoledBlackEnabled()) {
+            theme.applyStyle(R.style.ThemeOverlay_App_Amoled, true)
         }
     }
 
