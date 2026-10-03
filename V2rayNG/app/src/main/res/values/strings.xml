@@ -688,4 +688,30 @@
     <string name="summary_pref_network_check_url_1">Default: google.com</string>
     <string name="title_pref_network_check_url_2">Secondary Check Domain</string>
     <string name="summary_pref_network_check_url_2">Default: ya.ru</string>
+
+    <!-- Cloudflare WARP Offload Settings -->
+    <string name="title_warp_settings">Cloudflare WARP (Auto Offload)</string>
+    <string name="title_pref_warp_enabled">Enable Cloudflare WARP</string>
+    <string name="summary_pref_warp_enabled">Offload traffic to WARP on clean networks to save public server bandwidth. Bypassed automatically when whitelists/jamming are detected.</string>
+    <string name="title_pref_warp_max_attempts">Max Generation Attempts</string>
+    <string name="summary_pref_warp_max_attempts">Number of new WARP profiles to test before falling back to servers. Default: 3</string>
+    <string name="title_pref_warp_min_speed_mbps">WARP Minimum Speed Threshold (Mbps)</string>
+    <string name="summary_pref_warp_min_speed_mbps">WARP configs slower than this will be rejected and regenerated. Default: 2.0</string>
+    <string name="title_pref_warp_cooldown_minutes">Cooldown Base Period (Minutes)</string>
+    <string name="summary_pref_warp_cooldown_minutes">Wait time before retrying WARP after failed attempts. Default: 15</string>
+    <string name="title_pref_warp_awg_jc">AWG Junk Packets (Jc)</string>
+    <string name="summary_pref_warp_awg_jc">Number of junk UDP packets sent before handshake. Default: 5</string>
+    <string name="title_pref_warp_awg_jmin">AWG Junk Min Size (Jmin)</string>
+    <string name="summary_pref_warp_awg_jmin">Minimum junk packet size in bytes. Default: 15</string>
+    <string name="title_pref_warp_awg_jmax">AWG Junk Max Size (Jmax)</string>
+    <string name="summary_pref_warp_awg_jmax">Maximum junk packet size in bytes. Default: 150</string>
+    <string name="status_checking_warp">Testing Cloudflare WARP...</string>
+    <string name="status_generating_warp">Generating WARP (attempt %1$d/%2$d)...</string>
+    <string name="status_verifying_warp">Testing WARP speed (attempt %1$d/%2$d)...</string>
+    <string name="status_warp_cooldown_fallback">WARP in cooldown, connecting to servers...</string>
+    <string name="status_warp_failed_fallback">WARP degraded, switching to servers...</string>
+    <string name="status_warp_ready_switching">WARP profile ready, switching to WARP...</string>
+    <string name="title_pref_warp_regenerate">Regenerate WARP Profile</string>
+    <string name="summary_pref_warp_regenerate">Create a fresh WARP profile through active VPN connection</string>
+    <string name="warp_vpn_required_to_generate">A connected VPN is required to register WARP because Cloudflare API is blocked directly.</string>
 </resources>

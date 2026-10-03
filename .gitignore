@@ -68,3 +68,6 @@ CONTRIBUTING.md
 my-release-key.jks
 key_base64.txt
 ARCHITECTURE.md
+poc_warp_awg/
+build-core/
+release-apks/

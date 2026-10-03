@@ -78,9 +78,34 @@ object V2RayServiceManager {
 
     /**
      * Checks if the V2Ray service is running.
+     * Supports both daemon process and main/UI process via MMKV and process/VPN check.
      * @return True if the service is running, false otherwise.
      */
-    fun isRunning() = coreController.isRunning
+    fun isRunning(): Boolean {
+        if (coreController.isRunning) return true
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SERVICE_RUNNING, false)) {
+            return false
+        }
+        return isDaemonProcessAlive()
+    }
+
+    private fun isDaemonProcessAlive(): Boolean {
+        return try {
+            val app = com.kiktor.v2whitelist.AngApplication.application
+            val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val daemonProcName = "${app.packageName}:RunSoLibV2RayDaemon"
+            val procRunning = am?.runningAppProcesses?.any { it.processName == daemonProcName }
+            if (procRunning != null) {
+                procRunning
+            } else {
+                val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+                caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        } catch (_: Exception) {
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+        }
+    }
 
     /**
      * Gets the name of the currently running server.
@@ -213,11 +238,13 @@ object V2RayServiceManager {
 
         if (coreController.isRunning == false) {
             Log.e(AppConfig.TAG, "startCoreLoop: core did not start (isRunning=false after startLoop)")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
             NotificationManager.cancelNotification()
             return false
         }
 
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, true)
         Log.i(AppConfig.TAG, "startCoreLoop: core started successfully for '${config.remarks}'")
         try {
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
@@ -237,6 +264,7 @@ object V2RayServiceManager {
      */
     fun stopCoreLoop(): Boolean {
         Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
         
         SmartFailoverManager.stopFailoverMonitor()
         

@@ -105,6 +105,16 @@ object SpeedtestManager {
     ): Double? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         return@withContext try {
             val url = URL(AppConfig.SPEED_CHECK_URL + bytes)
+            val socksUser = SettingsManager.getSocksUser()
+            val socksPass = SettingsManager.getSocksPass()
+            if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
+                java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                    override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
+                        return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
+                    }
+                })
+            }
+
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(AppConfig.LOOPBACK, socksPort))
             val conn = url.openConnection(proxy) as java.net.HttpURLConnection
             conn.connectTimeout = timeoutMs
@@ -164,7 +174,13 @@ object SpeedtestManager {
         var result = ""
         var elapsed = -1L
 
-        val conn = HttpUtil.createProxyConnection(SettingsManager.getDelayTestUrl(), port, timeoutMs, timeoutMs) ?: return@withContext Pair(elapsed, "")
+        val conn = HttpUtil.createProxyConnection(
+            SettingsManager.getDelayTestUrl(),
+            port,
+            timeoutMs,
+            timeoutMs,
+            proxyType = Proxy.Type.SOCKS
+        ) ?: return@withContext Pair(elapsed, "")
         
         val job = launch {
             try {

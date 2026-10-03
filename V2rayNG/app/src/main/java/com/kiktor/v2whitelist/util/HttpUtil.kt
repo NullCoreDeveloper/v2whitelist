@@ -217,12 +217,31 @@ object HttpUtil {
                 conn.useCaches = false
             }
 
-            //Add Basic Authorization
+            //Add Basic Authorization for URL
             url.userInfo?.let {
                 conn.setRequestProperty(
                     "Authorization",
                     "Basic ${encode(urlDecode(it))}"
                 )
+            }
+
+            //Add Proxy Authorization if port > 0
+            if (port > 0) {
+                val socksUser = com.kiktor.v2whitelist.handler.SettingsManager.getSocksUser()
+                val socksPass = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPass()
+                if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
+                    java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                        override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
+                            return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
+                        }
+                    })
+                    if (proxyType == Proxy.Type.HTTP) {
+                        conn.setRequestProperty(
+                            "Proxy-Authorization",
+                            "Basic ${encode("$socksUser:$socksPass")}"
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to create proxy connection", e)

@@ -107,6 +107,22 @@ object AppConfig {
     const val PREF_PAUSED_SERVER_GUID = "pref_paused_server_guid"
     /** Флаг: VPN на паузе (остановлен пользователем через кнопку Pause) */
     const val PREF_IS_PAUSED = "pref_is_paused"
+    /** Флаг: ядро V2Ray активно и запущено в процессе демона (межпроцессный статус) */
+    const val PREF_IS_SERVICE_RUNNING = "pref_is_service_running"
+
+    /** Cloudflare WARP Offloading Settings */
+    const val PREF_WARP_ENABLED = "pref_warp_enabled"
+    const val PREF_WARP_MAX_ATTEMPTS = "pref_warp_max_attempts"
+    const val PREF_WARP_MIN_SPEED_MBPS = "pref_warp_min_speed_mbps"
+    const val PREF_WARP_SPEED_CHECK_BYTES = "pref_warp_speed_check_bytes"
+    const val PREF_WARP_SPEED_CHECK_TIMEOUT_MS = "pref_warp_speed_check_timeout_ms"
+    const val PREF_WARP_COOLDOWN_MINUTES = "pref_warp_cooldown_minutes"
+    const val PREF_WARP_AWG_JC = "pref_warp_awg_jc"
+    const val PREF_WARP_AWG_JMIN = "pref_warp_awg_jmin"
+    const val PREF_WARP_AWG_JMAX = "pref_warp_awg_jmax"
+    const val PREF_WARP_COOLDOWN_UNTIL = "pref_warp_cooldown_until"
+    const val PREF_WARP_COOLDOWN_STEP = "pref_warp_cooldown_step"
+    const val PREF_WARP_PROFILE_GUID = "pref_warp_profile_guid"
 
     /** Custom Endpoint (Proxy Chain) */
     const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"

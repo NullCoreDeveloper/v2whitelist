@@ -98,6 +98,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     override fun onDestroy() {
         super.onDestroy()
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
         serviceScope.cancel()
         NotificationManager.cancelNotification()
     }

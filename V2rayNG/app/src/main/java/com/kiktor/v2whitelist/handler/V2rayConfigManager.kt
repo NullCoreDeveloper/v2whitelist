@@ -484,13 +484,11 @@ object V2rayConfigManager {
                 inbound1.sniffing?.destOverride?.add("fakedns")
             }
 
-            if (!Utils.isXray()) {
-                val inbound2 = JsonUtil.fromJson(JsonUtil.toJson(inbound1), V2rayConfig.InboundBean::class.java) ?: return false
-                inbound2.tag = EConfigType.HTTP.name.lowercase()
-                inbound2.port = SettingsManager.getHttpPort()
-                inbound2.protocol = EConfigType.HTTP.name.lowercase()
-                v2rayConfig.inbounds.add(inbound2)
-            }
+            val inbound2 = JsonUtil.fromJson(JsonUtil.toJson(inbound1), V2rayConfig.InboundBean::class.java) ?: return false
+            inbound2.tag = EConfigType.HTTP.name.lowercase()
+            inbound2.port = SettingsManager.getHttpPort()
+            inbound2.protocol = EConfigType.HTTP.name.lowercase()
+            v2rayConfig.inbounds.add(inbound2)
 
             if (needTun()) {
                 val inboundTun = v2rayConfig.inbounds.firstOrNull { e -> e.tag == "tun" }

@@ -56,6 +56,10 @@ data class ProfileItem(
     var localAddress: String? = null,
     var reserved: String? = null,
     var mtu: Int? = null,
+    // Мусорные UDP-пакеты перед WG-хендшейком (обход DPI). Только для WireGuard/WARP.
+    var junkCount: Int? = null,
+    var junkMin: Int? = null,
+    var junkMax: Int? = null,
 
     var obfsPassword: String? = null,
     var portHopping: String? = null,

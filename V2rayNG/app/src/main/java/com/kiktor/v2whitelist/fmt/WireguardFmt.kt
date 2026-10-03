@@ -119,6 +119,14 @@ object WireguardFmt : FmtBase() {
             }
             wireguard.mtu = profileItem.mtu
             wireguard.reserved = profileItem.reserved?.takeIf { it.isNotBlank() }?.split(",")?.filter { it.isNotBlank() }?.map { it.trim().toInt() }
+            val jc = profileItem.junkCount ?: 0
+            val jmin = profileItem.junkMin ?: 0
+            val jmax = profileItem.junkMax ?: 0
+            if (jc > 0 && jmin > 0 && jmax >= jmin) {
+                wireguard.junkCount = jc
+                wireguard.junkMin = jmin
+                wireguard.junkMax = jmax
+            }
         }
 
         return outboundBean

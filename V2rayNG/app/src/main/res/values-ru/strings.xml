@@ -681,4 +681,30 @@
     <string name="summary_pref_network_check_url_1">По умолчанию: google.com</string>
     <string name="title_pref_network_check_url_2">Резервный домен для проверки</string>
     <string name="summary_pref_network_check_url_2">По умолчанию: ya.ru</string>
+
+    <!-- Cloudflare WARP Offload Settings -->
+    <string name="title_warp_settings">Разгрузка через Cloudflare WARP</string>
+    <string name="title_pref_warp_enabled">Использовать Cloudflare WARP</string>
+    <string name="summary_pref_warp_enabled">Разгружать публичные серверы через WARP в обычных сетях (без глушилок). При белых списках автоматически используются серверы.</string>
+    <string name="title_pref_warp_max_attempts">Количество попыток генерации</string>
+    <string name="summary_pref_warp_max_attempts">Сколько раз создавать и тестировать новый WARP-профиль перед переключением на серверы. По умолчанию: 3</string>
+    <string name="title_pref_warp_min_speed_mbps">Минимальная скорость WARP (Мбит/с)</string>
+    <string name="summary_pref_warp_min_speed_mbps">Если скорость ниже порога, профиль отбраковывается и создаётся новый. По умолчанию: 2.0</string>
+    <string name="title_pref_warp_cooldown_minutes">Базовый период блокировки (минут)</string>
+    <string name="summary_pref_warp_cooldown_minutes">Время ожидания перед повторной попыткой использовать WARP после неудач. По умолчанию: 15</string>
+    <string name="title_pref_warp_awg_jc">AWG Junk Packets (Jc)</string>
+    <string name="summary_pref_warp_awg_jc">Количество мусорных пакетов перед хендшейком. По умолчанию: 5</string>
+    <string name="title_pref_warp_awg_jmin">AWG Junk Min Size (Jmin)</string>
+    <string name="summary_pref_warp_awg_jmin">Минимальный размер мусорного пакета в байтах. По умолчанию: 15</string>
+    <string name="title_pref_warp_awg_jmax">AWG Junk Max Size (Jmax)</string>
+    <string name="summary_pref_warp_awg_jmax">Максимальный размер мусорного пакета в байтах. По умолчанию: 150</string>
+    <string name="status_checking_warp">Проверка Cloudflare WARP...</string>
+    <string name="status_generating_warp">Генерация WARP (попытка %1$d/%2$d)...</string>
+    <string name="status_verifying_warp">Замер скорости WARP (попытка %1$d/%2$d)...</string>
+    <string name="status_warp_cooldown_fallback">WARP на паузе, подключаемся к серверам...</string>
+    <string name="status_warp_failed_fallback">WARP деградировал, переключаемся на серверы...</string>
+    <string name="status_warp_ready_switching">WARP профиль готов, переключение на WARP...</string>
+    <string name="title_pref_warp_regenerate">Сгенерировать профиль WARP заново</string>
+    <string name="summary_pref_warp_regenerate">Создать новый профиль WARP через активное VPN-подключение</string>
+    <string name="warp_vpn_required_to_generate">Для регистрации WARP необходимо активное VPN-подключение, так как API Cloudflare блокируется напрямую.</string>
 </resources>

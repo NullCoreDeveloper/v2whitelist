@@ -68,6 +68,13 @@ class AngApplication : Application(), Configuration.Provider {
 
         // The rest only runs in the main process
         if (isMain) {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            val daemonProcName = "$packageName:RunSoLibV2RayDaemon"
+            val daemonAlive = am?.runningAppProcesses?.any { it.processName == daemonProcName } == true
+            if (!daemonAlive) {
+                com.kiktor.v2whitelist.handler.MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            }
+
             SettingsManager.setNightMode()
 
             SettingsManager.initRoutingRulesets(this)

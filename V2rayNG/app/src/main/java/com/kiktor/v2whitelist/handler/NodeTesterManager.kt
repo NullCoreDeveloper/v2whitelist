@@ -158,7 +158,14 @@ object NodeTesterManager {
      * Проверяет профиль: поднимает настоящий экземпляр V2Ray-ядра с локальным SOCKS-прокси
      * и делает реальный HTTP-запрос через него.
      */
-    suspend fun verifyProfile(context: Context, guid: String, showStatus: Boolean = true): Boolean {
+    suspend fun verifyProfile(
+        context: Context,
+        guid: String,
+        showStatus: Boolean = true,
+        customMinMbps: Double? = null,
+        customBytes: Long? = null,
+        customTimeoutMs: Int? = null
+    ): Boolean {
         if (!currentCoroutineContext().isActive) return false
         
         // Выделяем свободный локальный порт для SOCKS-прокси
@@ -196,8 +203,8 @@ object NodeTesterManager {
             delay(500L)
             if (!currentCoroutineContext().isActive) return false
 
-            val timeout  = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "5000")
-                               ?.toIntOrNull()?.takeIf { it > 0 } ?: 5_000
+            val timeout = customTimeoutMs ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "5000")
+                               ?.toIntOrNull()?.takeIf { it > 0 } ?: 5_000)
 
             // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
             val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)
@@ -212,12 +219,12 @@ object NodeTesterManager {
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
 
                 // --- Тест скорости (если включён) ---
-                val speedCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
+                val speedCheckEnabled = customMinMbps != null || MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
                 if (speedCheckEnabled) {
-                    val bytes    = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
-                                       ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L
-                    val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
-                    val minMbps = minSpeedStr?.trim()?.replace(',', '.')?.toDoubleOrNull() ?: 1.0
+                    val bytes = customBytes ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
+                                       ?.toLongOrNull()?.takeIf { it > 0 } ?: 2_000_000L)
+                    val minMbps = customMinMbps ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
+                        ?.trim()?.replace(',', '.')?.toDoubleOrNull() ?: 1.0)
 
                     if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,

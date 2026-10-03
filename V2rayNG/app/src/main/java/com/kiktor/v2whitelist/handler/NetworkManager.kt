@@ -55,11 +55,11 @@ object NetworkManager {
         if (url2.isBlank()) url2 = "ya.ru"
 
         val googleOk = try {
-            Socket().use { it.connect(InetSocketAddress(url1, 443), 1500); true }
+            Socket().use { it.connect(InetSocketAddress(url1, 443), 800); true }
         } catch (_: Exception) { false }
 
         val yandexOk = try {
-            Socket().use { it.connect(InetSocketAddress(url2, 443), 1500); true }
+            Socket().use { it.connect(InetSocketAddress(url2, 443), 800); true }
         } catch (_: Exception) { false }
 
         return when {
