@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.ui
 
+import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.widget.RadioGroup
@@ -9,7 +10,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SubscriptionHelper
+import java.util.Locale
 
 class LocationFilterActivity : BaseActivity() {
 
@@ -278,6 +281,44 @@ class LocationFilterActivity : BaseActivity() {
             }
 
             return TAG_UNKNOWN
+        }
+
+        /**
+         * Преобразует двухбуквенный эмодзи-флаг (Regional Indicator Symbols) в код ISO 3166-1 alpha-2.
+         */
+        fun flagEmojiToCountryCode(emoji: String): String? {
+            val codePoints = emoji.codePoints().toArray()
+            if (codePoints.size == 2 &&
+                codePoints[0] in 0x1F1E6..0x1F1FF &&
+                codePoints[1] in 0x1F1E6..0x1F1FF
+            ) {
+                val char1 = ('A'.code + (codePoints[0] - 0x1F1E6)).toChar()
+                val char2 = ('A'.code + (codePoints[1] - 0x1F1E6)).toChar()
+                return "$char1$char2"
+            }
+            return null
+        }
+
+        /**
+         * Возвращает локализованное название страны/локации для отображения в списке фильтра.
+         */
+        fun getCountryDisplayName(tag: String, context: Context): String {
+            if (tag == TAG_UNKNOWN || tag.contains("Неизвестные") || tag.contains("Unknown")) {
+                return context.getString(R.string.location_filter_unknown)
+            }
+            val countryCode = flagEmojiToCountryCode(tag)
+            if (countryCode != null) {
+                val locale = SettingsManager.getLocale()
+                val displayCountry = try {
+                    Locale.Builder().setRegion(countryCode).build().getDisplayCountry(locale)
+                } catch (e: Exception) {
+                    null
+                }
+                if (!displayCountry.isNullOrBlank() && !displayCountry.equals(countryCode, ignoreCase = true)) {
+                    return displayCountry
+                }
+            }
+            return tag
         }
     }
 

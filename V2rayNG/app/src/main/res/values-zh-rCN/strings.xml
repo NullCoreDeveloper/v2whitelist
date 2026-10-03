@@ -457,6 +457,7 @@
     <string name="location_filter_locations_title">地区列表</string>
     <string name="location_filter_empty">无可用地区，请更新订阅。</string>
     <string name="location_filter_server_count">节点数: %d</string>
+    <string name="location_filter_unknown">未知地区</string>
     <string name="geek_mode_btn_ping_test">Ping 测试</string>
     <string name="geek_mode_btn_find_vip">查找 VIP</string>
     <string name="geek_mode_btn_ping_vip">Ping VIP</string>

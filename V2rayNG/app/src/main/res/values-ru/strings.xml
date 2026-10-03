@@ -526,6 +526,7 @@
     <string name="location_filter_locations_title">Локации</string>
     <string name="location_filter_empty">Нет доступных локаций. Обновите подписку.</string>
     <string name="location_filter_server_count">Серверов: %d</string>
+    <string name="location_filter_unknown">Неизвестные</string>
 
     <!-- Geek Mode -->
     <string name="geek_mode_btn_ping_test">Пинг-тест</string>

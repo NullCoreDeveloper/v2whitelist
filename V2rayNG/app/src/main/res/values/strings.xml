@@ -538,6 +538,7 @@
     <string name="location_filter_locations_title">Locations</string>
     <string name="location_filter_empty">No available locations. Update subscription.</string>
     <string name="location_filter_server_count">Servers: %d</string>
+    <string name="location_filter_unknown">Unknown</string>
 
     <!-- Geek Mode -->
     <string name="geek_mode_btn_ping_test">Ping Test</string>

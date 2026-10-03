@@ -408,4 +408,16 @@
         <item>WebDAV</item>
     </string-array>
 
+    <!-- Location Filter -->
+    <string name="title_location_filter">تصفية المواقع</string>
+    <string name="btn_label_filter">تصفية</string>
+    <string name="location_filter_mode_title">وضع التصفية</string>
+    <string name="location_filter_mode_exclude">استبعاد</string>
+    <string name="location_filter_mode_whitelist">القائمة البيضاء</string>
+    <string name="location_filter_mode_exclude_hint">لن يتم استخدام المواقع المحددة</string>
+    <string name="location_filter_mode_whitelist_hint">سيتم استخدام المواقع المحددة فقط</string>
+    <string name="location_filter_locations_title">المواقع</string>
+    <string name="location_filter_empty">لا توجد مواقع متاحة. يرجى تحديث الاشتراك.</string>
+    <string name="location_filter_server_count">الخوادم: %d</string>
+    <string name="location_filter_unknown">غير معروف</string>
 </resources>

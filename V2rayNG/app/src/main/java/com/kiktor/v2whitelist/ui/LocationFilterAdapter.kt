@@ -28,8 +28,15 @@ class LocationFilterAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = locations[position]
-        holder.tvEmoji.text = item.emoji
-        holder.tvLocationName.text = item.emoji  // Эмодзи как название
+        val isFlag = LocationFilterActivity.flagEmojiToCountryCode(item.emoji) != null
+        val isUnknown = item.emoji == LocationFilterActivity.TAG_UNKNOWN || item.emoji.contains("Неизвестные")
+
+        holder.tvEmoji.text = when {
+            isFlag -> item.emoji
+            isUnknown -> "🌐"
+            else -> "🏷️"
+        }
+        holder.tvLocationName.text = LocationFilterActivity.getCountryDisplayName(item.emoji, holder.itemView.context)
         holder.tvServerCount.text = holder.itemView.context.getString(
             R.string.location_filter_server_count, item.serverCount
         )
