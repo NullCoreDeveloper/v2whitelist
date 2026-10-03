@@ -43,6 +43,7 @@ object AppConfig {
     const val PREF_FRAGMENT_INTERVAL = "pref_fragment_interval"
     const val SUBSCRIPTION_AUTO_UPDATE = "pref_auto_update_subscription"
     const val SUBSCRIPTION_AUTO_UPDATE_INTERVAL = "pref_auto_update_interval"
+    const val PREF_UPDATE_SUB_ONLY_VIA_VPN = "pref_update_sub_only_via_vpn"
     const val PREF_AUTO_FAILOVER = "pref_auto_failover"
     const val PREF_SMART_FAILOVER_ENABLED = "pref_smart_failover_enabled"
     const val PREF_AUTO_FAILOVER_INTERVAL_SEC = "pref_auto_failover_interval_sec"

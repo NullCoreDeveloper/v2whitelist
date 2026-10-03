@@ -461,6 +461,33 @@ object SubscriptionHelper {
         
         Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
 
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)) {
+            var hasTun = false
+            try {
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                if (interfaces != null) {
+                    for (intf in interfaces) {
+                        if (intf.isUp && intf.name.startsWith("tun")) {
+                            hasTun = true
+                            break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // ignore
+            }
+            if (!hasTun) {
+                Log.w(AppConfig.TAG, "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled and no TUN interface found")
+                if (!sequential) {
+                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Обновление прервано: требуется активное VPN-соединение", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+                return@withContext
+            }
+        }
+
+
         // Ensure base subscriptions are initialized if this is the first launch
         checkAndSetupSubscription(context)
 

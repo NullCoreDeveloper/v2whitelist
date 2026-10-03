@@ -237,6 +237,11 @@
             android:key="pref_auto_update_interval"
             android:summary="60"
             android:title="@string/title_pref_auto_update_interval" />
+        <CheckBoxPreference
+            android:key="pref_update_sub_only_via_vpn"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_update_sub_only_via_vpn"
+            android:title="@string/title_pref_update_sub_only_via_vpn" />
         <Preference
             android:key="pref_check_update_now"
             android:summary="@string/summary_pref_check_update_now"
