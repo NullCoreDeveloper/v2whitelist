@@ -99,7 +99,7 @@ object PremiumUiHelper {
         }
 
         // Micro-animations on connect button (Scale morph)
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_ANIMATIONS, false)) {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_ANIMATIONS, true)) {
             // Apply scale touch listener
             connectButton.setOnTouchListener { v, event ->
                 when (event.action) {
@@ -153,7 +153,7 @@ object PremiumUiHelper {
     }
 
     fun triggerHaptic(view: View) {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, false)) {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, true)) {
             view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
         }
     }

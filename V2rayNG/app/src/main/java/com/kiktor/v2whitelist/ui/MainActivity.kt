@@ -390,7 +390,7 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleConnectAction() {
-        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, false)) {
+        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, true)) {
             binding.btnBigConnect.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
         }
         if (isTaskRunning) {
@@ -557,6 +557,7 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun updateUIState(isRunning: Boolean) {
+        com.kiktor.v2whitelist.util.PremiumUiHelper.updateGradientState(this, binding.root, isRunning)
         // Не трогаем activeJob здесь — это делает caller (finally-блок).
         // Иначе observer может обнулить activeJob пока корутина ещё работает.
         binding.btnBigConnect.isEnabled = true

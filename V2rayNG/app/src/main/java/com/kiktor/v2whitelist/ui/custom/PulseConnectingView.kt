@@ -189,7 +189,7 @@ class PulseConnectingView @JvmOverloads constructor(
         canvas.restore()
 
         // 3. Premium Particles Effect
-        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(com.kiktor.v2whitelist.AppConfig.PREF_PREMIUM_PULSE, false)) {
+        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(com.kiktor.v2whitelist.AppConfig.PREF_PREMIUM_PULSE, true)) {
             val numParticles = 12
             for (i in 0 until numParticles) {
                 // simple deterministic pseudo-random based on rotation Angle and index

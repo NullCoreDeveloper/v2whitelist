@@ -69,17 +69,17 @@
 
     <PreferenceCategory android:title="@string/title_premium_interactions">
         <SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="pref_premium_animations"
             android:summary="@string/summary_pref_premium_animations"
             android:title="@string/title_pref_premium_animations" />
         <SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="pref_premium_pulse"
             android:summary="@string/summary_pref_premium_pulse"
             android:title="@string/title_pref_premium_pulse" />
         <SwitchPreference
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="pref_premium_haptic"
             android:summary="@string/summary_pref_premium_haptic"
             android:title="@string/title_pref_premium_haptic" />
