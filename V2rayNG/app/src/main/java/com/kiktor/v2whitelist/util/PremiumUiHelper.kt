@@ -96,6 +96,13 @@ object PremiumUiHelper {
             statusCard.cardElevation = 0f
             statusCard.strokeWidth = 2
             statusCard.strokeColor = if (isNightMode) Color.parseColor("#33FFFFFF") else Color.parseColor("#33000000")
+            
+            // Fix text readability against complex gradients
+            val tvStatus = statusCard.findViewById<android.widget.TextView>(R.id.tv_status)
+            val tvDetail = statusCard.findViewById<android.widget.TextView>(R.id.tv_status_detail)
+            val shadowColor = if (isNightMode) Color.parseColor("#80000000") else Color.parseColor("#CCFFFFFF")
+            tvStatus?.setShadowLayer(8f, 0f, 2f, shadowColor)
+            tvDetail?.setShadowLayer(8f, 0f, 2f, shadowColor)
         }
 
         // Micro-animations on connect button (Scale morph)

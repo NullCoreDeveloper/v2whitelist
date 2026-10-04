@@ -60,11 +60,6 @@
             android:key="pref_premium_glass"
             android:summary="@string/summary_pref_premium_glass"
             android:title="@string/title_pref_premium_glass" />
-        <SwitchPreference
-            android:defaultValue="false"
-            android:key="pref_premium_skeleton"
-            android:summary="@string/summary_pref_premium_skeleton"
-            android:title="@string/title_pref_premium_skeleton" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_premium_interactions">
