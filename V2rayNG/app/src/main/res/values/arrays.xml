@@ -239,4 +239,16 @@
         <item>classic</item>
     </string-array>
 
+    <string-array name="premium_gradient_anim_entries">
+        <item>@string/gradient_anim_none</item>
+        <item>@string/gradient_anim_breathing</item>
+        <item>@string/gradient_anim_reactive</item>
+    </string-array>
+
+    <string-array name="premium_gradient_anim_values" translatable="false">
+        <item>none</item>
+        <item>breathing</item>
+        <item>reactive</item>
+    </string-array>
+
 </resources>
