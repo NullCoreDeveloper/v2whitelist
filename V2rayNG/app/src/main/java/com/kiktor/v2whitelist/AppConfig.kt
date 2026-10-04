@@ -70,6 +70,7 @@ object AppConfig {
 
     // Premium UI Toggles
     const val PREF_PREMIUM_GRADIENTS = "pref_premium_gradients"
+    const val PREF_PREMIUM_GRADIENT_ANIM = "pref_premium_gradient_anim"
     const val PREF_PREMIUM_ANIMATIONS = "pref_premium_animations"
     const val PREF_PREMIUM_GLASS = "pref_premium_glass"
     const val PREF_PREMIUM_HAPTIC = "pref_premium_haptic"

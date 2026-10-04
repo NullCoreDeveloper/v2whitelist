@@ -731,8 +731,12 @@
     <string name="summary_pref_amoled_black">Deep #000000 background for OLED displays in dark mode</string>
 
     <string name="title_premium_effects">Premium UI Effects</string>
+    <string name="title_premium_visuals">Premium Visuals</string>
+    <string name="title_premium_interactions">Premium Interactions</string>
     <string name="title_pref_premium_gradients">Mesh Gradients</string>
     <string name="summary_pref_premium_gradients">Animated colorful backgrounds</string>
+    <string name="title_pref_premium_gradient_anim">Animated Gradient</string>
+    <string name="summary_pref_premium_gradient_anim">Slowly morphing gradient colors</string>
     <string name="title_pref_premium_animations">Micro-animations</string>
     <string name="summary_pref_premium_animations">Fluid transitions and morph effects</string>
     <string name="title_pref_premium_glass">Glassmorphism</string>
@@ -744,4 +748,7 @@
     <string name="title_pref_premium_skeleton">Skeleton Loading</string>
     <string name="summary_pref_premium_skeleton">Animated placeholders while loading</string>
     <string name="toast_restart_required_premium_ui">Please restart the app or go to the main screen for the new UI effects to apply.</string>
+    <string name="gradient_anim_none">Static (No animation)</string>
+    <string name="gradient_anim_breathing">Breathing (Slow Morph)</string>
+    <string name="gradient_anim_reactive">Reactive (Connect Flow)</string>
 </resources>

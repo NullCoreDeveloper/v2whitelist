@@ -87,6 +87,7 @@ class AppearanceActivity : BaseActivity() {
                 true
             }
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_GRADIENTS)?.onPreferenceChangeListener = premiumListener
+            findPreference<androidx.preference.ListPreference>(AppConfig.PREF_PREMIUM_GRADIENT_ANIM)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_ANIMATIONS)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_GLASS)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_HAPTIC)?.onPreferenceChangeListener = premiumListener
