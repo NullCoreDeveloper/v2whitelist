@@ -737,8 +737,6 @@
     <string name="summary_pref_premium_haptic">Приятная вибрация при взаимодействии</string>
     <string name="title_pref_premium_pulse">Эффект частиц</string>
     <string name="summary_pref_premium_pulse">Красивые частицы вокруг кнопки при подключении</string>
-    <string name="title_pref_premium_skeleton">Скелетная загрузка</string>
-    <string name="summary_pref_premium_skeleton">Анимированные заглушки вместо крутилки при обновлении</string>
     <string name="toast_restart_required_premium_ui">Пожалуйста, перезайдите в приложение или вернитесь на главный экран, чтобы эффекты применились.</string>
     <string name="gradient_anim_none">Статичный (без анимации)</string>
     <string name="gradient_anim_breathing">Дыхание (плавное перетекание)</string>

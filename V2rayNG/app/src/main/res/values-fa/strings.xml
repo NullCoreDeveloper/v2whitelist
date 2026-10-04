@@ -670,8 +670,6 @@
     <string name="summary_pref_premium_haptic">لرزش هنگام لمس دکمه‌ها</string>
     <string name="title_pref_premium_pulse">جلوه پیشرفته اتصال</string>
     <string name="summary_pref_premium_pulse">نمایش ذرات نورانی هنگام اتصال</string>
-    <string name="title_pref_premium_skeleton">بارگذاری اسکلتی (Skeleton Loading)</string>
-    <string name="summary_pref_premium_skeleton">نمایش قالب موقت هنگام بارگذاری</string>
     <string name="toast_restart_required_premium_ui">لطفاً برنامه را مجدداً راه‌اندازی کنید یا به صفحه اصلی برگردید تا جلوه‌های جدید اعمال شوند.</string>
     <string name="gradient_anim_none">ثابت (بدون انیمیشن)</string>
     <string name="gradient_anim_breathing">نفس کشیدن (تغییر آرام)</string>

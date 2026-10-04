@@ -92,7 +92,6 @@ class AppearanceActivity : BaseActivity() {
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_GLASS)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_HAPTIC)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_PULSE)?.onPreferenceChangeListener = premiumListener
-            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_SKELETON)?.onPreferenceChangeListener = premiumListener
 
             initSummaries()
         }

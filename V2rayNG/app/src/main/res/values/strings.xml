@@ -745,8 +745,6 @@
     <string name="summary_pref_premium_haptic">Subtle vibrations on interactions</string>
     <string name="title_pref_premium_pulse">Advanced Pulse</string>
     <string name="summary_pref_premium_pulse">Particle effects during connection</string>
-    <string name="title_pref_premium_skeleton">Skeleton Loading</string>
-    <string name="summary_pref_premium_skeleton">Animated placeholders while loading</string>
     <string name="toast_restart_required_premium_ui">Please restart the app or go to the main screen for the new UI effects to apply.</string>
     <string name="gradient_anim_none">Static (No animation)</string>
     <string name="gradient_anim_breathing">Breathing (Slow Morph)</string>
