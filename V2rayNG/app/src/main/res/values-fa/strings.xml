@@ -655,4 +655,25 @@
     <string name="title_pref_network_check_url_2">آدرس بررسی دوم</string>
     <string name="summary_pref_network_check_url_2">URL پشتیبان برای پینگ و تست اینترنت</string>
 
+    <string name="title_premium_effects">جلوه‌های ویژه رابط کاربری</string>
+    <string name="title_premium_visuals">جلوه‌های بصری پیشرفته</string>
+    <string name="title_premium_interactions">تعاملات پیشرفته</string>
+    <string name="title_pref_premium_gradients">پس‌زمینه‌های گرادیانت (Mesh)</string>
+    <string name="summary_pref_premium_gradients">پس‌زمینه‌های رنگارنگ پویا</string>
+    <string name="title_pref_premium_gradient_anim">گرادیانت متحرک</string>
+    <string name="summary_pref_premium_gradient_anim">تغییر ملایم رنگ‌های گرادیانت</string>
+    <string name="title_pref_premium_animations">انیمیشن‌های ظریف</string>
+    <string name="summary_pref_premium_animations">تغییرات نرم و جلوه‌های بصری دکمه‌ها</string>
+    <string name="title_pref_premium_glass">جلوه شیشه‌ای (Glassmorphism)</string>
+    <string name="summary_pref_premium_glass">جلوه شیشه مات برای پنل‌ها</string>
+    <string name="title_pref_premium_haptic">بازخورد لمسی (لرزش)</string>
+    <string name="summary_pref_premium_haptic">لرزش هنگام لمس دکمه‌ها</string>
+    <string name="title_pref_premium_pulse">جلوه پیشرفته اتصال</string>
+    <string name="summary_pref_premium_pulse">نمایش ذرات نورانی هنگام اتصال</string>
+    <string name="title_pref_premium_skeleton">بارگذاری اسکلتی (Skeleton Loading)</string>
+    <string name="summary_pref_premium_skeleton">نمایش قالب موقت هنگام بارگذاری</string>
+    <string name="toast_restart_required_premium_ui">لطفاً برنامه را مجدداً راه‌اندازی کنید یا به صفحه اصلی برگردید تا جلوه‌های جدید اعمال شوند.</string>
+    <string name="gradient_anim_none">ثابت (بدون انیمیشن)</string>
+    <string name="gradient_anim_breathing">نفس کشیدن (تغییر آرام)</string>
+    <string name="gradient_anim_reactive">واکنشی (تغییر هنگام اتصال)</string>
 </resources>

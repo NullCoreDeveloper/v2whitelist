@@ -656,4 +656,25 @@
     <string name="routing_settings_network_tip">[udp|tcp]</string>
     <string name="routing_settings_outbound_tag">出站标签</string>
 
+    <string name="title_premium_effects">高级界面效果 (可选)</string>
+    <string name="title_premium_visuals">高级视觉效果</string>
+    <string name="title_premium_interactions">高级互动体验</string>
+    <string name="title_pref_premium_gradients">Mesh 渐变背景</string>
+    <string name="summary_pref_premium_gradients">动态多彩渐变背景</string>
+    <string name="title_pref_premium_gradient_anim">动画渐变</string>
+    <string name="summary_pref_premium_gradient_anim">缓慢变化的渐变色彩</string>
+    <string name="title_pref_premium_animations">微动画</string>
+    <string name="summary_pref_premium_animations">流畅的过渡和变形效果</string>
+    <string name="title_pref_premium_glass">毛玻璃效果 (Glassmorphism)</string>
+    <string name="summary_pref_premium_glass">面板上的磨砂玻璃效果</string>
+    <string name="title_pref_premium_haptic">触觉反馈</string>
+    <string name="summary_pref_premium_haptic">界面交互时的振动反馈</string>
+    <string name="title_pref_premium_pulse">高级脉冲效果</string>
+    <string name="summary_pref_premium_pulse">连接时的粒子特效</string>
+    <string name="title_pref_premium_skeleton">骨架屏加载</string>
+    <string name="summary_pref_premium_skeleton">加载时的动画占位符</string>
+    <string name="toast_restart_required_premium_ui">请重启应用或返回主屏幕以应用新的界面效果。</string>
+    <string name="gradient_anim_none">静态 (无动画)</string>
+    <string name="gradient_anim_breathing">呼吸 (缓慢变形)</string>
+    <string name="gradient_anim_reactive">反应式 (连接时流动)</string>
 </resources>
