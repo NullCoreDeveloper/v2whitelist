@@ -30,10 +30,7 @@
 
     <PreferenceCategory android:title="@string/title_language">
 
-        <CheckBoxPreference
-            android:key="pref_double_column_display"
-            android:summary="@string/summary_pref_double_column_display"
-            android:title="@string/title_pref_double_column_display" />
+
 
         <ListPreference
             android:defaultValue="auto"
@@ -43,6 +40,39 @@
             android:summary="%s"
             android:title="@string/title_language" />
 
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/title_premium_effects">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_gradients"
+            android:summary="@string/summary_pref_premium_gradients"
+            android:title="@string/title_pref_premium_gradients" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_animations"
+            android:summary="@string/summary_pref_premium_animations"
+            android:title="@string/title_pref_premium_animations" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_glass"
+            android:summary="@string/summary_pref_premium_glass"
+            android:title="@string/title_pref_premium_glass" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_haptic"
+            android:summary="@string/summary_pref_premium_haptic"
+            android:title="@string/title_pref_premium_haptic" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_pulse"
+            android:summary="@string/summary_pref_premium_pulse"
+            android:title="@string/title_pref_premium_pulse" />
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_premium_skeleton"
+            android:summary="@string/summary_pref_premium_skeleton"
+            android:title="@string/title_pref_premium_skeleton" />
     </PreferenceCategory>
 
 </PreferenceScreen>

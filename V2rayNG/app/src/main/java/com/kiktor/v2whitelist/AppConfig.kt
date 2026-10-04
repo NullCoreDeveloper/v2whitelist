@@ -67,6 +67,14 @@ object AppConfig {
     const val PREF_THEME_PALETTE = "pref_theme_palette"
     const val THEME_PALETTE_MATERIAL_YOU = "material_you"
     const val THEME_PALETTE_CLASSIC = "classic"
+
+    // Premium UI Toggles
+    const val PREF_PREMIUM_GRADIENTS = "pref_premium_gradients"
+    const val PREF_PREMIUM_ANIMATIONS = "pref_premium_animations"
+    const val PREF_PREMIUM_GLASS = "pref_premium_glass"
+    const val PREF_PREMIUM_HAPTIC = "pref_premium_haptic"
+    const val PREF_PREMIUM_PULSE = "pref_premium_pulse"
+    const val PREF_PREMIUM_SKELETON = "pref_premium_skeleton"
     const val PREF_PREFER_IPV6 = "pref_prefer_ipv6"
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"
     const val PREF_ALLOW_INSECURE = "pref_allow_insecure"

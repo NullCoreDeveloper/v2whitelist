@@ -721,4 +721,19 @@
     <string name="summary_pref_dynamic_color">Адаптация цветов интерфейса под системные обои (Android 12+)</string>
     <string name="title_pref_amoled_black">Чистый черный (AMOLED)</string>
     <string name="summary_pref_amoled_black">Истинный глубокий черный фон #000000 в темной теме для OLED экранов</string>
+
+    <string name="title_premium_effects">Премиальные эффекты UI (Опционально)</string>
+    <string name="title_pref_premium_gradients">Градиентные фоны (Mesh)</string>
+    <string name="summary_pref_premium_gradients">Медленно переливающийся цветной фон</string>
+    <string name="title_pref_premium_animations">Продвинутые микро-анимации</string>
+    <string name="summary_pref_premium_animations">Плавные переходы и эффекты кнопок</string>
+    <string name="title_pref_premium_glass">Матовое стекло (Glassmorphism)</string>
+    <string name="summary_pref_premium_glass">Эффект размытия под карточками</string>
+    <string name="title_pref_premium_haptic">Тактильный отклик</string>
+    <string name="summary_pref_premium_haptic">Приятная вибрация при взаимодействии</string>
+    <string name="title_pref_premium_pulse">Эффект частиц</string>
+    <string name="summary_pref_premium_pulse">Красивые частицы вокруг кнопки при подключении</string>
+    <string name="title_pref_premium_skeleton">Скелетная загрузка</string>
+    <string name="summary_pref_premium_skeleton">Анимированные заглушки вместо крутилки при обновлении</string>
+    <string name="toast_restart_required_premium_ui">Пожалуйста, перезайдите в приложение или вернитесь на главный экран, чтобы эффекты применились.</string>
 </resources>

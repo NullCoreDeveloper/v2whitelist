@@ -729,4 +729,19 @@
     <string name="summary_pref_dynamic_color">Adapt UI colors to system wallpaper (requires Android 12+)</string>
     <string name="title_pref_amoled_black">Pure Black (AMOLED)</string>
     <string name="summary_pref_amoled_black">Deep #000000 background for OLED displays in dark mode</string>
+
+    <string name="title_premium_effects">Premium UI Effects</string>
+    <string name="title_pref_premium_gradients">Mesh Gradients</string>
+    <string name="summary_pref_premium_gradients">Animated colorful backgrounds</string>
+    <string name="title_pref_premium_animations">Micro-animations</string>
+    <string name="summary_pref_premium_animations">Fluid transitions and morph effects</string>
+    <string name="title_pref_premium_glass">Glassmorphism</string>
+    <string name="summary_pref_premium_glass">Translucent blur effects on cards and panels</string>
+    <string name="title_pref_premium_haptic">Haptic Feedback</string>
+    <string name="summary_pref_premium_haptic">Subtle vibrations on interactions</string>
+    <string name="title_pref_premium_pulse">Advanced Pulse</string>
+    <string name="summary_pref_premium_pulse">Particle effects during connection</string>
+    <string name="title_pref_premium_skeleton">Skeleton Loading</string>
+    <string name="summary_pref_premium_skeleton">Animated placeholders while loading</string>
+    <string name="toast_restart_required_premium_ui">Please restart the app or go to the main screen for the new UI effects to apply.</string>
 </resources>

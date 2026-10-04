@@ -12,6 +12,7 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
+import com.kiktor.v2whitelist.extension.toast
 
 class AppearanceActivity : BaseActivity() {
 
@@ -80,6 +81,17 @@ class AppearanceActivity : BaseActivity() {
                 activity?.recreate()
                 true
             }
+
+            val premiumListener = androidx.preference.Preference.OnPreferenceChangeListener { _, _ ->
+                requireContext().toast(getString(R.string.toast_restart_required_premium_ui))
+                true
+            }
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_GRADIENTS)?.onPreferenceChangeListener = premiumListener
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_ANIMATIONS)?.onPreferenceChangeListener = premiumListener
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_GLASS)?.onPreferenceChangeListener = premiumListener
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_HAPTIC)?.onPreferenceChangeListener = premiumListener
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_PULSE)?.onPreferenceChangeListener = premiumListener
+            findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_SKELETON)?.onPreferenceChangeListener = premiumListener
 
             initSummaries()
         }

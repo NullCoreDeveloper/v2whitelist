@@ -187,5 +187,23 @@ class PulseConnectingView @JvmOverloads constructor(
         canvas.drawCircle(dotX, dotY, dotRadius, dotGlowPaint)
 
         canvas.restore()
+
+        // 3. Premium Particles Effect
+        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(com.kiktor.v2whitelist.AppConfig.PREF_PREMIUM_PULSE, false)) {
+            val numParticles = 12
+            for (i in 0 until numParticles) {
+                // simple deterministic pseudo-random based on rotation Angle and index
+                val pAngle = (rotationAngle * 1.5f + i * (360f / numParticles)) % 360f
+                val pProgress = ((pulseFraction + i.toFloat() / numParticles) % 1.0f)
+                val pRadius = buttonRadius + pProgress * (maxWaveRadius * 1.2f - buttonRadius)
+                
+                val px = cx + pRadius * kotlin.math.cos(Math.toRadians(pAngle.toDouble())).toFloat()
+                val py = cy + pRadius * kotlin.math.sin(Math.toRadians(pAngle.toDouble())).toFloat()
+                
+                val pAlpha = ((1f - pProgress) * 255).toInt().coerceIn(0, 255)
+                dotGlowPaint.alpha = pAlpha
+                canvas.drawCircle(px, py, 2f * density, dotGlowPaint)
+            }
+        }
     }
 }

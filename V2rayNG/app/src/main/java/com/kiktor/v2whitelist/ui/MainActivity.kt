@@ -132,6 +132,14 @@ class MainActivity : HelperBaseActivity() {
 
         processDeepLink(intent)
 
+        com.kiktor.v2whitelist.util.PremiumUiHelper.applyPremiumEffects(
+            this,
+            binding.root,
+            binding.statusCard,
+            binding.btnBigConnect,
+            binding.pulseConnectingView
+        )
+
         binding.btnBigConnect.setOnClickListener { handleConnectAction() }
         binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
@@ -382,6 +390,9 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleConnectAction() {
+        if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, false)) {
+            binding.btnBigConnect.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        }
         if (isTaskRunning) {
             cancelActiveTask()
             return
