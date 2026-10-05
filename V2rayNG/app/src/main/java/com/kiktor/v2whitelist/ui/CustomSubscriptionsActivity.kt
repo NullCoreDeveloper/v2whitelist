@@ -128,6 +128,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     allSubs.find { it.guid == "custom_sub_${existingItem.id}" }?.let {
                         it.subscription.remarks = name
                         it.subscription.url = url
+                        it.subscription.filter = filter
+                        it.subscription.sharePercent = sharePercent
                         it.subscription.lastUpdateFailed = false
                         MmkvManager.encodeSubscription(it.guid, it.subscription)
                     }

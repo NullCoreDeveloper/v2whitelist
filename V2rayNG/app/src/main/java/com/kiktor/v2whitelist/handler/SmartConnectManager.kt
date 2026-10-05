@@ -68,11 +68,9 @@ object SmartConnectManager {
     )
 
 
-    private fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
-        // Получаем список выключенных подписок, чтобы не подключаться к их серверам
+    fun filterServerPairs(candidates: List<Pair<String, ProfileItem>>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
         val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
         
-        // Загружаем настройки фильтра
         val filterMode = MmkvManager.decodeSettingsString(
             AppConfig.PREF_LOCATION_FILTER_MODE,
             AppConfig.LOCATION_FILTER_MODE_EXCLUDE
@@ -84,37 +82,50 @@ object SmartConnectManager {
         val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
         val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
 
-        return allServers.mapNotNull { guid ->
-            val profile = MmkvManager.decodeServerConfig(guid)
-            if (profile != null && (excludeGuid == null || guid != excludeGuid)) {
-                if (disabledSubIds.contains(profile.subscriptionId)) {
-                    null // Пропускаем серверы из выключенных подписок
-                } else if (filterInsecure && !profile.isSecure()) {
-                    null // Пропускаем небезопасные профили, если включена опция
-                } else {
-                    guid to profile
+        return candidates.filter { (guid, profile) ->
+            if (excludeGuid != null && guid == excludeGuid) return@filter false
+            if (disabledSubIds.contains(profile.subscriptionId)) return@filter false
+            if (filterInsecure && !profile.isSecure()) return@filter false
+            if (profile.configType == com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP) return@filter false
+            
+            if (filterSet.isEmpty()) return@filter true
+            
+            val regexStr = groupRegexMap[profile.subscriptionId]
+            val tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.resolveServerTag(profile.remarks, regexStr)
+            
+            when (filterMode) {
+                AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
+                    !filterSet.contains(tag)
                 }
-            } else null
-        }.filter { it.second.configType != com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP }
-            .filter {
-                // Фильтр по локациям (эмодзи-флаги или кастомные группы)
-                if (filterSet.isEmpty()) return@filter true
-                
-                val regexStr = groupRegexMap[it.second.subscriptionId]
-                val tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.resolveServerTag(it.second.remarks, regexStr)
-                
-                when (filterMode) {
-                    AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
-                        // Режим исключения: если тег в наборе — исключаем
-                        tag == null || !filterSet.contains(tag)
-                    }
-                    AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
-                        // Режим белого списка: если тег в наборе — разрешаем
-                        tag != null && filterSet.contains(tag)
-                    }
-                    else -> true
+                AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
+                    filterSet.contains(tag)
                 }
+                else -> true
             }
+        }
+    }
+
+    fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+        val candidates = allServers.mapNotNull { guid ->
+            val profile = MmkvManager.decodeServerConfig(guid)
+            if (profile != null) guid to profile else null
+        }
+        return filterServerPairs(candidates, excludeGuid)
+    }
+
+    fun cleanVipCacheForFilter() {
+        val allServers = MmkvManager.decodeServerList()
+        val validFilteredGuids = filterServers(allServers).map { it.first }.toSet()
+        val currentVipGuids = MmkvManager.getVipCache()
+        for (guid in currentVipGuids) {
+            if (!validFilteredGuids.contains(guid)) {
+                MmkvManager.removeVipServer(guid)
+            }
+        }
+        val currentSelected = MmkvManager.getSelectServer()
+        if (currentSelected != null && currentSelected.isNotEmpty() && !validFilteredGuids.contains(currentSelected)) {
+            MmkvManager.setSelectServer("")
+        }
     }
 
 
@@ -188,11 +199,15 @@ object SmartConnectManager {
         
         invalidGuids.forEach { MmkvManager.removeVipServer(it) }
         
-        if (vipCandidates.isEmpty()) return false
+        val filteredVipCandidates = filterServerPairs(vipCandidates)
+        if (filteredVipCandidates.isEmpty()) {
+            GeekModeLogger.log("SmartConnect", "VIP Cache: no VIP servers match current filters")
+            return false
+        }
         
         sendStatus(context, context.getString(R.string.status_checking_vip_servers))
         
-        val results = NodeTesterManager.testServers(context, vipCandidates)
+        val results = NodeTesterManager.testServers(context, filteredVipCandidates)
         val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
         
         val validResults = results.filter { it.third < Long.MAX_VALUE }

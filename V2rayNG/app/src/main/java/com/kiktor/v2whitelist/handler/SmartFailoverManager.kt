@@ -228,29 +228,26 @@ object SmartFailoverManager {
         val allServers = MmkvManager.decodeServerList()
         if (allServers.size <= 1) return null
 
+        val filteredPairs = SmartConnectManager.filterServers(allServers, excludeGuid = currentGuid)
+        if (filteredPairs.isEmpty()) return null
+        val filteredGuids = filteredPairs.map { it.first }.toSet()
+
         // 1. VIP Cache
         val vipGuids = MmkvManager.getVipCache()
         for (guid in vipGuids) {
             if (guid == currentGuid) continue
+            if (!filteredGuids.contains(guid)) continue
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            if (!allServers.contains(guid)) continue
             GeekModeLogger.log("Failover", "Selected next server from VIP cache: ${profile.remarks} ($guid)")
             return guid
         }
 
-        // 2. Следующий по кругу из основного списка
-        val currentIndex = if (currentGuid != null) allServers.indexOf(currentGuid) else -1
-        val startIndex = if (currentIndex != -1) (currentIndex + 1) % allServers.size else 0
-        for (i in allServers.indices) {
-            val idx = (startIndex + i) % allServers.size
-            val guid = allServers[idx]
-            if (guid == currentGuid) continue
-            val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            GeekModeLogger.log("Failover", "Selected next server from main list: ${profile.remarks} ($guid)")
-            return guid
-        }
-
-        return null
+        // 2. Следующий по кругу из отфильтрованного списка
+        val currentIndex = if (currentGuid != null) filteredPairs.indexOfFirst { it.first == currentGuid } else -1
+        val startIndex = if (currentIndex != -1) (currentIndex + 1) % filteredPairs.size else 0
+        val selected = filteredPairs[startIndex]
+        GeekModeLogger.log("Failover", "Selected next server from filtered list: ${selected.second.remarks} (${selected.first})")
+        return selected.first
     }
 
     /**

@@ -60,17 +60,20 @@ class LocationFilterActivity : BaseActivity() {
                 getString(R.string.location_filter_mode_whitelist_hint)
             else
                 getString(R.string.location_filter_mode_exclude_hint)
+            com.kiktor.v2whitelist.handler.SmartConnectManager.cleanVipCacheForFilter()
         }
     }
 
     private fun setupLocationList() {
         val groupRegexMap = getGroupRegexMap()
+        val disabledSubIds = SubscriptionHelper.loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
 
         val allServers = MmkvManager.decodeServerList()
         val emojiCountMap = mutableMapOf<String, Int>()
 
         for (guid in allServers) {
             val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+            if (disabledSubIds.contains(profile.subscriptionId)) continue
             val regexStr = groupRegexMap[profile.subscriptionId]
             val tag = resolveServerTag(profile.remarks, regexStr)
             emojiCountMap[tag] = (emojiCountMap[tag] ?: 0) + 1
@@ -107,6 +110,7 @@ class LocationFilterActivity : BaseActivity() {
                 currentSet.remove(emoji)
             }
             MmkvManager.encodeSettings(AppConfig.PREF_LOCATION_FILTER_SET, currentSet)
+            com.kiktor.v2whitelist.handler.SmartConnectManager.cleanVipCacheForFilter()
         }
 
         rvLocations.layoutManager = LinearLayoutManager(this)
@@ -184,52 +188,52 @@ class LocationFilterActivity : BaseActivity() {
         }
 
         private val COUNTRY_PATTERNS = listOf(
-            Regex("(?i)\\b(Россия|РФ|Russia|Russian|Moscow|RU)\\b|俄罗斯联邦|俄罗斯") to "🇷🇺",
-            Regex("(?i)\\b(Германия|Germany|Frankfurt|Berlin|DE)\\b|德国") to "🇩🇪",
-            Regex("(?i)\\b(Нидерланды|Голландия|Netherlands|The Netherlands|Amsterdam|NL)\\b|荷兰") to "🇳🇱",
-            Regex("(?i)\\b(США|Соединенные Штаты|United States|USA|America|US)\\b|美国|🇺🇲") to "🇺🇸",
-            Regex("(?i)\\b(Финляндия|Finland|Helsinki|FI)\\b|芬兰") to "🇫🇮",
-            Regex("(?i)\\b(Франция|France|Paris|Lyon|FR)\\b|法国") to "🇫🇷",
-            Regex("(?i)\\b(Польша|Poland|Warsaw|PL)\\b|波兰") to "🇵🇱",
-            Regex("(?i)\\b(Швеция|Sweden|Stockholm|SE)\\b|瑞典") to "🇸🇪",
-            Regex("(?i)\\b(Япония|Japan|Tokyo|JP)\\b|日本") to "🇯🇵",
-            Regex("(?i)\\b(Сингапур|Singapore|SG)\\b|新加坡") to "🇸🇬",
-            Regex("(?i)\\b(Гонконг|Hong\\s*Kong|HongKong|HK)\\b|香港") to "🇭🇰",
-            Regex("(?i)\\b(Южная Корея|Корея|Korea|Seoul|KR)\\b|韩国") to "🇰🇷",
-            Regex("(?i)\\b(Турция|Turkey|Istanbul|TR)\\b|土耳其") to "🇹🇷",
-            Regex("(?i)\\b(Казахстан|Kazakhstan|Almaty|Astana|KZ)\\b|哈萨克斯坦") to "🇰🇿",
-            Regex("(?i)\\b(Украина|Ukraine|Kyiv|Kiev|UA)\\b|乌克兰") to "🇺🇦",
-            Regex("(?i)\\b(Великобритания|Англия|United Kingdom|UK|London|GB)\\b|英国") to "🇬🇧",
-            Regex("(?i)\\b(Канада|Canada|Toronto|CA)\\b|加拿大") to "🇨🇦",
-            Regex("(?i)\\b(Швейцария|Switzerland|Zurich|CH)\\b|瑞士") to "🇨🇭",
-            Regex("(?i)\\b(Австрия|Austria|Vienna|AT)\\b|奥地利") to "🇦🇹",
-            Regex("(?i)\\b(Италия|Italy|Rome|Milano|IT)\\b|意大利") to "🇮🇹",
-            Regex("(?i)\\b(Испания|Spain|Madrid|ES)\\b|西班牙") to "🇪🇸",
-            Regex("(?i)\\b(ОАЭ|Эмираты|UAE|Dubai|AE)\\b|阿联酋|迪拜") to "🇦🇪",
-            Regex("(?i)\\b(Чехия|Czech|Prague|CZ)\\b|捷克") to "🇨🇿",
-            Regex("(?i)\\b(Болгария|Bulgaria|Sofia|BG)\\b|保加利亚") to "🇧🇬",
-            Regex("(?i)\\b(Тайвань|Taiwan|Taipei|TW)\\b|台湾") to "🇹🇼",
-            Regex("(?i)\\b(Сейшелы|Seychelles|SC)\\b|塞舌尔") to "🇸🇨",
-            Regex("(?i)\\b(Джерси|Jersey|JE)\\b|泽西") to "🇯🇪",
-            Regex("(?i)\\b(Кюрасао|Curacao|CW)\\b|库拉索") to "🇨🇼",
-            Regex("(?i)\\b(Норвегия|Norway|Oslo|NO)\\b|挪威") to "🇳🇴",
-            Regex("(?i)\\b(Индия|India|Mumbai|IN)\\b|印度") to "🇮🇳",
-            Regex("(?i)\\b(Таиланд|Тайланд|Thailand|Bangkok|TH)\\b|泰国") to "🇹🇭",
-            Regex("(?i)\\b(Австралия|Australia|Sydney|AU)\\b|澳大利亚") to "🇦🇺",
-            Regex("(?i)\\b(Венгрия|Hungary|Budapest|HU)\\b|匈牙利") to "🇭🇺",
-            Regex("(?i)\\b(Ирландия|Ireland|Dublin|IE)\\b|爱尔兰") to "🇮🇪",
-            Regex("(?i)\\b(Румыния|Romania|Bucharest|RO)\\b|罗马尼亚") to "🇷🇴",
-            Regex("(?i)\\b(Малайзия|Malaysia|MY)\\b|马来西亚") to "🇲🇾",
-            Regex("(?i)\\b(Армения|Armenia|AM)\\b|亚美尼亚") to "🇦🇲",
-            Regex("(?i)\\b(Грузия|Georgia|GE)\\b|格鲁吉亚") to "🇬🇪",
-            Regex("(?i)\\b(Молдова|Молдавия|Moldova|MD)\\b|摩尔多瓦") to "🇲🇩",
-            Regex("(?i)\\b(Сербия|Serbia|RS)\\b|塞尔维亚") to "🇷🇸",
-            Regex("(?i)\\b(Эстония|Estonia|EE)\\b|爱沙尼亚") to "🇪🇪",
-            Regex("(?i)\\b(Латвия|Latvia|LV)\\b|拉脱维亚") to "🇱🇻",
-            Regex("(?i)\\b(Литва|Lithuania|LT)\\b|立陶宛") to "🇱🇹",
-            Regex("(?i)\\b(Маршалловы Острова|MH)\\b|马绍尔群岛") to "🇲🇭",
-            Regex("(?i)\\b(Дания|Denmark|DK)\\b|丹麦") to "🇩🇰",
-            Regex("(?i)\\b(Иран|Iran|IR)\\b|伊朗") to "🇮🇷"
+            Regex("(?Ui)\\b(Россия|РФ|Russia|Russian|Moscow|RU)\\b|俄罗斯联邦|俄罗斯") to "🇷🇺",
+            Regex("(?Ui)\\b(Германия|Germany|Frankfurt|Berlin|DE)\\b|德国") to "🇩🇪",
+            Regex("(?Ui)\\b(Нидерланды|Голландия|Netherlands|The Netherlands|Amsterdam|NL)\\b|荷兰") to "🇳🇱",
+            Regex("(?Ui)\\b(США|Соединенные Штаты|United States|USA|America|US)\\b|美国|🇺🇲") to "🇺🇸",
+            Regex("(?Ui)\\b(Финляндия|Finland|Helsinki|FI)\\b|芬兰") to "🇫🇮",
+            Regex("(?Ui)\\b(Франция|France|Paris|Lyon|FR)\\b|法国") to "🇫🇷",
+            Regex("(?Ui)\\b(Польша|Poland|Warsaw|PL)\\b|波兰") to "🇵🇱",
+            Regex("(?Ui)\\b(Швеция|Sweden|Stockholm|SE)\\b|瑞典") to "🇸🇪",
+            Regex("(?Ui)\\b(Япония|Japan|Tokyo|JP)\\b|日本") to "🇯🇵",
+            Regex("(?Ui)\\b(Сингапур|Singapore|SG)\\b|新加坡") to "🇸🇬",
+            Regex("(?Ui)\\b(Гонконг|Hong\\s*Kong|HongKong|HK)\\b|香港") to "🇭🇰",
+            Regex("(?Ui)\\b(Южная Корея|Корея|Korea|Seoul|KR)\\b|韩国") to "🇰🇷",
+            Regex("(?Ui)\\b(Турция|Turkey|Istanbul|TR)\\b|土耳其") to "🇹🇷",
+            Regex("(?Ui)\\b(Казахстан|Kazakhstan|Almaty|Astana|KZ)\\b|哈萨克斯坦") to "🇰🇿",
+            Regex("(?Ui)\\b(Украина|Ukraine|Kyiv|Kiev|UA)\\b|乌克兰") to "🇺🇦",
+            Regex("(?Ui)\\b(Великобритания|Англия|United Kingdom|UK|London|GB)\\b|英国") to "🇬🇧",
+            Regex("(?Ui)\\b(Канада|Canada|Toronto|CA)\\b|加拿大") to "🇨🇦",
+            Regex("(?Ui)\\b(Швейцария|Switzerland|Zurich|CH)\\b|瑞士") to "🇨🇭",
+            Regex("(?Ui)\\b(Австрия|Austria|Vienna|AT)\\b|奥地利") to "🇦🇹",
+            Regex("(?Ui)\\b(Италия|Italy|Rome|Milano|IT)\\b|意大利") to "🇮🇹",
+            Regex("(?Ui)\\b(Испания|Spain|Madrid|ES)\\b|西班牙") to "🇪🇸",
+            Regex("(?Ui)\\b(ОАЭ|Эмираты|UAE|Dubai|AE)\\b|阿联酋|迪拜") to "🇦🇪",
+            Regex("(?Ui)\\b(Чехия|Czech|Prague|CZ)\\b|捷克") to "🇨🇿",
+            Regex("(?Ui)\\b(Болгария|Bulgaria|Sofia|BG)\\b|保加利亚") to "🇧🇬",
+            Regex("(?Ui)\\b(Тайвань|Taiwan|Taipei|TW)\\b|台湾") to "🇹🇼",
+            Regex("(?Ui)\\b(Сейшелы|Seychelles|SC)\\b|塞舌尔") to "🇸🇨",
+            Regex("(?Ui)\\b(Джерси|Jersey|JE)\\b|泽西") to "🇯🇪",
+            Regex("(?Ui)\\b(Кюрасао|Curacao|CW)\\b|库拉索") to "🇨🇼",
+            Regex("(?Ui)\\b(Норвегия|Norway|Oslo|NO)\\b|挪威") to "🇳🇴",
+            Regex("(?Ui)\\b(Индия|India|Mumbai|IN)\\b|印度") to "🇮🇳",
+            Regex("(?Ui)\\b(Таиланд|Тайланд|Thailand|Bangkok|TH)\\b|泰国") to "🇹🇭",
+            Regex("(?Ui)\\b(Австралия|Australia|Sydney|AU)\\b|澳大利亚") to "🇦🇺",
+            Regex("(?Ui)\\b(Венгрия|Hungary|Budapest|HU)\\b|匈牙利") to "🇭🇺",
+            Regex("(?Ui)\\b(Ирландия|Ireland|Dublin|IE)\\b|爱尔兰") to "🇮🇪",
+            Regex("(?Ui)\\b(Румыния|Romania|Bucharest|RO)\\b|罗马尼亚") to "🇷🇴",
+            Regex("(?Ui)\\b(Малайзия|Malaysia|MY)\\b|马来西亚") to "🇲🇾",
+            Regex("(?Ui)\\b(Армения|Armenia|AM)\\b|亚美尼亚") to "🇦🇲",
+            Regex("(?Ui)\\b(Грузия|Georgia|GE)\\b|格鲁吉亚") to "🇬🇪",
+            Regex("(?Ui)\\b(Молдова|Молдавия|Moldova|MD)\\b|摩尔多瓦") to "🇲🇩",
+            Regex("(?Ui)\\b(Сербия|Serbia|RS)\\b|塞尔维亚") to "🇷🇸",
+            Regex("(?Ui)\\b(Эстония|Estonia|EE)\\b|爱沙尼亚") to "🇪🇪",
+            Regex("(?Ui)\\b(Латвия|Latvia|LV)\\b|拉脱维亚") to "🇱🇻",
+            Regex("(?Ui)\\b(Литва|Lithuania|LT)\\b|立陶宛") to "🇱🇹",
+            Regex("(?Ui)\\b(Маршалловы Острова|MH)\\b|马绍尔群岛") to "🇲🇭",
+            Regex("(?Ui)\\b(Дания|Denmark|DK)\\b|丹麦") to "🇩🇰",
+            Regex("(?Ui)\\b(Иран|Iran|IR)\\b|伊朗") to "🇮🇷"
         )
 
         fun extractTextCountryTag(text: String): String? {

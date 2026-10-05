@@ -499,6 +499,9 @@ object SubscriptionHelper {
             val existing = subscriptions.find { it.guid == subId }
             if (existing != null) {
                 existing.subscription.enabled = true
+                existing.subscription.filter = sub.filter
+                existing.subscription.sharePercent = sub.sharePercent
+                MmkvManager.encodeSubscription(subId, existing.subscription)
                 Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
                 AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
             } else {
@@ -506,6 +509,8 @@ object SubscriptionHelper {
                 val subItem = SubscriptionItem().apply {
                     remarks = sub.name
                     url = sub.url
+                    filter = sub.filter
+                    sharePercent = sub.sharePercent
                     enabled = true
                 }
                 MmkvManager.encodeSubscription(subId, subItem)
