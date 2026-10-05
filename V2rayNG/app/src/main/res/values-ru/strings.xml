@@ -516,6 +516,7 @@
     <string name="tv_server_name">Сервер: %s</string>
     <string name="btn_scan_add">Скан</string>
     <string name="title_qr_current_server">QR-код текущего сервера</string>
+    <string name="btn_copy_to_clipboard">Скопировать в буфер</string>
     <string name="title_location_filter">Фильтр</string>
     <string name="btn_label_filter">Фильтр</string>
     <string name="btn_label_share">Поделиться</string>

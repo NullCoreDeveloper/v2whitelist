@@ -420,4 +420,5 @@
     <string name="location_filter_empty">لا توجد مواقع متاحة. يرجى تحديث الاشتراك.</string>
     <string name="location_filter_server_count">الخوادم: %d</string>
     <string name="location_filter_unknown">غير معروف</string>
+    <string name="btn_copy_to_clipboard">نسخ إلى الحافظة</string>
 </resources>

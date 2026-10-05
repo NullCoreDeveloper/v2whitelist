@@ -452,6 +452,7 @@
     <string name="btn_show_qr">کد QR</string>
     <string name="btn_scan_add">اسکن</string>
     <string name="title_qr_current_server">کد QR سرور فعلی</string>
+    <string name="btn_copy_to_clipboard">کپی در کلیپ‌بورد</string>
     <string name="title_location_filter">فیلتر موقعیت</string>
     <string name="btn_label_filter">فیلتر</string>
     <string name="btn_label_share">اشتراک‌گذاری</string>

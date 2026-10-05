@@ -444,6 +444,7 @@
     <string name="btn_show_qr">二维码</string>
     <string name="btn_scan_add">扫码</string>
     <string name="title_qr_current_server">当前节点二维码</string>
+    <string name="btn_copy_to_clipboard">复制到剪贴板</string>
     <string name="title_location_filter">地区过滤</string>
     <string name="btn_label_filter">过滤</string>
     <string name="btn_label_share">分享</string>

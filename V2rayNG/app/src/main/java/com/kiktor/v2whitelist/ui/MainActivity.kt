@@ -531,26 +531,46 @@ class MainActivity : HelperBaseActivity() {
         val serverName = V2RayServiceManager.getRunningServerName()
         lifecycleScope.launch(Dispatchers.IO) {
             val bitmap: Bitmap? = AngConfigManager.share2QRCode(guid)
+            val configUrl: String = AngConfigManager.shareConfig(guid)
             withContext(Dispatchers.Main) {
                 if (bitmap == null) {
                     toast(R.string.toast_failure)
                     return@withContext
                 }
-                // Показываем диалог с QR-кодом
-                val dialog = Dialog(this@MainActivity)
-                dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-                dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                val imageView = ImageView(this@MainActivity).apply {
-                    setImageBitmap(bitmap)
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad, pad, pad)
-                    setBackgroundColor(Color.WHITE)
-                }
-                dialog.setContentView(imageView)
-                dialog.setTitle(getString(R.string.title_qr_current_server))
+                val dialogView = layoutInflater.inflate(R.layout.dialog_qr_code, null)
+                val tvSubtitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_qr_subtitle)
+                val ivQrCode = dialogView.findViewById<ImageView>(R.id.iv_qr_code)
+                val btnCopy = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_copy_clipboard)
+                val btnClose = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_qr_close)
+
                 if (!serverName.isNullOrEmpty()) {
-                    imageView.contentDescription = serverName
+                    tvSubtitle.text = serverName
+                    tvSubtitle.visibility = View.VISIBLE
+                } else {
+                    tvSubtitle.visibility = View.GONE
                 }
+
+                ivQrCode.setImageBitmap(bitmap)
+                if (!serverName.isNullOrEmpty()) {
+                    ivQrCode.contentDescription = serverName
+                }
+
+                val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this@MainActivity)
+                    .setView(dialogView)
+                    .create()
+
+                btnCopy.setOnClickListener {
+                    if (configUrl.isNotEmpty()) {
+                        Utils.setClipboard(this@MainActivity, configUrl)
+                        toast(R.string.toast_link_copied)
+                        dialog.dismiss()
+                    }
+                }
+
+                btnClose.setOnClickListener {
+                    dialog.dismiss()
+                }
+
                 dialog.show()
             }
         }

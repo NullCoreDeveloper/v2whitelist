@@ -526,6 +526,7 @@
     <string name="btn_show_qr">QR</string>
     <string name="btn_scan_add">Scan</string>
     <string name="title_qr_current_server">Current server QR Code</string>
+    <string name="btn_copy_to_clipboard">Copy to clipboard</string>
 
     <!-- Location Filter -->
     <string name="title_location_filter">Filter</string>
