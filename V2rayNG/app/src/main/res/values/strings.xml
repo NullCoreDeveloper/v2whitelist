@@ -760,4 +760,13 @@
     <string name="gradient_anim_none">Static (No animation)</string>
     <string name="gradient_anim_breathing">Breathing (Slow Morph)</string>
     <string name="gradient_anim_reactive">Reactive (Connect Flow)</string>
+
+    <!-- Yandex Translate Subscription Updating -->
+    <string name="title_pref_update_via_yandex_on_bs">Update subscriptions via Yandex in Whitelist mode</string>
+    <string name="summary_pref_update_via_yandex_on_bs">During jamming/whitelist mode and when VPN is off, update subscriptions via Yandex Translate</string>
+    <string name="title_pref_debug_update_via_yandex">Update via Yandex Translate (Test)</string>
+    <string name="summary_pref_debug_update_via_yandex">Force update subscriptions via Yandex Translate for debugging</string>
+    <string name="msg_yandex_update_started">Updating subscriptions via Yandex…</string>
+    <string name="msg_yandex_update_success">Subscriptions updated via Yandex: %1$d servers</string>
+    <string name="msg_yandex_update_fail">Failed to update subscriptions via Yandex</string>
 </resources>

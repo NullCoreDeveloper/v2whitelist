@@ -574,6 +574,17 @@ object SubscriptionHelper {
         }
 
 
+        val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
+        val isBs = NetworkManager.checkInternetStatus() == 1
+        val isVpnRunning = V2RayServiceManager.isRunning()
+
+        if (updateViaYandexOnBs && isBs && !isVpnRunning) {
+            Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy")
+            val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false)
+            Log.i(AppConfig.TAG, "updateSubscription: Yandex Translate update finished, total configs: $count")
+            return@withContext
+        }
+
         // Ensure base subscriptions are initialized if this is the first launch
         checkAndSetupSubscription(context)
 

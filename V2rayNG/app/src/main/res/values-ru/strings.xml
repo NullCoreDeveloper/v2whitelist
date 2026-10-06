@@ -752,4 +752,13 @@
     <string name="gradient_anim_none">Статичный (без анимации)</string>
     <string name="gradient_anim_breathing">Дыхание (плавное перетекание)</string>
     <string name="gradient_anim_reactive">Реактивный (стягивается к кнопке)</string>
+
+    <!-- Yandex Translate Subscription Updating -->
+    <string name="title_pref_update_via_yandex_on_bs">Обновление подписок через Яндекс при БС</string>
+    <string name="summary_pref_update_via_yandex_on_bs">При блокировках (белые списки) и отключенном VPN обновлять подписки через Яндекс Переводчик</string>
+    <string name="title_pref_debug_update_via_yandex">Обновить через Яндекс Переводчик (тест)</string>
+    <string name="summary_pref_debug_update_via_yandex">Принудительно загрузить подписки через Яндекс Переводчик для отладки</string>
+    <string name="msg_yandex_update_started">Запущено обновление подписок через Яндекс…</string>
+    <string name="msg_yandex_update_success">Подписки обновлены через Яндекс: %1$d серверов</string>
+    <string name="msg_yandex_update_fail">Не удалось обновить подписки через Яндекс</string>
 </resources>

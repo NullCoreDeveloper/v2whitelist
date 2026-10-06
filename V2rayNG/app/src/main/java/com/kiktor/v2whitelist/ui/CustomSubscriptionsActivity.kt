@@ -19,8 +19,9 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.JsonUtil
 import com.kiktor.v2whitelist.util.Utils
+import androidx.lifecycle.lifecycleScope
+import com.kiktor.v2whitelist.handler.YandexTranslateUpdater
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 class CustomSubscriptionsActivity : BaseActivity() {
@@ -38,9 +39,42 @@ class CustomSubscriptionsActivity : BaseActivity() {
         tvEmpty = findViewById(R.id.tv_empty)
         rvSubscriptions = findViewById(R.id.rv_subscriptions)
 
+        setupYandexSettings()
         setupAddButton()
         loadCustomSubs()
         setupRecyclerView()
+    }
+
+    private fun setupYandexSettings() {
+        val switchYandex = findViewById<MaterialSwitch>(R.id.switch_update_via_yandex_on_bs)
+        val btnDebugYandex = findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_debug_update_yandex)
+        val layoutDebugYandex = findViewById<View>(R.id.layout_debug_update_yandex)
+
+        switchYandex?.isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
+        switchYandex?.setOnCheckedChangeListener { _, isChecked ->
+            MmkvManager.encodeSettings(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, isChecked)
+        }
+
+        val triggerDebugUpdate = {
+            lifecycleScope.launch {
+                btnDebugYandex?.isEnabled = false
+                layoutDebugYandex?.isEnabled = false
+                toast(R.string.msg_yandex_update_started)
+                val count = YandexTranslateUpdater.updateAllViaYandex(this@CustomSubscriptionsActivity, isDebug = true)
+                loadCustomSubs()
+                adapter.notifyDataSetChanged()
+                if (count > 0) {
+                    toast(getString(R.string.msg_yandex_update_success, count))
+                } else {
+                    toast(R.string.msg_yandex_update_fail)
+                }
+                btnDebugYandex?.isEnabled = true
+                layoutDebugYandex?.isEnabled = true
+            }
+        }
+
+        btnDebugYandex?.setOnClickListener { triggerDebugUpdate() }
+        layoutDebugYandex?.setOnClickListener { triggerDebugUpdate() }
     }
 
     private fun setupAddButton() {
