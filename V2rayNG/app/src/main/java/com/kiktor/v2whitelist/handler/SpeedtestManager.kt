@@ -132,6 +132,8 @@ object SpeedtestManager {
             val start = SystemClock.elapsedRealtime()
             var totalRead = 0L
             var stream: InputStream? = null
+            var firstByteTime = 0L
+
             try {
                 conn.connect()
                 stream = conn.inputStream
@@ -139,8 +141,11 @@ object SpeedtestManager {
                 var n: Int
                 while (stream.read(buf).also { n = it } != -1) {
                     if (!isActive) break
-                    if (SystemClock.elapsedRealtime() - start > timeoutMs) break
+                    if (firstByteTime == 0L) {
+                        firstByteTime = SystemClock.elapsedRealtime()
+                    }
                     totalRead += n
+                    if (SystemClock.elapsedRealtime() - start > timeoutMs) break
                 }
             } catch (_: IOException) {
                 // Таймаут чтения считаем нормой — данные уже прочли частично
@@ -150,11 +155,13 @@ object SpeedtestManager {
                 conn.disconnect()
             }
 
-            val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
-            if (elapsedSec <= 0 || totalRead == 0L) return@withContext null
+            if (firstByteTime == 0L || totalRead == 0L) return@withContext null
+
+            val elapsedSec = (SystemClock.elapsedRealtime() - firstByteTime) / 1000.0
+            if (elapsedSec <= 0.05) return@withContext null
 
             val mbps = (totalRead.toDouble() / elapsedSec) * 8.0 / 1_000_000.0
-            GeekModeLogger.log("SpeedTest", "Скачано $totalRead байт за %.2f сек → %.2f Мбит/с".format(elapsedSec, mbps))
+            GeekModeLogger.log("SpeedTest", "Чистый замер: скачано $totalRead байт за %.2f сек → %.2f Мбит/с".format(elapsedSec, mbps))
             mbps
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

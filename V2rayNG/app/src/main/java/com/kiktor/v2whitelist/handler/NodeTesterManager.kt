@@ -35,20 +35,20 @@ object NodeTesterManager {
 
     /**
      * Тестирует серверы батча параллельно в 2 этапа и возвращает результаты, отсортированные по задержке.
-     * Этап 1: Быстрый TCP пинг (800 мс). Если ни один сервер не ответил, чанк сразу пропускается.
+     * Этап 1: Быстрый TCP пинг (1200 мс). Если ни один сервер не ответил, чанк сразу пропускается.
      * Этап 2: HTTP 204 проверка задержки через ядро только для живых серверов.
      */
     suspend fun testServers(
         context: Context,
         servers: List<Pair<String, ProfileItem>>,
-        totalTimeoutMs: Long = 6000,
-        perServerTimeoutMs: Long = 1500
+        totalTimeoutMs: Long = 7000,
+        perServerTimeoutMs: Long = 3500
     ): List<Triple<String, ProfileItem, Long>> {
         if (servers.isEmpty()) return emptyList()
 
-        GeekModeLogger.log("NodeTester", "testServers: Phase 1: TCP ping pre-check (800ms) for chunk of ${servers.size} servers")
+        GeekModeLogger.log("NodeTester", "testServers: Phase 1: TCP ping pre-check (1200ms) for chunk of ${servers.size} servers")
 
-        // ── Этап 1: Быстрый параллельный TCP pre-check (800 мс) ──────────────────
+        // ── Этап 1: Быстрый параллельный TCP pre-check (1200 мс) ──────────────────
         val tcpAliveServers = coroutineScope {
             servers.map { (guid, profile) ->
                 async(Dispatchers.IO) {
@@ -65,10 +65,10 @@ object NodeTesterManager {
                             null
                         } else {
                             val ok = try {
-                                kotlinx.coroutines.withTimeoutOrNull(800L) {
+                                kotlinx.coroutines.withTimeoutOrNull(1200L) {
                                     Socket().use { socket ->
                                         socket.tcpNoDelay = true
-                                        socket.connect(InetSocketAddress(host, port), 800)
+                                        socket.connect(InetSocketAddress(host, port), 1200)
                                         true
                                     }
                                 } ?: false
@@ -84,7 +84,7 @@ object NodeTesterManager {
 
         // Если ни один сервер не прошёл TCP пинг — не тратим время на Xray и сразу переходим к следующему батчу!
         if (tcpAliveServers.isEmpty()) {
-            GeekModeLogger.log("NodeTester", "testServers: 0/${servers.size} servers passed TCP pre-check (800ms), skipping chunk")
+            GeekModeLogger.log("NodeTester", "testServers: 0/${servers.size} servers passed TCP pre-check (1200ms), skipping chunk")
             return emptyList()
         }
 
