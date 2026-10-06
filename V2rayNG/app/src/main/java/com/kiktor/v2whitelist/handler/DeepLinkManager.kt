@@ -9,6 +9,8 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import android.util.Log
 
+//dGJ6cGouZnZiYWJpbC5qdnQvZGhham8/Yz1qcUNNa3FyZ0gyNA
+
 object DeepLinkManager {
 
     private val gson = Gson()
@@ -49,7 +51,8 @@ object DeepLinkManager {
         val name: String,
         val url: String,
         val filter: String = "",
-        val groupRegex: String = ""
+        val groupRegex: String = "",
+        val targetScenarios: List<String> = emptyList()
     )
 
     data class SharedSplitTunneling(

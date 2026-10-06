@@ -659,18 +659,28 @@
     <!-- Onboarding / Setup Wizard -->
     <string name="onboarding_purpose_title">What do you need ПроБел for?</string>
     <string name="onboarding_purpose_subtitle">Choose your primary scenario. The app will automatically configure suitable subscriptions (you can always adjust them in Settings).</string>
+    <string name="scenario_auto_title">0. Auto (Recommended)</string>
+    <string name="scenario_auto_desc">Smart network adaptation: fast standard VPN on Wi-Fi and regular networks, automatic switch to Whitelist bypass during network jamming and throttling.</string>
     <string name="scenario_vpn_title">1. Standard VPN</string>
     <string name="scenario_vpn_desc">For accessing blocked websites and social media.\nIncludes: igareck Blacklist, KIZYAK Blacklist, CYBERPORTAL Blacklist, RKP Blacklist, EtoneYa Blacklist</string>
     <string name="scenario_whitelist_title">2. Whitelist Bypass (Anti-throttling)</string>
-    <string name="scenario_whitelist_desc">For connectivity during internet shutdowns, jamming, or whitelist-only access.\nIncludes: zieng2, igareck Whitelist, KIZYAK Whitelist (both), CYBERPORTAL Whitelist, EtoneYa Whitelist</string>
+    <string name="scenario_whitelist_desc">For connectivity during internet shutdowns, jamming, or whitelist-only access.\nIncludes: zieng2, KIZYAK Whitelist (both), CYBERPORTAL Whitelist, EtoneYa Whitelist</string>
     <string name="scenario_youtube_title">3. YouTube &amp; Music</string>
     <string name="scenario_youtube_desc">For accelerating and unblocking YouTube and streaming services.\nIncludes: EtoneYa YouTube, Music, Aetris</string>
     <string name="scenario_keep_title">4. Keep As Is</string>
     <string name="scenario_keep_desc">Do not change current settings and configure subscriptions manually in the subscription manager.</string>
+    <string name="scenario_toast_auto_applied">Applying \"Auto\" scenario…</string>
     <string name="scenario_toast_vpn_applied">Applying \"Standard VPN\" scenario…</string>
     <string name="scenario_toast_whitelist_applied">Applying \"Whitelist Bypass\" scenario…</string>
     <string name="scenario_toast_youtube_applied">Applying \"YouTube &amp; Music\" scenario…</string>
     <string name="scenario_toast_manual_hint">You can configure subscriptions manually in \"Settings -> Manage Subscriptions\" at any time</string>
+
+    <string name="sub_scenario_category_title">Auto-mode Categories</string>
+    <string name="sub_scenario_category_hint">Select scenarios when this subscription should be used in Auto mode:</string>
+    <string name="scenario_chip_whitelist">🛡️ Whitelist Bypass (Anti-throttling)</string>
+    <string name="scenario_chip_blacklist">🌐 Blacklist / Standard VPN</string>
+    <string name="scenario_chip_youtube">▶️ YouTube &amp; Music</string>
+    <string name="sub_scenario_universal">Universal (All scenarios)</string>
 
     <!-- Deep Links & Sharing -->
     <string name="toast_link_copied">Link copied to clipboard!</string>

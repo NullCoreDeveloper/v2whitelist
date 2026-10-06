@@ -642,18 +642,28 @@
     <!-- Onboarding / Setup Wizard -->
     <string name="onboarding_purpose_title">Для чего вам ПроБел?</string>
     <string name="onboarding_purpose_subtitle">Выберите основной сценарий работы. Приложение автоматически включит подходящие подписки (их всегда можно изменить в настройках).</string>
+    <string name="scenario_auto_title">0. Авто (Рекомендуется)</string>
+    <string name="scenario_auto_desc">Умное переключение под сеть: быстрый обычный VPN на Wi-Fi и домашнем интернете, автоматический переход на Белые списки при глушилках и изоляции.</string>
     <string name="scenario_vpn_title">1. Просто VPN</string>
     <string name="scenario_vpn_desc">Для доступа к заблокированным сайтам и соцсетям.\nВключает: igareck ЧС, КIЗЯК ЧС, CYBERPORTAL ЧС, RKP ЧС, ЭтоНеЯ ЧС</string>
     <string name="scenario_whitelist_title">2. Обход белых списков (БС)</string>
-    <string name="scenario_whitelist_desc">Для работы при глушилках и изоляции интернета.\nВключает: zieng2, igareck БС, КIЗЯК БС (обе), CYBERPORTAL БС, ЭтоНеЯ БС</string>
+    <string name="scenario_whitelist_desc">Для работы при глушилках и изоляции интернета.\nВключает: zieng2, КIЗЯК БС (обе), CYBERPORTAL БС, ЭтоНеЯ БС</string>
     <string name="scenario_youtube_title">3. YouTube и Музыка</string>
     <string name="scenario_youtube_desc">Для ускорения и обхода замедления YouTube (больше под черные списки).\nВключает: ЭтоНеЯ YouTube, Музыка, Aetris</string>
     <string name="scenario_keep_title">4. Оставить как есть</string>
     <string name="scenario_keep_desc">Не менять текущие настройки и настроить подписки вручную в менеджере подписок.</string>
+    <string name="scenario_toast_auto_applied">Применяем сценарий «Авто»…</string>
     <string name="scenario_toast_vpn_applied">Применяем сценарий «Просто VPN»…</string>
     <string name="scenario_toast_whitelist_applied">Применяем сценарий «Белые списки»…</string>
     <string name="scenario_toast_youtube_applied">Применяем сценарий «YouTube и Музыка»…</string>
     <string name="scenario_toast_manual_hint">Вы можете в любое время зайти в «Настройки -> Менеджер подписок» и настроить всё вручную</string>
+
+    <string name="sub_scenario_category_title">Категории для Авто-режима</string>
+    <string name="sub_scenario_category_hint">Выберите, в каких сценариях использовать эту подписку при авто-выборе:</string>
+    <string name="scenario_chip_whitelist">🛡️ Белые списки (БС)</string>
+    <string name="scenario_chip_blacklist">🌐 Черные списки (ЧС / VPN)</string>
+    <string name="scenario_chip_youtube">▶️ YouTube и Музыка</string>
+    <string name="sub_scenario_universal">Универсальная (Все сценарии)</string>
 
     <!-- Deep Links & Sharing -->
     <string name="toast_link_copied">Ссылка скопирована в буфер!</string>

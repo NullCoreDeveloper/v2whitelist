@@ -68,7 +68,11 @@ object SmartConnectManager {
     )
 
 
-    fun filterServerPairs(candidates: List<Pair<String, ProfileItem>>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+    fun filterServerPairs(
+        candidates: List<Pair<String, ProfileItem>>, 
+        excludeGuid: String? = null,
+        filterByScenario: Boolean = true
+    ): List<Pair<String, ProfileItem>> {
         val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
         
         val filterMode = MmkvManager.decodeSettingsString(
@@ -82,7 +86,7 @@ object SmartConnectManager {
         val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
         val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
 
-        return candidates.filter { (guid, profile) ->
+        val basicFiltered = candidates.filter { (guid, profile) ->
             if (excludeGuid != null && guid == excludeGuid) return@filter false
             if (disabledSubIds.contains(profile.subscriptionId)) return@filter false
             if (filterInsecure && !profile.isSecure()) return@filter false
@@ -103,19 +107,63 @@ object SmartConnectManager {
                 else -> true
             }
         }
+
+        if (!filterByScenario || basicFiltered.isEmpty()) {
+            return basicFiltered
+        }
+
+        val currentScenario = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_CURRENT_APP_SCENARIO, 
+            SubscriptionHelper.AppScenario.AUTO.name
+        ) ?: SubscriptionHelper.AppScenario.AUTO.name
+
+        val targetScenarios: Set<String>? = when (currentScenario) {
+            SubscriptionHelper.AppScenario.AUTO.name -> {
+                val internetStatus = NetworkManager.checkInternetStatus()
+                if (internetStatus == 1) { // JAMMED
+                    setOf(SubscriptionHelper.SCENARIO_WHITELIST)
+                } else { // 0 (OK) или 2 (нет сети)
+                    setOf(SubscriptionHelper.SCENARIO_BLACKLIST, SubscriptionHelper.SCENARIO_YOUTUBE)
+                }
+            }
+            SubscriptionHelper.AppScenario.WHITELIST.name -> setOf(SubscriptionHelper.SCENARIO_WHITELIST)
+            SubscriptionHelper.AppScenario.VPN_BLACKLIST.name -> setOf(SubscriptionHelper.SCENARIO_BLACKLIST)
+            SubscriptionHelper.AppScenario.YOUTUBE.name -> setOf(SubscriptionHelper.SCENARIO_YOUTUBE)
+            else -> null // KEEP_CURRENT или неизвестно: без дополнительной фильтрации
+        }
+
+        if (targetScenarios == null) {
+            return basicFiltered
+        }
+
+        val subScenariosMap = SubscriptionHelper.getSubScenariosMap()
+        val scenarioFiltered = basicFiltered.filter { (_, profile) ->
+            val subScenarios = subScenariosMap[profile.subscriptionId]
+            // Если подписка не имеет тегов — считаем ее универсальной
+            subScenarios.isNullOrEmpty() || subScenarios.any { targetScenarios.contains(it) }
+        }
+
+        return if (scenarioFiltered.isNotEmpty()) {
+            scenarioFiltered
+        } else {
+            // Graceful Fallback: если у пользователя нет серверов в целевом пуле (например, добавлены только БС или только ЧС),
+            // возвращаем все доступные базовые серверы, чтобы связь не прерывалась!
+            GeekModeLogger.log("SmartConnect", "Scenario filtering: 0 servers matched $targetScenarios. Fallback to all ${basicFiltered.size} enabled servers")
+            basicFiltered
+        }
     }
 
-    fun filterServers(allServers: List<String>, excludeGuid: String? = null): List<Pair<String, ProfileItem>> {
+    fun filterServers(allServers: List<String>, excludeGuid: String? = null, filterByScenario: Boolean = true): List<Pair<String, ProfileItem>> {
         val candidates = allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
             if (profile != null) guid to profile else null
         }
-        return filterServerPairs(candidates, excludeGuid)
+        return filterServerPairs(candidates, excludeGuid, filterByScenario)
     }
 
     fun cleanVipCacheForFilter() {
         val allServers = MmkvManager.decodeServerList()
-        val validFilteredGuids = filterServers(allServers).map { it.first }.toSet()
+        val validFilteredGuids = filterServers(allServers, filterByScenario = false).map { it.first }.toSet()
         val currentVipGuids = MmkvManager.getVipCache()
         for (guid in currentVipGuids) {
             if (!validFilteredGuids.contains(guid)) {

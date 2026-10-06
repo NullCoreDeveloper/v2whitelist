@@ -22,6 +22,10 @@ object SubscriptionHelper {
 
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
 
+    const val SCENARIO_WHITELIST = "WHITELIST"
+    const val SCENARIO_BLACKLIST = "BLACKLIST"
+    const val SCENARIO_YOUTUBE = "YOUTUBE"
+
     /** Дата-класс для JSON-десериализации кастомных подписок */
     data class CustomSubData(
         val id: String = "",
@@ -30,7 +34,8 @@ object SubscriptionHelper {
         var filter: String = "",
         var groupRegex: String = "",
         var enabled: Boolean = true,
-        var sharePercent: Int? = null
+        var sharePercent: Int? = null,
+        var targetScenarios: List<String> = emptyList()
     )
 
     /**
@@ -143,10 +148,54 @@ object SubscriptionHelper {
         val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
         if (json.isNullOrEmpty()) return emptyList()
         return try {
-            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+            val subs = com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+            // Подтягиваем дефолтные сценарии для подписок, где сценарии еще не были назначены
+            subs.forEach { sub ->
+                if (sub.targetScenarios.isEmpty()) {
+                    val defaultMatch = DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }
+                    if (defaultMatch != null && defaultMatch.targetScenarios.isNotEmpty()) {
+                        sub.targetScenarios = defaultMatch.targetScenarios
+                    }
+                }
+            }
+            subs
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    /**
+     * Возвращает карту привязки подписок к целевым сценариям.
+     * Ключи включают как "custom_sub_${id}", так и "${id}".
+     */
+    fun getSubScenariosMap(): Map<String, Set<String>> {
+        val map = mutableMapOf<String, Set<String>>()
+
+        // 1. Дефолтные сценарии из DefaultSubscriptions.PREPOPULATED_SUBS
+        for (sub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            val scenarios = sub.targetScenarios.toSet()
+            if (scenarios.isNotEmpty()) {
+                map["custom_sub_${sub.id}"] = scenarios
+                map[sub.id] = scenarios
+            }
+        }
+
+        // 2. Настройки кастомных подписок из MMKV (пользовательские настройки)
+        val customSubs = loadCustomSubs()
+        for (sub in customSubs) {
+            val scenarios = if (sub.targetScenarios.isNotEmpty()) {
+                sub.targetScenarios.toSet()
+            } else {
+                val defaultMatch = DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }
+                defaultMatch?.targetScenarios?.toSet() ?: emptySet()
+            }
+            if (scenarios.isNotEmpty()) {
+                map["custom_sub_${sub.id}"] = scenarios
+                map[sub.id] = scenarios
+            }
+        }
+
+        return map
     }
 
     /**
@@ -175,9 +224,10 @@ object SubscriptionHelper {
      * Сценарии работы для стартового опросника
      */
     enum class AppScenario {
-        VPN_BLACKLIST, // 1. Просто VPN (igareck чс, кизяк чс)
-        WHITELIST,     // 2. БС (zieng2, igareck бс, кизяк бс обе, киберпортал все бс, это не я бс)
-        YOUTUBE,       // 3. YouTube и Музыка (ЭтоНеЯ YouTube, Музыка, Aetris)
+        AUTO,          // 0. Автоматический выбор под сеть (Рекомендуется)
+        VPN_BLACKLIST, // 1. Просто VPN (Черные списки)
+        WHITELIST,     // 2. БС (Белые списки)
+        YOUTUBE,       // 3. YouTube и Музыка
         KEEP_CURRENT   // 4. Оставить как есть
     }
 
@@ -193,27 +243,48 @@ object SubscriptionHelper {
         }
 
         val targetSubIds = when (scenario) {
-            AppScenario.VPN_BLACKLIST -> setOf(
-                "def_igareck_black",
-                "def_kizyak_black",
-                "def_cyberportal_cp002",
-                "def_rkp_blacklist",
-                "def_etoneya_blacklist",
-                "def_rjsxrd_bypass_all"
-            )
-            AppScenario.WHITELIST -> setOf(
+            AppScenario.AUTO -> setOf(
+                // Белые списки (БС)
                 "def_zieng2",
-                "def_igareck_white",
                 "def_kizyak_white",
                 "def_kizyak_white_v6",
-                "def_cyberportal_cp001",
                 "def_cyberportal_cp035",
                 "def_cyberportal_cp006",
                 "def_cyberportal_cp008",
                 "def_cyberportal_cp042",
                 "def_etoneya_whitelist",
                 "def_airlink_whitelist",
+                "def_rkp_whitelist",
+                // Черные списки (ЧС)
+                "def_cyberportal_cp001",
+                "def_cyberportal_cp002",
+                "def_kizyak_black",
+                "def_rkp_blacklist",
+                "def_etoneya_blacklist",
                 "def_rjsxrd_bypass_all",
+                // YouTube и Музыка
+                "def_etoneya_youtube",
+                "def_etoneya_ytm",
+                "def_aetris"
+            )
+            AppScenario.VPN_BLACKLIST -> setOf(
+                "def_cyberportal_cp001",
+                "def_cyberportal_cp002",
+                "def_kizyak_black",
+                "def_rkp_blacklist",
+                "def_etoneya_blacklist",
+                "def_rjsxrd_bypass_all"
+            )
+            AppScenario.WHITELIST -> setOf(
+                "def_zieng2",
+                "def_kizyak_white",
+                "def_kizyak_white_v6",
+                "def_cyberportal_cp035",
+                "def_cyberportal_cp006",
+                "def_cyberportal_cp008",
+                "def_cyberportal_cp042",
+                "def_etoneya_whitelist",
+                "def_airlink_whitelist",
                 "def_rkp_whitelist",
                 "def_mifa_bobrik"
             )
@@ -247,8 +318,12 @@ object SubscriptionHelper {
             MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(removedSet.toList()))
         }
 
+        val defaultSubIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
         for (sub in customSubs) {
-            val shouldEnable = targetSubIds.contains(sub.id)
+            // Если подписка из предустановленных — управляем её статусом согласно сценарию.
+            // Если кастомная добавленная пользователем — не отключаем её принудительно.
+            val isDefault = defaultSubIds.contains(sub.id)
+            val shouldEnable = if (isDefault) targetSubIds.contains(sub.id) else sub.enabled
             sub.enabled = shouldEnable
             val guid = "custom_sub_${sub.id}"
             val realSub = allSubs.find { it.guid == guid }
@@ -296,12 +371,13 @@ object SubscriptionHelper {
         val view = activity.layoutInflater.inflate(R.layout.layout_onboarding_purpose_bottom_sheet, null)
         val isTvMode = Utils.isTv(activity)
 
+        val cardAuto = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_auto)
         val cardVpn = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_vpn)
         val cardWhitelist = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_whitelist)
         val cardYoutube = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_youtube)
         val cardKeep = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_keep)
 
-        val cards = listOfNotNull(cardVpn, cardWhitelist, cardYoutube, cardKeep)
+        val cards = listOfNotNull(cardAuto, cardVpn, cardWhitelist, cardYoutube, cardKeep)
 
         // На ТВ настраиваем D-pad фокус и убираем полоску свайпа
         if (isTvMode) {
@@ -323,11 +399,21 @@ object SubscriptionHelper {
             MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
             if (!isExplicitlySelected) {
                 isExplicitlySelected = true
-                Toast.makeText(activity, R.string.scenario_toast_whitelist_applied, Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, R.string.scenario_toast_auto_applied, Toast.LENGTH_SHORT).show()
                 CoroutineScope(Dispatchers.Main).launch {
-                    applyScenario(activity, AppScenario.WHITELIST)
+                    applyScenario(activity, AppScenario.AUTO)
                     onApplied?.invoke()
                 }
+            }
+        }
+
+        cardAuto?.setOnClickListener {
+            isExplicitlySelected = true
+            dismissAction()
+            Toast.makeText(activity, R.string.scenario_toast_auto_applied, Toast.LENGTH_SHORT).show()
+            CoroutineScope(Dispatchers.Main).launch {
+                applyScenario(activity, AppScenario.AUTO)
+                onApplied?.invoke()
             }
         }
 

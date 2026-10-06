@@ -56,6 +56,9 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val etFilter = dialogView.findViewById<EditText>(R.id.et_sub_filter)
         val etGroupRegex = dialogView.findViewById<EditText>(R.id.et_sub_group_regex)
         val etSharePercent = dialogView.findViewById<EditText>(R.id.et_sub_share_percent)
+        val cbWhitelist = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_whitelist)
+        val cbBlacklist = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_blacklist)
+        val cbYoutube = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_youtube)
 
         if (existingItem != null) {
             etName.setText(existingItem.name)
@@ -63,6 +66,21 @@ class CustomSubscriptionsActivity : BaseActivity() {
             etFilter.setText(existingItem.filter)
             etGroupRegex.setText(existingItem.groupRegex)
             etSharePercent.setText(existingItem.sharePercent?.toString() ?: "")
+
+            val scenarios = if (existingItem.targetScenarios.isNotEmpty()) {
+                existingItem.targetScenarios
+            } else {
+                val defaultMatch = com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == existingItem.id }
+                defaultMatch?.targetScenarios ?: emptyList()
+            }
+            cbWhitelist.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST)
+            cbBlacklist.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST)
+            cbYoutube.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE)
+        } else {
+            // Для новых подписок по умолчанию отмечаем БС и ЧС
+            cbWhitelist.isChecked = true
+            cbBlacklist.isChecked = true
+            cbYoutube.isChecked = false
         }
 
         val builder = AlertDialog.Builder(this)
@@ -75,7 +93,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     name = existingItem.name,
                     url = existingItem.url,
                     filter = existingItem.filter,
-                    groupRegex = existingItem.groupRegex
+                    groupRegex = existingItem.groupRegex,
+                    targetScenarios = existingItem.targetScenarios
                 )
                 val base64 = com.kiktor.v2whitelist.handler.DeepLinkManager.encodeToDeepLinkData(sharedSub)
                 val link = "${com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SUB}://?data=$base64"
@@ -108,6 +127,11 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 val sharePercentStr = etSharePercent.text.toString().trim()
                 val sharePercent = if (sharePercentStr.isNotEmpty()) sharePercentStr.toIntOrNull() else null
 
+                val selectedScenarios = mutableListOf<String>()
+                if (cbWhitelist.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST)
+                if (cbBlacklist.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST)
+                if (cbYoutube.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE)
+
                 if (name.isEmpty()) {
                     toast(R.string.sub_setting_remarks)
                     return@setPositiveButton
@@ -123,6 +147,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     existingItem.filter = filter
                     existingItem.groupRegex = groupRegex
                     existingItem.sharePercent = sharePercent
+                    existingItem.targetScenarios = selectedScenarios
                     existingItem.lastUpdateFailed = false
                     val allSubs = MmkvManager.decodeSubscriptions()
                     allSubs.find { it.guid == "custom_sub_${existingItem.id}" }?.let {
@@ -142,7 +167,8 @@ class CustomSubscriptionsActivity : BaseActivity() {
                         filter = filter,
                         groupRegex = groupRegex,
                         enabled = true,
-                        sharePercent = sharePercent
+                        sharePercent = sharePercent,
+                        targetScenarios = selectedScenarios
                     )
                     customSubs.add(sub)
                     adapter.notifyItemInserted(customSubs.size - 1)
@@ -164,12 +190,19 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 if (items != null) {
                     customSubs = items.toMutableList()
                     
-                    // Обогащаем данными о последнем обновлении из реальных подписок
+                    // Обогащаем данными о последнем обновлении и сценариях
                     val allSubs = MmkvManager.decodeSubscriptions()
                     customSubs.forEach { sub ->
                         val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" }
                         sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
                         sub.lastUpdateFailed = (realSub?.subscription?.lastUpdateFailed ?: false) && sub.enabled
+
+                        if (sub.targetScenarios.isEmpty()) {
+                            val defaultMatch = com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }
+                            if (defaultMatch != null && defaultMatch.targetScenarios.isNotEmpty()) {
+                                sub.targetScenarios = defaultMatch.targetScenarios
+                            }
+                        }
                     }
 
                     // Авто-очистка призрачных подписок (удаленных до фикса бага)
@@ -275,6 +308,7 @@ class CustomSubscriptionsActivity : BaseActivity() {
         var enabled: Boolean = true,
         var lastUpdated: Long = 0L,
         var sharePercent: Int? = null,
-        var lastUpdateFailed: Boolean = false
+        var lastUpdateFailed: Boolean = false,
+        var targetScenarios: List<String> = emptyList()
     )
 }

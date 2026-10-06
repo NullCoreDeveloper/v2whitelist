@@ -87,5 +87,42 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- Категории для авто-режима -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/sub_scenario_category_title"
+            android:textStyle="bold"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textColor="?android:attr/textColorPrimary" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="4dp"
+            android:text="@string/sub_scenario_category_hint"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+            android:textColor="?android:attr/textColorSecondary" />
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_scenario_whitelist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scenario_chip_whitelist" />
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_scenario_blacklist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scenario_chip_blacklist" />
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cb_scenario_youtube"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scenario_chip_youtube" />
+
     </LinearLayout>
 </ScrollView>

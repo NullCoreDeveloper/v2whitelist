@@ -28,6 +28,7 @@ class CustomSubscriptionAdapter(
         val tvName: TextView = view.findViewById(R.id.tv_sub_name)
         val tvUrl: TextView = view.findViewById(R.id.tv_sub_url)
         val tvLastUpdate: TextView = view.findViewById(R.id.tv_sub_last_update)
+        val tvScenarios: TextView = view.findViewById(R.id.tv_sub_scenarios)
         val switchEnabled: MaterialSwitch = view.findViewById(R.id.switch_sub_enabled)
         val btnDelete: ImageButton = view.findViewById(R.id.btn_delete)
         
@@ -70,6 +71,23 @@ class CustomSubscriptionAdapter(
                 holder.tvLastUpdate.visibility = View.VISIBLE
             }
         }
+
+        val context = holder.itemView.context
+        val scenarios = item.targetScenarios
+        if (scenarios.isEmpty()) {
+            holder.tvScenarios.text = context.getString(R.string.sub_scenario_universal)
+        } else {
+            val scenarioLabels = scenarios.map { scenarioKey ->
+                when (scenarioKey) {
+                    com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST -> "🛡️ БС"
+                    com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST -> "🌐 ЧС"
+                    com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE -> "▶️ YouTube"
+                    else -> scenarioKey
+                }
+            }
+            holder.tvScenarios.text = scenarioLabels.joinToString(" • ")
+        }
+        holder.tvScenarios.visibility = View.VISIBLE
 
         holder.switchEnabled.setOnCheckedChangeListener(null)
         holder.switchEnabled.isChecked = item.enabled

@@ -869,7 +869,8 @@ class MainActivity : HelperBaseActivity() {
                                 url = sub.url,
                                 filter = sub.filter,
                                 groupRegex = sub.groupRegex,
-                                enabled = true
+                                enabled = true,
+                                targetScenarios = sub.targetScenarios
                             )
                             // Читаем текущие подписки
                             val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)

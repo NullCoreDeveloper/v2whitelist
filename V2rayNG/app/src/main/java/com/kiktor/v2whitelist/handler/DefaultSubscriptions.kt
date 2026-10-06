@@ -18,7 +18,8 @@ object DefaultSubscriptions {
                 "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
                 "https://gitlab.com/zieng2/wl/raw/main/vless_universal.txt"
             ).joinToString("|"),
-            enabled = true
+            enabled = true,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_igareck_black",
@@ -30,51 +31,46 @@ object DefaultSubscriptions {
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt"
             ).joinToString("|"),
             groupRegex = "\\[(BL)\\]",
-            enabled = false
-        ),
-        SubscriptionHelper.CustomSubData(
-            id = "def_igareck_white",
-            name = "igareck (Обход белых списков / Внутри РФ)",
-            url = listOf(
-                "https://gitlab.com/igareck/vpn-configs-for-russia/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
-                "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
-                "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
-                "https://raw.githack.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt"
-            ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_mifa_bobrik",
             name = "mifa/bobrik (Резервные сервера)",
             url = "https://mifa.world/bobrik",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_whitelist",
             name = "RKP (Анти-РосКомПозор: Белые списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
             groupRegex = "(Неизвестно)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_blacklist",
             name = "RKP (Анти-РосКомПозор: Черные списки)",
             url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
             groupRegex = "(Неизвестно)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_aetris",
             name = "AetrisVPN (Сборник: Резервные + YouTube)",
             url = "https://raw.githubusercontent.com/flaafix/AetrisVPN/main/AetrisVPN.txt",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_YOUTUBE, SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_hiztin_gribi",
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
             groupRegex = "(@[A-Za-z0-9_]+|SERDNS\\s*VIP|t\\.me/[A-Za-z0-9_]+)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_kizyak_white",
@@ -85,7 +81,8 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_kizyak_white_v6",
@@ -97,7 +94,8 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt"
             ).joinToString("|"),
             groupRegex = "\\[(🏳️LTE|LTE)\\]",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_kizyak_black",
@@ -109,7 +107,8 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt"
             ).joinToString("|"),
             groupRegex = "\\[(🏴BL|BL)\\]",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp001",
@@ -118,7 +117,8 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-001.txt",
                 "https://warp-gen.cyb-portal.org/CP-001"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp002",
@@ -127,7 +127,8 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-002.txt",
                 "https://warp-gen.cyb-portal.org/CP-002"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp035",
@@ -137,7 +138,8 @@ object DefaultSubscriptions {
                 "https://warp-gen.cyb-portal.org/CP-035"
             ).joinToString("|"),
             groupRegex = "(?i)(White\\s*List)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp006",
@@ -146,7 +148,8 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-006.txt",
                 "https://warp-gen.cyb-portal.org/CP-006"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp008",
@@ -155,7 +158,8 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-008.txt",
                 "https://warp-gen.cyb-portal.org/CP-008"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_cyberportal_cp042",
@@ -165,7 +169,8 @@ object DefaultSubscriptions {
                 "https://warp-gen.cyb-portal.org/CP-042"
             ).joinToString("|"),
             groupRegex = "(?i)(White\\s*Keys)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_whitelist",
@@ -180,7 +185,8 @@ object DefaultSubscriptions {
                 "https://xn--e1apcp8cq.xn--p1ai/whitelist"
             ).joinToString("|"),
             groupRegex = "(CIDR-[A-Za-z0-9_-]+|SNI-[A-Za-z0-9_-]+)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_blacklist",
@@ -195,7 +201,8 @@ object DefaultSubscriptions {
                 "https://xn--e1apcp8cq.xn--p1ai/other"
             ).joinToString("|"),
             groupRegex = "(☁️\\s*Cloudflare|Cloudflare|VLESS|HYSTERIA2|VMESS|TROJAN|SS)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_gemini",
@@ -209,7 +216,8 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/gemini",
                 "https://xn--e1apcp8cq.xn--p1ai/gemini"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_youtube",
@@ -223,7 +231,8 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/youtube",
                 "https://xn--e1apcp8cq.xn--p1ai/youtube"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_YOUTUBE, SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_etoneya_ytm",
@@ -237,7 +246,8 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/ytm",
                 "https://xn--e1apcp8cq.xn--p1ai/ytm"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_YOUTUBE, SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_rjsxrd_bypass_all",
@@ -249,7 +259,8 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
             ).joinToString("|"),
             groupRegex = "(CF中转|☁️\\s*Cloudflare|Cloudflare|\\[BL\\]|BL)",
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_airlink_whitelist",
@@ -260,7 +271,8 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list",
                 "https://cdn.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list"
             ).joinToString("|"),
-            enabled = false
+            enabled = false,
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         )
     )
 }
