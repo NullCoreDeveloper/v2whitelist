@@ -508,6 +508,17 @@ object SettingsManager {
         }
     }
 
+    fun migrateSpeedCheckTimeoutDefaults() {
+        val migrationKey = "speed_check_timeout_3s_migrated"
+        if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            val currentVal = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT)
+            if (currentVal == null || currentVal == "5000" || currentVal == "5") {
+                MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
+            }
+            MmkvManager.encodeSettings(migrationKey, true)
+        }
+    }
+
     fun migrateHysteria2PinSHA256() {
         // Check if migration has already been done
         val migrationKey = "hysteria2_pin_sha256_migrated"

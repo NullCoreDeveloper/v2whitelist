@@ -791,6 +791,7 @@ object MmkvManager {
         AppConfig.PREF_V2W_CORE_MIGRATION_V1,
         "pref_defaults_added_v1",
         "hysteria2_pin_sha256_migrated",
+        "speed_check_timeout_3s_migrated",
         KEY_BATTERY_ASKED
     )
 

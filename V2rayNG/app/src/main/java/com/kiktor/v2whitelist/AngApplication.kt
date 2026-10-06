@@ -89,6 +89,7 @@ class AngApplication : Application(), Configuration.Provider {
             SettingsManager.initRoutingRulesets(this)
             SettingsManager.migrateHysteria2PinSHA256()
             SettingsManager.migrateV2wCoreDefaults()
+            SettingsManager.migrateSpeedCheckTimeoutDefaults()
 
             es.dmoral.toasty.Toasty.Config.getInstance()
                 .setGravity(android.view.Gravity.BOTTOM, 0, 200)

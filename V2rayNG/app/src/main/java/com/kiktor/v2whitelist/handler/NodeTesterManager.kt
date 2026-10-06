@@ -203,8 +203,8 @@ object NodeTesterManager {
             delay(500L)
             if (!currentCoroutineContext().isActive) return false
 
-            val timeout = customTimeoutMs ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "5000")
-                               ?.toIntOrNull()?.takeIf { it > 0 } ?: 5_000)
+            val timeout = customTimeoutMs ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
+                               ?.toIntOrNull()?.takeIf { it > 0 } ?: 3_000)
 
             // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
             val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)
