@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -66,6 +69,17 @@ object YandexTranslateUpdater {
             .replace(Regex("(?i)<p[^>]*>"), "")
         val stripped = withNewlines.replace(Regex("<[^>]+>"), "")
         return unescapeHtml(stripped).trim()
+    }
+
+    /**
+     * Checks if the response is a Yandex SmartCaptcha challenge or bot blocking page.
+     */
+    fun isCaptchaResponse(response: String): Boolean {
+        val lower = response.lowercase()
+        return lower.contains("smartcaptcha") ||
+               lower.contains("captcha.yandex") ||
+               lower.contains("/captcha") ||
+               (lower.contains("<title>") && lower.contains("captcha"))
     }
 
     /**
@@ -177,51 +191,69 @@ object YandexTranslateUpdater {
             return@withContext 0
         }
 
-        Log.i(AppConfig.TAG, "YandexTranslateUpdater: processing ${targets.size} subscriptions in parallel")
+        Log.i(AppConfig.TAG, "YandexTranslateUpdater: processing ${targets.size} subscriptions (2 concurrent workers)")
 
-        // 3. Параллельное обновление подписок; для каждой подписки — последовательный перебор зеркал
+        // 3. Параллельное обновление подписок с ограничением в 2 потока (по 1 подписке на поток);
+        // для каждой подписки — последовательный перебор зеркал
         var totalConfigs = 0
+        val semaphore = Semaphore(2)
+
         coroutineScope {
             val tasks = targets.map { target ->
                 async(Dispatchers.IO) {
-                    var success = false
-                    var importedCount = 0
+                    semaphore.withPermit {
+                        var success = false
+                        var importedCount = 0
+                        var hadCaptcha = false
 
-                    for (mirror in target.urls) {
-                        try {
-                            val yandexUrl = buildYandexTranslateUrl(mirror)
-                            Log.d(AppConfig.TAG, "YandexTranslateUpdater: querying mirror for '${target.remarks}': $mirror")
-                            val responseBody = fetchHttp(yandexUrl) ?: continue
-                            val extracted = extractSubscriptionContent(responseBody)
-                            if (extracted.isBlank()) {
-                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: extracted content is blank for $mirror")
-                                continue
-                            }
+                        for (mirror in target.urls) {
+                            try {
+                                val yandexUrl = buildYandexTranslateUrl(mirror)
+                                Log.d(AppConfig.TAG, "YandexTranslateUpdater: querying mirror for '${target.remarks}': $mirror")
+                                val responseBody = fetchHttp(yandexUrl) ?: continue
 
-                            val (count, _) = AngConfigManager.importBatchConfig(extracted, target.subGuid, append = false)
-                            if (count > 0) {
-                                Log.i(AppConfig.TAG, "YandexTranslateUpdater: imported $count configs for '${target.remarks}' via $mirror")
-                                target.subItem.lastUpdated = System.currentTimeMillis()
-                                target.subItem.lastUpdateFailed = false
-                                MmkvManager.encodeSubscription(target.subGuid, target.subItem)
-                                success = true
-                                importedCount = count
-                                break // Прерываем цикл зеркал: первое же успешное зеркало завершает обработку этой подписки!
-                            } else {
-                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: parsed 0 configs from $mirror")
+                                if (isCaptchaResponse(responseBody)) {
+                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: SmartCaptcha detected from Yandex for mirror $mirror on '${target.remarks}'")
+                                    hadCaptcha = true
+                                    continue
+                                }
+
+                                val extracted = extractSubscriptionContent(responseBody)
+                                if (extracted.isBlank()) {
+                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: extracted content is blank for $mirror")
+                                    continue
+                                }
+
+                                val (count, _) = AngConfigManager.importBatchConfig(extracted, target.subGuid, append = false)
+                                if (count > 0) {
+                                    Log.i(AppConfig.TAG, "YandexTranslateUpdater: imported $count configs for '${target.remarks}' via $mirror")
+                                    target.subItem.lastUpdated = System.currentTimeMillis()
+                                    target.subItem.lastUpdateFailed = false
+                                    MmkvManager.encodeSubscription(target.subGuid, target.subItem)
+                                    success = true
+                                    importedCount = count
+                                    break // Прерываем цикл зеркал: первое же успешное зеркало завершает обработку этой подписки!
+                                } else {
+                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: parsed 0 configs from $mirror")
+                                }
+                            } catch (e: Exception) {
+                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: mirror $mirror failed: ${e.message}")
                             }
-                        } catch (e: Exception) {
-                            Log.w(AppConfig.TAG, "YandexTranslateUpdater: mirror $mirror failed: ${e.message}")
+                            delay(200)
                         }
-                    }
 
-                    if (!success) {
-                        Log.e(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed for '${target.remarks}'")
-                        target.subItem.lastUpdateFailed = true
-                        MmkvManager.encodeSubscription(target.subGuid, target.subItem)
-                    }
+                        if (!success) {
+                            if (hadCaptcha) {
+                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: sub '${target.remarks}' skipped due to SmartCaptcha, not marking as failure")
+                            } else {
+                                Log.e(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed for '${target.remarks}'")
+                                target.subItem.lastUpdateFailed = true
+                                MmkvManager.encodeSubscription(target.subGuid, target.subItem)
+                            }
+                        }
 
-                    importedCount
+                        importedCount
+                    }
                 }
             }
 
