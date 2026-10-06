@@ -524,14 +524,22 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun showCurrentServerQr() {
-        val guid = MmkvManager.getSelectServer() ?: run {
-            toast(R.string.toast_none_data)
-            return
-        }
-        val serverName = V2RayServiceManager.getRunningServerName()
+        val runningConfig = if (V2RayServiceManager.isRunning()) {
+            MmkvManager.decodeRunningServerConfig()
+        } else null
+
+        val selectedGuid = MmkvManager.getSelectServer()
+        val config = runningConfig
+            ?: (!selectedGuid.isNullOrBlank()).let { MmkvManager.decodeServerConfig(selectedGuid.orEmpty()) }
+            ?: run {
+                toast(R.string.toast_none_data)
+                return
+            }
+
+        val serverName = config.remarks.ifEmpty { V2RayServiceManager.getRunningServerName() }
         lifecycleScope.launch(Dispatchers.IO) {
-            val bitmap: Bitmap? = AngConfigManager.share2QRCode(guid)
-            val configUrl: String = AngConfigManager.shareConfig(guid)
+            val bitmap: Bitmap? = AngConfigManager.share2QRCode(config)
+            val configUrl: String = AngConfigManager.shareConfig(config)
             withContext(Dispatchers.Main) {
                 if (bitmap == null) {
                     toast(R.string.toast_failure)
@@ -596,12 +604,16 @@ class MainActivity : HelperBaseActivity() {
             // Показываем имя текущего сервера
             // getRunningServerName() живёт в процессе сервиса и недоступен из UI-процесса,
             // поэтому читаем напрямую из MMKV по выбранному серверу
+            val runningConfig = if (V2RayServiceManager.isRunning()) {
+                MmkvManager.decodeRunningServerConfig()
+            } else null
             val selectedGuid = MmkvManager.getSelectServer()
-            val serverName = if (!selectedGuid.isNullOrBlank()) {
-                MmkvManager.decodeServerConfig(selectedGuid)?.remarks.orEmpty()
-            } else {
-                V2RayServiceManager.getRunningServerName()
-            }
+            val serverName = runningConfig?.remarks?.takeIf { it.isNotEmpty() }
+                ?: if (!selectedGuid.isNullOrBlank()) {
+                    MmkvManager.decodeServerConfig(selectedGuid)?.remarks.orEmpty()
+                } else {
+                    V2RayServiceManager.getRunningServerName()
+                }
             if (serverName.isNotEmpty()) {
                 binding.tvStatusDetail.text = getString(R.string.tv_server_name, serverName)
             } else {

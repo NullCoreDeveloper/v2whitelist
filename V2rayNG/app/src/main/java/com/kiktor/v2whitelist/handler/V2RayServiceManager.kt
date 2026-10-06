@@ -221,6 +221,7 @@ object V2RayServiceManager {
         }
 
         currentConfig = config
+        MmkvManager.encodeRunningServerConfig(config)
         var tunFd = vpnInterface?.fd ?: 0
         Log.d(AppConfig.TAG, "startCoreLoop: tunFd=$tunFd, isUsingHevTun=${SettingsManager.isUsingHevTun()}")
         if (SettingsManager.isUsingHevTun()) {
@@ -265,6 +266,8 @@ object V2RayServiceManager {
     fun stopCoreLoop(): Boolean {
         Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+        MmkvManager.encodeRunningServerConfig(null)
+        currentConfig = null
         
         SmartFailoverManager.stopFailoverMonitor()
         

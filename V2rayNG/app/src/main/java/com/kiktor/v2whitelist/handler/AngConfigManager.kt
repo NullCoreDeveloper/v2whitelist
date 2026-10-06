@@ -87,8 +87,16 @@ object AngConfigManager {
      * @return The QR code bitmap.
      */
     fun share2QRCode(guid: String): Bitmap? {
+        val config = MmkvManager.decodeServerConfig(guid) ?: return null
+        return share2QRCode(config)
+    }
+
+    /**
+     * Generates QR code directly from ProfileItem.
+     */
+    fun share2QRCode(config: ProfileItem): Bitmap? {
         try {
-            val conf = shareConfig(guid)
+            val conf = shareConfig(config)
             if (TextUtils.isEmpty(conf)) {
                 return null
             }
@@ -130,9 +138,15 @@ object AngConfigManager {
      * @return The configuration string.
      */
     fun shareConfig(guid: String): String {
-        try {
-            val config = MmkvManager.decodeServerConfig(guid) ?: return ""
+        val config = MmkvManager.decodeServerConfig(guid) ?: return ""
+        return shareConfig(config)
+    }
 
+    /**
+     * Generates share URL directly from ProfileItem.
+     */
+    fun shareConfig(config: ProfileItem): String {
+        try {
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
                 EConfigType.CUSTOM -> ""
@@ -147,7 +161,7 @@ object AngConfigManager {
                 else -> ""
             }
         } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to share config for GUID: $guid", e)
+            Log.e(AppConfig.TAG, "Failed to share config: ${config.remarks}", e)
             return ""
         }
     }
@@ -281,19 +295,42 @@ object AngConfigManager {
             }
             
             val guids = MmkvManager.encodeServerConfigs(processedConfigs)
-            for (i in processedConfigs.indices) {
-                val guid = guids[i]
-                val config = processedConfigs[i]
-                // Восстановление выбора сервера
-                if (removedSelectedServer != null &&
-                    config.server == removedSelectedServer.server &&
-                    config.serverPort == removedSelectedServer.serverPort &&
-                    config.remarks == removedSelectedServer.remarks
-                ) {
-                    MmkvManager.setSelectServer(guid)
+            var restoredGuid: String? = null
+
+            if (removedSelectedServer != null) {
+                // 1. Точное совпадение (адрес, порт, remarks)
+                for (i in processedConfigs.indices) {
+                    val config = processedConfigs[i]
+                    if (config.server == removedSelectedServer.server &&
+                        config.serverPort == removedSelectedServer.serverPort &&
+                        config.remarks == removedSelectedServer.remarks
+                    ) {
+                        restoredGuid = guids[i]
+                        break
+                    }
                 }
-                count++
+                // 2. Если remarks обновились в динамической подписке, ищем по адресу и порту
+                if (restoredGuid == null) {
+                    for (i in processedConfigs.indices) {
+                        val config = processedConfigs[i]
+                        if (config.server == removedSelectedServer.server &&
+                            config.serverPort == removedSelectedServer.serverPort
+                        ) {
+                            restoredGuid = guids[i]
+                            break
+                        }
+                    }
+                }
             }
+
+            if (restoredGuid != null) {
+                MmkvManager.setSelectServer(restoredGuid)
+                if (V2RayServiceManager.isRunning()) {
+                    val restoredConfig = processedConfigs[guids.indexOf(restoredGuid)]
+                    MmkvManager.encodeRunningServerConfig(restoredConfig)
+                }
+            }
+            count = processedConfigs.size
             return count
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to parse batch config", e)

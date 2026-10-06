@@ -55,6 +55,35 @@ object MmkvManager {
         return mainStorage.decodeString(KEY_SELECTED_SERVER)
     }
 
+    private const val KEY_RUNNING_SERVER_CONFIG = "KEY_RUNNING_SERVER_CONFIG"
+
+    /**
+     * Stores the configuration of the currently running server so that UI and QR codes
+     * remain accessible even during subscription updates.
+     */
+    fun encodeRunningServerConfig(config: ProfileItem?) {
+        if (config == null) {
+            mainStorage.remove(KEY_RUNNING_SERVER_CONFIG)
+        } else {
+            mainStorage.encode(KEY_RUNNING_SERVER_CONFIG, JsonUtil.toJson(config))
+        }
+    }
+
+    /**
+     * Retrieves the configuration of the currently running server.
+     */
+    fun decodeRunningServerConfig(): ProfileItem? {
+        val json = mainStorage.decodeString(KEY_RUNNING_SERVER_CONFIG)
+        if (json.isNullOrBlank()) {
+            return null
+        }
+        return try {
+            JsonUtil.fromJson(json, ProfileItem::class.java)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
      * Sets the selected server GUID.
      *
@@ -289,12 +318,22 @@ object MmkvManager {
             }
         }
         
+        val currentSelected = getSelectServer()
+        val isServiceRunning = V2RayServiceManager.isRunning()
+
         keysToRemove.forEach { key ->
-            if (getSelectServer() == key) {
-                mainStorage.remove(KEY_SELECTED_SERVER)
+            if (currentSelected == key) {
+                // Если сервис сейчас запущен и работает на этом сервере, не стираем его сразу из mainStorage
+                // и profileFullStorage, чтобы не сломать UI, показ QR-кода и проверку статуса.
+                if (!isServiceRunning) {
+                    mainStorage.remove(KEY_SELECTED_SERVER)
+                    profileFullStorage.remove(key)
+                    serverAffStorage.remove(key)
+                }
+            } else {
+                profileFullStorage.remove(key)
+                serverAffStorage.remove(key)
             }
-            profileFullStorage.remove(key)
-            serverAffStorage.remove(key)
         }
         
         if (keysToRemove.isNotEmpty()) {
