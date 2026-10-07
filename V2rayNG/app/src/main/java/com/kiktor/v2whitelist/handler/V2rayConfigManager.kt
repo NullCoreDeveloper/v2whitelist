@@ -65,15 +65,15 @@ object V2rayConfigManager {
      * @param guid The unique identifier for the V2ray configuration.
      * @return A ConfigResult object containing the configuration details or indicating failure.
      */
-    fun getV2rayConfig4Speedtest(context: Context, guid: String, port: Int = 0): ConfigResult {
+    fun getV2rayConfig4Speedtest(context: Context, guid: String, port: Int = 0, ignoreCustomEndpoint: Boolean = false): ConfigResult {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ConfigResult(false)
             return if (config.configType == EConfigType.CUSTOM) {
                 getV2rayCustomConfig(context, guid, config, port)
             } else if (config.configType == EConfigType.POLICYGROUP) {
-                getV2rayGroupConfig(context, guid, config, port)
+                getV2rayGroupConfig(context, guid, config, port, ignoreCustomEndpoint)
             } else {
-                getV2rayNormalConfig4Speedtest(context, guid, config, port)
+                getV2rayNormalConfig4Speedtest(context, guid, config, port, ignoreCustomEndpoint)
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to get V2ray config for speedtest", e)
@@ -172,7 +172,7 @@ object V2rayConfigManager {
      * @param config The profile item containing the configuration details.
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
-    private fun getV2rayGroupConfig(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
+    private fun getV2rayGroupConfig(context: Context, guid: String, config: ProfileItem, port: Int = 0, ignoreCustomEndpoint: Boolean = false): ConfigResult {
         val result = ConfigResult(false)
 
         val serverList = MmkvManager.decodeServerList()
@@ -199,7 +199,7 @@ object V2rayConfigManager {
                 }
             }
 
-        val v2rayConfig = getV2rayMultipleConfig(context, config, configList) ?: return result
+        val v2rayConfig = getV2rayMultipleConfig(context, config, configList, ignoreCustomEndpoint) ?: return result
 
         if (port > 0) {
             v2rayConfig.inbounds.clear()
@@ -289,7 +289,7 @@ object V2rayConfigManager {
         return result
     }
 
-    private fun getV2rayMultipleConfig(context: Context, config: ProfileItem, configList: List<ProfileItem>): V2rayConfig? {
+    private fun getV2rayMultipleConfig(context: Context, config: ProfileItem, configList: List<ProfileItem>, ignoreCustomEndpoint: Boolean = false): V2rayConfig? {
         val validConfigs = configList.asSequence().filter { it.server.isNotNullEmpty() }
             .filter { !Utils.isPureIpAddress(it.server!!) || Utils.isValidUrl(it.server!!) }
             .filter { it.configType != EConfigType.CUSTOM }
@@ -328,7 +328,9 @@ object V2rayConfigManager {
         getDns(v2rayConfig)
 
         getBalance(v2rayConfig, config)
-        getCustomEndpointOutbound(v2rayConfig)
+        if (!ignoreCustomEndpoint) {
+            getCustomEndpointOutbound(v2rayConfig)
+        }
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED)) {
             getCustomLocalDns(v2rayConfig)
@@ -354,7 +356,7 @@ object V2rayConfigManager {
      * @param config The profile item containing the configuration details.
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
-    private fun getV2rayNormalConfig4Speedtest(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
+    private fun getV2rayNormalConfig4Speedtest(context: Context, guid: String, config: ProfileItem, port: Int = 0, ignoreCustomEndpoint: Boolean = false): ConfigResult {
         val result = ConfigResult(false)
 
         val address = config.server ?: return result
@@ -369,6 +371,9 @@ object V2rayConfigManager {
 
         getOutbounds(v2rayConfig, config) ?: return result
         getMoreOutbounds(v2rayConfig, config.subscriptionId)
+        if (!ignoreCustomEndpoint) {
+            getCustomEndpointOutbound(v2rayConfig)
+        }
 
         v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "error"
         v2rayConfig.inbounds.clear()

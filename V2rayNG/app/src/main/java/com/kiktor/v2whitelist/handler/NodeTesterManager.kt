@@ -164,7 +164,8 @@ object NodeTesterManager {
         showStatus: Boolean = true,
         customMinMbps: Double? = null,
         customBytes: Long? = null,
-        customTimeoutMs: Int? = null
+        customTimeoutMs: Int? = null,
+        ignoreCustomEndpoint: Boolean = false
     ): Boolean {
         if (!currentCoroutineContext().isActive) return false
         
@@ -177,7 +178,7 @@ object NodeTesterManager {
         }
 
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
-        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port)
+        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port, ignoreCustomEndpoint)
         if (!configResult.status) {
             GeekModeLogger.log("NodeTester", "verifyProfile: failed to create speedtest config for $guid")
             return false

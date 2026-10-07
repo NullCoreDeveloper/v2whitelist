@@ -120,6 +120,10 @@ object SubscriptionHelper {
                     existing.url = defaultSub.url
                     changed = true
                 }
+                if (existing.targetScenarios != defaultSub.targetScenarios) {
+                    existing.targetScenarios = defaultSub.targetScenarios
+                    changed = true
+                }
             }
         }
         if (changed) {
@@ -309,25 +313,26 @@ object SubscriptionHelper {
                 "def_etoneya_whitelist",
                 "def_airlink_whitelist",
                 "def_rkp_whitelist",
+                "def_rjsxrd_bypass_all",
                 // Черные списки (ЧС)
+                "def_igareck_black",
                 "def_cyberportal_cp001",
                 "def_cyberportal_cp002",
                 "def_kizyak_black",
                 "def_rkp_blacklist",
                 "def_etoneya_blacklist",
-                "def_rjsxrd_bypass_all",
                 // YouTube и Музыка
                 "def_etoneya_youtube",
                 "def_etoneya_ytm",
                 "def_aetris"
             )
             AppScenario.VPN_BLACKLIST -> setOf(
+                "def_igareck_black",
                 "def_cyberportal_cp001",
                 "def_cyberportal_cp002",
                 "def_kizyak_black",
                 "def_rkp_blacklist",
-                "def_etoneya_blacklist",
-                "def_rjsxrd_bypass_all"
+                "def_etoneya_blacklist"
             )
             AppScenario.WHITELIST -> setOf(
                 "def_zieng2",
@@ -339,7 +344,8 @@ object SubscriptionHelper {
                 "def_cyberportal_cp042",
                 "def_etoneya_whitelist",
                 "def_airlink_whitelist",
-                "def_rkp_whitelist"
+                "def_rkp_whitelist",
+                "def_rjsxrd_bypass_all"
             )
             AppScenario.YOUTUBE -> setOf(
                 "def_etoneya_youtube",
@@ -691,11 +697,19 @@ object SubscriptionHelper {
 
         // Обновляем кастомные подписки
         val customSubs = loadCustomSubs()
-        for (sub in customSubs.filter { it.enabled }) {
+        val enabledCustomSubs = customSubs.filter { it.enabled }
+        val allSubscriptions = MmkvManager.decodeSubscriptions()
+        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
+        val totalSubs = enabledCustomSubs.size + regularSubs.size
+        var currentIdx = 0
+
+        for (sub in enabledCustomSubs) {
+            currentIdx++
+            val prefix = "[$currentIdx/$totalSubs]"
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${sub.name}")
             val subId = "custom_sub_${sub.id}"
-            val subscriptions = MmkvManager.decodeSubscriptions()
-            val existing = subscriptions.find { it.guid == subId }
-            if (existing != null) {
+            val existing = allSubscriptions.find { it.guid == subId }
+            val count = if (existing != null) {
                 existing.subscription.enabled = true
                 existing.subscription.filter = sub.filter
                 existing.subscription.sharePercent = sub.sharePercent
@@ -714,14 +728,21 @@ object SubscriptionHelper {
                 MmkvManager.encodeSubscription(subId, subItem)
                 AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort, sequential)
             }
+            if (count > 0) {
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${sub.name}: +$count")
+            }
         }
 
         // Обновляем обычные подписки (добавленные пользователем вручную)
-        val allSubscriptions = MmkvManager.decodeSubscriptions()
-        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
         for (sub in regularSubs) {
+            currentIdx++
+            val prefix = "[$currentIdx/$totalSubs]"
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${sub.subscription.remarks}")
             Log.d(AppConfig.TAG, "Manually updating regular subscription: ${sub.subscription.remarks}")
-            AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
+            val count = AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
+            if (count > 0) {
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${sub.subscription.remarks}: +$count")
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════

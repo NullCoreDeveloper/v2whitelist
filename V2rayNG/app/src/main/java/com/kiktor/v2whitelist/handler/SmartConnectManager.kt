@@ -469,6 +469,20 @@ object SmartConnectManager {
                 return@withContext true
             }
 
+            val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            if (customEndpointEnabled && !endpointUrl.isNullOrBlank() && filteredServers.isNotEmpty()) {
+                val testCandidate = filteredServers.first()
+                val worksDirectly = NodeTesterManager.verifyProfile(context, testCandidate.first, showStatus = false, ignoreCustomEndpoint = true)
+                if (worksDirectly) {
+                    val endpointProfile = AngConfigManager.identifyConfigType(endpointUrl)
+                    val endpointName = endpointProfile?.remarks?.takeIf { it.isNotBlank() } ?: "Конечный узел"
+                    GeekModeLogger.log("SmartConnect", "⚠️ Servers work directly, but Custom Endpoint ($endpointName) is DOWN!")
+                    sendStatus(context, "⚠️ Конечный узел ($endpointName) не отвечает")
+                    return@withContext false
+                }
+            }
+
             GeekModeLogger.log("SmartConnect", "No working server found after checking all chunks")
             sendStatus(context, context.getString(R.string.status_no_servers))
             return@withContext false
@@ -569,6 +583,20 @@ object SmartConnectManager {
                 connectToBest(context, nextBest, isStartup = false)
                 NotificationManager.cancelFailoverNotification()
                 return@withContext true
+            }
+
+            val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            if (customEndpointEnabled && !endpointUrl.isNullOrBlank() && filteredServers.isNotEmpty()) {
+                val testCandidate = filteredServers.first()
+                val worksDirectly = NodeTesterManager.verifyProfile(context, testCandidate.first, showStatus = false, ignoreCustomEndpoint = true)
+                if (worksDirectly) {
+                    val endpointProfile = AngConfigManager.identifyConfigType(endpointUrl)
+                    val endpointName = endpointProfile?.remarks?.takeIf { it.isNotBlank() } ?: "Конечный узел"
+                    GeekModeLogger.log("SmartConnect", "switchServer: ⚠️ Servers work directly, but Custom Endpoint ($endpointName) is DOWN!")
+                    sendStatus(context, "⚠️ Конечный узел ($endpointName) не отвечает")
+                    return@withContext false
+                }
             }
 
             GeekModeLogger.log("SmartConnect", "switchServer: No working server found")

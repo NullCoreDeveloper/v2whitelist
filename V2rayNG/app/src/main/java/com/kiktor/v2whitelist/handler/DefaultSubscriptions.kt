@@ -254,7 +254,7 @@ object DefaultSubscriptions {
             ).joinToString("|"),
             groupRegex = "(CF中转|☁️\\s*Cloudflare|Cloudflare|\\[BL\\]|BL)",
             enabled = false,
-            targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
+            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
         ),
         SubscriptionHelper.CustomSubData(
             id = "def_airlink_whitelist",

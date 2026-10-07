@@ -39,6 +39,7 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SettingsChangeManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
+import com.kiktor.v2whitelist.handler.SpeedtestManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.Utils
 import com.kiktor.v2whitelist.viewmodel.MainViewModel
@@ -62,6 +63,8 @@ class MainActivity : HelperBaseActivity() {
     val mainViewModel: MainViewModel by viewModels()
     private var activeJob: Job? = null
     private var isTaskRunning = false
+    private var isSubscriptionUpdating = false
+    private var customEndpointCheckJob: Job? = null
     // true пока мы показываем сообщение об ошибке после провала SmartConnect (2.5с задержка)
     private var isShowingError = false
     private var watchdogJob: Job? = null
@@ -360,6 +363,7 @@ class MainActivity : HelperBaseActivity() {
             cancelActiveTask()
             return
         }
+        isSubscriptionUpdating = true
         activeJob = lifecycleScope.launch {
             val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
             val isBs = com.kiktor.v2whitelist.handler.NetworkManager.checkInternetStatus() == 1
@@ -376,6 +380,7 @@ class MainActivity : HelperBaseActivity() {
                 mainViewModel.reloadServerList()
             } finally {
                 withContext(NonCancellable) {
+                    isSubscriptionUpdating = false
                     isTaskRunning = false
                     activeJob = null
                     updateUIState(mainViewModel.isRunning.value == true)
@@ -390,6 +395,7 @@ class MainActivity : HelperBaseActivity() {
             cancelActiveTask()
             return
         }
+        isSubscriptionUpdating = true
         activeJob = lifecycleScope.launch {
             setConnectingState(getString(R.string.msg_yandex_update_started))
             binding.tvStatus.text = "Обновление через Яндекс"
@@ -407,6 +413,7 @@ class MainActivity : HelperBaseActivity() {
                 }
             } finally {
                 withContext(NonCancellable) {
+                    isSubscriptionUpdating = false
                     isTaskRunning = false
                     activeJob = null
                     updateUIState(mainViewModel.isRunning.value == true)
@@ -435,7 +442,7 @@ class MainActivity : HelperBaseActivity() {
             // Показываем статус пока идёт задача ИЛИ пока сканирует ИЛИ пока показываем ошибку
             if (isTaskRunning || SmartConnectManager.isScanning.get() || isShowingError) {
                 binding.tvStatusDetail.text = status
-                if (isTaskRunning) {
+                if (isSubscriptionUpdating) {
                     val tvUpdateStatus = findViewById<android.widget.TextView>(R.id.tv_update_status)
                     val tvUpdateTime = findViewById<android.widget.TextView>(R.id.tv_update_time)
                     tvUpdateStatus?.text = "Обновление…"
@@ -572,6 +579,8 @@ class MainActivity : HelperBaseActivity() {
         cancelWatchdog()
         activeJob?.cancel()
         activeJob = null
+        customEndpointCheckJob?.cancel()
+        isSubscriptionUpdating = false
         isTaskRunning = false
         isShowingError = false
         SmartConnectManager.isScanning.set(false)
@@ -595,7 +604,7 @@ class MainActivity : HelperBaseActivity() {
         binding.tvConnectedServerBottom.isVisible = false
         binding.ivStatusIcon.setColorFilter(orangeColor)
 
-        if (message != null && (message.contains("подпис", ignoreCase = true) || message.contains("Яндекс", ignoreCase = true) || message.contains("update", ignoreCase = true))) {
+        if (isSubscriptionUpdating && message != null) {
             findViewById<android.widget.TextView>(R.id.tv_update_status)?.apply {
                 text = "Обновление…"
                 setTextColor(orangeColor)
@@ -683,8 +692,6 @@ class MainActivity : HelperBaseActivity() {
             binding.ivStatusIcon.setColorFilter(greenColor)
 
             // Показываем имя текущего сервера
-            // getRunningServerName() живёт в процессе сервиса и недоступен из UI-процесса,
-            // поэтому читаем напрямую из MMKV по выбранному серверу
             val runningConfig = if (V2RayServiceManager.isRunning()) {
                 MmkvManager.decodeRunningServerConfig()
             } else null
@@ -695,19 +702,63 @@ class MainActivity : HelperBaseActivity() {
                 } else {
                     V2RayServiceManager.getRunningServerName()
                 }
-            if (serverName.isNotEmpty()) {
-                binding.tvStatusDetail.text = getString(R.string.tv_server_name, serverName)
+
+            val isCustomEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            val endpointProfile = if (isCustomEndpointEnabled && !endpointUrl.isNullOrBlank()) {
+                AngConfigManager.identifyConfigType(endpointUrl)
+            } else null
+            val endpointName = endpointProfile?.remarks?.takeIf { it.isNotBlank() } ?: "Конечный узел"
+
+            if (isCustomEndpointEnabled && endpointUrl.isNullOrBlank()) {
+                val warnColor = ContextCompat.getColor(this, R.color.color_fab_active)
+                binding.tvStatus.text = "⚠️ Конечный узел не настроен"
+                binding.tvStatus.setTextColor(warnColor)
+                binding.ivStatusIcon.setColorFilter(warnColor)
+                binding.tvStatusDetail.text = "Опция включена, но URL узла пуст"
+            } else if (isCustomEndpointEnabled) {
+                binding.tvStatusDetail.text = if (serverName.isNotEmpty()) "$serverName ➔ $endpointName" else endpointName
+                customEndpointCheckJob?.cancel()
+                customEndpointCheckJob = lifecycleScope.launch(Dispatchers.IO) {
+                    delay(1200L)
+                    if (!V2RayServiceManager.isRunning()) return@launch
+                    val (delay, _) = SpeedtestManager.testConnection(this@MainActivity, SettingsManager.getSocksPort(), 4000)
+                    if (!V2RayServiceManager.isRunning()) return@launch
+                    withContext(Dispatchers.Main) {
+                        if (mainViewModel.isRunning.value == true && !isTaskRunning) {
+                            if (delay <= 0) {
+                                val warnColor = ContextCompat.getColor(this@MainActivity, R.color.color_fab_active)
+                                binding.tvStatus.text = "⚠️ Конечный узел не отвечает"
+                                binding.tvStatus.setTextColor(warnColor)
+                                binding.ivStatusIcon.setColorFilter(warnColor)
+                                val baseName = if (serverName.isNotEmpty()) "$serverName ➔ " else ""
+                                binding.tvStatusDetail.text = "$baseName❌ $endpointName"
+                            } else {
+                                binding.tvStatus.text = getString(R.string.tv_status_protected)
+                                binding.tvStatus.setTextColor(greenColor)
+                                binding.ivStatusIcon.setColorFilter(greenColor)
+                                val baseName = if (serverName.isNotEmpty()) "$serverName ➔ " else ""
+                                binding.tvStatusDetail.text = "$baseName$endpointName (${delay}ms)"
+                            }
+                        }
+                    }
+                }
             } else {
-                binding.tvStatusDetail.text = getString(R.string.tv_status_protected)
+                if (serverName.isNotEmpty()) {
+                    binding.tvStatusDetail.text = getString(R.string.tv_server_name, serverName)
+                } else {
+                    binding.tvStatusDetail.text = getString(R.string.tv_status_protected)
+                }
             }
             binding.tvServerName.isVisible = false
             binding.tvConnectedServerBottom.isVisible = false
-
 
             // Подключён: показываем QR кнопку, скрываем кнопку сканирования
             binding.btnShowQr.isVisible = true
             binding.btnScanAdd.isVisible = false
         } else {
+            customEndpointCheckJob?.cancel()
+            customEndpointCheckJob = null
             val grayColor = ContextCompat.getColor(this, R.color.color_fab_inactive)
             binding.tvStatus.text = getString(R.string.connection_not_connected)
             binding.tvStatus.setTextColor(grayColor)
@@ -722,6 +773,10 @@ class MainActivity : HelperBaseActivity() {
             // Отключён: скрываем QR кнопку, показываем кнопку сканирования
             binding.btnShowQr.isVisible = false
             binding.btnScanAdd.isVisible = true
+        }
+
+        if (!isSubscriptionUpdating) {
+            updateSubscriptionStatusUI()
         }
     }
 
@@ -768,6 +823,7 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun updateSubscriptionStatusUI() {
+        if (isSubscriptionUpdating) return
         val subs = MmkvManager.decodeSubscriptions()
         // minOf только по подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
         // Отключенные подписки не должны влиять на статус и время на главном экране.
@@ -1006,5 +1062,10 @@ class MainActivity : HelperBaseActivity() {
             e.printStackTrace()
         }
         return false
+    }
+
+    override fun onDestroy() {
+        customEndpointCheckJob?.cancel()
+        super.onDestroy()
     }
 }
