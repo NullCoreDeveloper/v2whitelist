@@ -154,6 +154,20 @@ class SettingsActivity : BaseActivity() {
                 requireContext().toast(getString(R.string.status_updating_subscription))
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_test_update_via_yandex")?.setOnPreferenceClickListener {
+                val intent = android.content.Intent(requireContext(), MainActivity::class.java).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra(MainActivity.EXTRA_START_YANDEX_UPDATE, true)
+                }
+                startActivity(intent)
+                activity?.finish()
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_clear_yandex_cookies")?.setOnPreferenceClickListener {
+                com.kiktor.v2whitelist.handler.YandexCaptchaSolver.clearCookies()
+                requireContext().toast(getString(R.string.toast_yandex_cookies_cleared))
+                true
+            }
             findPreference<androidx.preference.Preference>("pref_appearance_settings")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), AppearanceActivity::class.java))
                 true

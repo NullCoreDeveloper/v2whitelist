@@ -361,7 +361,16 @@ class MainActivity : HelperBaseActivity() {
             return
         }
         activeJob = lifecycleScope.launch {
-            setConnectingState(getString(R.string.status_updating_subscription))
+            val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
+            val isBs = com.kiktor.v2whitelist.handler.NetworkManager.checkInternetStatus() == 1
+            val isVpnRunning = V2RayServiceManager.isRunning()
+            val isYandexMode = updateViaYandexOnBs && isBs && !isVpnRunning
+
+            val statusMsg = if (isYandexMode) getString(R.string.msg_yandex_update_started) else getString(R.string.status_updating_subscription)
+            setConnectingState(statusMsg)
+            if (isYandexMode) {
+                binding.tvStatus.text = "Обновление через Яндекс"
+            }
             try {
                 SubscriptionHelper.updateSubscription(this@MainActivity)
                 mainViewModel.reloadServerList()
@@ -383,8 +392,13 @@ class MainActivity : HelperBaseActivity() {
         }
         activeJob = lifecycleScope.launch {
             setConnectingState(getString(R.string.msg_yandex_update_started))
+            binding.tvStatus.text = "Обновление через Яндекс"
             try {
-                val count = com.kiktor.v2whitelist.handler.YandexTranslateUpdater.updateAllViaYandex(this@MainActivity, isDebug = true)
+                val count = com.kiktor.v2whitelist.handler.YandexTranslateUpdater.updateAllViaYandex(
+                    context = this@MainActivity,
+                    isDebug = true,
+                    sequential = false
+                )
                 mainViewModel.reloadServerList()
                 if (count > 0) {
                     toast(getString(R.string.msg_yandex_update_success, count))
@@ -421,6 +435,13 @@ class MainActivity : HelperBaseActivity() {
             // Показываем статус пока идёт задача ИЛИ пока сканирует ИЛИ пока показываем ошибку
             if (isTaskRunning || SmartConnectManager.isScanning.get() || isShowingError) {
                 binding.tvStatusDetail.text = status
+                if (isTaskRunning) {
+                    val tvUpdateStatus = findViewById<android.widget.TextView>(R.id.tv_update_status)
+                    val tvUpdateTime = findViewById<android.widget.TextView>(R.id.tv_update_time)
+                    tvUpdateStatus?.text = "Обновление…"
+                    tvUpdateStatus?.setTextColor(ContextCompat.getColor(this, R.color.color_fab_active))
+                    tvUpdateTime?.text = status
+                }
             }
         }
         mainViewModel.updateListAction.observe(this) {
@@ -555,6 +576,7 @@ class MainActivity : HelperBaseActivity() {
         isShowingError = false
         SmartConnectManager.isScanning.set(false)
         updateUIState(mainViewModel.isRunning.value == true)
+        updateSubscriptionStatusUI()
     }
 
     private fun setConnectingState(message: String? = null) {
@@ -572,6 +594,14 @@ class MainActivity : HelperBaseActivity() {
         binding.tvServerName.isVisible = false
         binding.tvConnectedServerBottom.isVisible = false
         binding.ivStatusIcon.setColorFilter(orangeColor)
+
+        if (message != null && (message.contains("подпис", ignoreCase = true) || message.contains("Яндекс", ignoreCase = true) || message.contains("update", ignoreCase = true))) {
+            findViewById<android.widget.TextView>(R.id.tv_update_status)?.apply {
+                text = "Обновление…"
+                setTextColor(orangeColor)
+            }
+            findViewById<android.widget.TextView>(R.id.tv_update_time)?.text = message
+        }
     }
 
     private fun showCurrentServerQr() {

@@ -166,37 +166,41 @@ object YandexTranslateUpdater {
     private suspend fun processTarget(
         target: SubUpdateTarget,
         context: Context,
-        isRetryPass: Boolean = false
+        isRetryPass: Boolean = false,
+        subIndex: Int = 1,
+        totalSubs: Int = 1,
+        sequential: Boolean = false
     ): Pair<Boolean, Int> {
         var success = false
         var importedCount = 0
         var hadCaptcha = false
 
-        GeekModeLogger.log("YandexTranslate", "► Подписка '${target.remarks}' (${target.urls.size} зеркал${if (isRetryPass) ", повторный проход" else ""})")
-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Загрузка: ${target.remarks}")
+        val prefix = if (isRetryPass) "Повтор [$subIndex/$totalSubs]" else "[$subIndex/$totalSubs]"
+        GeekModeLogger.log("YandexTranslate", "► $prefix '${target.remarks}' (${target.urls.size} зеркал${if (isRetryPass) ", повторный проход" else ""})")
+        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${target.remarks}")
 
         for ((index, mirror) in target.urls.withIndex()) {
             try {
                 val yandexUrl = buildYandexTranslateUrl(mirror)
                 Log.d(AppConfig.TAG, "YandexTranslateUpdater: [${if (isRetryPass) "RETRY" else "PASS1"}] querying mirror for '${target.remarks}': $mirror")
-                GeekModeLogger.log("YandexTranslate", "  → [${target.remarks}] Зеркало ${index + 1}/${target.urls.size}: $mirror")
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "${target.remarks} (${index + 1}/${target.urls.size})")
+                GeekModeLogger.log("YandexTranslate", "  → $prefix Зеркало ${index + 1}/${target.urls.size}: $mirror")
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${target.remarks} (${index + 1}/${target.urls.size})")
 
                 var result = fetchHttp(yandexUrl, timeoutMs = 7000)
 
                 if (result.isCaptcha) {
                     Log.w(AppConfig.TAG, "YandexTranslateUpdater: SmartCaptcha detected for '${target.remarks}', invoking solver...")
-                    GeekModeLogger.log("YandexTranslate", "  ⚠️ [${target.remarks}] Обнаружена SmartCaptcha! Запуск решения...")
-                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Проверка SmartCaptcha...")
+                    GeekModeLogger.log("YandexTranslate", "  ⚠️ $prefix Обнаружена SmartCaptcha! Запуск решения...")
+                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: проверка капчи…")
                     hadCaptcha = true
-                    val solved = YandexCaptchaSolver.solve(context, result.captchaUrl ?: yandexUrl)
+                    val solved = YandexCaptchaSolver.solve(context, result.captchaUrl ?: yandexUrl, allowInteractive = !sequential)
                     if (solved) {
                         Log.i(AppConfig.TAG, "YandexTranslateUpdater: Captcha solved! Retrying mirror $mirror...")
-                        GeekModeLogger.log("YandexTranslate", "  ✅ [${target.remarks}] Капча пройдена! Повторный запрос...")
+                        GeekModeLogger.log("YandexTranslate", "  ✅ $prefix Капча пройдена! Повторный запрос...")
                         result = fetchHttp(yandexUrl, timeoutMs = 7000)
                     } else {
                         Log.w(AppConfig.TAG, "YandexTranslateUpdater: Captcha was not solved, skipping mirror")
-                        GeekModeLogger.log("YandexTranslate", "  ❌ [${target.remarks}] Капча не решена, пропуск зеркала")
+                        GeekModeLogger.log("YandexTranslate", "  ❌ $prefix Капча не решена, пропуск зеркала")
                         continue
                     }
                 }
@@ -207,8 +211,8 @@ object YandexTranslateUpdater {
                         val (count, _) = AngConfigManager.importBatchConfig(extracted, target.subGuid, append = false)
                         if (count > 0) {
                             Log.i(AppConfig.TAG, "YandexTranslateUpdater: successfully imported $count configs for '${target.remarks}' via $mirror")
-                            GeekModeLogger.log("YandexTranslate", "  ✅ [${target.remarks}] Успешно импортировано: $count серверов")
-                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "${target.remarks}: +$count")
+                            GeekModeLogger.log("YandexTranslate", "  ✅ $prefix Успешно импортировано: $count серверов")
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${target.remarks}: +$count")
                             target.subItem.lastUpdated = System.currentTimeMillis()
                             target.subItem.lastUpdateFailed = false
                             MmkvManager.encodeSubscription(target.subGuid, target.subItem)
@@ -217,23 +221,23 @@ object YandexTranslateUpdater {
                             break // Успех: прерываем перебор зеркал для этой подписки
                         } else {
                             Log.w(AppConfig.TAG, "YandexTranslateUpdater: parsed 0 configs from $mirror")
-                            GeekModeLogger.log("YandexTranslate", "  ⚠️ [${target.remarks}] 0 серверов распознано из ответа")
+                            GeekModeLogger.log("YandexTranslate", "  ⚠️ $prefix 0 серверов распознано из ответа")
                         }
                     } else {
                         Log.w(AppConfig.TAG, "YandexTranslateUpdater: extracted content is blank for $mirror")
-                        GeekModeLogger.log("YandexTranslate", "  ⚠️ [${target.remarks}] Текст подписки пуст после декодирования")
+                        GeekModeLogger.log("YandexTranslate", "  ⚠️ $prefix Текст подписки пуст после декодирования")
                     }
                 }
             } catch (e: Exception) {
                 Log.w(AppConfig.TAG, "YandexTranslateUpdater: mirror $mirror failed: ${e.message}")
-                GeekModeLogger.log("YandexTranslate", "  ❌ [${target.remarks}] Ошибка зеркала: ${e.message}")
+                GeekModeLogger.log("YandexTranslate", "  ❌ $prefix Ошибка зеркала: ${e.message}")
             }
-            delay(150)
+            delay(if (sequential) 300L else 150L)
         }
 
         if (!success && !isRetryPass && !hadCaptcha) {
             Log.w(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed for '${target.remarks}' on initial pass")
-            GeekModeLogger.log("YandexTranslate", "  ⚠️ [${target.remarks}] Все зеркала не ответили на первом проходе")
+            GeekModeLogger.log("YandexTranslate", "  ⚠️ $prefix Все зеркала не ответили на первом проходе")
         }
 
         return Pair(success, importedCount)
@@ -241,15 +245,21 @@ object YandexTranslateUpdater {
 
     /**
      * Updates all active subscriptions via Yandex Translate proxy.
-     * All subscriptions run concurrently with semaphore limit.
+     * In interactive mode runs concurrently (2 workers); in sequential mode runs 1 worker at a time.
      * Includes automatic SmartCaptcha resolution and retry pass for failed subscriptions.
      *
      * @param context Application or Activity context.
      * @param isDebug True if triggered manually for debugging.
+     * @param sequential If true, process strictly one subscription at a time and avoid interactive UI popups.
      * @return Total count of successfully imported configurations.
      */
-    suspend fun updateAllViaYandex(context: Context, isDebug: Boolean = false): Int = withContext(Dispatchers.IO) {
-        Log.i(AppConfig.TAG, "YandexTranslateUpdater: starting update (isDebug=$isDebug)")
+    suspend fun updateAllViaYandex(
+        context: Context,
+        isDebug: Boolean = false,
+        sequential: Boolean = false
+    ): Int = withContext(Dispatchers.IO) {
+        val modeStr = if (sequential) "последовательный режим, 1 поток" else "2 потока"
+        Log.i(AppConfig.TAG, "YandexTranslateUpdater: starting update (isDebug=$isDebug, sequential=$sequential)")
 
         // 1. Снимок кэшей серверов для последующего ремаппинга
         data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
@@ -312,20 +322,28 @@ object YandexTranslateUpdater {
             return@withContext 0
         }
 
-        Log.i(AppConfig.TAG, "YandexTranslateUpdater: processing ${targets.size} subscriptions (2 concurrent workers)")
-        GeekModeLogger.log("YandexTranslate", "🚀 Запуск обновления подписок через Яндекс (${targets.size} подписок, 2 потока)")
+        Log.i(AppConfig.TAG, "YandexTranslateUpdater: processing ${targets.size} subscriptions ($modeStr)")
+        GeekModeLogger.log("YandexTranslate", "🚀 Запуск обновления подписок через Яндекс (${targets.size} подписок, $modeStr)")
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Обновление через Яндекс (${targets.size} подписок)...")
 
         var totalConfigs = 0
-        val semaphore = Semaphore(2)
+        val concurrency = if (sequential) 1 else 2
+        val semaphore = Semaphore(concurrency)
         val failedTargets = mutableListOf<SubUpdateTarget>()
 
         // 3. Первый проход
         coroutineScope {
-            val tasks = targets.map { target ->
+            val tasks = targets.mapIndexed { idx, target ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
-                        val (success, count) = processTarget(target, context, isRetryPass = false)
+                        val (success, count) = processTarget(
+                            target = target,
+                            context = context,
+                            isRetryPass = false,
+                            subIndex = idx + 1,
+                            totalSubs = targets.size,
+                            sequential = sequential
+                        )
                         if (!success) {
                             synchronized(failedTargets) {
                                 failedTargets.add(target)
@@ -343,16 +361,23 @@ object YandexTranslateUpdater {
         // 4. Повторный проход для подписок, у которых не удалось получить серверы (retry pass)
         if (failedTargets.isNotEmpty()) {
             Log.i(AppConfig.TAG, "YandexTranslateUpdater: ${failedTargets.size} subscriptions failed, starting retry pass after delay...")
-            GeekModeLogger.log("YandexTranslate", "🔄 Запуск повторного прохода для ${failedTargets.size} подписок через 1.5с...")
+            GeekModeLogger.log("YandexTranslate", "🔄 Запуск повторного прохода для ${failedTargets.size} подписок...")
             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Повторный опрос ${failedTargets.size} подписок...")
-            delay(1500)
+            delay(if (sequential) 2000L else 1500L)
 
             val stillFailed = mutableListOf<SubUpdateTarget>()
             coroutineScope {
-                val retryTasks = failedTargets.map { target ->
+                val retryTasks = failedTargets.mapIndexed { rIdx, target ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
-                            val (success, count) = processTarget(target, context, isRetryPass = true)
+                            val (success, count) = processTarget(
+                                target = target,
+                                context = context,
+                                isRetryPass = true,
+                                subIndex = rIdx + 1,
+                                totalSubs = failedTargets.size,
+                                sequential = sequential
+                            )
                             if (!success) {
                                 synchronized(stillFailed) {
                                     stillFailed.add(target)

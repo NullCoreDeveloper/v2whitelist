@@ -771,4 +771,7 @@
     <string name="msg_yandex_update_fail">Failed to update subscriptions via Yandex</string>
     <string name="title_yandex_captcha">Yandex Verification</string>
     <string name="msg_yandex_captcha">Yandex is requesting verification to continue updating subscriptions. Please verify below:</string>
+    <string name="title_pref_clear_yandex_cookies">Reset Yandex session (captcha)</string>
+    <string name="summary_pref_clear_yandex_cookies">Clear saved cookies and SmartCaptcha pass session</string>
+    <string name="toast_yandex_cookies_cleared">Yandex session cleared</string>
 </resources>

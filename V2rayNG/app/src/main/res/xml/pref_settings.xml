@@ -246,6 +246,19 @@
             android:key="pref_check_update_now"
             android:summary="@string/summary_pref_check_update_now"
             android:title="@string/title_pref_check_update_now" />
+        <CheckBoxPreference
+            android:key="pref_update_via_yandex_on_bs"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_update_via_yandex_on_bs"
+            android:title="@string/title_pref_update_via_yandex_on_bs" />
+        <Preference
+            android:key="pref_test_update_via_yandex"
+            android:summary="@string/summary_pref_debug_update_via_yandex"
+            android:title="@string/title_pref_debug_update_via_yandex" />
+        <Preference
+            android:key="pref_clear_yandex_cookies"
+            android:summary="@string/summary_pref_clear_yandex_cookies"
+            android:title="@string/title_pref_clear_yandex_cookies" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/title_ui_settings">

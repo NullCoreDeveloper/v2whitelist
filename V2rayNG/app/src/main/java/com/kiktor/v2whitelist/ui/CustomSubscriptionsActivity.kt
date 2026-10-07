@@ -12,7 +12,6 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.kiktor.v2whitelist.helper.SimpleItemTouchHelperCallback
-import com.google.android.material.materialswitch.MaterialSwitch
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.extension.toast
@@ -21,7 +20,6 @@ import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.JsonUtil
 import com.kiktor.v2whitelist.util.Utils
 import androidx.lifecycle.lifecycleScope
-import com.kiktor.v2whitelist.handler.YandexTranslateUpdater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -40,33 +38,9 @@ class CustomSubscriptionsActivity : BaseActivity() {
         tvEmpty = findViewById(R.id.tv_empty)
         rvSubscriptions = findViewById(R.id.rv_subscriptions)
 
-        setupYandexSettings()
         setupAddButton()
         loadCustomSubs()
         setupRecyclerView()
-    }
-
-    private fun setupYandexSettings() {
-        val switchYandex = findViewById<MaterialSwitch>(R.id.switch_update_via_yandex_on_bs)
-        val btnDebugYandex = findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_debug_update_yandex)
-        val layoutDebugYandex = findViewById<View>(R.id.layout_debug_update_yandex)
-
-        switchYandex?.isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
-        switchYandex?.setOnCheckedChangeListener { _, isChecked ->
-            MmkvManager.encodeSettings(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, isChecked)
-        }
-
-        val triggerDebugUpdate = {
-            val intent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra(MainActivity.EXTRA_START_YANDEX_UPDATE, true)
-            }
-            startActivity(intent)
-            finish()
-        }
-
-        btnDebugYandex?.setOnClickListener { triggerDebugUpdate() }
-        layoutDebugYandex?.setOnClickListener { triggerDebugUpdate() }
     }
 
     private fun setupAddButton() {

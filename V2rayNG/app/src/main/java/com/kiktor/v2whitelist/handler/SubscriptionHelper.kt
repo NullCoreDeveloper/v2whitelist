@@ -602,8 +602,8 @@ object SubscriptionHelper {
         val isVpnRunning = V2RayServiceManager.isRunning()
 
         if (updateViaYandexOnBs && isBs && !isVpnRunning) {
-            Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy")
-            val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false)
+            Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy (sequential=$sequential)")
+            val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false, sequential = sequential)
             Log.i(AppConfig.TAG, "updateSubscription: Yandex Translate update finished, total configs: $count")
             return@withContext
         }

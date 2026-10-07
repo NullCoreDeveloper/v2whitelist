@@ -763,4 +763,7 @@
     <string name="msg_yandex_update_fail">Не удалось обновить подписки через Яндекс</string>
     <string name="title_yandex_captcha">Проверка Яндекс (SmartCaptcha)</string>
     <string name="msg_yandex_captcha">Яндекс запрашивает подтверждение для обновления подписок. Пожалуйста, подтвердите, что вы не робот, ниже:</string>
+    <string name="title_pref_clear_yandex_cookies">Сброс сессии Яндекс (капча)</string>
+    <string name="summary_pref_clear_yandex_cookies">Очистить сохранённые cookies и сессию прохождения SmartCaptcha</string>
+    <string name="toast_yandex_cookies_cleared">Сессия Яндекс успешно очищена</string>
 </resources>

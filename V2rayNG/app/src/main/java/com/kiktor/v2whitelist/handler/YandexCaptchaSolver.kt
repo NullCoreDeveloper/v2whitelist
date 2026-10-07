@@ -33,9 +33,14 @@ object YandexCaptchaSolver {
      *
      * @param context Context or Activity
      * @param captchaUrl URL where captcha was encountered
+     * @param allowInteractive Whether to show interactive dialog if silent pass fails. False in background/sequential mode.
      * @return true if captcha was resolved and cookies updated, false otherwise.
      */
-    suspend fun solve(context: Context, captchaUrl: String): Boolean = mutex.withLock {
+    suspend fun solve(
+        context: Context,
+        captchaUrl: String,
+        allowInteractive: Boolean = true
+    ): Boolean = mutex.withLock {
         val currentCookies = MmkvManager.decodeSettingsString(AppConfig.PREF_YANDEX_COOKIES, "").orEmpty()
         if (currentCookies.contains("spravka=")) {
             Log.i(AppConfig.TAG, "YandexCaptchaSolver: valid spravka already in cookies, testing if challenge bypassed")
@@ -55,8 +60,8 @@ object YandexCaptchaSolver {
                 return@withContext true
             }
 
-            // 2. Интерактивный диалог с пользователем
-            if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+            // 2. Интерактивный диалог с пользователем (если разрешен интерактивный режим)
+            if (allowInteractive && activity != null && !activity.isFinishing && !activity.isDestroyed) {
                 Log.i(AppConfig.TAG, "YandexCaptchaSolver: silent pass insufficient, launching interactive dialog")
                 GeekModeLogger.log("YandexCaptcha", "Фоновое решение не удалось. Открыт диалог подтверждения «Я не робот».")
                 val dialogResult = showInteractiveDialog(activity, captchaUrl)
@@ -67,8 +72,13 @@ object YandexCaptchaSolver {
                 }
                 return@withContext dialogResult
             } else {
-                Log.w(AppConfig.TAG, "YandexCaptchaSolver: no active activity for interactive dialog, skipping")
-                GeekModeLogger.log("YandexCaptcha", "⚠️ Нет активного Activity для показа диалога капчи, пропуск.")
+                if (!allowInteractive) {
+                    Log.w(AppConfig.TAG, "YandexCaptchaSolver: interactive dialog disabled (background/sequential mode)")
+                    GeekModeLogger.log("YandexCaptcha", "⚠️ Интерактивный диалог капчи пропущен (фоновый/последовательный режим)")
+                } else {
+                    Log.w(AppConfig.TAG, "YandexCaptchaSolver: no active activity for interactive dialog, skipping")
+                    GeekModeLogger.log("YandexCaptcha", "⚠️ Нет активного Activity для показа диалога капчи, пропуск.")
+                }
                 return@withContext false
             }
         }
@@ -279,5 +289,16 @@ object YandexCaptchaSolver {
         val merged = mergeCookies(existing, cookies)
         MmkvManager.encodeSettings(AppConfig.PREF_YANDEX_COOKIES, merged)
         Log.i(AppConfig.TAG, "YandexCaptchaSolver: updated saved cookies (spravka=${merged.contains("spravka=")})")
+    }
+
+    fun clearCookies() {
+        MmkvManager.encodeSettings(AppConfig.PREF_YANDEX_COOKIES, "")
+        try {
+            val cm = CookieManager.getInstance()
+            cm.removeAllCookies(null)
+            cm.flush()
+        } catch (ignored: Exception) {}
+        Log.i(AppConfig.TAG, "YandexCaptchaSolver: cookies cleared")
+        GeekModeLogger.log("YandexCaptcha", "🗑️ Сессия и cookies Яндекса сброшены.")
     }
 }
