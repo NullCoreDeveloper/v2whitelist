@@ -18,7 +18,9 @@ import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.JsonUtil
+import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.util.Utils
+import com.kiktor.v2whitelist.dto.SubscriptionItem
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -193,9 +195,20 @@ class CustomSubscriptionsActivity : BaseActivity() {
                     // Обогащаем данными о последнем обновлении и сценариях
                     val allSubs = MmkvManager.decodeSubscriptions()
                     customSubs.forEach { sub ->
-                        val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" }
-                        sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
-                        sub.lastUpdateFailed = (realSub?.subscription?.lastUpdateFailed ?: false) && sub.enabled
+                        val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" || it.guid == sub.id }
+                        if (!sub.enabled) {
+                            sub.lastUpdated = 0L
+                            sub.lastUpdateFailed = false
+                            if (realSub != null && (realSub.subscription.lastUpdated != 0L || realSub.subscription.enabled)) {
+                                realSub.subscription.lastUpdated = 0L
+                                realSub.subscription.enabled = false
+                                realSub.subscription.lastUpdateFailed = false
+                                MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                            }
+                        } else {
+                            sub.lastUpdated = realSub?.subscription?.lastUpdated ?: 0L
+                            sub.lastUpdateFailed = (realSub?.subscription?.lastUpdateFailed ?: false) && sub.enabled
+                        }
 
                         if (sub.targetScenarios.isEmpty()) {
                             val defaultMatch = com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }
@@ -234,28 +247,50 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 val subId = customSubs[position].id
                 val guid = "custom_sub_$subId"
                 val allSubs = MmkvManager.decodeSubscriptions()
-                val realSub = allSubs.find { it.guid == guid }
+                val matchingSubs = allSubs.filter { it.guid == guid || it.guid == subId }
 
                 if (!isEnabled) {
                     customSubs[position].lastUpdateFailed = false
-                    MmkvManager.removeServerViaSubid(guid)
                     customSubs[position].lastUpdated = 0L
+                    MmkvManager.removeServerViaSubid(guid)
+                    MmkvManager.removeServerViaSubid(subId)
                     
-                    realSub?.let {
-                        it.subscription.lastUpdated = 0L
-                        it.subscription.enabled = false
-                        it.subscription.lastUpdateFailed = false
-                        MmkvManager.encodeSubscription(it.guid, it.subscription)
+                    for (realSub in matchingSubs) {
+                        realSub.subscription.lastUpdated = 0L
+                        realSub.subscription.enabled = false
+                        realSub.subscription.lastUpdateFailed = false
+                        MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                        MmkvManager.removeServerViaSubid(realSub.guid)
+                    }
+
+                    val directSub = MmkvManager.decodeSubscription(guid)
+                    if (directSub != null) {
+                        directSub.lastUpdated = 0L
+                        directSub.enabled = false
+                        directSub.lastUpdateFailed = false
+                        MmkvManager.encodeSubscription(guid, directSub)
                     }
                     
                     // Обновляем UI, чтобы сразу сбросить "Обновлено N минут назад"
                     rvSubscriptions.post {
                         adapter.notifyItemChanged(position)
                     }
+                    // Оповещаем главный экран о перезагрузке списка серверов и обновлении времени
+                    MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
                 } else {
-                    realSub?.let {
-                        it.subscription.enabled = true
-                        MmkvManager.encodeSubscription(it.guid, it.subscription)
+                    for (realSub in matchingSubs) {
+                        realSub.subscription.enabled = true
+                        MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                    }
+                    if (matchingSubs.isEmpty()) {
+                        val subItem = SubscriptionItem().apply {
+                            remarks = customSubs[position].name
+                            url = customSubs[position].url
+                            filter = customSubs[position].filter
+                            sharePercent = customSubs[position].sharePercent
+                            enabled = true
+                        }
+                        MmkvManager.encodeSubscription(guid, subItem)
                     }
                 }
                 saveCustomSubs()

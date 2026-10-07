@@ -34,7 +34,9 @@ object SubscriptionHelper {
         var filter: String = "",
         var groupRegex: String = "",
         var enabled: Boolean = true,
+        var lastUpdated: Long = 0L,
         var sharePercent: Int? = null,
+        var lastUpdateFailed: Boolean = false,
         var targetScenarios: List<String> = emptyList()
     )
 
@@ -125,6 +127,31 @@ object SubscriptionHelper {
         }
         MmkvManager.encodeSettings("pref_defaults_added_v1", true)
 
+        // Санитизация: для всех отключенных подписок сбрасываем lastUpdated и удаляем остаточные серверы
+        val allSubsInStorage = MmkvManager.decodeSubscriptions()
+        for (sub in customSubs.filter { !it.enabled }) {
+            sub.lastUpdated = 0L
+            sub.lastUpdateFailed = false
+            val guid = "custom_sub_${sub.id}"
+            MmkvManager.removeServerViaSubid(guid)
+            MmkvManager.removeServerViaSubid(sub.id)
+            val realSub = MmkvManager.decodeSubscription(guid)
+            if (realSub != null && (realSub.lastUpdated > 0L || realSub.enabled)) {
+                realSub.lastUpdated = 0L
+                realSub.enabled = false
+                realSub.lastUpdateFailed = false
+                MmkvManager.encodeSubscription(guid, realSub)
+            }
+        }
+        for (subCache in allSubsInStorage.filter { !it.subscription.enabled }) {
+            if (subCache.subscription.lastUpdated > 0L) {
+                subCache.subscription.lastUpdated = 0L
+                subCache.subscription.lastUpdateFailed = false
+                MmkvManager.encodeSubscription(subCache.guid, subCache.subscription)
+            }
+            MmkvManager.removeServerViaSubid(subCache.guid)
+        }
+
         // Обработка кастомных подписок (zieng2/wl теперь обычная кастомная подписка)
         setupCustomSubscriptions(context)
     }
@@ -172,8 +199,12 @@ object SubscriptionHelper {
         if (json.isNullOrEmpty()) return emptyList()
         return try {
             val subs = com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
-            // Подтягиваем дефолтные сценарии для подписок, где сценарии еще не были назначены
+            // Подтягиваем дефолтные сценарии для подписок, где сценарии еще не были назначены, и сбрасываем время у отключенных
             subs.forEach { sub ->
+                if (!sub.enabled) {
+                    sub.lastUpdated = 0L
+                    sub.lastUpdateFailed = false
+                }
                 if (sub.targetScenarios.isEmpty()) {
                     val defaultMatch = DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }
                     if (defaultMatch != null && defaultMatch.targetScenarios.isNotEmpty()) {
@@ -341,6 +372,8 @@ object SubscriptionHelper {
         }
 
         val defaultSubIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+        val disabledSubIdsToPurge = mutableSetOf<String>()
+
         for (sub in customSubs) {
             // Если подписка из предустановленных — управляем её статусом согласно сценарию.
             // Если кастомная добавленная пользователем — не отключаем её принудительно.
@@ -348,18 +381,33 @@ object SubscriptionHelper {
             val shouldEnable = if (isDefault) targetSubIds.contains(sub.id) else sub.enabled
             sub.enabled = shouldEnable
             val guid = "custom_sub_${sub.id}"
-            val realSub = allSubs.find { it.guid == guid }
+            val matchingSubs = allSubs.filter {
+                it.guid == guid || it.guid == sub.id || it.subscription.remarks.equals(sub.name, ignoreCase = true)
+            }
 
             if (!shouldEnable) {
-                MmkvManager.removeServerViaSubid(guid)
-                realSub?.let {
-                    it.subscription.lastUpdated = 0L
-                    it.subscription.enabled = false
-                    it.subscription.lastUpdateFailed = false
-                    MmkvManager.encodeSubscription(it.guid, it.subscription)
+                sub.lastUpdated = 0L
+                sub.lastUpdateFailed = false
+                disabledSubIdsToPurge.add(guid)
+                disabledSubIdsToPurge.add(sub.id)
+                matchingSubs.forEach { disabledSubIdsToPurge.add(it.guid) }
+
+                for (realSub in matchingSubs) {
+                    realSub.subscription.lastUpdated = 0L
+                    realSub.subscription.enabled = false
+                    realSub.subscription.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                }
+
+                val direct = MmkvManager.decodeSubscription(guid)
+                if (direct != null) {
+                    direct.lastUpdated = 0L
+                    direct.enabled = false
+                    direct.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(guid, direct)
                 }
             } else {
-                if (realSub == null) {
+                if (matchingSubs.isEmpty()) {
                     val subItem = SubscriptionItem().apply {
                         remarks = sub.name
                         url = sub.url
@@ -369,18 +417,48 @@ object SubscriptionHelper {
                     }
                     MmkvManager.encodeSubscription(guid, subItem)
                 } else {
-                    realSub.subscription.enabled = true
-                    MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                    for (realSub in matchingSubs) {
+                        realSub.subscription.enabled = true
+                        MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
+                    }
+                }
+            }
+        }
+
+        // Также гарантируем отключение любых предустановленных подписок в allSubs, не входящих в целевой сценарий
+        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            if (!targetSubIds.contains(defaultSub.id)) {
+                val guid = "custom_sub_${defaultSub.id}"
+                disabledSubIdsToPurge.add(guid)
+                disabledSubIdsToPurge.add(defaultSub.id)
+                allSubs.filter {
+                    it.guid == guid || it.guid == defaultSub.id || it.subscription.remarks.equals(defaultSub.name, ignoreCase = true)
+                }.forEach { match ->
+                    disabledSubIdsToPurge.add(match.guid)
+                    match.subscription.lastUpdated = 0L
+                    match.subscription.enabled = false
+                    match.subscription.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(match.guid, match.subscription)
                 }
             }
         }
 
         MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
 
+        // Удаляем серверы отключенных подписок до обновления
+        for (id in disabledSubIdsToPurge) {
+            MmkvManager.removeServerViaSubid(id)
+        }
+
         try {
             updateSubscription(context)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to update subscriptions after applying scenario: ${e.message}")
+        }
+
+        // Повторная очистка серверов отключенных подписок после обновления
+        for (id in disabledSubIdsToPurge) {
+            MmkvManager.removeServerViaSubid(id)
         }
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
     }

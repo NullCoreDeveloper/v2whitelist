@@ -310,9 +310,16 @@ object MmkvManager {
         var changed = false
         val keysToRemove = mutableSetOf<String>()
         
+        val targetIds = mutableSetOf(subid)
+        if (subid.startsWith("custom_sub_")) {
+            targetIds.add(subid.removePrefix("custom_sub_"))
+        } else {
+            targetIds.add("custom_sub_$subid")
+        }
+
         profileFullStorage.allKeys()?.forEach { key ->
             decodeServerConfig(key)?.let { config ->
-                if (config.subscriptionId == subid) {
+                if (targetIds.contains(config.subscriptionId)) {
                     keysToRemove.add(key)
                 }
             }
@@ -342,6 +349,9 @@ object MmkvManager {
         
         if (changed) {
             encodeServerList(serverList)
+            if (getSelectServer().isNullOrBlank() && serverList.isNotEmpty()) {
+                mainStorage.encode(KEY_SELECTED_SERVER, serverList.first())
+            }
         }
     }
 

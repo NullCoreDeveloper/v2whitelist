@@ -769,16 +769,17 @@ class MainActivity : HelperBaseActivity() {
 
     private fun updateSubscriptionStatusUI() {
         val subs = MmkvManager.decodeSubscriptions()
-        // minOf по подпискам, которые хоть раз обновлялись — показываем самую старую.
-        // Так таймер честно сигнализирует если хотя бы одна подписка протухла.
-        val lastUpdateTime = subs.filter { it.subscription.lastUpdated > 0 }
+        // minOf только по подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
+        // Отключенные подписки не должны влиять на статус и время на главном экране.
+        val enabledSubs = subs.filter { it.subscription.enabled }
+        val lastUpdateTime = enabledSubs.filter { it.subscription.lastUpdated > 0 }
             .minOfOrNull { it.subscription.lastUpdated } ?: 0L
 
         val tvStatus = findViewById<android.widget.TextView>(R.id.tv_update_status) ?: return
         val tvTime = findViewById<android.widget.TextView>(R.id.tv_update_time) ?: return
 
-        // Проверяем подписки, обновление которых завершилось ошибкой
-        val failedCount = subs.count { it.subscription.enabled && it.subscription.lastUpdateFailed }
+        // Проверяем подписки, обновление которых завершилось ошибкой (только среди включенных)
+        val failedCount = enabledSubs.count { it.subscription.lastUpdateFailed }
         if (failedCount > 0) {
             tvStatus.text = getString(R.string.status_update_failed, failedCount)
             tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
