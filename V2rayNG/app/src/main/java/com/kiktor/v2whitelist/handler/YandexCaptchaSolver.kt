@@ -44,19 +44,31 @@ object YandexCaptchaSolver {
         withContext(Dispatchers.Main) {
             val activity = findActivity(context)
 
+            GeekModeLogger.log("YandexCaptcha", "Запуск резолвера капчи (URL: $captchaUrl)")
+
             // 1. Попытка тихого решения в фоновом WebView
+            GeekModeLogger.log("YandexCaptcha", "Попытка автоматического фонового решения в headless WebView...")
             val silentSuccess = trySilentSolve(context, captchaUrl)
             if (silentSuccess) {
                 Log.i(AppConfig.TAG, "YandexCaptchaSolver: silent challenge passed successfully!")
+                GeekModeLogger.log("YandexCaptcha", "✅ Фоновая проверка успешно пройдена! Сохранены session cookies.")
                 return@withContext true
             }
 
             // 2. Интерактивный диалог с пользователем
             if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
                 Log.i(AppConfig.TAG, "YandexCaptchaSolver: silent pass insufficient, launching interactive dialog")
-                return@withContext showInteractiveDialog(activity, captchaUrl)
+                GeekModeLogger.log("YandexCaptcha", "Фоновое решение не удалось. Открыт диалог подтверждения «Я не робот».")
+                val dialogResult = showInteractiveDialog(activity, captchaUrl)
+                if (dialogResult) {
+                    GeekModeLogger.log("YandexCaptcha", "✅ Капча успешно подтверждена пользователем! Куки сохранены.")
+                } else {
+                    GeekModeLogger.log("YandexCaptcha", "❌ Капча не была пройдена или отменена.")
+                }
+                return@withContext dialogResult
             } else {
                 Log.w(AppConfig.TAG, "YandexCaptchaSolver: no active activity for interactive dialog, skipping")
+                GeekModeLogger.log("YandexCaptcha", "⚠️ Нет активного Activity для показа диалога капчи, пропуск.")
                 return@withContext false
             }
         }

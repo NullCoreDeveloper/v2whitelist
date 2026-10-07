@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -56,21 +57,12 @@ class CustomSubscriptionsActivity : BaseActivity() {
         }
 
         val triggerDebugUpdate = {
-            lifecycleScope.launch {
-                btnDebugYandex?.isEnabled = false
-                layoutDebugYandex?.isEnabled = false
-                toast(R.string.msg_yandex_update_started)
-                val count = YandexTranslateUpdater.updateAllViaYandex(this@CustomSubscriptionsActivity, isDebug = true)
-                loadCustomSubs()
-                adapter.notifyDataSetChanged()
-                if (count > 0) {
-                    toast(getString(R.string.msg_yandex_update_success, count))
-                } else {
-                    toast(R.string.msg_yandex_update_fail)
-                }
-                btnDebugYandex?.isEnabled = true
-                layoutDebugYandex?.isEnabled = true
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(MainActivity.EXTRA_START_YANDEX_UPDATE, true)
             }
+            startActivity(intent)
+            finish()
         }
 
         btnDebugYandex?.setOnClickListener { triggerDebugUpdate() }

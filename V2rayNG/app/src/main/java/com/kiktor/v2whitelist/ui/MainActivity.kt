@@ -51,6 +51,10 @@ import kotlinx.coroutines.withContext
 import com.kiktor.v2whitelist.handler.SubscriptionHelper
 
 class MainActivity : HelperBaseActivity() {
+    companion object {
+        const val EXTRA_START_YANDEX_UPDATE = "EXTRA_START_YANDEX_UPDATE"
+    }
+
     private val binding by lazy {
         ActivityMainBinding.inflate(layoutInflater)
     }
@@ -137,6 +141,10 @@ class MainActivity : HelperBaseActivity() {
         setContentView(binding.root)
 
         processDeepLink(intent)
+        if (intent?.getBooleanExtra(EXTRA_START_YANDEX_UPDATE, false) == true) {
+            intent.removeExtra(EXTRA_START_YANDEX_UPDATE)
+            handleUpdateSubscriptionViaYandex()
+        }
 
         com.kiktor.v2whitelist.util.PremiumUiHelper.applyPremiumEffects(
             this,
@@ -357,6 +365,32 @@ class MainActivity : HelperBaseActivity() {
             try {
                 SubscriptionHelper.updateSubscription(this@MainActivity)
                 mainViewModel.reloadServerList()
+            } finally {
+                withContext(NonCancellable) {
+                    isTaskRunning = false
+                    activeJob = null
+                    updateUIState(mainViewModel.isRunning.value == true)
+                    updateSubscriptionStatusUI()
+                }
+            }
+        }
+    }
+
+    fun handleUpdateSubscriptionViaYandex() {
+        if (isTaskRunning || SmartConnectManager.isScanning.get()) {
+            cancelActiveTask()
+            return
+        }
+        activeJob = lifecycleScope.launch {
+            setConnectingState(getString(R.string.msg_yandex_update_started))
+            try {
+                val count = com.kiktor.v2whitelist.handler.YandexTranslateUpdater.updateAllViaYandex(this@MainActivity, isDebug = true)
+                mainViewModel.reloadServerList()
+                if (count > 0) {
+                    toast(getString(R.string.msg_yandex_update_success, count))
+                } else {
+                    toast(R.string.msg_yandex_update_fail)
+                }
             } finally {
                 withContext(NonCancellable) {
                     isTaskRunning = false
@@ -865,6 +899,10 @@ class MainActivity : HelperBaseActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         processDeepLink(intent)
+        if (intent.getBooleanExtra(EXTRA_START_YANDEX_UPDATE, false)) {
+            intent.removeExtra(EXTRA_START_YANDEX_UPDATE)
+            handleUpdateSubscriptionViaYandex()
+        }
     }
 
     private fun processDeepLink(intent: Intent?) {
