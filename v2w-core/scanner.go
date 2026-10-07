@@ -98,7 +98,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		}
 	}
 
-	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
 
 	httpDone := make(chan error, 1)
 	go func() {

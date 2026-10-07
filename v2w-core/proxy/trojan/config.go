@@ -9,7 +9,14 @@ import (
 
 	"github.com/kiktor/v2w-core/common"
 	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/serial"
 )
+
+func init() {
+	serial.RegisterCreator("xray.proxy.trojan.Account", func() interface{} { return &Account{} })
+	serial.RegisterCreator("xray.proxy.trojan.ClientConfig", func() interface{} { return &ClientConfig{} })
+	serial.RegisterCreator("xray.proxy.trojan.ServerConfig", func() interface{} { return &ServerConfig{} })
+}
 
 // MemoryAccount is an account type converted from Account.
 type MemoryAccount struct {

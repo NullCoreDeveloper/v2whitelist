@@ -111,7 +111,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 
 		// Send header if not sent yet
 		if _, err = connWriter.Write([]byte{}); err != nil {
-			return err.(*errors.Error).AtWarning()
+			return errors.New("failed to write header").Base(err).AtWarning()
 		}
 
 		if err = buf.Copy(link.Reader, bodyWriter, buf.UpdateActivity(timer)); err != nil {

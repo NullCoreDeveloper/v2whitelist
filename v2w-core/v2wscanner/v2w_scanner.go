@@ -20,6 +20,7 @@ import (
 	"github.com/kiktor/v2w-core/common/session"
 	"github.com/kiktor/v2w-core/proxy/hysteria"
 	"github.com/kiktor/v2w-core/proxy/hysteria/account"
+	"github.com/kiktor/v2w-core/proxy/trojan"
 	"github.com/kiktor/v2w-core/proxy/vless"
 	vless_outbound "github.com/kiktor/v2w-core/proxy/vless/outbound"
 	"github.com/kiktor/v2w-core/transport/internet"
@@ -96,7 +97,7 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 	var links []string
 	for _, line := range rawLines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") {
+		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "trojan://") {
 			links = append(links, line)
 		}
 	}
@@ -172,6 +173,13 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 					return
 				}
 				handler = h
+			} else if outboundConfig, ok := config.(*trojan.ClientConfig); ok {
+				h, err := trojan.NewClient(context.Background(), outboundConfig)
+				if err != nil || h == nil {
+					atomic.AddInt64(&failCount, 1)
+					return
+				}
+				handler = h
 			}
 
 			if handler == nil {
@@ -209,6 +217,151 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 
 
 func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	if strings.HasPrefix(rawURL, "trojan://") {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			return nil, nil, net.Destination{}, err
+		}
+		password := u.User.Username()
+		serverIP := u.Hostname()
+		portStr := u.Port()
+		port := 443
+		if portStr != "" {
+			if p, err := strconv.Atoi(portStr); err == nil {
+				port = p
+			}
+		}
+
+		dest := net.TCPDestination(net.ParseAddress(serverIP), net.Port(port))
+
+		q := u.Query()
+		netType := q.Get("type")
+		if netType == "" || netType == "raw" || netType == "none" {
+			netType = "tcp"
+		}
+
+		security := q.Get("security")
+		if security == "" {
+			security = "tls"
+		}
+
+		streamSettings := &internet.MemoryStreamConfig{
+			ProtocolName: netType,
+			SecurityType: security,
+		}
+
+		switch netType {
+		case "tcp":
+			streamSettings.ProtocolName = "tcp"
+			streamSettings.ProtocolSettings = &tcp.Config{}
+		case "ws", "websocket":
+			streamSettings.ProtocolName = "websocket"
+			host := q.Get("host")
+			if host == "" {
+				host = q.Get("sni")
+			}
+			streamSettings.ProtocolSettings = &websocket.Config{
+				Path: q.Get("path"),
+				Host: host,
+				Header: map[string]string{
+					"Host": host,
+				},
+			}
+		case "grpc":
+			streamSettings.ProtocolName = "grpc"
+			streamSettings.ProtocolSettings = &grpc.Config{
+				ServiceName: q.Get("serviceName"),
+			}
+		case "httpupgrade":
+			streamSettings.ProtocolName = "httpupgrade"
+			host := q.Get("host")
+			if host == "" {
+				host = q.Get("sni")
+			}
+			streamSettings.ProtocolSettings = &httpupgrade.Config{
+				Path: q.Get("path"),
+				Host: host,
+				Header: map[string]string{
+					"Host": host,
+				},
+			}
+		case "xhttp", "splithttp":
+			streamSettings.ProtocolName = "splithttp"
+			host := q.Get("host")
+			if host == "" {
+				host = q.Get("sni")
+			}
+			mode := q.Get("mode")
+			if mode == "" {
+				mode = "auto"
+			}
+			config := &splithttp.Config{
+				Path: q.Get("path"),
+				Host: host,
+				Mode: mode,
+				Xmux: &splithttp.XmuxConfig{
+					MaxConnections:   &splithttp.RangeConfig{From: 3, To: 3},
+					HMaxRequestTimes: &splithttp.RangeConfig{From: 600, To: 900},
+					HMaxReusableSecs: &splithttp.RangeConfig{From: 1800, To: 3000},
+				},
+			}
+			streamSettings.ProtocolSettings = config
+		default:
+			return nil, nil, net.Destination{}, fmt.Errorf("unsupported network type: %s", netType)
+		}
+
+		streamSettings.SocketSettings = &internet.SocketConfig{
+			DomainStrategy: internet.DomainStrategy_USE_IP4,
+		}
+
+		if security == "tls" {
+			streamSettings.SecurityType = "tls"
+			alpn := q.Get("alpn")
+			var nextProtocol []string
+			if alpn != "" {
+				for _, p := range strings.Split(alpn, ",") {
+					nextProtocol = append(nextProtocol, strings.TrimSpace(p))
+				}
+			}
+			if netType == "ws" || netType == "websocket" {
+				nextProtocol = []string{"http/1.1"}
+			}
+			sni := q.Get("sni")
+			if sni == "" {
+				sni = q.Get("peer")
+			}
+			if sni == "" {
+				sni = q.Get("host")
+			}
+			if sni == "" {
+				sni = serverIP
+			}
+			streamSettings.SecuritySettings = &tls.Config{
+				ServerName:   sni,
+				NextProtocol: nextProtocol,
+			}
+			if fp := q.Get("fp"); fp != "" {
+				streamSettings.SecuritySettings.(*tls.Config).Fingerprint = fp
+			}
+		}
+
+		account := &trojan.Account{
+			Password: password,
+		}
+
+		config := &trojan.ClientConfig{
+			Server: &protocol.ServerEndpoint{
+				Address: net.NewIPOrDomain(net.ParseAddress(serverIP)),
+				Port:    uint32(port),
+				User: &protocol.User{
+					Account: serial.ToTypedMessage(account),
+				},
+			},
+		}
+
+		return config, streamSettings, dest, nil
+	}
+
 	if strings.HasPrefix(rawURL, "hysteria2://") {
 		u, err := url.Parse(rawURL)
 		if err != nil {
