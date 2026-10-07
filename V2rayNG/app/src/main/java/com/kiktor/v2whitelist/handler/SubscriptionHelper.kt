@@ -69,6 +69,29 @@ object SubscriptionHelper {
         val isAlreadyInitialized = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
         var changed = false
 
+        // Очистка устаревших и неактуальных подписок (mifa.world, igareck БС и др.)
+        val deprecatedSubIds = setOf("def_mifa_bobrik", "def_igareck_white")
+        val removedDeprecatedFromList = customSubs.removeAll { deprecatedSubIds.contains(it.id) }
+        if (removedDeprecatedFromList) {
+            changed = true
+            Log.i(AppConfig.TAG, "Purged deprecated subscriptions from customSubs: $deprecatedSubIds")
+        }
+        for (depId in deprecatedSubIds) {
+            val subGuid = "custom_sub_$depId"
+            MmkvManager.removeSubscription(subGuid)
+            MmkvManager.removeServerViaSubid(subGuid)
+        }
+        val removedSet = removedSubIds.toMutableSet()
+        var removedModified = false
+        for (depId in deprecatedSubIds) {
+            if (removedSet.add(depId)) {
+                removedModified = true
+            }
+        }
+        if (removedModified) {
+            MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(removedSet.toList()))
+        }
+
         for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
             // Если пользователь явно удалил эту подписку, никогда не воскрешаем её
             if (removedSubIds.contains(defaultSub.id)) {
@@ -285,8 +308,7 @@ object SubscriptionHelper {
                 "def_cyberportal_cp042",
                 "def_etoneya_whitelist",
                 "def_airlink_whitelist",
-                "def_rkp_whitelist",
-                "def_mifa_bobrik"
+                "def_rkp_whitelist"
             )
             AppScenario.YOUTUBE -> setOf(
                 "def_etoneya_youtube",

@@ -21,7 +21,7 @@ import java.util.regex.Pattern
 object YandexTranslateUpdater {
 
     private const val YANDEX_TRANSLATE_BASE_URL = "https://translate.yandex.ru/translate?url="
-    private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     private val PRE_TAG_PATTERN = Pattern.compile("<pre[^>]*>(.*?)</pre>", Pattern.DOTALL or Pattern.CASE_INSENSITIVE)
 
     /**
@@ -77,15 +77,22 @@ object YandexTranslateUpdater {
     fun isCaptchaResponse(response: String): Boolean {
         val lower = response.lowercase()
         return lower.contains("smartcaptcha") ||
-               lower.contains("captcha.yandex") ||
-               lower.contains("/captcha") ||
-               (lower.contains("<title>") && lower.contains("captcha"))
+                lower.contains("captcha.yandex") ||
+                lower.contains("/captcha") ||
+                lower.contains("showcaptcha") ||
+                (lower.contains("<title>") && lower.contains("captcha"))
     }
 
+    data class FetchResult(
+        val body: String?,
+        val isCaptcha: Boolean,
+        val captchaUrl: String? = null
+    )
+
     /**
-     * Performs direct HTTP GET request to Yandex Translate.
+     * Performs direct HTTP GET request to Yandex Translate with cookie persistence and captcha detection.
      */
-    fun fetchHttp(urlStr: String, timeoutMs: Int = 12000): String? {
+    fun fetchHttp(urlStr: String, timeoutMs: Int = 7000): FetchResult {
         var connection: HttpURLConnection? = null
         return try {
             val url = URL(urlStr)
@@ -96,17 +103,49 @@ object YandexTranslateUpdater {
                 setRequestProperty("User-Agent", USER_AGENT)
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
                 setRequestProperty("Accept-Language", "ru,en;q=0.9")
+
+                val savedCookies = MmkvManager.decodeSettingsString(AppConfig.PREF_YANDEX_COOKIES, "").orEmpty()
+                if (savedCookies.isNotBlank()) {
+                    setRequestProperty("Cookie", savedCookies)
+                }
             }
+
+            val finalUrl = connection.url.toString()
             val responseCode = connection.responseCode
+
+            // Сохраняем новые Set-Cookie
+            val setCookieHeaders = connection.headerFields["Set-Cookie"]
+            if (!setCookieHeaders.isNullOrEmpty()) {
+                val newCookies = setCookieHeaders.joinToString("; ") { it.substringBefore(';') }
+                YandexCaptchaSolver.saveCookies(newCookies)
+            }
+
+            if (finalUrl.contains("showcaptcha") || finalUrl.contains("captcha.yandex")) {
+                Log.w(AppConfig.TAG, "YandexTranslateUpdater: redirected to captcha URL: $finalUrl")
+                return FetchResult(body = null, isCaptcha = true, captchaUrl = finalUrl)
+            }
+
             if (responseCode in 200..299) {
-                connection.inputStream.bufferedReader().use { it.readText() }
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                if (isCaptchaResponse(body)) {
+                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: response body contains captcha challenge")
+                    return FetchResult(body = body, isCaptcha = true, captchaUrl = finalUrl)
+                }
+                FetchResult(body = body, isCaptcha = false)
+            } else if (responseCode == 403) {
+                val errBody = try {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() }
+                } catch (e: Exception) { null }
+                val isCaptcha = errBody?.let { isCaptchaResponse(it) } ?: true
+                Log.w(AppConfig.TAG, "YandexTranslateUpdater: HTTP 403 (isCaptcha=$isCaptcha)")
+                FetchResult(body = errBody, isCaptcha = isCaptcha, captchaUrl = finalUrl)
             } else {
                 Log.w(AppConfig.TAG, "YandexTranslateUpdater: HTTP $responseCode for $urlStr")
-                null
+                FetchResult(body = null, isCaptcha = false)
             }
         } catch (e: Exception) {
             Log.w(AppConfig.TAG, "YandexTranslateUpdater: connection failed for $urlStr: ${e.message}")
-            null
+            FetchResult(body = null, isCaptcha = false)
         } finally {
             connection?.disconnect()
         }
@@ -119,12 +158,72 @@ object YandexTranslateUpdater {
         val subItem: SubscriptionItem
     )
 
+    private suspend fun processTarget(
+        target: SubUpdateTarget,
+        context: Context,
+        isRetryPass: Boolean = false
+    ): Pair<Boolean, Int> {
+        var success = false
+        var importedCount = 0
+        var hadCaptcha = false
+
+        for (mirror in target.urls) {
+            try {
+                val yandexUrl = buildYandexTranslateUrl(mirror)
+                Log.d(AppConfig.TAG, "YandexTranslateUpdater: [${if (isRetryPass) "RETRY" else "PASS1"}] querying mirror for '${target.remarks}': $mirror")
+                var result = fetchHttp(yandexUrl, timeoutMs = 7000)
+
+                if (result.isCaptcha) {
+                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: SmartCaptcha detected for '${target.remarks}', invoking solver...")
+                    hadCaptcha = true
+                    val solved = YandexCaptchaSolver.solve(context, result.captchaUrl ?: yandexUrl)
+                    if (solved) {
+                        Log.i(AppConfig.TAG, "YandexTranslateUpdater: Captcha solved! Retrying mirror $mirror...")
+                        result = fetchHttp(yandexUrl, timeoutMs = 7000)
+                    } else {
+                        Log.w(AppConfig.TAG, "YandexTranslateUpdater: Captcha was not solved, skipping mirror")
+                        continue
+                    }
+                }
+
+                if (!result.isCaptcha && !result.body.isNullOrBlank()) {
+                    val extracted = extractSubscriptionContent(result.body)
+                    if (extracted.isNotBlank()) {
+                        val (count, _) = AngConfigManager.importBatchConfig(extracted, target.subGuid, append = false)
+                        if (count > 0) {
+                            Log.i(AppConfig.TAG, "YandexTranslateUpdater: successfully imported $count configs for '${target.remarks}' via $mirror")
+                            target.subItem.lastUpdated = System.currentTimeMillis()
+                            target.subItem.lastUpdateFailed = false
+                            MmkvManager.encodeSubscription(target.subGuid, target.subItem)
+                            success = true
+                            importedCount = count
+                            break // Успех: прерываем перебор зеркал для этой подписки
+                        } else {
+                            Log.w(AppConfig.TAG, "YandexTranslateUpdater: parsed 0 configs from $mirror")
+                        }
+                    } else {
+                        Log.w(AppConfig.TAG, "YandexTranslateUpdater: extracted content is blank for $mirror")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(AppConfig.TAG, "YandexTranslateUpdater: mirror $mirror failed: ${e.message}")
+            }
+            delay(150)
+        }
+
+        if (!success && !isRetryPass && !hadCaptcha) {
+            Log.w(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed for '${target.remarks}' on initial pass")
+        }
+
+        return Pair(success, importedCount)
+    }
+
     /**
      * Updates all active subscriptions via Yandex Translate proxy.
-     * All subscriptions run in parallel (concurrently).
-     * For each subscription, mirrors are queried sequentially, stopping on the first successful mirror.
+     * All subscriptions run concurrently with semaphore limit.
+     * Includes automatic SmartCaptcha resolution and retry pass for failed subscriptions.
      *
-     * @param context Application context.
+     * @param context Application or Activity context.
      * @param isDebug True if triggered manually for debugging.
      * @return Total count of successfully imported configurations.
      */
@@ -193,66 +292,22 @@ object YandexTranslateUpdater {
 
         Log.i(AppConfig.TAG, "YandexTranslateUpdater: processing ${targets.size} subscriptions (2 concurrent workers)")
 
-        // 3. Параллельное обновление подписок с ограничением в 2 потока (по 1 подписке на поток);
-        // для каждой подписки — последовательный перебор зеркал
         var totalConfigs = 0
         val semaphore = Semaphore(2)
+        val failedTargets = mutableListOf<SubUpdateTarget>()
 
+        // 3. Первый проход
         coroutineScope {
             val tasks = targets.map { target ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
-                        var success = false
-                        var importedCount = 0
-                        var hadCaptcha = false
-
-                        for (mirror in target.urls) {
-                            try {
-                                val yandexUrl = buildYandexTranslateUrl(mirror)
-                                Log.d(AppConfig.TAG, "YandexTranslateUpdater: querying mirror for '${target.remarks}': $mirror")
-                                val responseBody = fetchHttp(yandexUrl) ?: continue
-
-                                if (isCaptchaResponse(responseBody)) {
-                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: SmartCaptcha detected from Yandex for mirror $mirror on '${target.remarks}'")
-                                    hadCaptcha = true
-                                    continue
-                                }
-
-                                val extracted = extractSubscriptionContent(responseBody)
-                                if (extracted.isBlank()) {
-                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: extracted content is blank for $mirror")
-                                    continue
-                                }
-
-                                val (count, _) = AngConfigManager.importBatchConfig(extracted, target.subGuid, append = false)
-                                if (count > 0) {
-                                    Log.i(AppConfig.TAG, "YandexTranslateUpdater: imported $count configs for '${target.remarks}' via $mirror")
-                                    target.subItem.lastUpdated = System.currentTimeMillis()
-                                    target.subItem.lastUpdateFailed = false
-                                    MmkvManager.encodeSubscription(target.subGuid, target.subItem)
-                                    success = true
-                                    importedCount = count
-                                    break // Прерываем цикл зеркал: первое же успешное зеркало завершает обработку этой подписки!
-                                } else {
-                                    Log.w(AppConfig.TAG, "YandexTranslateUpdater: parsed 0 configs from $mirror")
-                                }
-                            } catch (e: Exception) {
-                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: mirror $mirror failed: ${e.message}")
-                            }
-                            delay(200)
-                        }
-
+                        val (success, count) = processTarget(target, context, isRetryPass = false)
                         if (!success) {
-                            if (hadCaptcha) {
-                                Log.w(AppConfig.TAG, "YandexTranslateUpdater: sub '${target.remarks}' skipped due to SmartCaptcha, not marking as failure")
-                            } else {
-                                Log.e(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed for '${target.remarks}'")
-                                target.subItem.lastUpdateFailed = true
-                                MmkvManager.encodeSubscription(target.subGuid, target.subItem)
+                            synchronized(failedTargets) {
+                                failedTargets.add(target)
                             }
                         }
-
-                        importedCount
+                        count
                     }
                 }
             }
@@ -261,7 +316,38 @@ object YandexTranslateUpdater {
             totalConfigs = results.sum()
         }
 
-        // 4. Ремаппинг кэшей
+        // 4. Повторный проход для подписок, у которых не удалось получить серверы (retry pass)
+        if (failedTargets.isNotEmpty()) {
+            Log.i(AppConfig.TAG, "YandexTranslateUpdater: ${failedTargets.size} subscriptions failed, starting retry pass after delay...")
+            delay(1500)
+
+            val stillFailed = mutableListOf<SubUpdateTarget>()
+            coroutineScope {
+                val retryTasks = failedTargets.map { target ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            val (success, count) = processTarget(target, context, isRetryPass = true)
+                            if (!success) {
+                                synchronized(stillFailed) {
+                                    stillFailed.add(target)
+                                }
+                            }
+                            count
+                        }
+                    }
+                }
+                val retryResults = retryTasks.awaitAll()
+                totalConfigs += retryResults.sum()
+            }
+
+            for (target in stillFailed) {
+                Log.e(AppConfig.TAG, "YandexTranslateUpdater: all mirrors failed after retry for '${target.remarks}'")
+                target.subItem.lastUpdateFailed = true
+                MmkvManager.encodeSubscription(target.subGuid, target.subItem)
+            }
+        }
+
+        // 5. Ремаппинг кэшей
         if (lastServerIdentity != null || vipIdentities.isNotEmpty()) {
             val updatedServers = MmkvManager.decodeServerList()
             val identityIndex = mutableMapOf<String, String>()
@@ -296,7 +382,7 @@ object YandexTranslateUpdater {
             }
         }
 
-        // 5. Подавление алертов при ограниченном доступе
+        // 6. Подавление алертов при ограниченном доступе
         val allSubs = MmkvManager.decodeSubscriptions()
         val failedSubs = allSubs.filter { it.subscription.enabled && it.subscription.lastUpdateFailed }
         if (failedSubs.isNotEmpty()) {
@@ -309,7 +395,7 @@ object YandexTranslateUpdater {
             }
         }
 
-        // 6. Оповещение UI об обновлении списка серверов
+        // 7. Оповещение UI об обновлении списка серверов
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
         Log.i(AppConfig.TAG, "YandexTranslateUpdater: update completed, total configs imported: $totalConfigs")
 

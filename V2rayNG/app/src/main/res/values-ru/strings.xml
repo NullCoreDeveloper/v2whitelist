@@ -761,4 +761,6 @@
     <string name="msg_yandex_update_started">Запущено обновление подписок через Яндекс…</string>
     <string name="msg_yandex_update_success">Подписки обновлены через Яндекс: %1$d серверов</string>
     <string name="msg_yandex_update_fail">Не удалось обновить подписки через Яндекс</string>
+    <string name="title_yandex_captcha">Проверка Яндекс (SmartCaptcha)</string>
+    <string name="msg_yandex_captcha">Яндекс запрашивает подтверждение для обновления подписок. Пожалуйста, подтвердите, что вы не робот, ниже:</string>
 </resources>

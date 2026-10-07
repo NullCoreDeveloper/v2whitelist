@@ -22,6 +22,9 @@ import com.kiktor.v2whitelist.handler.SubscriptionHelper
 class AngApplication : Application(), Configuration.Provider {
     companion object {
         lateinit var application: AngApplication
+        private var currentActivityRef: java.lang.ref.WeakReference<android.app.Activity>? = null
+
+        fun getCurrentActivity(): android.app.Activity? = currentActivityRef?.get()
     }
 
     /**
@@ -53,6 +56,26 @@ class AngApplication : Application(), Configuration.Provider {
      */
     override fun onCreate() {
         super.onCreate()
+
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: android.app.Activity) {}
+            override fun onActivityResumed(activity: android.app.Activity) {
+                currentActivityRef = java.lang.ref.WeakReference(activity)
+            }
+            override fun onActivityPaused(activity: android.app.Activity) {
+                if (currentActivityRef?.get() == activity) {
+                    currentActivityRef = null
+                }
+            }
+            override fun onActivityStopped(activity: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: android.app.Activity) {
+                if (currentActivityRef?.get() == activity) {
+                    currentActivityRef = null
+                }
+            }
+        })
 
         val isMain = isMainProcess()
         Log.i(AppConfig.TAG, "AngApplication.onCreate: pid=${Process.myPid()}, isMainProcess=$isMain")

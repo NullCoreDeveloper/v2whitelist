@@ -34,13 +34,7 @@ object DefaultSubscriptions {
             enabled = false,
             targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)
         ),
-        SubscriptionHelper.CustomSubData(
-            id = "def_mifa_bobrik",
-            name = "mifa/bobrik (Резервные сервера)",
-            url = "https://mifa.world/bobrik",
-            enabled = false,
-            targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
-        ),
+
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_whitelist",
             name = "RKP (Анти-РосКомПозор: Белые списки)",

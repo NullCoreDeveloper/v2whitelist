@@ -769,4 +769,6 @@
     <string name="msg_yandex_update_started">Updating subscriptions via Yandex…</string>
     <string name="msg_yandex_update_success">Subscriptions updated via Yandex: %1$d servers</string>
     <string name="msg_yandex_update_fail">Failed to update subscriptions via Yandex</string>
+    <string name="title_yandex_captcha">Yandex Verification</string>
+    <string name="msg_yandex_captcha">Yandex is requesting verification to continue updating subscriptions. Please verify below:</string>
 </resources>

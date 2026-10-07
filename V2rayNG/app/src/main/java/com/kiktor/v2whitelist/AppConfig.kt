@@ -45,6 +45,7 @@ object AppConfig {
     const val SUBSCRIPTION_AUTO_UPDATE_INTERVAL = "pref_auto_update_interval"
     const val PREF_UPDATE_SUB_ONLY_VIA_VPN = "pref_update_sub_only_via_vpn"
     const val PREF_UPDATE_VIA_YANDEX_ON_BS = "pref_update_via_yandex_on_bs"
+    const val PREF_YANDEX_COOKIES = "pref_yandex_cookies"
     const val PREF_AUTO_FAILOVER = "pref_auto_failover"
     const val PREF_SMART_FAILOVER_ENABLED = "pref_smart_failover_enabled"
     const val PREF_AUTO_FAILOVER_INTERVAL_SEC = "pref_auto_failover_interval_sec"
