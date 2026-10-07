@@ -41,8 +41,8 @@ object NodeTesterManager {
     suspend fun testServers(
         context: Context,
         servers: List<Pair<String, ProfileItem>>,
-        totalTimeoutMs: Long = 7000,
-        perServerTimeoutMs: Long = 3500
+        totalTimeoutMs: Long = 6000,
+        perServerTimeoutMs: Long = 1500
     ): List<Triple<String, ProfileItem, Long>> {
         if (servers.isEmpty()) return emptyList()
 

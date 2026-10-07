@@ -60,6 +60,12 @@ class MainActivity : HelperBaseActivity() {
     private var isTaskRunning = false
     // true пока мы показываем сообщение об ошибке после провала SmartConnect (2.5с задержка)
     private var isShowingError = false
+    private var watchdogJob: Job? = null
+
+    private fun cancelWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = null
+    }
 
     private var isVpnPermissionPending = false
     private var pendingActionAfterVpnPermission: (() -> Unit)? = null
@@ -342,7 +348,7 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleUpdateSubscription() {
-        if (isTaskRunning) {
+        if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
         }
@@ -366,19 +372,20 @@ class MainActivity : HelperBaseActivity() {
         mainViewModel.isRunning.observe(this) { isRunning ->
             if (isRunning) {
                 // Сервис успешно запущен! Принудительно сбрасываем статус "Загрузка"
+                cancelWatchdog()
                 isTaskRunning = false
                 isShowingError = false
                 updateUIState(true)
             } else {
-                // Не сбрасываем UI пока идёт поиск ИЛИ пока показываем ошибку
-                if (!isTaskRunning && !isShowingError) {
+                // Не сбрасываем UI пока идёт поиск ИЛИ пока сканирует ИЛИ пока показываем ошибку
+                if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
                     updateUIState(false)
                 }
             }
         }
         mainViewModel.uiStatus.observe(this) { status ->
-            // Показываем статус пока идёт задача ИЛИ пока показываем ошибку
-            if (isTaskRunning || isShowingError) {
+            // Показываем статус пока идёт задача ИЛИ пока сканирует ИЛИ пока показываем ошибку
+            if (isTaskRunning || SmartConnectManager.isScanning.get() || isShowingError) {
                 binding.tvStatusDetail.text = status
             }
         }
@@ -393,7 +400,7 @@ class MainActivity : HelperBaseActivity() {
         if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, true)) {
             binding.btnBigConnect.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
         }
-        if (isTaskRunning) {
+        if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
         }
@@ -416,6 +423,7 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun startConnectFlow() {
+        cancelWatchdog()
         activeJob = lifecycleScope.launch {
             setConnectingState()
             var success = false
@@ -433,7 +441,9 @@ class MainActivity : HelperBaseActivity() {
                         isShowingError = true
                         delay(2500)
                         isShowingError = false
-                        updateUIState(mainViewModel.isRunning.value == true)
+                        if (!SmartConnectManager.isScanning.get()) {
+                            updateUIState(mainViewModel.isRunning.value == true)
+                        }
                     } else {
                         if (mainViewModel.isRunning.value == true) {
                             isTaskRunning = false
@@ -441,10 +451,11 @@ class MainActivity : HelperBaseActivity() {
                         } else {
                             // Сервис еще запускается. Оставляем интерфейс оранжевым!
                             // Observer сам переведет его в зеленый, когда придет MSG_STATE_START_SUCCESS
-                            // Ставим предохранитель 15 секунд на случай тихого падения
-                            lifecycleScope.launch {
-                                delay(15000)
-                                if (isTaskRunning && activeJob == null) {
+                            // Предохранитель 30 секунд на случай тихого падения
+                            cancelWatchdog()
+                            watchdogJob = lifecycleScope.launch {
+                                delay(30000)
+                                if (isTaskRunning && activeJob == null && !SmartConnectManager.isScanning.get()) {
                                     isTaskRunning = false
                                     updateUIState(mainViewModel.isRunning.value == true)
                                 }
@@ -458,10 +469,11 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleSwitchServer() {
-        if (isTaskRunning) {
+        if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
         }
+        cancelWatchdog()
         activeJob = lifecycleScope.launch {
             setConnectingState()
             var success = false
@@ -477,15 +489,18 @@ class MainActivity : HelperBaseActivity() {
                         isShowingError = true
                         delay(2500)
                         isShowingError = false
-                        updateUIState(mainViewModel.isRunning.value == true)
+                        if (!SmartConnectManager.isScanning.get()) {
+                            updateUIState(mainViewModel.isRunning.value == true)
+                        }
                     } else {
                         if (mainViewModel.isRunning.value == true) {
                             isTaskRunning = false
                             updateUIState(true)
                         } else {
-                            lifecycleScope.launch {
-                                delay(15000)
-                                if (isTaskRunning && activeJob == null) {
+                            cancelWatchdog()
+                            watchdogJob = lifecycleScope.launch {
+                                delay(30000)
+                                if (isTaskRunning && activeJob == null && !SmartConnectManager.isScanning.get()) {
                                     isTaskRunning = false
                                     updateUIState(mainViewModel.isRunning.value == true)
                                 }
@@ -499,10 +514,12 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun cancelActiveTask() {
+        cancelWatchdog()
         activeJob?.cancel()
         activeJob = null
         isTaskRunning = false
         isShowingError = false
+        SmartConnectManager.isScanning.set(false)
         updateUIState(mainViewModel.isRunning.value == true)
     }
 

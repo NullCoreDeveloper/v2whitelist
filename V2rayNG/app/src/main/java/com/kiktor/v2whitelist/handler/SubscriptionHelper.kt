@@ -392,12 +392,13 @@ object SubscriptionHelper {
             }
         }
 
+        val wasAlreadyShown = MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, false)
         var isExplicitlySelected = false
         var dismissAction: () -> Unit = {}
 
         val handleDismissOrCancel = {
             MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
-            if (!isExplicitlySelected) {
+            if (!isExplicitlySelected && !wasAlreadyShown) {
                 isExplicitlySelected = true
                 Toast.makeText(activity, R.string.scenario_toast_auto_applied, Toast.LENGTH_SHORT).show()
                 CoroutineScope(Dispatchers.Main).launch {

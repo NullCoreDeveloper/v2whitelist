@@ -41,6 +41,8 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
 object SmartConnectManager {
+    val isScanning = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private fun sendStatus(context: Context, status: String) {
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
     }
@@ -357,209 +359,224 @@ object SmartConnectManager {
      * Logic for "Smart Connect" - filter, sort by RealPing, and connect to best.
      */
     suspend fun smartConnect(context: Context): Boolean = withContext(Dispatchers.IO) {
-        
-        // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
-        NetworkManager.waitForInternet(context)
-
-        // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
-        if (checkVipCacheAndConnect(context, isStartup = true)) {
-            NotificationManager.cancelFailoverNotification()
-            return@withContext true
-        }
-
-        // ── Полный SmartConnect ────────────────────────────────────────────────
-
-
-        // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
-        val internetStatus = NetworkManager.checkInternetStatus()
-        when (internetStatus) {
-            0 -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: internet is available")
-                sendStatus(context, context.getString(R.string.status_testing_servers))
-            }
-            1 -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: internet is jammed (only local resources available)")
-                sendStatus(context, context.getString(R.string.status_jamming_detected))
-            }
-            else -> {
-                GeekModeLogger.log("SmartConnect", "SmartConnect: no internet connection")
-                sendStatus(context, context.getString(R.string.status_no_internet))
-            }
-        }
-
-        SubscriptionHelper.checkAndSetupSubscription(context)
-        val allServers = MmkvManager.decodeServerList()
-        val filteredServers = filterServers(allServers).shuffled()
-
-        if (filteredServers.isEmpty()) {
-            GeekModeLogger.log("SmartConnect", "No servers found in hardcoded subscription")
-            sendStatus(context, context.getString(R.string.status_no_servers))
+        if (!isScanning.compareAndSet(false, true)) {
+            GeekModeLogger.log("SmartConnect", "smartConnect: already scanning, ignoring duplicate call")
             return@withContext false
         }
+        try {
+            // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
+            NetworkManager.waitForInternet(context)
 
-        if (MmkvManager.isV2wCoreEnabled()) {
-            val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
-                context, 
-                filteredServers, 
-                isStartup = true,
-                internetStatus = internetStatus,
-                sendStatus = { status -> sendStatus(context, status) },
-                connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
-            )
-            if (v2wSuccess) {
+            // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
+            if (checkVipCacheAndConnect(context, isStartup = true)) {
+                NotificationManager.cancelFailoverNotification()
                 return@withContext true
             }
-            if (!MmkvManager.isV2wFallbackEnabled()) {
+
+            // ── Полный SmartConnect ────────────────────────────────────────────────
+
+
+            // Проверяем состояние интернета и запоминаем — чтобы не перезаписать в цикле
+            val internetStatus = NetworkManager.checkInternetStatus()
+            when (internetStatus) {
+                0 -> {
+                    GeekModeLogger.log("SmartConnect", "SmartConnect: internet is available")
+                    sendStatus(context, context.getString(R.string.status_testing_servers))
+                }
+                1 -> {
+                    GeekModeLogger.log("SmartConnect", "SmartConnect: internet is jammed (only local resources available)")
+                    sendStatus(context, context.getString(R.string.status_jamming_detected))
+                }
+                else -> {
+                    GeekModeLogger.log("SmartConnect", "SmartConnect: no internet connection")
+                    sendStatus(context, context.getString(R.string.status_no_internet))
+                }
+            }
+
+            SubscriptionHelper.checkAndSetupSubscription(context)
+            val allServers = MmkvManager.decodeServerList()
+            val filteredServers = filterServers(allServers).shuffled()
+
+            if (filteredServers.isEmpty()) {
+                GeekModeLogger.log("SmartConnect", "No servers found in hardcoded subscription")
+                sendStatus(context, context.getString(R.string.status_no_servers))
                 return@withContext false
             }
-            GeekModeLogger.log("SmartConnect", "v2w-core found no working servers, falling back to classic scanner")
-            sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
-            delay(1000)
-        }
 
-        val chunkedServers = buildProportionalChunks(filteredServers)
-        var best: Triple<String, ProfileItem, Long>? = null
-        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
-
-        for ((index, chunk) in chunkedServers.withIndex()) {
-            GeekModeLogger.log("SmartConnect", "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
-            // Обновляем статус "тестируем" только если интернет в норме.
-            // При "глушат" (1) и "нет интернета" (2) строки уже говорят "ищём серверы" —
-            // перезаписывать их бессмысленно, иначе пользователь не увидит важный контекст.
-            if (internetStatus == 0) {
-                sendStatus(context, context.getString(R.string.status_testing_servers))
+            if (MmkvManager.isV2wCoreEnabled()) {
+                val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
+                    context, 
+                    filteredServers, 
+                    isStartup = true,
+                    internetStatus = internetStatus,
+                    sendStatus = { status -> sendStatus(context, status) },
+                    connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
+                )
+                if (v2wSuccess) {
+                    return@withContext true
+                }
+                if (!MmkvManager.isV2wFallbackEnabled()) {
+                    return@withContext false
+                }
+                GeekModeLogger.log("SmartConnect", "v2w-core found no working servers, falling back to classic scanner")
+                sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
+                delay(1000)
             }
 
-            val results = NodeTesterManager.testServers(context, chunk)
+            val chunkedServers = buildProportionalChunks(filteredServers)
+            var best: Triple<String, ProfileItem, Long>? = null
+            val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
-            if (profileCheckEnabled) {
-                for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                    if (NodeTesterManager.verifyProfile(context, candidate.first, showStatus = (internetStatus == 0))) {
-                        best = candidate
-                        break
-                    } else {
-                        if (internetStatus == 0) {
-                            sendStatus(context, context.getString(R.string.status_profile_check_failed))
+            for ((index, chunk) in chunkedServers.withIndex()) {
+                GeekModeLogger.log("SmartConnect", "Starting Smart Connect for chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+                // Обновляем статус "тестируем" только если интернет в норме.
+                // При "глушат" (1) и "нет интернета" (2) строки уже говорят "ищём серверы" —
+                // перезаписывать их бессмысленно, иначе пользователь не увидит важный контекст.
+                if (internetStatus == 0) {
+                    sendStatus(context, context.getString(R.string.status_testing_servers))
+                }
+
+                val results = NodeTesterManager.testServers(context, chunk)
+
+                if (profileCheckEnabled) {
+                    for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+                        if (NodeTesterManager.verifyProfile(context, candidate.first, showStatus = (internetStatus == 0))) {
+                            best = candidate
+                            break
+                        } else {
+                            if (internetStatus == 0) {
+                                sendStatus(context, context.getString(R.string.status_profile_check_failed))
+                            }
                         }
                     }
+                } else {
+                    best = results.firstOrNull { it.third < Long.MAX_VALUE }
                 }
-            } else {
-                best = results.firstOrNull { it.third < Long.MAX_VALUE }
+
+                if (best != null) {
+                    val leftovers = results.filter { it.first != best.first && it.third < Long.MAX_VALUE }
+                    if (leftovers.isNotEmpty()) {
+                        NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    }
+                    break // Found a working server, stop testing other chunks
+                }
+                GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
             }
 
             if (best != null) {
-                val leftovers = results.filter { it.first != best.first && it.third < Long.MAX_VALUE }
-                if (leftovers.isNotEmpty()) {
-                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
-                }
-                break // Found a working server, stop testing other chunks
+                connectToBest(context, best, isStartup = true)
+                NotificationManager.cancelFailoverNotification()
+                return@withContext true
             }
-            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
-        }
 
-        if (best != null) {
-            connectToBest(context, best, isStartup = true)
-            NotificationManager.cancelFailoverNotification()
-            return@withContext true
+            GeekModeLogger.log("SmartConnect", "No working server found after checking all chunks")
+            sendStatus(context, context.getString(R.string.status_no_servers))
+            return@withContext false
+        } finally {
+            isScanning.set(false)
         }
-
-        GeekModeLogger.log("SmartConnect", "No working server found after checking all chunks")
-        sendStatus(context, context.getString(R.string.status_no_servers))
-        return@withContext false
     }
 
     /**
      * Switches to the next best server.
      */
     suspend fun switchServer(context: Context): Boolean = withContext(Dispatchers.IO) {
-        // Ждем появления интернета (dzen.ru) перед переключением
-        NetworkManager.waitForInternet(context)
-        
-        val currentGuid = MmkvManager.getSelectServer()
-        
-        // Если пользователь вручную нажал "Сменить сервер", значит текущий сервер его чем-то
-        // не устроил (например, забанен IP). Удаляем его из VIP-кэша, чтобы:
-        // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
-        // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
-        if (currentGuid != null) {
-            GeekModeLogger.log("SmartConnect", "switchServer: user manually rejected current server, removing from VIP cache")
-            MmkvManager.removeVipServer(currentGuid)
-        }
-        
-        val allServers = MmkvManager.decodeServerList()
-        val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
-
-        if (filteredServers.isEmpty()) {
+        if (!isScanning.compareAndSet(false, true)) {
+            GeekModeLogger.log("SmartConnect", "switchServer: already scanning, ignoring duplicate call")
             return@withContext false
         }
-
-        if (MmkvManager.isV2wCoreEnabled()) {
-            val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
-                context, 
-                filteredServers, 
-                isStartup = false,
-                sendStatus = { status -> sendStatus(context, status) },
-                connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
-            )
-            if (v2wSuccess) {
-                return@withContext true
+        try {
+            // Ждем появления интернета (dzen.ru) перед переключением
+            NetworkManager.waitForInternet(context)
+            
+            val currentGuid = MmkvManager.getSelectServer()
+            
+            // Если пользователь вручную нажал "Сменить сервер", значит текущий сервер его чем-то
+            // не устроил (например, забанен IP). Удаляем его из VIP-кэша, чтобы:
+            // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
+            // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
+            if (currentGuid != null) {
+                GeekModeLogger.log("SmartConnect", "switchServer: user manually rejected current server, removing from VIP cache")
+                MmkvManager.removeVipServer(currentGuid)
             }
-            if (!MmkvManager.isV2wFallbackEnabled()) {
+            
+            val allServers = MmkvManager.decodeServerList()
+            val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
+
+            if (filteredServers.isEmpty()) {
                 return@withContext false
             }
-            GeekModeLogger.log("SmartConnect", "v2w-core found no working servers in switchToNextServer, falling back to classic scanner")
-            sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
-            delay(1000)
-        }
 
-        // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
-        if (checkVipCacheAndConnect(context, isStartup = false)) {
-            NotificationManager.cancelFailoverNotification()
-            return@withContext true
-        }
-
-        sendStatus(context, context.getString(R.string.status_switching_server))
-
-        val chunkedServers = buildProportionalChunks(filteredServers)
-        var nextBest: Triple<String, ProfileItem, Long>? = null
-        val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
-
-        for ((index, chunk) in chunkedServers.withIndex()) {
-            GeekModeLogger.log("SmartConnect", "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
-            sendStatus(context, context.getString(R.string.status_testing_servers))
-
-            val results = NodeTesterManager.testServers(context, chunk)
-
-            if (profileCheckEnabled) {
-                for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
-                    if (NodeTesterManager.verifyProfile(context, candidate.first)) {
-                        nextBest = candidate
-                        break
-                    }
+            if (MmkvManager.isV2wCoreEnabled()) {
+                val v2wSuccess = V2WScannerEngine.runV2WCoreScan(
+                    context, 
+                    filteredServers, 
+                    isStartup = false,
+                    sendStatus = { status -> sendStatus(context, status) },
+                    connectToBest = { candidate, startup -> connectToBest(context, Triple(candidate.first, candidate.second, 0L), startup) }
+                )
+                if (v2wSuccess) {
+                    return@withContext true
                 }
-            } else {
-                nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
+                if (!MmkvManager.isV2wFallbackEnabled()) {
+                    return@withContext false
+                }
+                GeekModeLogger.log("SmartConnect", "v2w-core found no working servers in switchToNextServer, falling back to classic scanner")
+                sendStatus(context, context.getString(R.string.status_v2w_fallback_to_classic))
+                delay(1000)
+            }
+
+            // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
+            if (checkVipCacheAndConnect(context, isStartup = false)) {
+                NotificationManager.cancelFailoverNotification()
+                return@withContext true
+            }
+
+            sendStatus(context, context.getString(R.string.status_switching_server))
+
+            val chunkedServers = buildProportionalChunks(filteredServers)
+            var nextBest: Triple<String, ProfileItem, Long>? = null
+            val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+
+            for ((index, chunk) in chunkedServers.withIndex()) {
+                GeekModeLogger.log("SmartConnect", "Switching server: testing chunk ${index + 1}/${chunkedServers.size} (${chunk.size} servers)")
+                sendStatus(context, context.getString(R.string.status_testing_servers))
+
+                val results = NodeTesterManager.testServers(context, chunk)
+
+                if (profileCheckEnabled) {
+                    for (candidate in results.filter { it.third < Long.MAX_VALUE }) {
+                        if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                            nextBest = candidate
+                            break
+                        }
+                    }
+                } else {
+                    nextBest = results.firstOrNull { it.third < Long.MAX_VALUE }
+                }
+
+                if (nextBest != null) {
+                    val leftovers = results.filter { it.first != nextBest.first && it.third < Long.MAX_VALUE }
+                    if (leftovers.isNotEmpty()) {
+                        NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
+                    }
+                    break
+                }
+                GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
             }
 
             if (nextBest != null) {
-                val leftovers = results.filter { it.first != nextBest.first && it.third < Long.MAX_VALUE }
-                if (leftovers.isNotEmpty()) {
-                    NodeTesterManager.verifyAndCacheLeftovers(context.applicationContext, leftovers)
-                }
-                break
+                connectToBest(context, nextBest, isStartup = false)
+                NotificationManager.cancelFailoverNotification()
+                return@withContext true
             }
-            GeekModeLogger.log("SmartConnect", "No working server found in chunk ${index + 1}, moving to next chunk...")
-        }
 
-        if (nextBest != null) {
-            connectToBest(context, nextBest, isStartup = false)
-            NotificationManager.cancelFailoverNotification()
-            return@withContext true
+            GeekModeLogger.log("SmartConnect", "switchServer: No working server found")
+            sendStatus(context, context.getString(R.string.status_no_servers))
+            return@withContext false
+        } finally {
+            isScanning.set(false)
         }
-
-        GeekModeLogger.log("SmartConnect", "switchServer: No working server found")
-        sendStatus(context, context.getString(R.string.status_no_servers))
-        return@withContext false
     }
 
     /**

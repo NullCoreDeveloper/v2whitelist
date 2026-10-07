@@ -183,7 +183,7 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 			targetDest := net.TCPDestination(net.DomainAddress("www.google.com"), 443)
 
 			startT := time.Now()
-			ctx, cancel := context.WithTimeout(globalCtx, 20*time.Second)
+			ctx, cancel := context.WithTimeout(globalCtx, 10*time.Second)
 			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
 			cancel()
 

@@ -31,8 +31,10 @@ object VmessFmt : FmtBase() {
         val allowInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_ALLOW_INSECURE, false)
         val config = ProfileItem.create(EConfigType.VMESS)
 
-        var result = str.replace(EConfigType.VMESS.protocolScheme, "")
-        result = Utils.decode(result)
+        val raw = str.replace(EConfigType.VMESS.protocolScheme, "")
+        val base64 = raw.substringBefore('#')
+        val fragment = if (raw.contains('#')) Utils.urlDecode(raw.substringAfter('#')) else ""
+        val result = Utils.decode(base64)
         if (TextUtils.isEmpty(result)) {
             Log.w(AppConfig.TAG, "Toast decoding failed")
             return null
@@ -48,7 +50,7 @@ object VmessFmt : FmtBase() {
             return null
         }
 
-        config.remarks = vmessQRCode.ps
+        config.remarks = if (!TextUtils.isEmpty(vmessQRCode.ps)) vmessQRCode.ps else fragment
         config.server = vmessQRCode.add
         config.serverPort = vmessQRCode.port
         config.password = vmessQRCode.id

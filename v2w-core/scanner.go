@@ -47,7 +47,7 @@ func NewScanner() *Scanner {
 func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, dest xnet.Destination) ScanResult {
 	start := time.Now()
 
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// clientConn — used by the HTTP client.
@@ -98,7 +98,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		}
 	}
 
-	client := &http.Client{Transport: tr, Timeout: 15 * time.Second}
+	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
 
 	httpDone := make(chan error, 1)
 	go func() {

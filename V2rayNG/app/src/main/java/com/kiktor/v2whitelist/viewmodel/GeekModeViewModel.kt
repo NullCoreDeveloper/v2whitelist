@@ -93,11 +93,11 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                 }
             }
 
-            // 204 test through the running proxy (HTTP port)
+            // 204 test through the running proxy (SOCKS port)
             if (V2RayServiceManager.isRunning() == true) {
-                val httpPort = SettingsManager.getHttpPort()
-                GeekModeLogger.log("GeekMode", "HTTP 204 test via proxy port $httpPort...")
-                val (elapsed, result) = SpeedtestManager.testConnection(getApplication(), httpPort)
+                val socksPort = SettingsManager.getSocksPort()
+                GeekModeLogger.log("GeekMode", "HTTP 204 test via proxy socks port $socksPort...")
+                val (elapsed, result) = SpeedtestManager.testConnection(getApplication(), socksPort)
                 if (elapsed > 0) {
                     GeekModeLogger.log("GeekMode", "Proxy latency: ${elapsed}ms")
                     // Update testDelayMillis for current server
