@@ -7,6 +7,8 @@ import (
 	"crypto/sha1"
 	"io"
 
+	"strings"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/kiktor/v2w-core/common"
@@ -14,9 +16,31 @@ import (
 	"github.com/kiktor/v2w-core/common/crypto"
 	"github.com/kiktor/v2w-core/common/errors"
 	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/serial"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 )
+
+func init() {
+	serial.RegisterCreator("xray.proxy.shadowsocks.Account", func() interface{} { return &Account{} })
+	serial.RegisterCreator("xray.proxy.shadowsocks.ClientConfig", func() interface{} { return &ClientConfig{} })
+	serial.RegisterCreator("xray.proxy.shadowsocks.ServerConfig", func() interface{} { return &ServerConfig{} })
+}
+
+func CipherTypeFromString(c string) CipherType {
+	switch strings.ToLower(strings.TrimSpace(c)) {
+	case "aes-128-gcm", "aead_aes_128_gcm":
+		return CipherType_AES_128_GCM
+	case "aes-256-gcm", "aead_aes_256_gcm":
+		return CipherType_AES_256_GCM
+	case "chacha20-poly1305", "chacha20-ietf-poly1305", "aead_chacha20_poly1305":
+		return CipherType_CHACHA20_POLY1305
+	case "xchacha20-poly1305", "xchacha20-ietf-poly1305":
+		return CipherType_XCHACHA20_POLY1305
+	default:
+		return CipherType_UNKNOWN
+	}
+}
 
 // MemoryAccount is an account type converted from Account.
 type MemoryAccount struct {

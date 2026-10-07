@@ -23,6 +23,7 @@ import (
 	"github.com/kiktor/v2w-core/common/serial"
 	"github.com/kiktor/v2w-core/proxy/hysteria"
 	"github.com/kiktor/v2w-core/proxy/hysteria/account"
+	"github.com/kiktor/v2w-core/proxy/shadowsocks"
 	"github.com/kiktor/v2w-core/proxy/trojan"
 	"github.com/kiktor/v2w-core/proxy/vless"
 	vless_outbound "github.com/kiktor/v2w-core/proxy/vless/outbound"
@@ -51,7 +52,134 @@ func (d *customDialer) DestIpAddress() net.IP {
 	return nil
 }
 
+func decodeBase64Safe(s string) string {
+	s = strings.TrimSpace(s)
+	if unescaped, err := url.PathUnescape(s); err == nil {
+		s = unescaped
+	}
+	if b, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return string(b)
+	}
+	if b, err := base64.RawStdEncoding.DecodeString(s); err == nil {
+		return string(b)
+	}
+	if b, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return string(b)
+	}
+	if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
+		return string(b)
+	}
+	return s
+}
+
+func parseShadowsocksURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	trimmed := strings.TrimPrefix(rawURL, "ss://")
+	if idx := strings.Index(trimmed, "#"); idx != -1 {
+		trimmed = trimmed[:idx]
+	}
+
+	var method, password, hostStr, portStr string
+
+	if strings.Contains(trimmed, "@") {
+		// SIP002 format: ss://[userinfo]@[host]:[port][/?params]
+		parts := strings.SplitN(trimmed, "@", 2)
+		userInfo := parts[0]
+		hostPortPart := parts[1]
+
+		if idx := strings.Index(hostPortPart, "?"); idx != -1 {
+			hostPortPart = hostPortPart[:idx]
+		}
+		hostPortPart = strings.TrimSuffix(hostPortPart, "/")
+
+		decodedUser := decodeBase64Safe(userInfo)
+		if strings.Contains(decodedUser, ":") {
+			userParts := strings.SplitN(decodedUser, ":", 2)
+			method = userParts[0]
+			password = userParts[1]
+		} else if strings.Contains(userInfo, ":") {
+			userParts := strings.SplitN(userInfo, ":", 2)
+			method = userParts[0]
+			password = userParts[1]
+		} else {
+			return nil, nil, net.Destination{}, fmt.Errorf("invalid shadowsocks userinfo: %s", userInfo)
+		}
+
+		h, p, err := stdnet.SplitHostPort(hostPortPart)
+		if err != nil {
+			return nil, nil, net.Destination{}, fmt.Errorf("invalid shadowsocks host:port (%s): %w", hostPortPart, err)
+		}
+		hostStr = h
+		portStr = p
+	} else {
+		// Legacy format: ss://base64(method:password@host:port)
+		decoded := decodeBase64Safe(trimmed)
+		if idx := strings.Index(decoded, "?"); idx != -1 {
+			decoded = decoded[:idx]
+		}
+		decoded = strings.TrimSuffix(decoded, "/")
+
+		if !strings.Contains(decoded, "@") {
+			return nil, nil, net.Destination{}, fmt.Errorf("invalid legacy shadowsocks format: %s", trimmed)
+		}
+		parts := strings.SplitN(decoded, "@", 2)
+		userParts := strings.SplitN(parts[0], ":", 2)
+		if len(userParts) != 2 {
+			return nil, nil, net.Destination{}, fmt.Errorf("invalid legacy shadowsocks userinfo: %s", parts[0])
+		}
+		method = userParts[0]
+		password = userParts[1]
+
+		h, p, err := stdnet.SplitHostPort(parts[1])
+		if err != nil {
+			return nil, nil, net.Destination{}, fmt.Errorf("invalid legacy shadowsocks host:port (%s): %w", parts[1], err)
+		}
+		hostStr = h
+		portStr = p
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, nil, net.Destination{}, fmt.Errorf("invalid port: %s", portStr)
+	}
+
+	cipherType := shadowsocks.CipherTypeFromString(method)
+	if cipherType == shadowsocks.CipherType_UNKNOWN {
+		return nil, nil, net.Destination{}, fmt.Errorf("unsupported shadowsocks cipher: %s", method)
+	}
+
+	dest := net.TCPDestination(net.ParseAddress(hostStr), net.Port(port))
+
+	streamSettings := &internet.MemoryStreamConfig{
+		ProtocolName:     "tcp",
+		SecurityType:     "none",
+		ProtocolSettings: &tcp.Config{},
+		SocketSettings: &internet.SocketConfig{
+			DomainStrategy: internet.DomainStrategy_USE_IP4,
+		},
+	}
+
+	account := &shadowsocks.Account{
+		CipherType: cipherType,
+		Password:   password,
+	}
+
+	config := &shadowsocks.ClientConfig{
+		Server: &protocol.ServerEndpoint{
+			Address: net.NewIPOrDomain(net.ParseAddress(hostStr)),
+			Port:    uint32(port),
+			User: &protocol.User{
+				Account: serial.ToTypedMessage(account),
+			},
+		},
+	}
+
+	return config, streamSettings, dest, nil
+}
+
 func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	if strings.HasPrefix(rawURL, "ss://") {
+		return parseShadowsocksURL(rawURL)
+	}
 	if strings.HasPrefix(rawURL, "trojan://") {
 		u, err := url.Parse(rawURL)
 		if err != nil {
@@ -472,7 +600,7 @@ func main() {
 	var links []string
 	for _, line := range rawLines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "trojan://") {
+		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
 			links = append(links, line)
 		}
 	}
@@ -536,6 +664,13 @@ func main() {
 				handler = h
 			} else if outboundConfig, ok := config.(*trojan.ClientConfig); ok {
 				h, err := trojan.NewClient(context.Background(), outboundConfig)
+				if err != nil || h == nil {
+					atomic.AddInt32(&failCount, 1)
+					return
+				}
+				handler = h
+			} else if outboundConfig, ok := config.(*shadowsocks.ClientConfig); ok {
+				h, err := shadowsocks.NewClient(context.Background(), outboundConfig)
 				if err != nil || h == nil {
 					atomic.AddInt32(&failCount, 1)
 					return
