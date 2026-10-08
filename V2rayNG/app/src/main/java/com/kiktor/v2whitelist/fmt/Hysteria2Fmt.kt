@@ -28,7 +28,7 @@ object Hysteria2Fmt : FmtBase() {
         val uri = URI(Utils.fixIllegalUrl(str))
         config.remarks = Utils.decodeURIComponent(uri.fragment.orEmpty()).let { it.ifEmpty { "none" } }
         config.server = uri.idnHost
-        config.serverPort = uri.port.toString()
+        config.serverPort = if (uri.port > 0) uri.port.toString() else "443"
         config.password = uri.userInfo
         config.security = AppConfig.TLS
         config.network = NetworkType.HYSTERIA.type
@@ -95,7 +95,7 @@ object Hysteria2Fmt : FmtBase() {
 
         outboundBean.settings?.let { server ->
             server.address = getServerAddress(profileItem)
-            server.port = profileItem.serverPort.orEmpty().toInt()
+            server.port = profileItem.serverPort?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: 443
             server.version = 2
         }
 

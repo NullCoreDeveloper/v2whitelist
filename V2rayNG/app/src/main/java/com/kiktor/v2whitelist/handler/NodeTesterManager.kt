@@ -101,7 +101,10 @@ object NodeTesterManager {
         val foundFastServer = AtomicBoolean(false)
         val resultsList = mutableListOf<Triple<String, ProfileItem, Long>>()
 
-        withTimeoutOrNull(totalTimeoutMs) {
+        val hasHysteria = tcpAliveServers.any { it.second.configType == EConfigType.HYSTERIA2 }
+        val effectiveTotalTimeout = if (hasHysteria) maxOf(totalTimeoutMs, 8000L) else totalTimeoutMs
+
+        withTimeoutOrNull(effectiveTotalTimeout) {
             coroutineScope {
                 val jobs = tcpAliveServers.map { (guid, profile) ->
                     async {
@@ -112,8 +115,9 @@ object NodeTesterManager {
                             try {
                                 val randomUrl = testUrls[Random.nextInt(testUrls.size)]
                                 val config = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid)
+                                val serverTimeout = if (profile.configType == EConfigType.HYSTERIA2) 3000L else perServerTimeoutMs
                                 val delay = if (config.status) {
-                                    withTimeoutOrNull(perServerTimeoutMs) {
+                                    withTimeoutOrNull(serverTimeout) {
                                         V2RayNativeManager.measureOutboundDelay(config.content, randomUrl)
                                     } ?: -1L
                                 } else -1L
@@ -200,12 +204,16 @@ object NodeTesterManager {
             // fd=0: запуск без TUN (только SOCKS прокси на локальном порту)
             coreController.startLoop(configResult.content, 0)
 
+            val profile = MmkvManager.decodeServerConfig(guid)
+            val isHysteria = profile?.configType == EConfigType.HYSTERIA2
+
             // Ждём пока ядро поднимется и установит соединение с сервером
-            delay(500L)
+            delay(if (isHysteria) 800L else 500L)
             if (!currentCoroutineContext().isActive) return false
 
-            val timeout = customTimeoutMs ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
+            val baseTimeout = customTimeoutMs ?: (MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
                                ?.toIntOrNull()?.takeIf { it > 0 } ?: 3_000)
+            val timeout = if (isHysteria) maxOf(baseTimeout, 4000) else baseTimeout
 
             // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
             val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)

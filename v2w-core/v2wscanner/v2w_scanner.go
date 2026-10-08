@@ -506,7 +506,10 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		host := u.Hostname()
 		portStr := u.Port()
 		port, _ := strconv.Atoi(portStr)
-		dest := net.TCPDestination(net.ParseAddress(host), net.Port(port))
+		if port <= 0 {
+			port = 443
+		}
+		dest := net.UDPDestination(net.ParseAddress(host), net.Port(port))
 		q := u.Query()
 		sni := q.Get("sni")
 		if sni == "" {
