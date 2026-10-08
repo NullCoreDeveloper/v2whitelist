@@ -531,13 +531,13 @@ object AngConfigManager {
                                 if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) continue
                             }
                             var result = ""
-                            // 1. HTTP Proxy
-                            if (httpPort > 0) {
-                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 8000, httpPort) } catch (_: Exception) {}
-                            }
-                            // 2. SOCKS5 Proxy
-                            if (result.isEmpty() && socksPort > 0) {
+                            // 1. SOCKS5 Proxy
+                            if (socksPort > 0) {
                                 try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 6000, socksPort) } catch (_: Exception) {}
+                            }
+                            // 2. HTTP Proxy
+                            if (result.isEmpty() && httpPort > 0) {
+                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
                             }
                             // 3. Direct
                             if (result.isEmpty()) {
@@ -574,22 +574,17 @@ object AngConfigManager {
                                 
                                 val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
 
-                                // Если VPN не строго обязателен, сразу пробуем прямой запрос с быстрым таймаутом (3.5 сек)
-                                if (!onlyViaVpn) {
-                                    try {
-                                        result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500)
-                                    } catch (_: Exception) {}
+                                // Если VPN активен (socksPort > 0), сразу опрашиваем через локальный прокси
+                                if (socksPort > 0) {
+                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 3500, socksPort) } catch (_: Exception) {}
                                 }
-
-                                // Если прямой запрос не удался или нужен VPN, пробуем через локальные прокси
                                 if (result.isEmpty() && httpPort > 0) {
                                     try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500, httpPort) } catch (_: Exception) {}
                                 }
-                                if (result.isEmpty() && socksPort > 0) {
-                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 3500, socksPort) } catch (_: Exception) {}
-                                }
+
+                                // Если через прокси не удалось или VPN не включен (socksPort == 0) — пробуем напрямую
                                 if (result.isEmpty() && !onlyViaVpn) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 4000) } catch (_: Exception) {}
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500) } catch (_: Exception) {}
                                 }
 
                                 if (result.isNotEmpty()) {

@@ -648,33 +648,25 @@ object SubscriptionHelper {
         var vpnStarted = false
         
         // Ожидаем запуска прокси (дольше при старте приложения, так как он может запускаться SmartConnect'ом)
-        val waitLoops = if (isStartup) 8 else 1
+        val waitLoops = if (isStartup) 8 else 2
         for (i in 0 until waitLoops) {
             if (SmartConnectManager.isProxyRunning(candidateSocksPort)) {
                 socksPort = candidateSocksPort
                 vpnStarted = true
                 break
             }
-            if (i < waitLoops - 1) delay(1000)
+            if (i < waitLoops - 1) delay(500)
+        }
+        if (socksPort == 0 && V2RayServiceManager.isRunning()) {
+            socksPort = candidateSocksPort
+            vpnStarted = true
         }
         
-        Log.i(AppConfig.TAG, "updateSubscription: VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
+        val isVpnActive = NetworkManager.isVpnActive(context)
+        Log.i(AppConfig.TAG, "updateSubscription: isVpnActive=$isVpnActive, VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)) {
-            var hasTun = false
-            try {
-                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
-                if (interfaces != null) {
-                    for (intf in interfaces) {
-                        if (intf.isUp && intf.name.startsWith("tun")) {
-                            hasTun = true
-                            break
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // ignore
-            }
+            val hasTun = NetworkManager.hasTunInterface()
             if (!hasTun) {
                 Log.w(AppConfig.TAG, "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled and no TUN interface found")
                 if (!sequential) {
@@ -686,12 +678,15 @@ object SubscriptionHelper {
             }
         }
 
-
         val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
         val isBs = NetworkManager.checkInternetStatus() == 1
-        val isVpnRunning = V2RayServiceManager.isRunning()
 
-        if (updateViaYandexOnBs && isBs && !isVpnRunning) {
+        // Яндекс-обход работает ТОЛЬКО если:
+        // 1. Включен в настройках (updateViaYandexOnBs == true)
+        // 2. Пользователь под БС (isBs == true)
+        // 3. VPN ВЫКЛЮЧЕН (нет ни tun интерфейса, ни запущенного ядра/VPN транспорта: !isVpnActive)
+        // Если же VPN включен (или есть tun) — обновление всегда идет стандартно через VPN!
+        if (updateViaYandexOnBs && isBs && !isVpnActive) {
             Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy (sequential=$sequential)")
             val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false, sequential = sequential)
             Log.i(AppConfig.TAG, "updateSubscription: Yandex Translate update finished, total configs: $count")

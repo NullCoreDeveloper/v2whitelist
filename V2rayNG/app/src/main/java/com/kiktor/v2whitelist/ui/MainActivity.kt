@@ -367,8 +367,8 @@ class MainActivity : HelperBaseActivity() {
         activeJob = lifecycleScope.launch {
             val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
             val isBs = com.kiktor.v2whitelist.handler.NetworkManager.checkInternetStatus() == 1
-            val isVpnRunning = V2RayServiceManager.isRunning()
-            val isYandexMode = updateViaYandexOnBs && isBs && !isVpnRunning
+            val isVpnActive = com.kiktor.v2whitelist.handler.NetworkManager.isVpnActive(this@MainActivity)
+            val isYandexMode = updateViaYandexOnBs && isBs && !isVpnActive
 
             val statusMsg = if (isYandexMode) getString(R.string.msg_yandex_update_started) else getString(R.string.status_updating_subscription)
             setConnectingState(statusMsg)

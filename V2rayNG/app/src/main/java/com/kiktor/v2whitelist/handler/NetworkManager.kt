@@ -134,4 +134,37 @@ object NetworkManager {
         GeekModeLogger.log("Network", "shouldReportSubscriptionFailure: yaOk=$yaOk, bothOk=$result")
         return result
     }
+
+    /**
+     * Проверяет наличие активного сетевого интерфейса TUN (VPN интерфейса).
+     */
+    fun hasTunInterface(): Boolean {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return false
+            interfaces.asSequence().any { it.isUp && it.name.startsWith("tun") }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Проверяет, активно ли любое VPN-соединение:
+     * 1. Внутренний сервис V2RayServiceManager
+     * 2. Наличие поднятого TUN-интерфейса в ОС (tun0, tun1...)
+     * 3. Системный транспорт TRANSPORT_VPN в ConnectivityManager
+     * 4. Локальный SOCKS5-прокси в ядре
+     */
+    fun isVpnActive(context: Context): Boolean {
+        if (V2RayServiceManager.isRunning()) return true
+        if (hasTunInterface()) return true
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+            if (caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true) {
+                return true
+            }
+        } catch (_: Exception) {}
+        if (SmartConnectManager.isProxyRunning(SettingsManager.getSocksPort())) return true
+        return false
+    }
 }
