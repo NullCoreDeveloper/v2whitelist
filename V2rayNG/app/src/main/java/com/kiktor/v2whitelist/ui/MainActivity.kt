@@ -446,9 +446,6 @@ class MainActivity : HelperBaseActivity() {
                 isShowingError = false
                 updateUIState(true)
             } else {
-                if (activeJob == null && !SmartConnectManager.isScanning.get()) {
-                    isTaskRunning = false
-                }
                 // Не сбрасываем UI пока идёт поиск ИЛИ пока сканирует ИЛИ пока показываем ошибку
                 if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
                     updateUIState(false)
@@ -460,6 +457,21 @@ class MainActivity : HelperBaseActivity() {
             if (isTaskRunning || SmartConnectManager.isScanning.get() || isShowingError) {
                 if (!isTaskRunning && SmartConnectManager.isScanning.get()) {
                     setConnectingState(status)
+                    cancelWatchdog()
+                    watchdogJob = lifecycleScope.launch {
+                        while (SmartConnectManager.isScanning.get()) {
+                            delay(200)
+                        }
+                        var waited = 0
+                        while (waited < 5000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
+                            delay(200)
+                            waited += 200
+                        }
+                        if (isTaskRunning && activeJob == null && !V2RayServiceManager.isRunning()) {
+                            isTaskRunning = false
+                            updateUIState(false)
+                        }
+                    }
                 } else {
                     binding.tvStatusDetail.text = status
                 }
@@ -866,6 +878,21 @@ class MainActivity : HelperBaseActivity() {
 
         if (SmartConnectManager.isScanning.get()) {
             setConnectingState()
+            cancelWatchdog()
+            watchdogJob = lifecycleScope.launch {
+                while (SmartConnectManager.isScanning.get()) {
+                    delay(200)
+                }
+                var waited = 0
+                while (waited < 5000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
+                    delay(200)
+                    waited += 200
+                }
+                if (isTaskRunning && activeJob == null && !V2RayServiceManager.isRunning()) {
+                    isTaskRunning = false
+                    updateUIState(false)
+                }
+            }
         }
 
         if (mainViewModel.isRunning.value != true && !V2RayServiceManager.isRunning()) {

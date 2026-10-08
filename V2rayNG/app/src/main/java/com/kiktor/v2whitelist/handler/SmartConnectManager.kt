@@ -494,9 +494,6 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
-            if (!V2RayServiceManager.isRunning()) {
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_NOT_RUNNING, "")
-            }
         }
     }
 
@@ -615,9 +612,6 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
-            if (!V2RayServiceManager.isRunning()) {
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_NOT_RUNNING, "")
-            }
         }
     }
 
