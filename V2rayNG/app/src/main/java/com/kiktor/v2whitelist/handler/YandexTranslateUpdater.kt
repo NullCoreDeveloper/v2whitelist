@@ -21,7 +21,7 @@ import java.util.regex.Pattern
 object YandexTranslateUpdater {
 
     private const val YANDEX_TRANSLATE_BASE_URL = "https://translate.yandex.ru/translate?url="
-    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
     private val PRE_TAG_PATTERN = Pattern.compile("<pre[^>]*>(.*?)</pre>", Pattern.DOTALL or Pattern.CASE_INSENSITIVE)
 
     /**
@@ -101,8 +101,17 @@ object YandexTranslateUpdater {
                 readTimeout = timeoutMs
                 instanceFollowRedirects = true
                 setRequestProperty("User-Agent", USER_AGENT)
-                setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7")
-                setRequestProperty("Accept-Language", "ru,en;q=0.9")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+                setRequestProperty("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
+                setRequestProperty("Accept-Encoding", "gzip, deflate")
+                setRequestProperty("Sec-Ch-Ua", "\"Not/A)Brand\";v=\"8\", \"Chromium\";v=\"126\", \"Google Chrome\";v=\"126\"")
+                setRequestProperty("Sec-Ch-Ua-Mobile", "?1")
+                setRequestProperty("Sec-Ch-Ua-Platform", "\"Android\"")
+                setRequestProperty("Sec-Fetch-Dest", "document")
+                setRequestProperty("Sec-Fetch-Mode", "navigate")
+                setRequestProperty("Sec-Fetch-Site", "none")
+                setRequestProperty("Sec-Fetch-User", "?1")
+                setRequestProperty("Upgrade-Insecure-Requests", "1")
 
                 val savedCookies = MmkvManager.decodeSettingsString(AppConfig.PREF_YANDEX_COOKIES, "").orEmpty()
                 if (savedCookies.isNotBlank()) {
@@ -126,8 +135,15 @@ object YandexTranslateUpdater {
                 return FetchResult(body = null, isCaptcha = true, captchaUrl = finalUrl)
             }
 
+            fun readStream(stream: java.io.InputStream?): String? {
+                if (stream == null) return null
+                val isGzip = "gzip".equals(connection.contentEncoding, ignoreCase = true)
+                val inStream = if (isGzip) java.util.zip.GZIPInputStream(stream) else stream
+                return inStream.bufferedReader().use { it.readText() }
+            }
+
             if (responseCode in 200..299) {
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                val body = readStream(connection.inputStream).orEmpty()
                 if (isCaptchaResponse(body)) {
                     Log.w(AppConfig.TAG, "YandexTranslateUpdater: response body contains captcha challenge")
                     GeekModeLogger.log("YandexTranslate", "⚠️ Ответ содержит экран SmartCaptcha ($responseCode)")
@@ -136,7 +152,7 @@ object YandexTranslateUpdater {
                 FetchResult(body = body, isCaptcha = false)
             } else if (responseCode == 403) {
                 val errBody = try {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() }
+                    readStream(connection.errorStream)
                 } catch (e: Exception) { null }
                 val isCaptcha = errBody?.let { isCaptchaResponse(it) } ?: true
                 Log.w(AppConfig.TAG, "YandexTranslateUpdater: HTTP 403 (isCaptcha=$isCaptcha)")

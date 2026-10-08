@@ -14,9 +14,15 @@ import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 object SubscriptionHelper {
 
@@ -701,48 +707,63 @@ object SubscriptionHelper {
         val allSubscriptions = MmkvManager.decodeSubscriptions()
         val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
         val totalSubs = enabledCustomSubs.size + regularSubs.size
-        var currentIdx = 0
+        val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 10)
+        val semaphore = Semaphore(concurrency)
+        val startedCount = AtomicInteger(0)
+        val finishedCount = AtomicInteger(0)
+
+        data class SubTask(val name: String, val updateAction: suspend () -> Int)
+        val taskList = mutableListOf<SubTask>()
 
         for (sub in enabledCustomSubs) {
-            currentIdx++
-            val prefix = "[$currentIdx/$totalSubs]"
-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${sub.name}")
             val subId = "custom_sub_${sub.id}"
             val existing = allSubscriptions.find { it.guid == subId }
-            val count = if (existing != null) {
-                existing.subscription.enabled = true
-                existing.subscription.filter = sub.filter
-                existing.subscription.sharePercent = sub.sharePercent
-                MmkvManager.encodeSubscription(subId, existing.subscription)
-                Log.d(AppConfig.TAG, "Manually updating custom subscription: ${sub.name}")
-                AngConfigManager.updateConfigViaSub(existing, socksPort, sequential)
-            } else {
-                // Создаём если нет
-                val subItem = SubscriptionItem().apply {
-                    remarks = sub.name
-                    url = sub.url
-                    filter = sub.filter
-                    sharePercent = sub.sharePercent
-                    enabled = true
+            taskList.add(SubTask(sub.name) {
+                val cache = if (existing != null) {
+                    existing.subscription.enabled = true
+                    existing.subscription.filter = sub.filter
+                    existing.subscription.sharePercent = sub.sharePercent
+                    MmkvManager.encodeSubscription(subId, existing.subscription)
+                    Log.d(AppConfig.TAG, "Updating custom subscription: ${sub.name}")
+                    existing
+                } else {
+                    val subItem = SubscriptionItem().apply {
+                        remarks = sub.name
+                        url = sub.url
+                        filter = sub.filter
+                        sharePercent = sub.sharePercent
+                        enabled = true
+                    }
+                    MmkvManager.encodeSubscription(subId, subItem)
+                    SubscriptionCache(subId, subItem)
                 }
-                MmkvManager.encodeSubscription(subId, subItem)
-                AngConfigManager.updateConfigViaSub(SubscriptionCache(subId, subItem), socksPort, sequential)
-            }
-            if (count > 0) {
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${sub.name}: +$count")
-            }
+                AngConfigManager.updateConfigViaSub(cache, socksPort, sequential)
+            })
         }
 
         // Обновляем обычные подписки (добавленные пользователем вручную)
         for (sub in regularSubs) {
-            currentIdx++
-            val prefix = "[$currentIdx/$totalSubs]"
-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${sub.subscription.remarks}")
-            Log.d(AppConfig.TAG, "Manually updating regular subscription: ${sub.subscription.remarks}")
-            val count = AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
-            if (count > 0) {
-                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${sub.subscription.remarks}: +$count")
-            }
+            taskList.add(SubTask(sub.subscription.remarks) {
+                Log.d(AppConfig.TAG, "Updating regular subscription: ${sub.subscription.remarks}")
+                AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
+            })
+        }
+
+        coroutineScope {
+            taskList.map { task ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        val currentStarted = startedCount.incrementAndGet()
+                        val prefix = "[$currentStarted/$totalSubs]"
+                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${task.name}")
+                        val count = task.updateAction()
+                        val done = finishedCount.incrementAndGet()
+                        if (count > 0) {
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "[$done/$totalSubs] ${task.name}: +$count")
+                        }
+                    }
+                }
+            }.awaitAll()
         }
 
         // ══════════════════════════════════════════════════════════════════════

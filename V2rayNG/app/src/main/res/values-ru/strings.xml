@@ -260,6 +260,8 @@
     <string name="summary_pref_auto_update_subscription">Автоматическое обновление подписок в фоновом режиме с указанным интервалом. В зависимости от устройства эта функция может работать не всегда.</string>
     <string name="title_pref_update_sub_only_via_vpn">Обновлять подписки только через VPN</string>
     <string name="summary_pref_update_sub_only_via_vpn">Если включено, подписки будут обновляться только при наличии активного VPN-соединения, чтобы избежать утечек IP-адреса.</string>
+    <string name="title_pref_sub_concurrency">Параллельное обновление подписок</string>
+    <string name="summary_pref_sub_concurrency">Количество одновременно загружаемых подписок (по умолчанию: 3)</string>
     <string name="title_pref_auto_update_interval">Интервал автообновления (минут, не менее 15)</string>
 
     <string name="title_pref_custom_user_agent">Пользовательский User-Agent</string>
@@ -551,7 +553,7 @@
 
     <!-- Smart Auto-Failover string removed as it was duplicate -->
     <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
-    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect</string>
+    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (не используется при сканировании и проверке скорости)</string>
     <string name="title_pref_custom_endpoint_url">Конфиг конечного узла</string>
     <string name="summary_pref_custom_endpoint_url">Вставьте ссылку (vless://, vmess://, и т.д.)</string>
     <string name="title_custom_subscriptions">Управление подписками</string>

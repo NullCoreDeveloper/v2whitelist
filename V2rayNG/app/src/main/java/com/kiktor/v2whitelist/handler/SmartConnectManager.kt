@@ -326,7 +326,7 @@ object SmartConnectManager {
                     try {
                         delay(5000) // Ждем пока VPN разгонится
                         GeekModeLogger.log("SmartConnect", "Survival logic: Jamming detected, triggering background update via VPN")
-                        SubscriptionHelper.updateSubscription(context, sequential = true)
+                        SubscriptionHelper.updateSubscription(context, sequential = false)
                     } catch (e: Exception) {
                         GeekModeLogger.log("SmartConnect", "Survival logic: background update failed" + ": " + e)
                     }
@@ -344,8 +344,8 @@ object SmartConnectManager {
                     GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
                     GlobalScope.launch(Dispatchers.IO) {
                         try {
-                            // sequential = true, чтобы обновлять плавно и не убить пул потоков
-                            SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = true)
+                            // Быстрое параллельное обновление подписок с mirror racing
+                            SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = false)
                         } catch (e: Exception) {
                             GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
                         }

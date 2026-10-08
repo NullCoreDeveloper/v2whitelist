@@ -720,25 +720,64 @@ class MainActivity : HelperBaseActivity() {
                 binding.tvStatusDetail.text = if (serverName.isNotEmpty()) "$serverName ➔ $endpointName" else endpointName
                 customEndpointCheckJob?.cancel()
                 customEndpointCheckJob = lifecycleScope.launch(Dispatchers.IO) {
-                    delay(1200L)
+                    delay(1000L)
                     if (!V2RayServiceManager.isRunning()) return@launch
-                    val (delay, _) = SpeedtestManager.testConnection(this@MainActivity, SettingsManager.getSocksPort(), 4000)
+
+                    val socksPort = SettingsManager.getSocksPort()
+                    var successfulDelay = -1L
+
+                    // 1. Ретраи e2e проверки соединения через цепочку (до 3 попыток)
+                    for (attempt in 1..3) {
+                        if (!V2RayServiceManager.isRunning()) return@launch
+                        val timeout = if (attempt == 1) 3500 else 4500
+                        val (delay, _) = SpeedtestManager.testConnection(this@MainActivity, socksPort, timeout)
+                        if (delay > 0) {
+                            successfulDelay = delay
+                            break
+                        }
+                        if (attempt < 3) {
+                            delay(1200L)
+                        }
+                    }
+
                     if (!V2RayServiceManager.isRunning()) return@launch
+
+                    // 2. Если e2e проверка не прошла, проверяем доступность первого (входного) сервера
+                    var firstServerAlive = true
+                    if (successfulDelay <= 0) {
+                        val selGuid = selectedGuid
+                        val firstHost = runningConfig?.server
+                            ?: (if (!selGuid.isNullOrBlank()) MmkvManager.decodeServerConfig(selGuid)?.server else null)
+                        val firstPort = runningConfig?.serverPort?.toIntOrNull()
+                            ?: (if (!selGuid.isNullOrBlank()) MmkvManager.decodeServerConfig(selGuid)?.serverPort?.toIntOrNull() else null)
+                            ?: 443
+                        if (!firstHost.isNullOrBlank()) {
+                            val tcpPing = SpeedtestManager.socketConnectTime(firstHost, firstPort)
+                            if (tcpPing <= 0) {
+                                firstServerAlive = false
+                            }
+                        }
+                    }
+
                     withContext(Dispatchers.Main) {
                         if (mainViewModel.isRunning.value == true && !isTaskRunning) {
-                            if (delay <= 0) {
-                                val warnColor = ContextCompat.getColor(this@MainActivity, R.color.color_fab_active)
-                                binding.tvStatus.text = "⚠️ Конечный узел не отвечает"
-                                binding.tvStatus.setTextColor(warnColor)
-                                binding.ivStatusIcon.setColorFilter(warnColor)
-                                val baseName = if (serverName.isNotEmpty()) "$serverName ➔ " else ""
-                                binding.tvStatusDetail.text = "$baseName❌ $endpointName"
-                            } else {
+                            val warnColor = ContextCompat.getColor(this@MainActivity, R.color.color_fab_active)
+                            val baseName = if (serverName.isNotEmpty()) "$serverName ➔ " else ""
+                            if (successfulDelay > 0) {
                                 binding.tvStatus.text = getString(R.string.tv_status_protected)
                                 binding.tvStatus.setTextColor(greenColor)
                                 binding.ivStatusIcon.setColorFilter(greenColor)
-                                val baseName = if (serverName.isNotEmpty()) "$serverName ➔ " else ""
-                                binding.tvStatusDetail.text = "$baseName$endpointName (${delay}ms)"
+                                binding.tvStatusDetail.text = "$baseName$endpointName (${successfulDelay}ms)"
+                            } else if (!firstServerAlive) {
+                                binding.tvStatus.text = "⚠️ Входной сервер не отвечает"
+                                binding.tvStatus.setTextColor(warnColor)
+                                binding.ivStatusIcon.setColorFilter(warnColor)
+                                binding.tvStatusDetail.text = "❌ $serverName ➔ $endpointName"
+                            } else {
+                                binding.tvStatus.text = "⚠️ Конечный узел не отвечает"
+                                binding.tvStatus.setTextColor(warnColor)
+                                binding.ivStatusIcon.setColorFilter(warnColor)
+                                binding.tvStatusDetail.text = "$baseName❌ $endpointName"
                             }
                         }
                     }

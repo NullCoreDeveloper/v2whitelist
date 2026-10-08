@@ -283,6 +283,8 @@
     <string name="summary_pref_auto_update_subscription">Update your subscriptions automatically at set intervals in the background. Depending on the device, this feature may not always work</string>
     <string name="title_pref_update_sub_only_via_vpn">Update Subscriptions Only via VPN</string>
     <string name="summary_pref_update_sub_only_via_vpn">If enabled, subscriptions will only update when a VPN connection is active, preventing leaks.</string>
+    <string name="title_pref_sub_concurrency">Concurrent subscription updates</string>
+    <string name="summary_pref_sub_concurrency">Number of subscriptions to download simultaneously (default: 3)</string>
     <string name="title_pref_auto_update_interval">Auto Update Interval (Minutes, Min value 15)</string>
 
     <string name="title_pref_custom_user_agent">Custom User-Agent</string>
@@ -586,7 +588,7 @@
 
     <!-- Custom Endpoint (Proxy Chain) -->
     <string name="title_pref_custom_endpoint_enabled">Use custom proxy as final endpoint</string>
-    <string name="summary_pref_custom_endpoint_enabled">Route traffic through your personal proxy after connecting to Smart Connect server</string>
+    <string name="summary_pref_custom_endpoint_enabled">Route traffic through your personal proxy after connecting to Smart Connect server (not used during scanning and speed check)</string>
     <string name="title_pref_custom_endpoint_url">Final endpoint config</string>
     <string name="summary_pref_custom_endpoint_url">Paste URL (vless://, vmess://, etc.)</string>
 

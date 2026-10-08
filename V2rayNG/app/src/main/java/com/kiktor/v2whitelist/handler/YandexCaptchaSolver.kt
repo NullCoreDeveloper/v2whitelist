@@ -17,6 +17,8 @@ import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -89,14 +91,64 @@ object YandexCaptchaSolver {
         return AngApplication.getCurrentActivity()
     }
 
+    private const val SOLVER_JS = """
+        (function() {
+            try {
+                var cb = document.querySelector('.CheckboxCaptcha-Button, .SmartCaptcha-Button, .CheckboxCaptcha-Anchor, input[type="checkbox"], [data-testid="checkbox-captcha"]');
+                if (cb && !cb.getAttribute('data-clicked')) {
+                    cb.setAttribute('data-clicked', 'true');
+                    cb.click();
+                }
+                var text = document.body ? (document.body.innerText || document.body.textContent || '') : '';
+                if (text.indexOf('vless://') !== -1 || text.indexOf('vmess://') !== -1 || 
+                    text.indexOf('trojan://') !== -1 || text.indexOf('ss://') !== -1 ||
+                    text.indexOf('hysteria2://') !== -1 || text.indexOf('hy2://') !== -1) {
+                    return 'CONFIGS_FOUND';
+                }
+                var isCaptcha = !!cb || location.href.indexOf('showcaptcha') !== -1 || location.href.indexOf('captcha.yandex') !== -1;
+                if (!isCaptcha && location.href.indexOf('translate.yandex') !== -1) {
+                    return 'CLEAN_TRANSLATE';
+                }
+                return isCaptcha ? 'CAPTCHA_PENDING' : 'READY';
+            } catch(e) {
+                return 'ERROR';
+            }
+        })();
+    """
+
     private fun getCombinedCookies(): String {
         val cm = CookieManager.getInstance()
-        val c1 = cm.getCookie("https://translate.yandex.ru").orEmpty()
-        val c2 = cm.getCookie("https://yandex.ru").orEmpty()
-        return mergeCookies(c1, c2)
+        val domains = listOf(
+            "https://translate.yandex.ru",
+            "https://yandex.ru",
+            "https://captcha.yandex.ru",
+            "https://smartcaptcha.yandexcloud.net",
+            "https://yandex.com",
+            "https://.yandex.ru"
+        )
+        var res = ""
+        for (d in domains) {
+            val c = cm.getCookie(d).orEmpty()
+            if (c.isNotEmpty()) {
+                res = mergeCookies(res, c)
+            }
+        }
+        return res
     }
 
-    fun isSolved(url: String?, cookies: String): Boolean {
+    fun isSolved(url: String?, cookies: String, bodyText: String? = null): Boolean {
+        if (!bodyText.isNullOrBlank()) {
+            val lowerBody = bodyText.lowercase()
+            if (lowerBody.contains("vless://") ||
+                lowerBody.contains("vmess://") ||
+                lowerBody.contains("trojan://") ||
+                lowerBody.contains("ss://") ||
+                lowerBody.contains("hysteria2://") ||
+                lowerBody.contains("hy2://")
+            ) {
+                return true
+            }
+        }
         if (cookies.contains("spravka=")) {
             return true
         }
@@ -104,12 +156,13 @@ object YandexCaptchaSolver {
         val isCaptchaUrl = lowerUrl.contains("showcaptcha") ||
                 lowerUrl.contains("captcha.yandex") ||
                 lowerUrl.contains("smartcaptcha")
-        return !isCaptchaUrl && lowerUrl.contains("translate.yandex.ru") && cookies.contains("yandexuid=")
+        return !isCaptchaUrl && (lowerUrl.contains("translate.yandex") || lowerUrl.contains("yandex.ru")) && cookies.contains("yandexuid=")
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private suspend fun trySilentSolve(context: Context, url: String): Boolean {
         var webView: WebView? = null
+        var monitorJob: kotlinx.coroutines.Job? = null
         try {
             val deferred = CompletableDeferred<Boolean>()
             val cookieManager = CookieManager.getInstance()
@@ -142,6 +195,14 @@ object YandexCaptchaSolver {
                         if (isSolved(currentUrl, cookies)) {
                             saveCookies(cookies)
                             deferred.complete(true)
+                        } else {
+                            view.evaluateJavascript(SOLVER_JS) { res ->
+                                val cleaned = res?.replace("\"", "").orEmpty()
+                                if (cleaned == "CONFIGS_FOUND" || cleaned == "CLEAN_TRANSLATE") {
+                                    saveCookies(getCombinedCookies())
+                                    deferred.complete(true)
+                                }
+                            }
                         }
                     }
 
@@ -155,15 +216,30 @@ object YandexCaptchaSolver {
                 }
             }
 
+            monitorJob = kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
+                while (!deferred.isCompleted) {
+                    kotlinx.coroutines.delay(400)
+                    webView?.evaluateJavascript(SOLVER_JS) { res ->
+                        val cleaned = res?.replace("\"", "").orEmpty()
+                        val cookies = getCombinedCookies()
+                        if (cleaned == "CONFIGS_FOUND" || cleaned == "CLEAN_TRANSLATE" || isSolved(webView?.url, cookies)) {
+                            saveCookies(cookies)
+                            deferred.complete(true)
+                        }
+                    }
+                }
+            }
+
             webView.loadUrl(url)
 
-            return withTimeoutOrNull(4000) {
+            return withTimeoutOrNull(8000) {
                 deferred.await()
             } ?: false
         } catch (e: Exception) {
             Log.w(AppConfig.TAG, "YandexCaptchaSolver: silent solve exception: ${e.message}")
             return false
         } finally {
+            monitorJob?.cancel()
             try {
                 webView?.stopLoading()
                 webView?.destroy()
@@ -176,6 +252,7 @@ object YandexCaptchaSolver {
         val deferred = CompletableDeferred<Boolean>()
         var dialog: AlertDialog? = null
         var webView: WebView? = null
+        var monitorJob: kotlinx.coroutines.Job? = null
 
         try {
             val cookieManager = CookieManager.getInstance()
@@ -211,8 +288,17 @@ object YandexCaptchaSolver {
                         val cookies = getCombinedCookies()
                         if (isSolved(currentUrl, cookies)) {
                             saveCookies(cookies)
-                            deferred.complete(true)
                             dialog?.dismiss()
+                            deferred.complete(true)
+                        } else {
+                            view.evaluateJavascript(SOLVER_JS) { res ->
+                                val cleaned = res?.replace("\"", "").orEmpty()
+                                if (cleaned == "CONFIGS_FOUND" || cleaned == "CLEAN_TRANSLATE") {
+                                    saveCookies(getCombinedCookies())
+                                    dialog?.dismiss()
+                                    deferred.complete(true)
+                                }
+                            }
                         }
                     }
 
@@ -220,8 +306,23 @@ object YandexCaptchaSolver {
                         val cookies = getCombinedCookies()
                         if (isSolved(currentUrl, cookies)) {
                             saveCookies(cookies)
-                            deferred.complete(true)
                             dialog?.dismiss()
+                            deferred.complete(true)
+                        }
+                    }
+                }
+            }
+
+            monitorJob = kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch {
+                while (!deferred.isCompleted) {
+                    kotlinx.coroutines.delay(400)
+                    webView?.evaluateJavascript(SOLVER_JS) { res ->
+                        val cleaned = res?.replace("\"", "").orEmpty()
+                        val cookies = getCombinedCookies()
+                        if (cleaned == "CONFIGS_FOUND" || cleaned == "CLEAN_TRANSLATE" || isSolved(webView?.url, cookies)) {
+                            saveCookies(cookies)
+                            dialog?.dismiss()
+                            deferred.complete(true)
                         }
                     }
                 }
@@ -255,6 +356,7 @@ object YandexCaptchaSolver {
             Log.e(AppConfig.TAG, "YandexCaptchaSolver: interactive dialog exception: ${e.message}")
             return false
         } finally {
+            monitorJob?.cancel()
             try {
                 dialog?.dismiss()
                 webView?.stopLoading()

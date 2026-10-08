@@ -87,6 +87,12 @@ class GeekModeActivity : BaseActivity() {
                 }
 
                 launch {
+                    viewModel.pingUpdated.collect {
+                        updateNodeInfo()
+                    }
+                }
+
+                launch {
                     viewModel.logs.collect { logsList ->
                         binding.tvLogs.text = logsList.joinToString("\n")
                         // Скроллим к низу только внутренний NestedScrollView с логами
@@ -162,7 +168,9 @@ class GeekModeActivity : BaseActivity() {
             val address = config.server ?: ""
             val port = config.serverPort?.toIntOrNull() ?: 0
             val protocol = config.configType.name
-            binding.tvNodeInfo.text = "Name: ${config.remarks}\nProtocol: $protocol\nAddress: $address:$port"
+            val delay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
+            val delayStr = if (delay > 0) "\nPing: ${delay}ms" else if (delay < 0) "\nPing: Failed (-1)" else ""
+            binding.tvNodeInfo.text = "Name: ${config.remarks}\nProtocol: $protocol\nAddress: $address:$port$delayStr"
         } else {
             binding.tvNodeInfo.text = getString(R.string.geek_mode_unknown_config)
         }

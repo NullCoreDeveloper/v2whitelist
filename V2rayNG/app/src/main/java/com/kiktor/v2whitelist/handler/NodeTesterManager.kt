@@ -165,7 +165,7 @@ object NodeTesterManager {
         customMinMbps: Double? = null,
         customBytes: Long? = null,
         customTimeoutMs: Int? = null,
-        ignoreCustomEndpoint: Boolean = false
+        ignoreCustomEndpoint: Boolean = true
     ): Boolean {
         if (!currentCoroutineContext().isActive) return false
         

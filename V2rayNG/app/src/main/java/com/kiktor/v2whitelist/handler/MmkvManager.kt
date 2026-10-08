@@ -500,6 +500,10 @@ object MmkvManager {
         return subscriptions
     }
 
+    fun getSubConcurrency(): Int {
+        return decodeSettingsString(AppConfig.PREF_SUB_CONCURRENCY, "3")?.toIntOrNull()?.coerceIn(1, 10) ?: 3
+    }
+
     /**
      * Removes the subscription.
      *

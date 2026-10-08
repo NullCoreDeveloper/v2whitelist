@@ -65,7 +65,7 @@ object V2rayConfigManager {
      * @param guid The unique identifier for the V2ray configuration.
      * @return A ConfigResult object containing the configuration details or indicating failure.
      */
-    fun getV2rayConfig4Speedtest(context: Context, guid: String, port: Int = 0, ignoreCustomEndpoint: Boolean = false): ConfigResult {
+    fun getV2rayConfig4Speedtest(context: Context, guid: String, port: Int = 0, ignoreCustomEndpoint: Boolean = true): ConfigResult {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ConfigResult(false)
             return if (config.configType == EConfigType.CUSTOM) {
@@ -1493,7 +1493,6 @@ object V2rayConfigManager {
      */
     fun populateTlsSettings(streamSettings: StreamSettingsBean, profileItem: ProfileItem, sniExt: String?) {
         val streamSecurity = profileItem.security.orEmpty()
-        val allowInsecure = profileItem.insecure == true
         val sni = if (profileItem.sni.isNullOrEmpty()) {
             when {
                 sniExt.isNotNullEmpty() && Utils.isDomainName(sniExt) -> sniExt
@@ -1507,7 +1506,6 @@ object V2rayConfigManager {
         streamSettings.security = streamSecurity.nullIfBlank()
         if (streamSettings.security == null) return
         val tlsSetting = StreamSettingsBean.TlsSettingsBean(
-            allowInsecure = allowInsecure,
             serverName = sni.nullIfBlank(),
             fingerprint = profileItem.fingerPrint.nullIfBlank(),
             alpn =  profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },

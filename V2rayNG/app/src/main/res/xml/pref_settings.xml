@@ -242,6 +242,12 @@
             android:defaultValue="false"
             android:summary="@string/summary_pref_update_sub_only_via_vpn"
             android:title="@string/title_pref_update_sub_only_via_vpn" />
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_sub_concurrency"
+            android:defaultValue="3"
+            android:summary="@string/summary_pref_sub_concurrency"
+            android:title="@string/title_pref_sub_concurrency" />
         <Preference
             android:key="pref_check_update_now"
             android:summary="@string/summary_pref_check_update_now"

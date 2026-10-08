@@ -38,7 +38,7 @@ object DefaultSubscriptions {
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_whitelist",
             name = "RKP (Анти-РосКомПозор: Белые списки)",
-            url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt",
+            url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl",
             groupRegex = "(Неизвестно)",
             enabled = false,
             targetScenarios = listOf(SubscriptionHelper.SCENARIO_WHITELIST)
@@ -46,7 +46,7 @@ object DefaultSubscriptions {
         SubscriptionHelper.CustomSubData(
             id = "def_rkp_blacklist",
             name = "RKP (Анти-РосКомПозор: Черные списки)",
-            url = "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt",
+            url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl",
             groupRegex = "(Неизвестно)",
             enabled = false,
             targetScenarios = listOf(SubscriptionHelper.SCENARIO_BLACKLIST)

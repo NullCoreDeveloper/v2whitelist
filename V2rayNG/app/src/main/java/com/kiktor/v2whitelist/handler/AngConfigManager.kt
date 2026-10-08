@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.text.TextUtils
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.HY2
 import com.kiktor.v2whitelist.R
@@ -472,8 +474,17 @@ object AngConfigManager {
     fun updateConfigViaSubAll(): Int {
         var count = 0
         try {
-            MmkvManager.decodeSubscriptions().forEach {
-                count += updateConfigViaSub(it)
+            val subs = MmkvManager.decodeSubscriptions().filter { it.subscription.enabled }
+            val concurrency = MmkvManager.getSubConcurrency()
+            val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency)
+            count = kotlinx.coroutines.runBlocking {
+                subs.map { sub ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            updateConfigViaSub(sub)
+                        }
+                    }
+                }.awaitAll().sum()
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to update config via all subscriptions", e)
@@ -549,8 +560,7 @@ object AngConfigManager {
                 // Быстро, но ресурсоёмко — не для фонового воркера.
                 kotlinx.coroutines.runBlocking {
                     val channel = kotlinx.coroutines.channels.Channel<String>(urls.size)
-                    var activeJobs = urls.size
-                    val lock = Any()
+                    val activeJobs = java.util.concurrent.atomic.AtomicInteger(urls.size)
                     
                     val jobs = urls.map { singleUrl ->
                         @OptIn(DelicateCoroutinesApi::class)
@@ -561,18 +571,27 @@ object AngConfigManager {
                                 if (!Utils.isValidUrl(urlFixed)) {
                                     if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) return@launch
                                 }
-                                // 1. HTTP Proxy
-                                if (httpPort > 0) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
+                                
+                                val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+
+                                // Если VPN не строго обязателен, сразу пробуем прямой запрос с быстрым таймаутом (3.5 сек)
+                                if (!onlyViaVpn) {
+                                    try {
+                                        result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500)
+                                    } catch (_: Exception) {}
                                 }
-                                // 2. SOCKS5 Proxy
+
+                                // Если прямой запрос не удался или нужен VPN, пробуем через локальные прокси
+                                if (result.isEmpty() && httpPort > 0) {
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500, httpPort) } catch (_: Exception) {}
+                                }
                                 if (result.isEmpty() && socksPort > 0) {
-                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 4000, socksPort) } catch (_: Exception) {}
+                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 3500, socksPort) } catch (_: Exception) {}
                                 }
-                                // 3. Direct
-                                if (result.isEmpty()) {
+                                if (result.isEmpty() && !onlyViaVpn) {
                                     try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 4000) } catch (_: Exception) {}
                                 }
+
                                 if (result.isNotEmpty()) {
                                     Log.i(AppConfig.TAG, "Mirror WON the race: $singleUrl")
                                     channel.trySend(result)
@@ -580,19 +599,14 @@ object AngConfigManager {
                             } catch (e: Exception) {
                                 Log.d(AppConfig.TAG, "Mirror failed: $singleUrl")
                             } finally {
-                                synchronized(lock) {
-                                    activeJobs--
-                                    // Когда все зеркала закончили — сигнализируем пустой строкой
-                                    if (activeJobs == 0) channel.trySend("")
+                                if (activeJobs.decrementAndGet() == 0) {
+                                    channel.trySend("")
                                 }
                             }
                         }
                     }
                     
-                    // Таймаут 30с на подписку: защита от TCP-зависания зеркал без ответа.
-                    // Без него channel.receive() мог висеть вечно если один GlobalScope.launch завис
-                    // (TCP handshake без ACK) — Android убивал WorkManager воркер по таймауту → FAILED.
-                    configText = kotlinx.coroutines.withTimeoutOrNull(30_000L) {
+                    configText = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
                         channel.receive()
                     } ?: ""
                     
@@ -608,17 +622,20 @@ object AngConfigManager {
                 return 0
             }
             
-            val count = parseConfigViaSub(configText, it.guid, false)
-            if (count > 0) {
-                it.subscription.lastUpdated = System.currentTimeMillis()
-                it.subscription.lastUpdateFailed = false
-                MmkvManager.encodeSubscription(it.guid, it.subscription)
-                MmkvManager.removeDuplicateServer() // Авто-очистка дубликатов
-                Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $count configs (duplicates cleaned)")
-            } else {
-                Log.w(AppConfig.TAG, "Update subscription: parsed 0 configs for ${it.subscription.remarks}")
-                it.subscription.lastUpdateFailed = NetworkManager.shouldReportSubscriptionFailure()
-                MmkvManager.encodeSubscription(it.guid, it.subscription)
+            val count = synchronized(AngConfigManager::class.java) {
+                val res = parseConfigViaSub(configText, it.guid, false)
+                if (res > 0) {
+                    it.subscription.lastUpdated = System.currentTimeMillis()
+                    it.subscription.lastUpdateFailed = false
+                    MmkvManager.encodeSubscription(it.guid, it.subscription)
+                    MmkvManager.removeDuplicateServer() // Авто-очистка дубликатов
+                    Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $res configs (duplicates cleaned)")
+                } else {
+                    Log.w(AppConfig.TAG, "Update subscription: parsed 0 configs for ${it.subscription.remarks}")
+                    it.subscription.lastUpdateFailed = NetworkManager.shouldReportSubscriptionFailure()
+                    MmkvManager.encodeSubscription(it.guid, it.subscription)
+                }
+                res
             }
             return count
         } catch (e: Exception) {

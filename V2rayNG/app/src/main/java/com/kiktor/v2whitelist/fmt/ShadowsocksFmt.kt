@@ -136,7 +136,7 @@ object ShadowsocksFmt : FmtBase() {
 
         outboundBean?.settings?.servers?.first()?.let { server ->
             server.address = getServerAddress(profileItem)
-            server.port = profileItem.serverPort.orEmpty().toInt()
+            server.port = profileItem.serverPort?.toIntOrNull() ?: AppConfig.DEFAULT_PORT
             server.password = profileItem.password
             server.method = profileItem.method
         }

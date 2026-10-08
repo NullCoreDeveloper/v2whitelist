@@ -3,8 +3,8 @@ import urllib.parse
 import re
 
 URLS = {
-    "rkp_whitelist": ["https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/whitelist.txt"],
-    "rkp_blacklist": ["https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/main/blacklist.txt"]
+    "rkp_whitelist": ["https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl"],
+    "rkp_blacklist": ["https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl"]
 }
 
 REGEXES = {

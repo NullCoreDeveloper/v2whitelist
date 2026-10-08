@@ -12,6 +12,8 @@ import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.handler.SpeedtestManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
+import com.kiktor.v2whitelist.handler.V2RayNativeManager
+import com.kiktor.v2whitelist.handler.V2rayConfigManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,9 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
 
     private val _exitIp = MutableStateFlow<String?>(null)
     val exitIp: StateFlow<String?> = _exitIp.asStateFlow()
+
+    private val _pingUpdated = MutableStateFlow<Long>(0L)
+    val pingUpdated: StateFlow<Long> = _pingUpdated.asStateFlow()
 
     // Логи живут в синглтоне GeekModeLogger, переживают закрытие фрагмента
     val logs: StateFlow<List<String>> = GeekModeLogger.logs
@@ -93,21 +98,52 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                 }
             }
 
-            // 204 test through the running proxy (SOCKS port)
             if (V2RayServiceManager.isRunning() == true) {
-                val socksPort = SettingsManager.getSocksPort()
-                GeekModeLogger.log("GeekMode", "HTTP 204 test via proxy socks port $socksPort...")
-                val (elapsed, result) = SpeedtestManager.testConnection(getApplication(), socksPort)
-                if (elapsed > 0) {
-                    GeekModeLogger.log("GeekMode", "Proxy latency: ${elapsed}ms")
-                    // Update testDelayMillis for current server
-                    serverGuid.let { MmkvManager.encodeServerTestDelayMillis(it, elapsed) }
-                    loadVipServers() // Refresh chips with new delay
+                GeekModeLogger.log("GeekMode", "Testing proxy latency via active core...")
+                var delay = V2RayServiceManager.measureDelay()
+                if (delay <= 0) {
+                    val socksPort = SettingsManager.getSocksPort()
+                    val (elapsed, _) = SpeedtestManager.testConnection(getApplication(), socksPort)
+                    if (elapsed > 0) delay = elapsed
+                }
+
+                if (delay > 0) {
+                    GeekModeLogger.log("GeekMode", "Proxy latency: ${delay}ms")
+                    MmkvManager.encodeServerTestDelayMillis(serverGuid, delay)
                 } else {
-                    GeekModeLogger.log("GeekMode", "204 test failed: $result")
+                    GeekModeLogger.log("GeekMode", "Proxy latency test failed")
+                    MmkvManager.encodeServerTestDelayMillis(serverGuid, -1L)
+                }
+            } else {
+                GeekModeLogger.log("GeekMode", "VPN not running, testing via isolated core...")
+                val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(getApplication(), serverGuid, ignoreCustomEndpoint = true)
+                var delay = -1L
+                if (speedtestConfig.status) {
+                    val testUrl = SettingsManager.getDelayTestUrl()
+                    val realDelay = V2RayNativeManager.measureOutboundDelay(speedtestConfig.content, testUrl)
+                    if (realDelay > 0) {
+                        delay = realDelay
+                    }
+                }
+                if (delay <= 0) {
+                    val ok = NodeTesterManager.verifyProfile(getApplication(), serverGuid, showStatus = false, ignoreCustomEndpoint = true)
+                    val testedDelay = MmkvManager.decodeServerAffiliationInfo(serverGuid)?.testDelayMillis ?: -1L
+                    if (ok && testedDelay > 0) {
+                        delay = testedDelay
+                    }
+                }
+
+                if (delay > 0) {
+                    GeekModeLogger.log("GeekMode", "Isolated core latency: ${delay}ms")
+                    MmkvManager.encodeServerTestDelayMillis(serverGuid, delay)
+                } else {
+                    GeekModeLogger.log("GeekMode", "Isolated core test failed")
+                    MmkvManager.encodeServerTestDelayMillis(serverGuid, -1L)
                 }
             }
 
+            loadVipServers()
+            _pingUpdated.value = System.currentTimeMillis()
             fetchExitIp()
         }
     }

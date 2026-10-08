@@ -264,7 +264,6 @@ data class V2rayConfig(
             )
 
             data class TlsSettingsBean(
-                var allowInsecure: Boolean = false,
                 var serverName: String? = null,
                 val alpn: List<String>? = null,
                 val minVersion: String? = null,
@@ -278,6 +277,7 @@ data class V2rayConfig(
                 var echConfigList: String? = null,
                 var echForceQuery: String? = null,
                 var pinnedPeerCertSha256: String? = null,
+                var verifyPeerCertByName: String? = null,
                 // REALITY settings
                 val show: Boolean = false,
                 var publicKey: String? = null,
