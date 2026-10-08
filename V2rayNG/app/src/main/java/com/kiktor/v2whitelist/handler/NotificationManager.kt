@@ -210,7 +210,7 @@ object NotificationManager {
             ""
         }
 
-        val title = serverRemarks ?: context.getString(R.string.app_name)
+        val title = serverRemarks ?: context.getString(R.string.app_display_name)
         val text = context.getString(R.string.notification_content_paused)
 
         val pausedBuilder = NotificationCompat.Builder(context, channelId)
@@ -421,7 +421,7 @@ object NotificationManager {
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(context.getString(R.string.app_name))
+            .setContentTitle(context.getString(R.string.app_display_name))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_LOW)
