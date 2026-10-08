@@ -7,8 +7,13 @@ import (
 	"github.com/kiktor/v2w-core/common/protocol"
 
 	"github.com/google/uuid"
+	"github.com/kiktor/v2w-core/common/serial"
 	"google.golang.org/protobuf/proto"
 )
+
+func init() {
+	serial.RegisterCreator("xray.proxy.hysteria.account.Account", func() interface{} { return &Account{} })
+}
 
 func (a *Account) AsAccount() (protocol.Account, error) {
 	var VR net.Port

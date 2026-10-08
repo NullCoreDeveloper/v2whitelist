@@ -515,6 +515,9 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		if sni == "" {
 			sni = q.Get("host")
 		}
+		if sni == "" {
+			sni = host
+		}
 		streamSettings := &internet.MemoryStreamConfig{
 			ProtocolName: "hysteria",
 			ProtocolSettings: &hysteria_transport.Config{
