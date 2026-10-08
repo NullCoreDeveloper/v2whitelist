@@ -593,7 +593,7 @@ object SubscriptionHelper {
             }
 
             view.post {
-                cardVpn?.requestFocus()
+                cardAuto?.requestFocus()
             }
         } else {
             val bottomSheetDialog = BottomSheetDialog(activity)

@@ -257,8 +257,12 @@ class MainActivity : HelperBaseActivity() {
         val alreadyShown = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, false)
         if (alreadyShown) return
 
-        com.kiktor.v2whitelist.handler.SubscriptionHelper.showSetupWizard(this) {
-            mainViewModel.reloadServerList()
+        binding.root.post {
+            if (!isFinishing && !isDestroyed) {
+                com.kiktor.v2whitelist.handler.SubscriptionHelper.showSetupWizard(this) {
+                    mainViewModel.reloadServerList()
+                }
+            }
         }
     }
 
