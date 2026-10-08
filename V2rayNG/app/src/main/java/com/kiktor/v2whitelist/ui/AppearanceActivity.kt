@@ -93,6 +93,21 @@ class AppearanceActivity : BaseActivity() {
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_HAPTIC)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_PULSE)?.onPreferenceChangeListener = premiumListener
 
+            findPreference<androidx.preference.Preference>("pref_add_qs_tile")?.setOnPreferenceClickListener {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    val sbm = requireContext().getSystemService(android.app.StatusBarManager::class.java)
+                    sbm?.requestAddTileService(
+                        android.content.ComponentName(requireContext(), com.kiktor.v2whitelist.service.QSTileService::class.java),
+                        getString(R.string.app_tile_name),
+                        android.graphics.drawable.Icon.createWithResource(requireContext(), R.drawable.ic_qs_probel),
+                        requireContext().mainExecutor
+                    ) { _ -> }
+                } else {
+                    requireContext().toast(getString(R.string.msg_qs_tile_manual_hint))
+                }
+                true
+            }
+
             initSummaries()
         }
 

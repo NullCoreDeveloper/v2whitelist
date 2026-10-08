@@ -80,4 +80,12 @@
             android:title="@string/title_pref_premium_haptic" />
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/title_pref_add_qs_tile">
+        <Preference
+            android:key="pref_add_qs_tile"
+            android:icon="@drawable/ic_qs_probel"
+            android:summary="@string/summary_pref_add_qs_tile"
+            android:title="@string/title_pref_add_qs_tile" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

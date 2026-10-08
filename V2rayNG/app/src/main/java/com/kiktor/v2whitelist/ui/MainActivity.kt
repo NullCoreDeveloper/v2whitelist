@@ -36,6 +36,7 @@ import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.extension.toastError
 import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.SettingsChangeManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
@@ -445,6 +446,9 @@ class MainActivity : HelperBaseActivity() {
                 isShowingError = false
                 updateUIState(true)
             } else {
+                if (activeJob == null && !SmartConnectManager.isScanning.get()) {
+                    isTaskRunning = false
+                }
                 // Не сбрасываем UI пока идёт поиск ИЛИ пока сканирует ИЛИ пока показываем ошибку
                 if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
                     updateUIState(false)
@@ -454,7 +458,11 @@ class MainActivity : HelperBaseActivity() {
         mainViewModel.uiStatus.observe(this) { status ->
             // Показываем статус пока идёт задача ИЛИ пока сканирует ИЛИ пока показываем ошибку
             if (isTaskRunning || SmartConnectManager.isScanning.get() || isShowingError) {
-                binding.tvStatusDetail.text = status
+                if (!isTaskRunning && SmartConnectManager.isScanning.get()) {
+                    setConnectingState(status)
+                } else {
+                    binding.tvStatusDetail.text = status
+                }
                 if (isSubscriptionUpdating) {
                     val tvUpdateStatus = findViewById<android.widget.TextView>(R.id.tv_update_status)
                     val tvUpdateTime = findViewById<android.widget.TextView>(R.id.tv_update_time)
@@ -601,6 +609,7 @@ class MainActivity : HelperBaseActivity() {
         isTaskRunning = false
         isShowingError = false
         SmartConnectManager.isScanning.set(false)
+        NotificationManager.cancelScanningNotification(this)
         updateUIState(mainViewModel.isRunning.value == true)
         updateSubscriptionStatusUI()
     }
@@ -854,6 +863,10 @@ class MainActivity : HelperBaseActivity() {
         lastPalette = currentPalette
 
         updateSubscriptionStatusUI()
+
+        if (SmartConnectManager.isScanning.get()) {
+            setConnectingState()
+        }
 
         if (mainViewModel.isRunning.value != true && !V2RayServiceManager.isRunning()) {
             if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {

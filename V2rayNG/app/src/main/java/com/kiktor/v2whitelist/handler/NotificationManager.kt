@@ -379,4 +379,78 @@ object NotificationManager {
     fun cancelFailoverNotification() {
         getNotificationManager()?.cancel(NOTIFICATION_ID + 1)
     }
+
+    // ── Уведомление поиска SmartConnect ──────────────────────────────────────────
+
+    /**
+     * Показывает беззвучное уведомление о поиске лучшего сервера.
+     * Канал IMPORTANCE_LOW — без звука, без вибрации.
+     */
+    fun showScanningNotification(context: Context, statusText: String? = null) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            ?: return
+
+        val channelId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val existing = nm.getNotificationChannel(AppConfig.SCANNING_CHANNEL_ID)
+            if (existing == null) {
+                val chan = NotificationChannel(
+                    AppConfig.SCANNING_CHANNEL_ID,
+                    AppConfig.SCANNING_CHANNEL_NAME,
+                    android.app.NotificationManager.IMPORTANCE_LOW  // беззвучный!
+                ).apply {
+                    setSound(null, null)
+                    enableVibration(false)
+                    setShowBadge(false)
+                }
+                nm.createNotificationChannel(chan)
+            }
+            AppConfig.SCANNING_CHANNEL_ID
+        } else {
+            ""
+        }
+
+        val contentIntent = PendingIntent.getActivity(
+            context, 0,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val text = statusText ?: context.getString(R.string.status_starting_smart_connect)
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_name)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)  // не трезвонить при каждом обновлении
+            .setProgress(0, 0, true) // indeterminate прогресс
+            .setContentIntent(contentIntent)
+            .setSound(null)
+            .setVibrate(null)
+
+        nm.notify(AppConfig.NOTIFICATION_ID_SCANNING, builder.build())
+    }
+
+    /**
+     * Обновляет текст уведомления поиска (без звука).
+     */
+    fun updateScanningNotification(context: Context, statusText: String) {
+        // Повторный вызов showScanningNotification обновит уже показанное уведомление
+        // благодаря setOnlyAlertOnce(true) — звука не будет
+        showScanningNotification(context, statusText)
+    }
+
+    /**
+     * Убирает уведомление поиска.
+     */
+    fun cancelScanningNotification(context: Context) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+        nm?.cancel(AppConfig.NOTIFICATION_ID_SCANNING)
+    }
 }

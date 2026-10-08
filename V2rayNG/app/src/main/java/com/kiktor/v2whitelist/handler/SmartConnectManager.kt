@@ -45,6 +45,10 @@ object SmartConnectManager {
 
     private fun sendStatus(context: Context, status: String) {
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
+        // Если идёт поиск — обновляем текст уведомления (беззвучно)
+        if (isScanning.get()) {
+            NotificationManager.updateScanningNotification(context, status)
+        }
     }
 
 
@@ -363,6 +367,7 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "smartConnect: already scanning, ignoring duplicate call")
             return@withContext false
         }
+        NotificationManager.showScanningNotification(context)
         try {
             // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
             NetworkManager.waitForInternet(context)
@@ -488,6 +493,10 @@ object SmartConnectManager {
             return@withContext false
         } finally {
             isScanning.set(false)
+            NotificationManager.cancelScanningNotification(context)
+            if (!V2RayServiceManager.isRunning()) {
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_NOT_RUNNING, "")
+            }
         }
     }
 
@@ -499,6 +508,7 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "switchServer: already scanning, ignoring duplicate call")
             return@withContext false
         }
+        NotificationManager.showScanningNotification(context, context.getString(R.string.status_switching_server))
         try {
             // Ждем появления интернета (dzen.ru) перед переключением
             NetworkManager.waitForInternet(context)
@@ -604,6 +614,10 @@ object SmartConnectManager {
             return@withContext false
         } finally {
             isScanning.set(false)
+            NotificationManager.cancelScanningNotification(context)
+            if (!V2RayServiceManager.isRunning()) {
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_NOT_RUNNING, "")
+            }
         }
     }
 
