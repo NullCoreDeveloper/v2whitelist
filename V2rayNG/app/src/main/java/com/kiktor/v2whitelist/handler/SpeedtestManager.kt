@@ -234,20 +234,16 @@ object SpeedtestManager {
             .takeIf { !it.isNullOrBlank() } ?: AppConfig.IP_API_URL
 
         val isRunning = V2RayServiceManager.isRunning() == true
-        val httpPort = if (isRunning) SettingsManager.getHttpPort() else 0
         val socksPort = if (isRunning) SettingsManager.getSocksPort() else 0
 
-        var content: String? = null
-        if (httpPort > 0) {
-            content = HttpUtil.getUrlContent(url, 5000, httpPort)
-        }
-        if (content.isNullOrBlank() && socksPort > 0) {
+        val content = if (socksPort > 0) {
             try {
-                content = HttpUtil.getUrlContentViaSocks(url, null, 5000, socksPort)
-            } catch (_: Exception) {}
-        }
-        if (content.isNullOrBlank() && !isRunning) {
-            content = HttpUtil.getUrlContent(url, 5000, 0)
+                HttpUtil.getUrlContentViaSocks(url, null, 5000, socksPort)
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            HttpUtil.getUrlContent(url, 5000, 0)
         }
         if (content.isNullOrBlank()) return null
 
