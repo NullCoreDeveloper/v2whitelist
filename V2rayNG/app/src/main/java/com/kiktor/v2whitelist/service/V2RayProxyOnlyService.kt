@@ -31,7 +31,7 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.showNotification(null)
         V2RayServiceManager.startCoreLoop(null)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /**
@@ -40,6 +40,9 @@ class V2RayProxyOnlyService : Service(), ServiceControl {
     override fun onDestroy() {
         super.onDestroy()
         V2RayServiceManager.stopCoreLoop()
+        if (V2RayServiceManager.serviceControl?.get() == this) {
+            V2RayServiceManager.serviceControl = null
+        }
     }
 
     /**

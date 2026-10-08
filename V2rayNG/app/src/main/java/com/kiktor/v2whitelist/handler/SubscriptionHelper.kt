@@ -678,7 +678,8 @@ object SubscriptionHelper {
             }
         }
 
-        val updateViaYandexOnBs = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
+        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+        val updateViaYandexOnBs = !onlyViaVpn && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
         val isBs = NetworkManager.checkInternetStatus() == 1
 
         // Яндекс-обход работает ТОЛЬКО если:

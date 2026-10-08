@@ -38,8 +38,10 @@ class SubscriptionUpdaterWorker(
         showNotification()
         return try {
             // sequential=true: перебираем зеркала по одному, без параллельных GlobalScope-корутин.
-            // В фоне торопиться некуда — экономим RAM и CPU.
-            SubscriptionHelper.updateSubscription(applicationContext, sequential = true)
+            // Ограничиваем таймаутом 2 минуты, чтобы воркер не зависал в фоне бесконечно
+            kotlinx.coroutines.withTimeoutOrNull(120_000L) {
+                SubscriptionHelper.updateSubscription(applicationContext, sequential = true)
+            }
             Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
             Result.success()
         } catch (e: Exception) {
@@ -50,7 +52,17 @@ class SubscriptionUpdaterWorker(
             Log.e(AppConfig.TAG, "SubscriptionUpdaterWorker: update failed, will retry on next schedule", e)
             Result.success()
         } finally {
+            cancelNotification()
+        }
+    }
+
+    private fun cancelNotification() {
+        try {
             notifManager.cancel(notifId)
+            val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.cancel(notifId)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to cancel notification", e)
         }
     }
 
@@ -72,7 +84,8 @@ class SubscriptionUpdaterWorker(
             .setContentTitle(applicationContext.getString(R.string.status_updating_subscription))
             .setSmallIcon(R.drawable.ic_stat_name)
             .setPriority(NotificationCompat.PRIORITY_MIN)   // минимальный приоритет = беззвучное
-            .setOngoing(true)
+            .setOngoing(false)                              // НЕ ongoing, чтобы уведомление легко снималось системой и смахивалось
+            .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setSilent(true)
             .build()

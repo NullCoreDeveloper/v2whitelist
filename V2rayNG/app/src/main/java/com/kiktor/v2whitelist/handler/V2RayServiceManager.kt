@@ -72,8 +72,57 @@ object V2RayServiceManager {
      * @param context The context from which the service is stopped.
      */
     fun stopVService(context: Context) {
-        //context.toast(R.string.toast_services_stop)
+        Log.i(AppConfig.TAG, "stopVService called")
         MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
+
+        // Надежный fallback: явно просим систему остановить сервисы через Context
+        try {
+            val appContext = context.applicationContext
+            appContext.stopService(Intent(appContext, V2RayVpnService::class.java))
+            appContext.stopService(Intent(appContext, V2RayProxyOnlyService::class.java))
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "stopVService fallback stopService failed", e)
+        }
+
+        // Сторожевой таймер: если через 800 мс интерфейс tun всё еще висит в системе,
+        // принудительно подчищаем зависший подпроцесс демона
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (!isRunning() && NetworkManager.hasTunInterface()) {
+                Log.w(AppConfig.TAG, "stopVService watchdog: detected lingering TUN interface after stop, killing daemon process")
+                killDaemonProcess(context)
+            }
+        }, 800L)
+    }
+
+    /**
+     * Завершает процесс демона :RunSoLibV2RayDaemon, если он завис или удерживает мертвый tun.
+     * Поскольку процессы имеют одинаковый UID приложения, killProcess легален и не требует root.
+     */
+    fun killDaemonProcess(context: Context) {
+        try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val daemonProcName = "${context.packageName}:RunSoLibV2RayDaemon"
+            am?.runningAppProcesses?.forEach { proc ->
+                if (proc.processName == daemonProcName && proc.pid != android.os.Process.myPid()) {
+                    Log.i(AppConfig.TAG, "Killing daemon process: ${proc.processName} (pid=${proc.pid})")
+                    android.os.Process.killProcess(proc.pid)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to kill daemon process", e)
+        }
+    }
+
+    /**
+     * Принудительно очищает зависший VPN (зомби tun-интерфейс).
+     * Вызывается, если сервис выключен, но tun-интерфейс остался активен в ОС.
+     */
+    fun forceCleanupZombieVpn(context: Context) {
+        Log.w(AppConfig.TAG, "forceCleanupZombieVpn: Cleaning up dead/zombie VPN state")
+        stopVService(context)
+        killDaemonProcess(context)
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+        NotificationManager.cancelNotification()
     }
 
     /**
@@ -270,33 +319,32 @@ object V2RayServiceManager {
         currentConfig = null
         
         SmartFailoverManager.stopFailoverMonitor()
-        
-        val service = getService() ?: run {
-            Log.w(AppConfig.TAG, "stopCoreLoop: service is null")
-            return false
-        }
 
         if (coreController.isRunning) {
-            Log.i(AppConfig.TAG, "stopCoreLoop: stopping V2Ray core loop...")
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    coreController.stopLoop()
-                    Log.i(AppConfig.TAG, "stopCoreLoop: core stopped successfully")
-                } catch (e: Exception) {
-                    Log.e(AppConfig.TAG, "stopCoreLoop: Failed to stop V2Ray loop", e)
-                }
+            Log.i(AppConfig.TAG, "stopCoreLoop: stopping V2Ray core loop synchronously...")
+            try {
+                coreController.stopLoop()
+                Log.i(AppConfig.TAG, "stopCoreLoop: core stopped successfully")
+            } catch (e: Exception) {
+                Log.e(AppConfig.TAG, "stopCoreLoop: Failed to stop V2Ray loop", e)
             }
         } else {
             Log.d(AppConfig.TAG, "stopCoreLoop: core was not running, skipping stopLoop")
         }
 
-        MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
-        NotificationManager.cancelNotification()
-
-        try {
-            service.unregisterReceiver(mMsgReceive)
-        } catch (e: Exception) {
-            Log.d(AppConfig.TAG, "stopCoreLoop: Failed to unregister broadcast receiver (may already be unregistered)", e)
+        val service = getService()
+        if (service != null) {
+            MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+            NotificationManager.cancelNotification()
+            try {
+                service.unregisterReceiver(mMsgReceive)
+            } catch (e: Exception) {
+                Log.d(AppConfig.TAG, "stopCoreLoop: Failed to unregister broadcast receiver (may already be unregistered)", e)
+            }
+        } else {
+            val app = com.kiktor.v2whitelist.AngApplication.application
+            MessageUtil.sendMsg2UI(app, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+            NotificationManager.cancelNotification()
         }
 
         return true
@@ -393,7 +441,19 @@ object V2RayServiceManager {
          * @return 0 for success, any other value for failure.
          */
         override fun shutdown(): Long {
-            val serviceControl = serviceControl?.get() ?: return -1
+            Log.i(AppConfig.TAG, "CoreCallback: shutdown invoked")
+            val serviceControl = serviceControl?.get()
+            if (serviceControl == null) {
+                Log.w(AppConfig.TAG, "CoreCallback: serviceControl is null, stopping services via application context fallback")
+                try {
+                    val app = com.kiktor.v2whitelist.AngApplication.application
+                    app.stopService(Intent(app, V2RayVpnService::class.java))
+                    app.stopService(Intent(app, V2RayProxyOnlyService::class.java))
+                } catch (e: Exception) {
+                    Log.e(AppConfig.TAG, "CoreCallback fallback stop failed", e)
+                }
+                return 0
+            }
             return try {
                 serviceControl.stopService()
                 0
@@ -426,8 +486,22 @@ object V2RayServiceManager {
          * @param intent The intent being received.
          */
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            val serviceControl = serviceControl?.get() ?: return
-            when (intent?.getIntExtra("key", 0)) {
+            val serviceControl = serviceControl?.get()
+            val key = intent?.getIntExtra("key", 0) ?: 0
+            if (serviceControl == null) {
+                if (key == AppConfig.MSG_STATE_STOP) {
+                    Log.w(AppConfig.TAG, "onReceive: serviceControl is null on MSG_STATE_STOP, forcing fallback stopContextService")
+                    ctx?.let { c ->
+                        try {
+                            val app = c.applicationContext
+                            app.stopService(Intent(app, V2RayVpnService::class.java))
+                            app.stopService(Intent(app, V2RayProxyOnlyService::class.java))
+                        } catch (_: Exception) {}
+                    }
+                }
+                return
+            }
+            when (key) {
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (coreController.isRunning) {
                         MessageUtil.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")
@@ -491,6 +565,10 @@ object V2RayServiceManager {
                         Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: starting core loop after switch")
                         val success = startCoreLoop(vpnInterface)
                         Log.i(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop result=$success")
+                        if (!success) {
+                            Log.e(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop failed, stopping service to prevent dead TUN interface")
+                            serviceControl.stopService()
+                        }
                     }, 500L) // Wait for core to fully release resources
                 }
 

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_widget_name">v2rayNG</string>
-    <string name="app_tile_name">v2rayNG</string>
+    <string name="app_widget_name">ПроБел</string>
+    <string name="app_tile_name">ПроБел</string>
     <string name="app_tile_first_use">Первое использование этой функции, пожалуйста, используйте приложение, чтобы добавить сервер</string>
+    <string name="title_pref_add_qs_tile">Плитка в шторке быстрых настроек</string>
+    <string name="summary_pref_add_qs_tile">Добавить плитку «ПроБел» в панель уведомлений для быстрого включения</string>
+    <string name="msg_qs_tile_manual_hint">Опустите шторку уведомлений, нажмите «Редактировать» (значок карандаша) и перетащите плитку «ПроБел»</string>
     <string name="navigation_drawer_open">Открыть панель навигации</string>
     <string name="navigation_drawer_close">Закрыть панель навигации</string>
     <string name="migration_success">Успешный перенос данных!</string>

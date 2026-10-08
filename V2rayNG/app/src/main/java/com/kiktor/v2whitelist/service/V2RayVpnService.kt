@@ -84,7 +84,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     override fun onRevoke() {
-        stopAllService()
+        Log.w(AppConfig.TAG, "V2RayVpnService: onRevoke() called by Android system")
+        stopAllService(true)
     }
 
     override fun getVpnInterface(): ParcelFileDescriptor? {
@@ -98,9 +99,36 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.i(AppConfig.TAG, "V2RayVpnService: onDestroy() called")
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
         serviceScope.cancel()
         NotificationManager.cancelNotification()
+
+        try {
+            tun2SocksService?.stopTun2Socks()
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "onDestroy: Failed to stop tun2socks", e)
+        }
+        tun2SocksService = null
+
+        try {
+            mInterface?.close()
+            Log.i(AppConfig.TAG, "V2RayVpnService: mInterface closed in onDestroy")
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "onDestroy: Failed to close VPN interface", e)
+        } finally {
+            mInterface = null
+        }
+
+        try {
+            V2RayServiceManager.stopCoreLoop()
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "onDestroy: Failed to stop core loop", e)
+        }
+
+        if (V2RayServiceManager.serviceControl?.get() == this) {
+            V2RayServiceManager.serviceControl = null
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -121,7 +149,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 stopAllService()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun getService(): Service {
@@ -445,10 +473,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     }
 
     private fun stopAllService(isForced: Boolean = true) {
-//        val configName = defaultDPreference.getPrefString(PREF_CURR_CONFIG_GUID, "")
-//        val emptyInfo = VpnNetworkInfo()
-//        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
-//        saveVpnNetworkInfo(configName, info)
+        Log.i(AppConfig.TAG, "V2RayVpnService: stopAllService(isForced=$isForced)")
         isRunning = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
@@ -458,25 +483,32 @@ class V2RayVpnService : VpnService(), ServiceControl {
             }
         }
 
-        tun2SocksService?.stopTun2Socks()
+        try {
+            tun2SocksService?.stopTun2Socks()
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to stop tun2socks", e)
+        }
         tun2SocksService = null
 
-        V2RayServiceManager.stopCoreLoop()
+        try {
+            V2RayServiceManager.stopCoreLoop()
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to stop core loop", e)
+        }
+
+        // ВАЖНО: дескриптор mInterface ОБЯЗАН быть закрыт БЕЗОГОВОРОЧНО!
+        // Иначе tun-интерфейс в ядре Linux остаётся жить и полностью блокирует интернет на телефоне.
+        try {
+            mInterface?.close()
+            Log.i(AppConfig.TAG, "V2RayVpnService: mInterface successfully closed")
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
+        } finally {
+            mInterface = null
+        }
 
         if (isForced) {
-            //stopSelf has to be called ahead of mInterface.close(). otherwise v2ray core cannot be stooped
-            //It's strage but true.
-            //This can be verified by putting stopself() behind and call stopLoop and startLoop
-            //in a row for several times. You will find that later created v2ray core report port in use
-            //which means the first v2ray core somehow failed to stop and release the port.
             stopSelf()
-
-            try {
-                mInterface?.close()
-                mInterface = null
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "Failed to close VPN interface", e)
-            }
         }
         cachedInstalledPackages = null
     }

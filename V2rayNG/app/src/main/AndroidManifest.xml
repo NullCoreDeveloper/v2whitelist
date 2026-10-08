@@ -244,17 +244,12 @@
         <service
             android:name=".service.QSTileService"
             android:exported="true"
-            android:foregroundServiceType="specialUse"
-            android:icon="@drawable/ic_stat_name"
+            android:icon="@drawable/ic_qs_probel"
             android:label="@string/app_tile_name"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:process=":RunSoLibV2RayDaemon">
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="tile" />
         </service>
         <!-- =====================Tasker===================== -->
         <activity

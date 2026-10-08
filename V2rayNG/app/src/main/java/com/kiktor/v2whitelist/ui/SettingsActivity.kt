@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.ui
 
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.preference.CheckBoxPreference
@@ -146,6 +147,25 @@ class SettingsActivity : BaseActivity() {
                 autoUpdateInterval?.summary = newValue as String
                 view?.post {
                     com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.reschedule(requireContext())
+                }
+                true
+            }
+            findPreference<CheckBoxPreference>(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN)?.setOnPreferenceChangeListener { _, newValue ->
+                val onlyViaVpn = newValue as Boolean
+                updateYandexUpdatePreferences(onlyViaVpn)
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_add_qs_tile")?.setOnPreferenceClickListener {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val sbm = requireContext().getSystemService(android.app.StatusBarManager::class.java)
+                    sbm?.requestAddTileService(
+                        android.content.ComponentName(requireContext(), com.kiktor.v2whitelist.service.QSTileService::class.java),
+                        getString(R.string.app_tile_name),
+                        android.graphics.drawable.Icon.createWithResource(requireContext(), R.drawable.ic_qs_probel),
+                        requireContext().mainExecutor
+                    ) { _ -> }
+                } else {
+                    requireContext().toast(getString(R.string.msg_qs_tile_manual_hint))
                 }
                 true
             }
@@ -302,6 +322,20 @@ class SettingsActivity : BaseActivity() {
 
             // Initialize auto-update interval state
             autoUpdateInterval?.isEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, false)
+
+            // Initialize Yandex update preferences state
+            val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+            updateYandexUpdatePreferences(onlyViaVpn)
+        }
+
+        private fun updateYandexUpdatePreferences(onlyViaVpn: Boolean) {
+            val yandexCheck = findPreference<CheckBoxPreference>(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS)
+            val testYandex = findPreference<androidx.preference.Preference>("pref_test_update_via_yandex")
+            val clearYandexCookies = findPreference<androidx.preference.Preference>("pref_clear_yandex_cookies")
+
+            yandexCheck?.isEnabled = !onlyViaVpn
+            testYandex?.isEnabled = !onlyViaVpn
+            clearYandexCookies?.isEnabled = !onlyViaVpn
         }
 
         private fun updateMode(value: String?) {

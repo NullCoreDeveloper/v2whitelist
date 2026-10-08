@@ -54,6 +54,7 @@ import com.kiktor.v2whitelist.handler.SubscriptionHelper
 class MainActivity : HelperBaseActivity() {
     companion object {
         const val EXTRA_START_YANDEX_UPDATE = "EXTRA_START_YANDEX_UPDATE"
+        const val EXTRA_AUTO_CONNECT = "EXTRA_AUTO_CONNECT"
     }
 
     private val binding by lazy {
@@ -147,6 +148,14 @@ class MainActivity : HelperBaseActivity() {
         if (intent?.getBooleanExtra(EXTRA_START_YANDEX_UPDATE, false) == true) {
             intent.removeExtra(EXTRA_START_YANDEX_UPDATE)
             handleUpdateSubscriptionViaYandex()
+        }
+        if (intent?.getBooleanExtra(EXTRA_AUTO_CONNECT, false) == true) {
+            intent.removeExtra(EXTRA_AUTO_CONNECT)
+            binding.root.post {
+                if (mainViewModel.isRunning.value != true && !isTaskRunning) {
+                    handleConnectAction()
+                }
+            }
         }
 
         com.kiktor.v2whitelist.util.PremiumUiHelper.applyPremiumEffects(
@@ -391,6 +400,10 @@ class MainActivity : HelperBaseActivity() {
     }
 
     fun handleUpdateSubscriptionViaYandex() {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)) {
+            toast("Обновление через Яндекс недоступно: включено обновление только через VPN")
+            return
+        }
         if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
@@ -469,6 +482,10 @@ class MainActivity : HelperBaseActivity() {
         if (mainViewModel.isRunning.value == true) {
             V2RayServiceManager.stopVService(this)
         } else {
+            if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {
+                Log.w(AppConfig.TAG, "handleConnectAction: Cleaning up lingering zombie TUN interface before connect")
+                V2RayServiceManager.forceCleanupZombieVpn(this)
+            }
             if (SettingsManager.isVpnMode()) {
                 val intent = android.net.VpnService.prepare(this)
                 if (intent != null) {
@@ -837,6 +854,13 @@ class MainActivity : HelperBaseActivity() {
         lastPalette = currentPalette
 
         updateSubscriptionStatusUI()
+
+        if (mainViewModel.isRunning.value != true && !V2RayServiceManager.isRunning()) {
+            if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {
+                Log.w(AppConfig.TAG, "onResume: Detected lingering zombie TUN interface! Cleaning up to restore internet...")
+                V2RayServiceManager.forceCleanupZombieVpn(this)
+            }
+        }
     }
 
     fun startV2Ray() {
@@ -1028,6 +1052,14 @@ class MainActivity : HelperBaseActivity() {
         if (intent.getBooleanExtra(EXTRA_START_YANDEX_UPDATE, false)) {
             intent.removeExtra(EXTRA_START_YANDEX_UPDATE)
             handleUpdateSubscriptionViaYandex()
+        }
+        if (intent.getBooleanExtra(EXTRA_AUTO_CONNECT, false)) {
+            intent.removeExtra(EXTRA_AUTO_CONNECT)
+            binding.root.post {
+                if (mainViewModel.isRunning.value != true && !isTaskRunning) {
+                    handleConnectAction()
+                }
+            }
         }
     }
 

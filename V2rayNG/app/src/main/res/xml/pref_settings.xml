@@ -202,6 +202,13 @@
             android:summary="@string/summary_pref_bypass_ru_apps"
             android:title="@string/title_pref_bypass_ru_apps" />
 
+        <!-- Quick Settings Tile -->
+        <Preference
+            android:key="pref_add_qs_tile"
+            android:icon="@drawable/ic_qs_probel"
+            android:summary="@string/summary_pref_add_qs_tile"
+            android:title="@string/title_pref_add_qs_tile" />
+
         <!-- Auto Check App Updates -->
         <CheckBoxPreference
             android:key="pref_auto_check_update"
