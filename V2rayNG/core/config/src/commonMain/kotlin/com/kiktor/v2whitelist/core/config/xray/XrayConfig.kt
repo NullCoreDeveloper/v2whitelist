@@ -45,11 +45,17 @@ data class InboundSniffing(
 )
 
 @Serializable
+data class OutboundProxySettings(
+    val tag: String? = null
+)
+
+@Serializable
 data class XrayOutbound(
     val tag: String = "proxy",
     val protocol: String,
     val settings: OutboundSettings? = null,
     val streamSettings: XrayStreamSettings? = null,
+    val proxySettings: OutboundProxySettings? = null,
     val mux: XrayMux? = null
 )
 
@@ -70,8 +76,10 @@ data class OutboundSettings(
     val down: String? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class BlackholeResponse(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val type: String = "http"
 )
 
