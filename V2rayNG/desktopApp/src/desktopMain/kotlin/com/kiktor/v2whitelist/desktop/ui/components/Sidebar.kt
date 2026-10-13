@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
@@ -73,7 +74,7 @@ fun Sidebar(
                         fontSize = 17.sp
                     )
                     Text(
-                        text = "Desktop Beta",
+                        text = "PC Edition",
                         color = AccentCyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
@@ -95,8 +96,17 @@ fun Sidebar(
             Spacer(Modifier.height(8.dp))
 
             NavItem(
+                icon = Icons.Default.CloudDownload,
+                label = "Подписки",
+                selected = currentTab == DesktopTab.SUBSCRIPTIONS,
+                onClick = { onTabSelected(DesktopTab.SUBSCRIPTIONS) }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            NavItem(
                 icon = Icons.Default.Terminal,
-                label = "Консоль / Логи",
+                label = "Geek Mode",
                 selected = currentTab == DesktopTab.LOGS,
                 onClick = { onTabSelected(DesktopTab.LOGS) }
             )

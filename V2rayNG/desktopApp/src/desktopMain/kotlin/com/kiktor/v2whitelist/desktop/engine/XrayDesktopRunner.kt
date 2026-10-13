@@ -48,7 +48,7 @@ class XrayDesktopRunner(
     fun findXrayExecutable(customPath: String? = null): File? {
         if (!customPath.isNullOrBlank()) {
             val f = File(customPath)
-            if (f.exists() && f.canExecute()) return f
+            return if (f.exists() && f.canExecute()) f else null
         }
 
         val isWindows = System.getProperty("os.name").lowercase().contains("windows")
@@ -85,7 +85,12 @@ class XrayDesktopRunner(
         xrayBinaryPath: String? = null,
         httpPort: Int = 10809,
         socksPort: Int = 10808,
-        listenAddress: String = "127.0.0.1"
+        listenAddress: String = "127.0.0.1",
+        customDirectDomains: List<String> = emptyList(),
+        customProxyDomains: List<String> = emptyList(),
+        upstreamProxyHost: String? = null,
+        upstreamProxyPort: Int? = null,
+        upstreamProxyType: String? = null
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -109,7 +114,13 @@ class XrayDesktopRunner(
                 socksPort = socksPort,
                 httpPort = httpPort,
                 listenAddress = listenAddress,
-                enableHttpInbound = true
+                enableHttpInbound = true,
+                scenario = scenario,
+                customDirectDomains = customDirectDomains,
+                customProxyDomains = customProxyDomains,
+                upstreamProxyHost = upstreamProxyHost,
+                upstreamProxyPort = upstreamProxyPort,
+                upstreamProxyType = upstreamProxyType
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
 
