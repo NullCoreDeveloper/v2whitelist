@@ -579,10 +579,21 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 
 func main() {
 	subUrl := flag.String("sub", "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt", "URL to fetch VLESS subscription from or local file path")
+	fromStdin := flag.Bool("stdin", false, "Read configuration links directly from stdin")
+	streamMode := flag.Bool("stream", false, "Stream successful nodes line-by-line as they respond")
+	firstOnly := flag.Bool("first", false, "Exit immediately upon finding the first working node (stateless fast mode)")
+	concurrency := flag.Int("concurrency", 35, "Maximum concurrent scan jobs")
+	timeoutSec := flag.Int("timeout", 10, "Per-node scan timeout in seconds")
 	flag.Parse()
 
 	var subData string
-	if strings.HasPrefix(*subUrl, "http://") || strings.HasPrefix(*subUrl, "https://") {
+	if *fromStdin {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			panic(err)
+		}
+		subData = string(data)
+	} else if strings.HasPrefix(*subUrl, "http://") || strings.HasPrefix(*subUrl, "https://") {
 		resp, err := http.Get(*subUrl)
 		if err != nil {
 			panic(err)
@@ -620,8 +631,11 @@ func main() {
 	var successfulLinks []string
 	var linksMu sync.Mutex
 
-	// Limit concurrent configs to 35
-	sem := make(chan struct{}, 35)
+	maxConc := *concurrency
+	if maxConc <= 0 {
+		maxConc = 35
+	}
+	sem := make(chan struct{}, maxConc)
 
 	for _, l := range links {
 		wg.Add(1)
@@ -697,28 +711,44 @@ func main() {
 			}
 
 			targetDest := net.TCPDestination(net.DomainAddress("www.google.com"), 443)
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			startT := time.Now()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSec)*time.Second)
 			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
+			delayMs := time.Since(startT).Milliseconds()
 			cancel()
 
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
+				if *streamMode || *firstOnly {
+					fmt.Printf("SUCCESS\t%d\t%s\n", delayMs, linkStr)
+					_ = os.Stdout.Sync()
+					if *firstOnly {
+						os.Exit(0)
+					}
+				}
 				linksMu.Lock()
 				successfulLinks = append(successfulLinks, linkStr)
 				linksMu.Unlock()
 			} else {
 				atomic.AddInt32(&failCount, 1)
-				fmt.Printf("[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
+				if !*streamMode {
+					fmt.Printf("[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
+				}
 			}
 		}(l)
 	}
 
 	wg.Wait()
-	fmt.Printf("\n--- Scan Complete ---\nSuccess: %d\nFailed/Timeout/Unsupported: %d\n", successCount, failCount)
-	if len(successfulLinks) > 0 {
-		fmt.Printf("\n--- Working Configs ---\n")
-		for _, sl := range successfulLinks {
-			fmt.Println(sl)
+	if *streamMode {
+		fmt.Printf("COMPLETE\t%d\t%d\n", successCount, failCount)
+		_ = os.Stdout.Sync()
+	} else {
+		fmt.Printf("\n--- Scan Complete ---\nSuccess: %d\nFailed/Timeout/Unsupported: %d\n", successCount, failCount)
+		if len(successfulLinks) > 0 {
+			fmt.Printf("\n--- Working Configs ---\n")
+			for _, sl := range successfulLinks {
+				fmt.Println(sl)
+			}
 		}
 	}
 }

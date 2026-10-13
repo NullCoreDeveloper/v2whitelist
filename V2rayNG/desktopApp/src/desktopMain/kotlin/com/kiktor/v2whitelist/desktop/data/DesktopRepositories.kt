@@ -32,7 +32,8 @@ internal data class SettingsStorage(
     val socksPort: Int = 10808,
     val httpPort: Int = 10809,
     val subscriptionUrl: String = "",
-    val xrayBinaryPath: String = ""
+    val xrayBinaryPath: String = "",
+    val v2wScanPath: String = ""
 )
 
 internal object DesktopStorageManager {
@@ -225,6 +226,7 @@ class DesktopFileSettingsRepository : SettingsRepository {
         return when (key) {
             "subscription_url" -> cached.subscriptionUrl
             "xray_path" -> cached.xrayBinaryPath
+            "v2w_scan_path" -> cached.v2wScanPath
             else -> defaultValue
         }
     }
@@ -233,6 +235,7 @@ class DesktopFileSettingsRepository : SettingsRepository {
         cached = when (key) {
             "subscription_url" -> cached.copy(subscriptionUrl = value)
             "xray_path" -> cached.copy(xrayBinaryPath = value)
+            "v2w_scan_path" -> cached.copy(v2wScanPath = value)
             else -> cached
         }
         persist()

@@ -59,13 +59,35 @@ class DesktopAppState(
     private val _isUpdatingSub = MutableStateFlow(false)
     val isUpdatingSub: StateFlow<Boolean> = _isUpdatingSub.asStateFlow()
 
+    private val _isV2WScanning = MutableStateFlow(false)
+    val isV2WScanning: StateFlow<Boolean> = _isV2WScanning.asStateFlow()
+
+    private val _smartConnectStatus = MutableStateFlow<String?>(null)
+    val smartConnectStatus: StateFlow<String?> = _smartConnectStatus.asStateFlow()
+
     val subscriptionUrl = MutableStateFlow(settingsRepo.getString("subscription_url"))
     val xrayBinaryPath = MutableStateFlow(settingsRepo.getString("xray_path"))
+    val v2wScanPath = MutableStateFlow(settingsRepo.getString("v2w_scan_path"))
     val httpPort = MutableStateFlow(settingsRepo.getHttpPort())
     val socksPort = MutableStateFlow(settingsRepo.getSocksPort())
 
+    val smartConnectManager = com.kiktor.v2whitelist.desktop.engine.DesktopSmartConnectManager(
+        serverRepo = serverRepo,
+        settingsRepo = settingsRepo,
+        xrayRunner = xrayRunner,
+        scope = scope
+    )
+
     init {
         GeekModeLogger.log("DesktopApp", "v2whitelist Desktop Beta инициализирован.")
+
+        smartConnectManager.onStageChanged = { _, text ->
+            _smartConnectStatus.value = text
+        }
+        smartConnectManager.onServerConnected = { guid, _ ->
+            _selectedGuid.value = guid
+        }
+
         // Автопоиск Xray бинарника, если не задан
         if (xrayBinaryPath.value.isBlank()) {
             val detected = xrayRunner.findXrayExecutable()
@@ -73,6 +95,15 @@ class DesktopAppState(
                 xrayBinaryPath.value = detected.absolutePath
                 settingsRepo.setString("xray_path", detected.absolutePath)
                 GeekModeLogger.log("DesktopApp", "Обнаружен исполняемый файл Xray: ${detected.absolutePath}")
+            }
+        }
+        // Автопоиск v2w-scan бинарника, если не задан
+        if (v2wScanPath.value.isBlank()) {
+            val detectedScanner = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable()
+            if (detectedScanner != null) {
+                v2wScanPath.value = detectedScanner.absolutePath
+                settingsRepo.setString("v2w_scan_path", detectedScanner.absolutePath)
+                GeekModeLogger.log("DesktopApp", "Обнаружено ядро v2w-core сканера: ${detectedScanner.absolutePath}")
             }
         }
     }
@@ -213,19 +244,44 @@ class DesktopAppState(
         }
     }
 
+    fun runSmartConnect(minSpeedMbps: Double = 1.0) {
+        if (_isV2WScanning.value) return
+        scope.launch {
+            _isV2WScanning.value = true
+            try {
+                smartConnectManager.startSmartConnect(
+                    scenario = _scenario.value,
+                    minSpeedMbps = minSpeedMbps,
+                    speedCheckEnabled = true
+                )
+            } catch (e: Exception) {
+                GeekModeLogger.log("SmartConnect", "Сбой SmartConnect: ${e.message}")
+            } finally {
+                _isV2WScanning.value = false
+            }
+        }
+    }
+
+    fun runV2WScan(autoConnectFirst: Boolean = true) {
+        runSmartConnect()
+    }
+
     fun saveSettings(
         subUrl: String,
         xrayPath: String,
+        v2wPath: String,
         httpP: Int,
         socksP: Int
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
+        v2wScanPath.value = v2wPath
         httpPort.value = httpP
         socksPort.value = socksP
 
         settingsRepo.setString("subscription_url", subUrl)
         settingsRepo.setString("xray_path", xrayPath)
+        settingsRepo.setString("v2w_scan_path", v2wPath)
         settingsRepo.setHttpPort(httpP)
         settingsRepo.setSocksPort(socksP)
         GeekModeLogger.log("Settings", "Настройки сохранены.")

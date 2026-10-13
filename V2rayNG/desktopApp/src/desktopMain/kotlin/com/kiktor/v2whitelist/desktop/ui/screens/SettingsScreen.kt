@@ -29,11 +29,13 @@ fun SettingsScreen(
 ) {
     val currentSubUrl by state.subscriptionUrl.collectAsState()
     val currentXrayPath by state.xrayBinaryPath.collectAsState()
+    val currentV2wPath by state.v2wScanPath.collectAsState()
     val currentHttpPort by state.httpPort.collectAsState()
     val currentSocksPort by state.socksPort.collectAsState()
 
     var subUrlInput by remember(currentSubUrl) { mutableStateOf(currentSubUrl) }
     var xrayPathInput by remember(currentXrayPath) { mutableStateOf(currentXrayPath) }
+    var v2wPathInput by remember(currentV2wPath) { mutableStateOf(currentV2wPath) }
     var httpPortInput by remember(currentHttpPort) { mutableStateOf(currentHttpPort.toString()) }
     var socksPortInput by remember(currentSocksPort) { mutableStateOf(currentSocksPort.toString()) }
 
@@ -127,6 +129,50 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        // v2w-core Scanner Section
+        SettingsCard(title = "Ядро глубокого сканирования v2w-core") {
+            Text(
+                text = "Путь к бинарнику v2w-scan (stateless reality/tls handshake):",
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = v2wPathInput,
+                    onValueChange = { v2wPathInput = it },
+                    placeholder = { Text("v2w-core/v2w-scan или v2w-scan.exe", color = TextTertiary, fontSize = 13.sp) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = defaultTextFieldColors(),
+                    modifier = Modifier.weight(1f)
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val detected = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable()
+                        if (detected != null) {
+                            v2wPathInput = detected.absolutePath
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, DarkBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                    modifier = Modifier.height(52.dp)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Автопоиск", fontSize = 13.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // Inbound Proxy Ports Section
         SettingsCard(title = "Локальные Inbound прокси порты") {
             Row(
@@ -171,6 +217,7 @@ fun SettingsScreen(
                 state.saveSettings(
                     subUrl = subUrlInput.trim(),
                     xrayPath = xrayPathInput.trim(),
+                    v2wPath = v2wPathInput.trim(),
                     httpP = httpP,
                     socksP = socksP
                 )

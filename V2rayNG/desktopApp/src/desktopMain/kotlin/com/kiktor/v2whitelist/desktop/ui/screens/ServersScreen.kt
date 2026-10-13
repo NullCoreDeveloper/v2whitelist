@@ -43,6 +43,8 @@ fun ServersScreen(
     val pingMap by state.pingMap.collectAsState()
     val isPinging by state.isPinging.collectAsState()
     val isUpdatingSub by state.isUpdatingSub.collectAsState()
+    val isV2WScanning by state.isV2WScanning.collectAsState()
+    val smartConnectStatus by state.smartConnectStatus.collectAsState()
     val searchQuery by state.searchQuery.collectAsState()
     val httpPort by state.httpPort.collectAsState()
     val socksPort by state.socksPort.collectAsState()
@@ -235,6 +237,34 @@ fun ServersScreen(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // SmartConnect Button (VIP -> v2w-core -> Xray e2e/speed -> Fallback)
+                Button(
+                    onClick = { state.runSmartConnect() },
+                    enabled = !isV2WScanning && servers.isNotEmpty(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentCyan.copy(alpha = 0.2f),
+                        contentColor = AccentCyan
+                    ),
+                    border = BorderStroke(1.dp, AccentCyan),
+                    modifier = Modifier.height(46.dp)
+                ) {
+                    if (isV2WScanning) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentCyan, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = smartConnectStatus ?: "Поиск...",
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentCyan)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Smart Connect", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 // Ping All Button
                 OutlinedButton(
                     onClick = { state.pingAllServers() },

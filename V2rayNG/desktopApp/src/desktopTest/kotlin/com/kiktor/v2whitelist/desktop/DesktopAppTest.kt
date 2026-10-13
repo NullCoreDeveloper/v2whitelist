@@ -99,18 +99,67 @@ class DesktopAppTest {
         state.saveSettings(
             subUrl = "https://sub.example.com/v2ray",
             xrayPath = "/usr/local/bin/xray",
+            v2wPath = "/usr/local/bin/v2w-scan",
             httpP = 8080,
             socksP = 1080
         )
 
         assertEquals("https://sub.example.com/v2ray", state.subscriptionUrl.value)
         assertEquals("/usr/local/bin/xray", state.xrayBinaryPath.value)
+        assertEquals("/usr/local/bin/v2w-scan", state.v2wScanPath.value)
         assertEquals(8080, state.httpPort.value)
         assertEquals(1080, state.socksPort.value)
 
         assertEquals("https://sub.example.com/v2ray", settingsRepo.getString("subscription_url"))
         assertEquals("/usr/local/bin/xray", settingsRepo.getString("xray_path"))
+        assertEquals("/usr/local/bin/v2w-scan", settingsRepo.getString("v2w_scan_path"))
         assertEquals(8080, settingsRepo.getHttpPort())
         assertEquals(1080, settingsRepo.getSocksPort())
+    }
+
+    @Test
+    fun testV2WCoreScannerExecutableDiscovery() {
+        val bin = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable()
+        assertNotNull(bin, "Бинарник v2w-scan должен быть обнаружен в репозитории")
+        assertTrue(bin.exists())
+        assertTrue(bin.canExecute())
+    }
+
+    @Test
+    fun testDesktopSmartConnectManagerVipAndFlow() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val runner = XrayDesktopRunner()
+
+        val sample1 = ProfileItem(
+            configType = EConfigType.VLESS,
+            remarks = "Node-1",
+            server = "127.0.0.1",
+            serverPort = "443"
+        )
+        val sample2 = ProfileItem(
+            configType = EConfigType.VLESS,
+            remarks = "Node-2",
+            server = "127.0.0.1",
+            serverPort = "443"
+        )
+        serverRepo.saveServerConfig("id-1", sample1)
+        serverRepo.saveServerConfig("id-2", sample2)
+        serverRepo.addVipServer("id-1")
+
+        val manager = com.kiktor.v2whitelist.desktop.engine.DesktopSmartConnectManager(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = runner,
+            scope = this
+        )
+
+        var lastStage: com.kiktor.v2whitelist.desktop.engine.SmartConnectStage? = null
+        manager.onStageChanged = { stage, _ ->
+            lastStage = stage
+        }
+
+        manager.startSmartConnect(minSpeedMbps = 0.0, speedCheckEnabled = false)
+        assertNotNull(lastStage)
     }
 }
