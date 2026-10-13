@@ -2,6 +2,9 @@ package com.kiktor.v2whitelist.desktop.state
 
 import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
 import com.kiktor.v2whitelist.core.domain.ping.NodePingTester
+import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
+import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
+import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
@@ -11,6 +14,7 @@ import com.kiktor.v2whitelist.core.subscription.defaults.DefaultSubscriptions
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetcher
 import com.kiktor.v2whitelist.core.subscription.parser.SubscriptionParser
+import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
@@ -120,6 +125,31 @@ class DesktopAppState(
     // Серверы, отфильтрованные по текущему выбранному сценарию (Авто, БС, ЧС, YouTube)
     val scenarioFilteredServers: StateFlow<List<Pair<String, ProfileItem>>> = combine(servers, _scenario, _subscriptions) { serverList, sc, subList ->
         filterServersByScenario(serverList, sc, subList)
+    }.stateIn(internalStateScope, SharingStarted.Eagerly, emptyList())
+
+    // Фильтр локаций серверов (1-в-1 как в Android версии)
+    val showLocationFilterDialog = MutableStateFlow(false)
+    val locationFilterMode = MutableStateFlow(LocationFilterMode.fromString(settingsRepo.getString("pref_location_filter_mode", "EXCLUDE")))
+    val locationFilterSet = MutableStateFlow<Set<String>>(
+        try {
+            val s = settingsRepo.getString("pref_location_filter_set", "")
+            if (s.isNotBlank()) jsonHelper.decodeFromString<Set<String>>(s) else ServerTagResolver.getDefaultFilterSet()
+        } catch (_: Exception) {
+            ServerTagResolver.getDefaultFilterSet()
+        }
+    )
+
+    val availableLocations: StateFlow<List<Map.Entry<String, Int>>> = combine(servers, _subscriptions) { serverList, subList ->
+        val disabledSubIds = subList.filter { !it.enabled }.map { it.id }.toSet()
+        val subRegexMap = subList.associate { it.id to it.groupRegex }
+        val map = mutableMapOf<String, Int>()
+        for ((_, profile) in serverList) {
+            if (disabledSubIds.contains(profile.subscriptionId)) continue
+            val regex = subRegexMap[profile.subscriptionId] ?: ""
+            val tag = ServerTagResolver.resolveServerTag(profile.remarks, regex)
+            map[tag] = (map[tag] ?: 0) + 1
+        }
+        map.entries.sortedByDescending { it.value }
     }.stateIn(internalStateScope, SharingStarted.Eagerly, emptyList())
 
     val subscriptionUrl = MutableStateFlow(settingsRepo.getString("subscription_url"))
@@ -712,10 +742,8 @@ class DesktopAppState(
 
                 if (newConfigs.isNotEmpty()) {
                     serverRepo.clearAllServers()
-                    for (cfg in newConfigs) {
-                        val guid = UUID.randomUUID().toString()
-                        serverRepo.saveServerConfig(guid, cfg)
-                    }
+                    val batch = newConfigs.map { UUID.randomUUID().toString() to it }
+                    serverRepo.saveServerConfigs(batch)
 
                     // Автоматическое удаление дубликатов (как в Android версии)
                     val removed = serverRepo.removeDuplicates()
@@ -776,8 +804,72 @@ class DesktopAppState(
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
             stopCore()
         } else {
-            connectCurrent()
+            if (_scenario.value == AppScenario.AUTO || _selectedGuid.value == null) {
+                startSmartConnect()
+            } else {
+                connectCurrent()
+            }
         }
+    }
+
+    fun startSmartConnect() {
+        scope.launch {
+            smartConnectManager.startSmartConnect(
+                scenario = _scenario.value,
+                minSpeedMbps = minSpeedThresholdMbps.value,
+                speedCheckEnabled = speedTestOnCheck.value
+            )
+        }
+    }
+
+    fun switchToNextServer() {
+        scope.launch {
+            smartConnectManager.switchToNextServer(_selectedGuid.value)
+        }
+    }
+
+    fun promptLocationFilterDialog() {
+        showLocationFilterDialog.value = true
+    }
+
+    fun dismissLocationFilterDialog() {
+        showLocationFilterDialog.value = false
+    }
+
+    fun setLocationFilterMode(mode: LocationFilterMode) {
+        locationFilterMode.value = mode
+        settingsRepo.setString("pref_location_filter_mode", mode.name)
+        smartConnectManager.cleanVipCacheForFilter()
+        vipGuids.value = serverRepo.getVipServerGuids()
+    }
+
+    fun toggleLocationFilter(tag: String) {
+        val current = locationFilterSet.value.toMutableSet()
+        if (current.contains(tag)) {
+            current.remove(tag)
+        } else {
+            current.add(tag)
+        }
+        locationFilterSet.value = current
+        settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(current))
+        smartConnectManager.cleanVipCacheForFilter()
+        vipGuids.value = serverRepo.getVipServerGuids()
+    }
+
+    fun resetLocationFilterToDefault() {
+        val defaults = ServerTagResolver.getDefaultFilterSet()
+        locationFilterSet.value = defaults
+        settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(defaults))
+        smartConnectManager.cleanVipCacheForFilter()
+        vipGuids.value = serverRepo.getVipServerGuids()
+    }
+
+    fun clearAllLocations() {
+        val empty = emptySet<String>()
+        locationFilterSet.value = empty
+        settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(empty))
+        smartConnectManager.cleanVipCacheForFilter()
+        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun stopCore() {

@@ -39,7 +39,7 @@ fun AppearanceScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
             .padding(24.dp)
             .verticalScroll(scrollState)
     ) {

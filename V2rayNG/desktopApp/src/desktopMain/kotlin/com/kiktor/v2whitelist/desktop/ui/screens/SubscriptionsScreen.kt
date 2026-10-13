@@ -64,10 +64,12 @@ fun SubscriptionsScreen(
         )
     }
 
+    val meshEnabled by state.meshGradientEnabled.collectAsState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
             .padding(24.dp)
     ) {
         // Шапка: заголовок + кнопка добавления + кнопка обновления

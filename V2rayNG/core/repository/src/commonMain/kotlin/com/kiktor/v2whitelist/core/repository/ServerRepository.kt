@@ -14,6 +14,7 @@ interface ServerRepository {
     fun getAllServerGuids(): List<String>
     fun getServerConfig(guid: String): ProfileItem?
     fun saveServerConfig(guid: String, profile: ProfileItem)
+    fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>)
     fun removeServer(guid: String)
 
     fun getSelectedServerGuid(): String?
@@ -67,6 +68,19 @@ class InMemoryServerRepository(
 
     override fun saveServerConfig(guid: String, profile: ProfileItem) {
         serverMap[guid] = profile
+        if (selectedGuid == null) {
+            selectedGuid = guid
+        }
+        _serversFlow.value = serverMap.entries.map { it.key to it.value }
+    }
+
+    override fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) {
+        for ((guid, profile) in configs) {
+            serverMap[guid] = profile
+        }
+        if (selectedGuid == null) {
+            selectedGuid = serverMap.keys.firstOrNull()
+        }
         _serversFlow.value = serverMap.entries.map { it.key to it.value }
     }
 

@@ -173,39 +173,57 @@ fun MeshGradientBackground(
 
             val color1: Color
             val color2: Color
-            val centerOffset: Offset
+            val centerOffset1: Offset
+            val centerOffset2: Offset
 
             when (mode.uppercase()) {
                 "BREATHING" -> {
-                    val shiftX = cos(phase.toDouble()).toFloat() * 120f
-                    val shiftY = sin(phase.toDouble()).toFloat() * 100f
-                    centerOffset = Offset(w * 0.35f + shiftX, h * 0.45f + shiftY)
-                    color1 = accentColor.copy(alpha = 0.18f + sin(phase.toDouble()).toFloat() * 0.05f)
-                    color2 = AccentPurple.copy(alpha = 0.14f + cos(phase.toDouble()).toFloat() * 0.04f)
+                    val shiftX1 = cos(phase.toDouble()).toFloat() * (w * 0.12f)
+                    val shiftY1 = sin(phase.toDouble()).toFloat() * (h * 0.10f)
+                    val shiftX2 = sin(phase.toDouble() * 0.8).toFloat() * (w * 0.15f)
+                    val shiftY2 = cos(phase.toDouble() * 0.8).toFloat() * (h * 0.12f)
+
+                    centerOffset1 = Offset(w * 0.30f + shiftX1, h * 0.35f + shiftY1)
+                    centerOffset2 = Offset(w * 0.75f + shiftX2, h * 0.65f + shiftY2)
+                    color1 = accentColor.copy(alpha = 0.38f + sin(phase.toDouble()).toFloat() * 0.08f)
+                    color2 = AccentPurple.copy(alpha = 0.32f + cos(phase.toDouble()).toFloat() * 0.06f)
                 }
                 "REACTIVE" -> {
                     if (connected) {
-                        centerOffset = Offset(w * 0.5f, h * 0.45f) // стягивание к центру
-                        color1 = AccentMint.copy(alpha = 0.28f)
-                        color2 = Color(0xFF00E676).copy(alpha = 0.18f)
+                        centerOffset1 = Offset(w * 0.50f, h * 0.45f) // Стягивание к центральной кнопке
+                        centerOffset2 = Offset(w * 0.50f, h * 0.55f)
+                        color1 = AccentMint.copy(alpha = 0.45f)
+                        color2 = Color(0xFF00E676).copy(alpha = 0.30f)
                     } else {
-                        centerOffset = Offset(w * 0.2f, h * 0.3f)
-                        color1 = accentColor.copy(alpha = 0.16f)
-                        color2 = AccentAmber.copy(alpha = 0.10f)
+                        centerOffset1 = Offset(w * 0.25f, h * 0.35f)
+                        centerOffset2 = Offset(w * 0.80f, h * 0.65f)
+                        color1 = accentColor.copy(alpha = 0.35f)
+                        color2 = AccentAmber.copy(alpha = 0.22f)
                     }
                 }
                 else -> { // STATIC
-                    centerOffset = Offset(w * 0.3f, h * 0.4f)
-                    color1 = accentColor.copy(alpha = 0.16f)
-                    color2 = AccentPurple.copy(alpha = 0.10f)
+                    centerOffset1 = Offset(w * 0.30f, h * 0.35f)
+                    centerOffset2 = Offset(w * 0.75f, h * 0.65f)
+                    color1 = accentColor.copy(alpha = 0.36f)
+                    color2 = AccentPurple.copy(alpha = 0.28f)
                 }
             }
 
+            // Первое пятно
             drawRect(
                 brush = Brush.radialGradient(
-                    colors = listOf(color1, color2, Color.Transparent),
-                    center = centerOffset,
-                    radius = (w.coerceAtLeast(h)) * 0.85f
+                    colors = listOf(color1, Color.Transparent),
+                    center = centerOffset1,
+                    radius = (w.coerceAtLeast(h)) * 0.75f
+                )
+            )
+
+            // Второе пятно для глубины и насыщенности Mesh
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(color2, Color.Transparent),
+                    center = centerOffset2,
+                    radius = (w.coerceAtLeast(h)) * 0.65f
                 )
             )
         }

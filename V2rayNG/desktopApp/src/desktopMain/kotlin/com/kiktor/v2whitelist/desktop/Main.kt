@@ -34,6 +34,8 @@ import com.kiktor.v2whitelist.desktop.ui.screens.GeekModeScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.MainScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SettingsScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SubscriptionsScreen
+import com.kiktor.v2whitelist.desktop.ui.i18n.I18n
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.DesktopTheme
 import com.kiktor.v2whitelist.desktop.ui.theme.MeshGradientBackground
 import com.kiktor.v2whitelist.desktop.ui.theme.getAccentColor
@@ -96,39 +98,44 @@ fun App(state: DesktopAppState) {
     val isAmoled by state.pureBlackAmoled.collectAsState()
     val meshEnabled by state.meshGradientEnabled.collectAsState()
     val meshMode by state.meshGradientMode.collectAsState()
+    val appLanguage by state.appLanguage.collectAsState()
 
-    DesktopTheme(
-        themeMode = themeMode,
-        palette = themePalette,
-        isAmoled = isAmoled
-    ) {
-        MeshGradientBackground(
-            enabled = meshEnabled,
-            mode = meshMode,
-            connected = coreState == DesktopCoreState.RUNNING,
-            accentColor = getAccentColor(themePalette)
+    val strings = remember(appLanguage) { I18n.get(appLanguage) }
+
+    CompositionLocalProvider(LocalAppStrings provides strings) {
+        DesktopTheme(
+            themeMode = themeMode,
+            palette = themePalette,
+            isAmoled = isAmoled
         ) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                Sidebar(
-                    currentTab = currentTab,
-                    serverCount = servers.size,
-                    coreState = coreState,
-                    onTabSelected = { state.setTab(it) }
-                )
+            MeshGradientBackground(
+                enabled = meshEnabled,
+                mode = meshMode,
+                connected = coreState == DesktopCoreState.RUNNING,
+                accentColor = getAccentColor(themePalette)
+            ) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Sidebar(
+                        currentTab = currentTab,
+                        serverCount = servers.size,
+                        coreState = coreState,
+                        onTabSelected = { state.setTab(it) }
+                    )
 
-                Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                    when (currentTab) {
-                        DesktopTab.MAIN -> MainScreen(state = state)
-                        DesktopTab.SUBSCRIPTIONS -> SubscriptionsScreen(state = state)
-                        DesktopTab.GEEK_MODE -> GeekModeScreen(state = state)
-                        DesktopTab.APPEARANCE -> AppearanceScreen(state = state)
-                        DesktopTab.SETTINGS -> SettingsScreen(state = state)
+                    Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                        when (currentTab) {
+                            DesktopTab.MAIN -> MainScreen(state = state)
+                            DesktopTab.SUBSCRIPTIONS -> SubscriptionsScreen(state = state)
+                            DesktopTab.GEEK_MODE -> GeekModeScreen(state = state)
+                            DesktopTab.APPEARANCE -> AppearanceScreen(state = state)
+                            DesktopTab.SETTINGS -> SettingsScreen(state = state)
+                        }
                     }
                 }
-            }
 
-            // Встроенный диалог ввода пароля sudo для TUN на Linux
-            SudoPasswordDialog(state = state)
+                // Встроенный диалог ввода пароля sudo для TUN на Linux
+                SudoPasswordDialog(state = state)
+            }
         }
     }
 }
@@ -332,6 +339,12 @@ fun main() = application {
         title = "пробел — v2whitelist",
         icon = trayIcon
     ) {
+        LaunchedEffect(isWindowVisible) {
+            if (isWindowVisible) {
+                window.toFront()
+                window.requestFocus()
+            }
+        }
         App(state = state)
     }
 }

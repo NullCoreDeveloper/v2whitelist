@@ -31,27 +31,9 @@ internal data class SettingsStorage(
     val smartFailover: Boolean = true,
     val socksPort: Int = 10808,
     val httpPort: Int = 10809,
-    val subscriptionUrl: String = "",
-    val xrayBinaryPath: String = "",
-    val v2wScanPath: String = "",
-    val autoEnableSystemProxy: Boolean = false,
-    val allowLan: Boolean = false,
-    val minimizeToTray: Boolean = true,
-    val routingMode: String = "PROXY", // PROXY или TUN
-    val uiTheme: String = "CYAN", // CYAN, AMOLED, PURPLE
-    val uiCompactCards: Boolean = false,
-    val subscriptionAutoUpdate: Boolean = false,
-    val subscriptionUpdateIntervalHours: Int = 12,
-    val subscriptionUpdateOnlyViaProxy: Boolean = false,
-    val subscriptionUserAgent: String = "v2rayNG/1.10.x",
-    val subscriptionThreads: Int = 3,
-    val customDirectDomains: String = "",
-    val customProxyDomains: String = "",
-    val upstreamProxyHost: String = "",
-    val upstreamProxyPort: Int = 0,
-    val upstreamProxyType: String = "socks5",
-    val minSpeedMbps: Double = 1.0,
-    val connectivityCheckUrl: String = "https://cp.cloudflare.com/generate_204"
+    val stringMap: Map<String, String> = emptyMap(),
+    val boolMap: Map<String, Boolean> = emptyMap(),
+    val intMap: Map<String, Int> = emptyMap()
 )
 
 internal object DesktopStorageManager {
@@ -157,6 +139,17 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
+    override fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) {
+        for ((guid, profile) in configs) {
+            serverMap[guid] = profile
+        }
+        if (selectedGuid == null) {
+            selectedGuid = serverMap.keys.firstOrNull()
+        }
+        updateFlow()
+        persist()
+    }
+
     override fun removeServer(guid: String) {
         serverMap.remove(guid)
         vipSet.remove(guid)
@@ -233,124 +226,94 @@ class DesktopFileServerRepository : ServerRepository {
 }
 
 class DesktopFileSettingsRepository : SettingsRepository {
-    private var cached = DesktopStorageManager.loadSettings()
+    private val stringMap = mutableMapOf<String, String>()
+    private val boolMap = mutableMapOf<String, Boolean>()
+    private val intMap = mutableMapOf<String, Int>()
+    private var appScenario: AppScenario = AppScenario.AUTO
+    private var smartFailover: Boolean = true
+    private var socksPort: Int = 10808
+    private var httpPort: Int = 10809
 
-    override fun getAppScenario(): AppScenario {
-        return try {
-            AppScenario.valueOf(cached.appScenario)
-        } catch (_: Exception) {
-            AppScenario.AUTO
-        }
+    init {
+        loadFromDisk()
     }
 
+    private fun loadFromDisk() {
+        val loaded = DesktopStorageManager.loadSettings()
+        appScenario = try { AppScenario.valueOf(loaded.appScenario) } catch (_: Exception) { AppScenario.AUTO }
+        smartFailover = loaded.smartFailover
+        socksPort = loaded.socksPort
+        httpPort = loaded.httpPort
+        stringMap.clear()
+        stringMap.putAll(loaded.stringMap)
+        boolMap.clear()
+        boolMap.putAll(loaded.boolMap)
+        intMap.clear()
+        intMap.putAll(loaded.intMap)
+    }
+
+    private fun persist() {
+        DesktopStorageManager.saveSettings(
+            SettingsStorage(
+                appScenario = appScenario.name,
+                smartFailover = smartFailover,
+                socksPort = socksPort,
+                httpPort = httpPort,
+                stringMap = stringMap.toMap(),
+                boolMap = boolMap.toMap(),
+                intMap = intMap.toMap()
+            )
+        )
+    }
+
+    override fun getAppScenario(): AppScenario = appScenario
     override fun setAppScenario(scenario: AppScenario) {
-        cached = cached.copy(appScenario = scenario.name)
+        appScenario = scenario
         persist()
     }
 
-    override fun isSmartFailoverEnabled(): Boolean = cached.smartFailover
-
+    override fun isSmartFailoverEnabled(): Boolean = smartFailover
     override fun setSmartFailoverEnabled(enabled: Boolean) {
-        cached = cached.copy(smartFailover = enabled)
+        smartFailover = enabled
         persist()
     }
 
-    override fun getSocksPort(): Int = cached.socksPort
-
+    override fun getSocksPort(): Int = socksPort
     override fun setSocksPort(port: Int) {
-        cached = cached.copy(socksPort = port)
+        socksPort = port
         persist()
     }
 
-    override fun getHttpPort(): Int = cached.httpPort
-
+    override fun getHttpPort(): Int = httpPort
     override fun setHttpPort(port: Int) {
-        cached = cached.copy(httpPort = port)
+        httpPort = port
         persist()
     }
 
     override fun getString(key: String, defaultValue: String): String {
-        return when (key) {
-            "subscription_url" -> cached.subscriptionUrl
-            "xray_path" -> cached.xrayBinaryPath
-            "v2w_scan_path" -> cached.v2wScanPath
-            "routing_mode" -> cached.routingMode
-            "ui_theme" -> cached.uiTheme
-            "subscription_user_agent" -> cached.subscriptionUserAgent
-            "custom_direct_domains" -> cached.customDirectDomains
-            "custom_proxy_domains" -> cached.customProxyDomains
-            "upstream_proxy_host" -> cached.upstreamProxyHost
-            "upstream_proxy_type" -> cached.upstreamProxyType
-            "connectivity_check_url" -> cached.connectivityCheckUrl
-            else -> defaultValue
-        }
+        return stringMap[key] ?: defaultValue
     }
 
     override fun setString(key: String, value: String) {
-        cached = when (key) {
-            "subscription_url" -> cached.copy(subscriptionUrl = value)
-            "xray_path" -> cached.copy(xrayBinaryPath = value)
-            "v2w_scan_path" -> cached.copy(v2wScanPath = value)
-            "routing_mode" -> cached.copy(routingMode = value)
-            "ui_theme" -> cached.copy(uiTheme = value)
-            "subscription_user_agent" -> cached.copy(subscriptionUserAgent = value)
-            "custom_direct_domains" -> cached.copy(customDirectDomains = value)
-            "custom_proxy_domains" -> cached.copy(customProxyDomains = value)
-            "upstream_proxy_host" -> cached.copy(upstreamProxyHost = value)
-            "upstream_proxy_type" -> cached.copy(upstreamProxyType = value)
-            "connectivity_check_url" -> cached.copy(connectivityCheckUrl = value)
-            else -> cached
-        }
+        stringMap[key] = value
         persist()
     }
 
     override fun getBoolean(key: String, defaultValue: Boolean): Boolean {
-        return when (key) {
-            "auto_enable_system_proxy" -> cached.autoEnableSystemProxy
-            "allow_lan" -> cached.allowLan
-            "smart_failover" -> cached.smartFailover
-            "minimize_to_tray" -> cached.minimizeToTray
-            "ui_compact_cards" -> cached.uiCompactCards
-            "subscription_auto_update" -> cached.subscriptionAutoUpdate
-            "subscription_update_only_via_proxy" -> cached.subscriptionUpdateOnlyViaProxy
-            else -> defaultValue
-        }
+        return boolMap[key] ?: defaultValue
     }
 
     override fun setBoolean(key: String, value: Boolean) {
-        cached = when (key) {
-            "auto_enable_system_proxy" -> cached.copy(autoEnableSystemProxy = value)
-            "allow_lan" -> cached.copy(allowLan = value)
-            "smart_failover" -> cached.copy(smartFailover = value)
-            "minimize_to_tray" -> cached.copy(minimizeToTray = value)
-            "ui_compact_cards" -> cached.copy(uiCompactCards = value)
-            "subscription_auto_update" -> cached.copy(subscriptionAutoUpdate = value)
-            "subscription_update_only_via_proxy" -> cached.copy(subscriptionUpdateOnlyViaProxy = value)
-            else -> cached
-        }
+        boolMap[key] = value
         persist()
     }
 
     override fun getInt(key: String, defaultValue: Int): Int {
-        return when (key) {
-            "subscription_update_interval_hours" -> cached.subscriptionUpdateIntervalHours
-            "subscription_threads" -> cached.subscriptionThreads
-            "upstream_proxy_port" -> cached.upstreamProxyPort
-            else -> defaultValue
-        }
+        return intMap[key] ?: defaultValue
     }
 
     override fun setInt(key: String, value: Int) {
-        cached = when (key) {
-            "subscription_update_interval_hours" -> cached.copy(subscriptionUpdateIntervalHours = value)
-            "subscription_threads" -> cached.copy(subscriptionThreads = value)
-            "upstream_proxy_port" -> cached.copy(upstreamProxyPort = value)
-            else -> cached
-        }
+        intMap[key] = value
         persist()
-    }
-
-    private fun persist() {
-        DesktopStorageManager.saveSettings(cached)
     }
 }

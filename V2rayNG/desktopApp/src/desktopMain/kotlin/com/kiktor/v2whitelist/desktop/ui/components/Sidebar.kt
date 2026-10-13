@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopTab
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -34,11 +35,13 @@ fun Sidebar(
     onTabSelected: (DesktopTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
+
     Column(
         modifier = modifier
             .fillMaxHeight()
             .width(230.dp)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.90f))
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -89,7 +92,7 @@ fun Sidebar(
             // 1. Меню (Главная)
             NavItem(
                 icon = Icons.Default.Home,
-                label = "Меню",
+                label = strings.menu,
                 badge = if (serverCount > 0) serverCount.toString() else null,
                 selected = currentTab == DesktopTab.MAIN,
                 onClick = { onTabSelected(DesktopTab.MAIN) }
@@ -100,7 +103,7 @@ fun Sidebar(
             // 2. Управление подписками
             NavItem(
                 icon = Icons.Default.CloudDownload,
-                label = "Управление подписками",
+                label = strings.subscriptions,
                 selected = currentTab == DesktopTab.SUBSCRIPTIONS,
                 onClick = { onTabSelected(DesktopTab.SUBSCRIPTIONS) }
             )
@@ -110,7 +113,7 @@ fun Sidebar(
             // 3. Geek Mode
             NavItem(
                 icon = Icons.Default.Terminal,
-                label = "Geek Mode",
+                label = strings.geekMode,
                 selected = currentTab == DesktopTab.GEEK_MODE,
                 onClick = { onTabSelected(DesktopTab.GEEK_MODE) }
             )
@@ -120,7 +123,7 @@ fun Sidebar(
             // 4. Оформление
             NavItem(
                 icon = Icons.Default.Palette,
-                label = "Оформление",
+                label = strings.appearance,
                 selected = currentTab == DesktopTab.APPEARANCE,
                 onClick = { onTabSelected(DesktopTab.APPEARANCE) }
             )
@@ -130,7 +133,7 @@ fun Sidebar(
             // 5. Настройки
             NavItem(
                 icon = Icons.Default.Settings,
-                label = "Настройки",
+                label = strings.settings,
                 selected = currentTab == DesktopTab.SETTINGS,
                 onClick = { onTabSelected(DesktopTab.SETTINGS) }
             )

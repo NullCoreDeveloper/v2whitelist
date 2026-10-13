@@ -9,8 +9,10 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.core.repository.ServerRepository
 import com.kiktor.v2whitelist.core.repository.SettingsRepository
+import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.serialization.json.Json
 
 enum class SmartConnectStage {
     IDLE,
@@ -39,6 +41,24 @@ class DesktopSmartConnectManager(
     var onStageChanged: ((SmartConnectStage, String) -> Unit)? = null
     var onServerConnected: ((guid: String, profile: ProfileItem) -> Unit)? = null
 
+    private fun loadLocationFilterConfig(excludeGuid: String? = null, scenario: AppScenario): SmartServerFilterConfig {
+        val filterModeStr = settingsRepo.getString("pref_location_filter_mode", "EXCLUDE")
+        val locMode = LocationFilterMode.fromString(filterModeStr)
+        val locSetJson = settingsRepo.getString("pref_location_filter_set", "")
+        val locSet = try {
+            if (locSetJson.isNotBlank()) Json.decodeFromString<Set<String>>(locSetJson) else ServerTagResolver.getDefaultFilterSet()
+        } catch (_: Exception) {
+            ServerTagResolver.getDefaultFilterSet()
+        }
+
+        return SmartServerFilterConfig(
+            excludeGuid = excludeGuid,
+            appScenario = scenario,
+            locationFilterMode = locMode,
+            locationFilterSet = locSet
+        )
+    }
+
     suspend fun startSmartConnect(
         scenario: AppScenario = settingsRepo.getAppScenario(),
         minSpeedMbps: Double = 1.0,
@@ -51,15 +71,11 @@ class DesktopSmartConnectManager(
             return@withContext false
         }
 
-        // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто)
-        val filterConfig = SmartServerFilterConfig(
-            appScenario = scenario,
-            locationFilterMode = LocationFilterMode.EXCLUDE,
-            locationFilterSet = emptySet()
-        )
+        // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто) + фильтр локаций 1-в-1 как на Android
+        val filterConfig = loadLocationFilterConfig(scenario = scenario)
         val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig).shuffled()
         if (candidates.isEmpty()) {
-            GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario.")
+            GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario с учетом фильтра стран.")
             onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет серверов под сценарий $scenario")
             return@withContext false
         }
@@ -211,6 +227,50 @@ class DesktopSmartConnectManager(
     }
 
     /**
+     * Очистка VIP-кэша от узлов, не проходящих новый фильтр локаций.
+     */
+    fun cleanVipCacheForFilter() {
+        val vips = serverRepo.getVipServerGuids()
+        val allServers = serverRepo.serversFlow.value
+        val filterConfig = loadLocationFilterConfig(scenario = settingsRepo.getAppScenario())
+        val validGuids = SmartServerSelector.filterServerPairs(allServers, filterConfig).map { it.first }.toSet()
+        for (g in vips) {
+            if (!validGuids.contains(g)) {
+                serverRepo.removeVipServer(g)
+            }
+        }
+    }
+
+    /**
+     * Быстрое переключение на следующий рабочий сервер (кнопка Сменить сервер).
+     */
+    suspend fun switchToNextServer(currentGuid: String?): Boolean = withContext(Dispatchers.IO) {
+        val allServers = serverRepo.serversFlow.value
+        if (allServers.isEmpty()) return@withContext false
+        val filterConfig = loadLocationFilterConfig(excludeGuid = currentGuid, scenario = settingsRepo.getAppScenario())
+        val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
+        if (candidates.isEmpty()) return@withContext false
+
+        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск следующего узла...")
+        val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+        for ((guid, profile) in candidates.shuffled()) {
+            val res = DesktopProfileVerifier.verifyProfile(
+                profile = profile,
+                xrayBinaryPath = xrayPath,
+                speedCheckEnabled = false,
+                minSpeedMbps = 0.5
+            )
+            if (res.success) {
+                serverRepo.addVipServer(guid)
+                connectAndFinish(guid, profile)
+                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
+                return@withContext true
+            }
+        }
+        return@withContext false
+    }
+
+    /**
      * Фоновая допроверка ответивших в v2w-core узлов для пополнения VIP-кэша.
      */
     private fun warmupLeftoversInVip(
@@ -238,3 +298,4 @@ class DesktopSmartConnectManager(
         }
     }
 }
+

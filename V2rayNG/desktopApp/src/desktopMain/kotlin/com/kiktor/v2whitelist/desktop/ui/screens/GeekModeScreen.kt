@@ -47,6 +47,7 @@ fun GeekModeScreen(
     val exitIp by state.exitIp.collectAsState()
     val vipGuids by state.vipGuids.collectAsState()
     val coreState by state.coreState.collectAsState()
+    val meshEnabled by state.meshGradientEnabled.collectAsState()
 
     val currentSni by state.globalSni.collectAsState()
     val currentCfIp by state.cloudflareIp.collectAsState()
@@ -89,7 +90,7 @@ fun GeekModeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
             .padding(20.dp)
     ) {
         // Шапка Geek Mode

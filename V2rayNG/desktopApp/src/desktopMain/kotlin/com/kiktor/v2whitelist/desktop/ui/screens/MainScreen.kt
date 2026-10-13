@@ -33,8 +33,10 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.components.LocationFilterDialog
 import com.kiktor.v2whitelist.desktop.ui.components.PulseConnectingView
 import com.kiktor.v2whitelist.desktop.ui.components.QrCodeDialog
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -57,6 +59,7 @@ fun MainScreen(
     val subStatus by state.subscriptionStatus.collectAsState()
     val subscriptions by state.subscriptions.collectAsState()
     val exitIp by state.exitIp.collectAsState()
+    val meshEnabled by state.meshGradientEnabled.collectAsState()
 
     var isServerListExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -109,7 +112,7 @@ fun MainScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -352,7 +355,7 @@ fun MainScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = { state.runSmartConnect() },
+                        onClick = { state.switchToNextServer() },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -420,12 +423,28 @@ fun MainScreen(
                 }
 
                 // 4 сценария: Авто, Белый список, Чёрный список, YouTube и музыка
-                Text(
-                    text = "Сценарий маршрутизации:",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Сценарий маршрутизации:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = { state.promptLocationFilterDialog() },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Фильтр стран", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -609,22 +628,28 @@ fun MainScreen(
                                 modifier = Modifier.padding(vertical = 12.dp)
                             )
                         } else {
-                            for ((guid, profile) in displayServers) {
-                                val isSelected = guid == selectedGuid
-                                val ping = pingMap[guid]
-                                val subName = subNamesMap[profile.subscriptionId] ?: profile.subscriptionId.ifBlank { "Подписка" }
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 540.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(displayServers, key = { it.first }) { (guid, profile) ->
+                                    val isSelected = guid == selectedGuid
+                                    val ping = pingMap[guid]
+                                    val subName = subNamesMap[profile.subscriptionId] ?: profile.subscriptionId.ifBlank { "Подписка" }
 
-                                ServerCardItem(
-                                    profile = profile,
-                                    subscriptionName = subName,
-                                    isSelected = isSelected,
-                                    ping = ping,
-                                    onSelect = { state.selectServer(guid) },
-                                    onPing = { state.pingServer(guid) },
-                                    onQr = { qrProfile = profile },
-                                    onDelete = { state.deleteServer(guid) }
-                                )
-                                Spacer(Modifier.height(6.dp))
+                                    ServerCardItem(
+                                        profile = profile,
+                                        subscriptionName = subName,
+                                        isSelected = isSelected,
+                                        ping = ping,
+                                        onSelect = { state.selectServer(guid) },
+                                        onPing = { state.pingServer(guid) },
+                                        onQr = { qrProfile = profile },
+                                        onDelete = { state.deleteServer(guid) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -654,6 +679,9 @@ fun MainScreen(
         ) {
             Icon(Icons.Default.QrCode2, contentDescription = "Показать QR код узла", modifier = Modifier.size(26.dp))
         }
+
+        // Диалог фильтра локаций серверов (1-в-1 как в Android версии)
+        LocationFilterDialog(state = state)
     }
 }
 
