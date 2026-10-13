@@ -341,25 +341,15 @@ object AngConfigManager {
     }
 
     fun identifyConfigType(str: String?): ProfileItem? {
-        if (str == null || TextUtils.isEmpty(str)) return null
-        return if (str.startsWith(EConfigType.VMESS.protocolScheme)) {
-            VmessFmt.parse(str)
-        } else if (str.startsWith(EConfigType.SHADOWSOCKS.protocolScheme)) {
-            ShadowsocksFmt.parse(str)
-        } else if (str.startsWith(EConfigType.SOCKS.protocolScheme)) {
-            SocksFmt.parse(str)
-        } else if (str.startsWith(EConfigType.TROJAN.protocolScheme)) {
-            TrojanFmt.parse(str)
-        } else if (str.startsWith(EConfigType.VLESS.protocolScheme)) {
-            VlessFmt.parse(str)
-        } else if (str.startsWith(EConfigType.WIREGUARD.protocolScheme)) {
-            WireguardFmt.parse(str)
-        } else if (str.startsWith(EConfigType.HYSTERIA2.protocolScheme) || str.startsWith(HY2)) {
-            Hysteria2Fmt.parse(str)
-        } else {
-            null
-        }
+        if (str.isNullOrBlank()) return null
+        return com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(str)
+            ?: if (str.startsWith(EConfigType.WIREGUARD.protocolScheme)) {
+                WireguardFmt.parse(str)
+            } else {
+                null
+            }
     }
+
 
     /**
      * Parses a custom configuration server.

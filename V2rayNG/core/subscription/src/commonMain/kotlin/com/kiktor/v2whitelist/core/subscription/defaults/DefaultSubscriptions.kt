@@ -1,0 +1,274 @@
+package com.kiktor.v2whitelist.core.subscription.defaults
+
+import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
+
+object DefaultSubscriptions {
+
+    /**
+     * Список предустановленных подписок.
+     * enabled = true означает, что подписка будет активна сразу после установки.
+     * enabled = false означает, что она просто будет лежать в списке кастомных подписок на всякий случай.
+     */
+    val PREPOPULATED_SUBS = listOf(
+        CustomSubData(
+            id = "def_zieng2",
+            name = "zieng2 (Для обхода белых списков)",
+            url = listOf(
+                "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+                "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt",
+                "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
+                "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
+                "https://gitlab.com/zieng2/wl/raw/main/vless_universal.txt"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_igareck_black",
+            name = "igareck (Обход черных списков / Блокировок)",
+            url = listOf(
+                "https://gitlab.com/igareck/vpn-configs-for-russia/raw/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://codeberg.org/igareck/vpn-configs-for-russia/raw/branch/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+                "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt"
+            ).joinToString("|"),
+            groupRegex = "\\[(BL)\\]",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        CustomSubData(
+            id = "def_rkp_whitelist",
+            name = "RKP (Анти-РосКомПозор: Белые списки)",
+            url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl",
+            groupRegex = "(Неизвестно)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_rkp_blacklist",
+            name = "RKP (Анти-РосКомПозор: Черные списки)",
+            url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl",
+            groupRegex = "(Неизвестно)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_aetris",
+            name = "AetrisVPN (Сборник: Резервные + YouTube)",
+            url = "https://raw.githubusercontent.com/flaafix/AetrisVPN/main/AetrisVPN.txt",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_hiztin_gribi",
+            name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
+            url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+            groupRegex = "(@[A-Za-z0-9_]+|SERDNS\\s*VIP|t\\.me/[A-Za-z0-9_]+)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_kizyak_white",
+            name = "КIЗЯК VPN (Обход белых списков / Mobile)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta7.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_kizyak_white_v6",
+            name = "КIЗЯК VPN v6 (Обход белых списков / Резерв)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt"
+            ).joinToString("|"),
+            groupRegex = "\\[(🏳️LTE|LTE)\\]",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_kizyak_black",
+            name = "КIЗЯК VPN (Обход черных списков / Проводной)",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6BL.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt"
+            ).joinToString("|"),
+            groupRegex = "\\[(🏴BL|BL)\\]",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp001",
+            name = "CYBERPORTAL (Black MIX RU)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-001.txt",
+                "https://warp-gen.cyb-portal.org/CP-001"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp002",
+            name = "CYBERPORTAL (VLESS Black All RU)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-002.txt",
+                "https://warp-gen.cyb-portal.org/CP-002"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp035",
+            name = "CYBERPORTAL (VLESS White List)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-035.txt",
+                "https://warp-gen.cyb-portal.org/CP-035"
+            ).joinToString("|"),
+            groupRegex = "(?i)(White\\s*List)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp006",
+            name = "CYBERPORTAL (CIDR White All RU)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-006.txt",
+                "https://warp-gen.cyb-portal.org/CP-006"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp008",
+            name = "CYBERPORTAL (SNI White All RU)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-008.txt",
+                "https://warp-gen.cyb-portal.org/CP-008"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_cyberportal_cp042",
+            name = "CYBERPORTAL (White Keys)",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-042.txt",
+                "https://warp-gen.cyb-portal.org/CP-042"
+            ).joinToString("|"),
+            groupRegex = "(?i)(White\\s*Keys)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_etoneya_whitelist",
+            name = "ЭтоНеЯ (Только белые списки)",
+            url = listOf(
+                "https://etoneya.su/whitelist",
+                "https://etoneya.best/whitelist",
+                "https://alley.serv00.net/whitelist",
+                "https://internet-tenshi.kangel.tech/whitelist",
+                "https://whitelist.etoneya.baby",
+                "https://etoskam.ru/whitelist",
+                "https://xn--e1apcp8cq.xn--p1ai/whitelist"
+            ).joinToString("|"),
+            groupRegex = "(CIDR-[A-Za-z0-9_-]+|SNI-[A-Za-z0-9_-]+)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_etoneya_blacklist",
+            name = "ЭтоНеЯ (Черные списки)",
+            url = listOf(
+                "https://etoneya.su/other",
+                "https://etoneya.best/other",
+                "https://alley.serv00.net/other",
+                "https://internet-tenshi.kangel.tech/other",
+                "https://blacklist.etoneya.baby",
+                "https://etoskam.ru/other",
+                "https://xn--e1apcp8cq.xn--p1ai/other"
+            ).joinToString("|"),
+            groupRegex = "(☁️\\s*Cloudflare|Cloudflare|VLESS|HYSTERIA2|VMESS|TROJAN|SS)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_etoneya_gemini",
+            name = "ЭтоНеЯ (Работает Gemini)",
+            url = listOf(
+                "https://etoneya.su/gemini",
+                "https://etoneya.best/gemini",
+                "https://alley.serv00.net/gemini",
+                "https://internet-tenshi.kangel.tech/gemini",
+                "https://gemini.etoneya.baby",
+                "https://etoskam.ru/gemini",
+                "https://xn--e1apcp8cq.xn--p1ai/gemini"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_etoneya_youtube",
+            name = "ЭтоНеЯ (Работает YouTube / Больше под черные списки)",
+            url = listOf(
+                "https://etoneya.su/youtube",
+                "https://etoneya.best/youtube",
+                "https://alley.serv00.net/youtube",
+                "https://internet-tenshi.kangel.tech/youtube",
+                "https://yt.etoneya.baby",
+                "https://etoskam.ru/youtube",
+                "https://xn--e1apcp8cq.xn--p1ai/youtube"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_etoneya_ytm",
+            name = "ЭтоНеЯ (Работает YouTube Музыка / Больше под черные списки)",
+            url = listOf(
+                "https://etoneya.su/ytm",
+                "https://etoneya.best/ytm",
+                "https://alley.serv00.net/ytm",
+                "https://internet-tenshi.kangel.tech/ytm",
+                "https://ytm.etoneya.baby",
+                "https://etoskam.ru/ytm",
+                "https://xn--e1apcp8cq.xn--p1ai/ytm"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+        ),
+        CustomSubData(
+            id = "def_rjsxrd_bypass_all",
+            name = "rjsxrd (Сборник обхода / Bypass All)",
+            url = listOf(
+                "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt",
+                "https://raw.githubusercontent.com/whoahaow/rjsxrd/main/githubmirror/bypass/bypass-all.txt",
+                "https://fastly.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt",
+                "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
+            ).joinToString("|"),
+            groupRegex = "(CF中转|☁️\\s*Cloudflare|Cloudflare|\\[BL\\]|BL)",
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+        CustomSubData(
+            id = "def_airlink_whitelist",
+            name = "AirLinkVPN (Белые списки РКН)",
+            url = listOf(
+                "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/refs/heads/main/rkn_white_list",
+                "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/main/rkn_white_list",
+                "https://fastly.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list",
+                "https://cdn.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list"
+            ).joinToString("|"),
+            enabled = false,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        )
+    )
+}

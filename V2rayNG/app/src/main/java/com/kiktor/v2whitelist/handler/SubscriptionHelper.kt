@@ -24,27 +24,15 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
+typealias CustomSubData = com.kiktor.v2whitelist.core.subscription.model.CustomSubData
+
 object SubscriptionHelper {
 
     const val SUBSCRIPTION_ID = "v2whitelist_hardcoded_sub"
 
-    const val SCENARIO_WHITELIST = "WHITELIST"
-    const val SCENARIO_BLACKLIST = "BLACKLIST"
-    const val SCENARIO_YOUTUBE = "YOUTUBE"
-
-    /** Дата-класс для JSON-десериализации кастомных подписок */
-    data class CustomSubData(
-        val id: String = "",
-        var name: String = "",
-        var url: String = "",
-        var filter: String = "",
-        var groupRegex: String = "",
-        var enabled: Boolean = true,
-        var lastUpdated: Long = 0L,
-        var sharePercent: Int? = null,
-        var lastUpdateFailed: Boolean = false,
-        var targetScenarios: List<String> = emptyList()
-    )
+    const val SCENARIO_WHITELIST = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_WHITELIST
+    const val SCENARIO_BLACKLIST = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_BLACKLIST
+    const val SCENARIO_YOUTUBE = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_YOUTUBE
 
     /**
      * Pre-populates the zieng2/wl subscription with mirrors on first launch,

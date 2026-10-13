@@ -52,26 +52,16 @@ object SmartConnectManager {
     }
 
 
-    private fun loadCustomSubs(): List<CustomSubData> {
+    private fun loadCustomSubs(): List<com.kiktor.v2whitelist.core.subscription.model.CustomSubData> {
         val json = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
         if (json.isNullOrEmpty()) return emptyList()
         return try {
-            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<CustomSubData>::class.java)?.toList() ?: emptyList()
+            com.kiktor.v2whitelist.util.JsonUtil.fromJson(json, Array<com.kiktor.v2whitelist.core.subscription.model.CustomSubData>::class.java)?.toList() ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }
     }
 
-    /** Дата-класс для JSON-десериализации кастомных подписок */
-    data class CustomSubData(
-        val id: String = "",
-        val name: String = "",
-        val url: String = "",
-        val filter: String = "",
-        val groupRegex: String = "",
-        val enabled: Boolean = true,
-        val sharePercent: Int? = null
-    )
 
 
     fun filterServerPairs(
