@@ -1,0 +1,10 @@
+com.kiktor.v2whitelist.core.model-pngs-0 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/generated/res/pngs/release
+com.kiktor.v2whitelist.core.model-resValues-1 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/generated/res/resValues/release
+com.kiktor.v2whitelist.core.model-updated_navigation_xml-2 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/generated/updated_navigation_xml/release
+com.kiktor.v2whitelist.core.model-mergeReleaseResources-3 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+com.kiktor.v2whitelist.core.model-mergeReleaseResources-4 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+com.kiktor.v2whitelist.core.model-release-5 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/intermediates/merged_res/release/mergeReleaseResources
+com.kiktor.v2whitelist.core.model-androidMain-6 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/src/androidMain/res
+com.kiktor.v2whitelist.core.model-androidRelease-7 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/src/androidRelease/res
+com.kiktor.v2whitelist.core.model-main-8 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/src/main/res
+com.kiktor.v2whitelist.core.model-release-9 /home/nethunter/Documents/v2whitelist/V2rayNG/core/model/src/release/res

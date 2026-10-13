@@ -1,0 +1,1 @@
+com.kiktor.v2whitelist.core.model

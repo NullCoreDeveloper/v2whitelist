@@ -1,0 +1,1 @@
+/home/nethunter/.konan/kotlin-native-prebuilt-linux-x86_64-2.3.10

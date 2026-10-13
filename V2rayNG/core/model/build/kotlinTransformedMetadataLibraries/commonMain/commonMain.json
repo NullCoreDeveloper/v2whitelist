@@ -1,0 +1,27 @@
+[
+  {
+    "moduleId": "module org.jetbrains.kotlin:kotlin-stdlib:2.3.10",
+    "file": "/home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlin-kotlin-stdlib-2.3.10-commonMain-1ooqQQ.klib",
+    "sourceSetName": "commonMain"
+  },
+  {
+    "moduleId": "module org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0",
+    "file": "/home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlinx-kotlinx-serialization-json-1.8.0-commonMain-sWF2lQ.klib",
+    "sourceSetName": "commonMain"
+  },
+  {
+    "moduleId": "module org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2",
+    "file": "/home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlinx-kotlinx-coroutines-core-1.10.2-concurrentMain-wJOvIw.klib",
+    "sourceSetName": "concurrentMain"
+  },
+  {
+    "moduleId": "module org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2",
+    "file": "/home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlinx-kotlinx-coroutines-core-1.10.2-commonMain-wJOvIw.klib",
+    "sourceSetName": "commonMain"
+  },
+  {
+    "moduleId": "module org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.0",
+    "file": "/home/nethunter/Documents/v2whitelist/V2rayNG/core/model/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlinx-kotlinx-serialization-core-1.8.0-commonMain-tao8ug.klib",
+    "sourceSetName": "commonMain"
+  }
+]

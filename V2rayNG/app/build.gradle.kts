@@ -165,6 +165,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:model"))
+
     // Core Libraries
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
 
