@@ -52,4 +52,13 @@ class XrayConfigGeneratorTest {
         assertTrue(jsonStr.contains("\"password\": \"mysecret\""))
         assertTrue(jsonStr.contains("\"address\": \"192.0.2.1\""))
     }
+
+    @Test
+    fun testGenerateAllowLanListenAddress() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=reality&sni=dl.google.com&fp=chrome&pbk=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789&sid=1234abcd&spx=%2F&type=tcp#MyNode"
+        val profile = UniversalConfigParser.parse(uri)!!
+
+        val jsonStr = XrayConfigGenerator.generateJson(profile, XrayGeneratorOptions(listenAddress = "0.0.0.0"))
+        assertTrue(jsonStr.contains("\"listen\": \"0.0.0.0\""))
+    }
 }

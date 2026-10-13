@@ -28,6 +28,7 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.components.ProxyModeCard
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -48,6 +49,7 @@ fun ServersScreen(
     val searchQuery by state.searchQuery.collectAsState()
     val httpPort by state.httpPort.collectAsState()
     val socksPort by state.socksPort.collectAsState()
+    val clipboardNotice by state.clipboardNotice.collectAsState()
 
     val filteredServers = remember(servers, searchQuery) {
         if (searchQuery.isBlank()) servers
@@ -67,6 +69,30 @@ fun ServersScreen(
             .background(DarkBg)
             .padding(24.dp)
     ) {
+        // Clipboard notice banner
+        AnimatedVisibility(visible = clipboardNotice != null) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = AccentMint.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, AccentMint.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentMint, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = clipboardNotice.orEmpty(),
+                        color = AccentMint,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
         // --- 1. Quick Connection Card ---
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -207,9 +233,14 @@ fun ServersScreen(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // --- 2. Action Controls & Search ---
+        // --- 2. Proxy Mode Card (Standalone / Pure Proxy) ---
+        ProxyModeCard(state = state)
+
+        Spacer(Modifier.height(16.dp))
+
+        // --- 3. Action Controls & Search ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

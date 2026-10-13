@@ -33,7 +33,9 @@ internal data class SettingsStorage(
     val httpPort: Int = 10809,
     val subscriptionUrl: String = "",
     val xrayBinaryPath: String = "",
-    val v2wScanPath: String = ""
+    val v2wScanPath: String = "",
+    val autoEnableSystemProxy: Boolean = false,
+    val allowLan: Boolean = false
 )
 
 internal object DesktopStorageManager {
@@ -241,8 +243,24 @@ class DesktopFileSettingsRepository : SettingsRepository {
         persist()
     }
 
-    override fun getBoolean(key: String, defaultValue: Boolean): Boolean = defaultValue
-    override fun setBoolean(key: String, value: Boolean) {}
+    override fun getBoolean(key: String, defaultValue: Boolean): Boolean {
+        return when (key) {
+            "auto_enable_system_proxy" -> cached.autoEnableSystemProxy
+            "allow_lan" -> cached.allowLan
+            "smart_failover" -> cached.smartFailover
+            else -> defaultValue
+        }
+    }
+
+    override fun setBoolean(key: String, value: Boolean) {
+        cached = when (key) {
+            "auto_enable_system_proxy" -> cached.copy(autoEnableSystemProxy = value)
+            "allow_lan" -> cached.copy(allowLan = value)
+            "smart_failover" -> cached.copy(smartFailover = value)
+            else -> cached
+        }
+        persist()
+    }
 
     override fun getInt(key: String, defaultValue: Int): Int = defaultValue
     override fun setInt(key: String, value: Int) {}

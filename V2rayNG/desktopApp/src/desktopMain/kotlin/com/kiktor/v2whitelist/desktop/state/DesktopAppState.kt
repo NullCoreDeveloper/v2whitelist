@@ -71,6 +71,11 @@ class DesktopAppState(
     val httpPort = MutableStateFlow(settingsRepo.getHttpPort())
     val socksPort = MutableStateFlow(settingsRepo.getSocksPort())
 
+    val isSystemProxyActive = MutableStateFlow(com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.isSystemProxyEnabled())
+    val autoEnableSystemProxy = MutableStateFlow(settingsRepo.getBoolean("auto_enable_system_proxy", false))
+    val allowLan = MutableStateFlow(settingsRepo.getBoolean("allow_lan", false))
+    val clipboardNotice = MutableStateFlow<String?>(null)
+
     val smartConnectManager = com.kiktor.v2whitelist.desktop.engine.DesktopSmartConnectManager(
         serverRepo = serverRepo,
         settingsRepo = settingsRepo,
@@ -134,10 +139,56 @@ class DesktopAppState(
 
     fun toggleConnect() {
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
-            xrayRunner.stop()
+            stopCore()
         } else {
             connectCurrent()
         }
+    }
+
+    fun stopCore() {
+        xrayRunner.stop()
+        if (isSystemProxyActive.value) {
+            com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
+            isSystemProxyActive.value = false
+        }
+    }
+
+    fun toggleSystemProxy() {
+        val target = !isSystemProxyActive.value
+        if (target) {
+            val success = com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.enableSystemProxy(socksPort.value, httpPort.value)
+            isSystemProxyActive.value = success
+        } else {
+            com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
+            isSystemProxyActive.value = false
+        }
+    }
+
+    fun setAutoEnableSystemProxy(enabled: Boolean) {
+        autoEnableSystemProxy.value = enabled
+        settingsRepo.setBoolean("auto_enable_system_proxy", enabled)
+    }
+
+    fun setAllowLan(enabled: Boolean) {
+        allowLan.value = enabled
+        settingsRepo.setBoolean("allow_lan", enabled)
+        if (coreState.value == DesktopCoreState.RUNNING) {
+            connectCurrent()
+        }
+    }
+
+    fun copyToClipboard(text: String, label: String) {
+        if (com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.copyToClipboard(text)) {
+            scope.launch {
+                clipboardNotice.value = "Скопировано: $label"
+                kotlinx.coroutines.delay(2500)
+                clipboardNotice.value = null
+            }
+        }
+    }
+
+    fun openUri(uri: String) {
+        com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.openUri(uri)
     }
 
     private fun connectCurrent() {
@@ -145,13 +196,19 @@ class DesktopAppState(
         val profile = serverRepo.getServerConfig(guid) ?: return
 
         scope.launch {
-            xrayRunner.start(
+            val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
+            val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
                 xrayBinaryPath = xrayBinaryPath.value.ifBlank { null },
                 httpPort = httpPort.value,
-                socksPort = socksPort.value
+                socksPort = socksPort.value,
+                listenAddress = listenAddr
             )
+            if (started && autoEnableSystemProxy.value) {
+                com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.enableSystemProxy(socksPort.value, httpPort.value)
+                isSystemProxyActive.value = true
+            }
         }
     }
 
@@ -167,7 +224,7 @@ class DesktopAppState(
     fun deleteServer(guid: String) {
         if (_selectedGuid.value == guid) {
             if (coreState.value == DesktopCoreState.RUNNING) {
-                xrayRunner.stop()
+                stopCore()
             }
         }
         serverRepo.removeServer(guid)
@@ -271,19 +328,29 @@ class DesktopAppState(
         xrayPath: String,
         v2wPath: String,
         httpP: Int,
-        socksP: Int
+        socksP: Int,
+        autoSystemProxy: Boolean = autoEnableSystemProxy.value,
+        lan: Boolean = allowLan.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
         v2wScanPath.value = v2wPath
         httpPort.value = httpP
         socksPort.value = socksP
+        autoEnableSystemProxy.value = autoSystemProxy
+        allowLan.value = lan
 
         settingsRepo.setString("subscription_url", subUrl)
         settingsRepo.setString("xray_path", xrayPath)
         settingsRepo.setString("v2w_scan_path", v2wPath)
         settingsRepo.setHttpPort(httpP)
         settingsRepo.setSocksPort(socksP)
+        settingsRepo.setBoolean("auto_enable_system_proxy", autoSystemProxy)
+        settingsRepo.setBoolean("allow_lan", lan)
         GeekModeLogger.log("Settings", "Настройки сохранены.")
+
+        if (coreState.value == DesktopCoreState.RUNNING) {
+            connectCurrent()
+        }
     }
 }

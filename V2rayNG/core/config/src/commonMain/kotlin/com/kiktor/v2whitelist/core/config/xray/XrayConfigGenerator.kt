@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 data class XrayGeneratorOptions(
     val socksPort: Int = 10808,
     val httpPort: Int = 10809,
+    val listenAddress: String = "127.0.0.1",
     val enableHttpInbound: Boolean = true,
     val logLevel: String = "warning",
     val allowInsecureDefault: Boolean = false,
@@ -39,7 +40,7 @@ object XrayConfigGenerator {
                 tag = "socks-in",
                 port = options.socksPort,
                 protocol = "socks",
-                listen = "127.0.0.1",
+                listen = options.listenAddress,
                 settings = InboundSettings(auth = "noauth", udp = true),
                 sniffing = InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"))
             )
@@ -52,7 +53,7 @@ object XrayConfigGenerator {
                     tag = "http-in",
                     port = options.httpPort,
                     protocol = "http",
-                    listen = "127.0.0.1",
+                    listen = options.listenAddress,
                     settings = null,
                     sniffing = InboundSniffing(enabled = true, destOverride = listOf("http", "tls"))
                 )

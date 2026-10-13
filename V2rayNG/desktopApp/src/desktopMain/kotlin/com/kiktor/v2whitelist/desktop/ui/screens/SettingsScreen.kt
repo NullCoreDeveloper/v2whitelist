@@ -32,12 +32,16 @@ fun SettingsScreen(
     val currentV2wPath by state.v2wScanPath.collectAsState()
     val currentHttpPort by state.httpPort.collectAsState()
     val currentSocksPort by state.socksPort.collectAsState()
+    val currentAutoSystemProxy by state.autoEnableSystemProxy.collectAsState()
+    val currentAllowLan by state.allowLan.collectAsState()
 
     var subUrlInput by remember(currentSubUrl) { mutableStateOf(currentSubUrl) }
     var xrayPathInput by remember(currentXrayPath) { mutableStateOf(currentXrayPath) }
     var v2wPathInput by remember(currentV2wPath) { mutableStateOf(currentV2wPath) }
     var httpPortInput by remember(currentHttpPort) { mutableStateOf(currentHttpPort.toString()) }
     var socksPortInput by remember(currentSocksPort) { mutableStateOf(currentSocksPort.toString()) }
+    var autoSystemProxyInput by remember(currentAutoSystemProxy) { mutableStateOf(currentAutoSystemProxy) }
+    var allowLanInput by remember(currentAllowLan) { mutableStateOf(currentAllowLan) }
 
     var isSavedSnackbar by remember { mutableStateOf(false) }
 
@@ -207,6 +211,87 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
+        // Standalone Proxy Mode Settings
+        SettingsCard(title = "Режим прокси (Standalone Proxy)") {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Auto enable system proxy toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "Авто-включение системного прокси ОС",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Автоматически настраивать системный прокси (KDE / GNOME / Windows) при старте ядра и выключать при остановке.",
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Switch(
+                        checked = autoSystemProxyInput,
+                        onCheckedChange = { autoSystemProxyInput = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = AccentMint,
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = DarkSurfaceElevated
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f))
+
+                // Allow LAN toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "Разрешить подключения из локальной сети (Allow LAN / 0.0.0.0)",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Прослушивать все сетевые интерфейсы (0.0.0.0), чтобы другие устройства в Wi-Fi сети могли использовать этот ПК как прокси.",
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                        val detectedIp = remember { com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.getLocalIpAddress() }
+                        if (detectedIp != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Локальный IP этого ПК: $detectedIp",
+                                color = AccentCyan,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = allowLanInput,
+                        onCheckedChange = { allowLanInput = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = AccentCyan,
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = DarkSurfaceElevated
+                        )
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
 
         // Save Button
@@ -219,7 +304,9 @@ fun SettingsScreen(
                     xrayPath = xrayPathInput.trim(),
                     v2wPath = v2wPathInput.trim(),
                     httpP = httpP,
-                    socksP = socksP
+                    socksP = socksP,
+                    autoSystemProxy = autoSystemProxyInput,
+                    lan = allowLanInput
                 )
                 isSavedSnackbar = true
             },

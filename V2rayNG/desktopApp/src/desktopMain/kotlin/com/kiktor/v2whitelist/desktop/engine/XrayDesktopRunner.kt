@@ -84,7 +84,8 @@ class XrayDesktopRunner(
         scenario: AppScenario = AppScenario.AUTO,
         xrayBinaryPath: String? = null,
         httpPort: Int = 10809,
-        socksPort: Int = 10808
+        socksPort: Int = 10808,
+        listenAddress: String = "127.0.0.1"
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -107,6 +108,7 @@ class XrayDesktopRunner(
             val options = XrayGeneratorOptions(
                 socksPort = socksPort,
                 httpPort = httpPort,
+                listenAddress = listenAddress,
                 enableHttpInbound = true
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
@@ -160,7 +162,7 @@ class XrayDesktopRunner(
             }
 
             _coreState.value = DesktopCoreState.RUNNING
-            GeekModeLogger.log("DesktopRunner", "Ядро успешно запущено. HTTP: $httpPort, SOCKS: $socksPort")
+            GeekModeLogger.log("DesktopRunner", "Ядро успешно запущено. HTTP: $httpPort, SOCKS: $socksPort (Listen: $listenAddress)")
             return true
         } catch (e: Exception) {
             val err = "Ошибка запуска Xray: ${e.message}"

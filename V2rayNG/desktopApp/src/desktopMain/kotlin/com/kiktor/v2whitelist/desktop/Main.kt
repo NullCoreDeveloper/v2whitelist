@@ -49,13 +49,15 @@ fun App(state: DesktopAppState) {
 fun main() = application {
     val state = remember { DesktopAppState() }
 
-    // Корректное завершение процесса Xray при выходе из приложения
+    // Корректное завершение процесса Xray и системного прокси при выходе из приложения
     Runtime.getRuntime().addShutdownHook(Thread {
+        com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
         state.xrayRunner.stop()
     })
 
     Window(
         onCloseRequest = {
+            com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
             state.xrayRunner.stop()
             exitApplication()
         },
