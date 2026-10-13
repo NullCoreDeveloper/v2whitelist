@@ -26,6 +26,12 @@ interface ServerRepository {
 
     fun clearAllServers()
 
+    /**
+     * Удаляет дубликаты серверов по формуле: address + port + password + (sni или host).
+     * @return Количество удаленных серверов-дубликатов.
+     */
+    fun removeDuplicates(): Int
+
     val serversFlow: StateFlow<List<Pair<String, ProfileItem>>>
 }
 
@@ -103,5 +109,33 @@ class InMemoryServerRepository(
         vipSet.clear()
         selectedGuid = null
         _serversFlow.value = emptyList()
+    }
+
+    override fun removeDuplicates(): Int {
+        val uniqueKeys = mutableSetOf<String>()
+        val guidsToDelete = mutableListOf<String>()
+
+        for ((guid, profile) in serverMap) {
+            val sniOrHost = profile.sni?.takeIf { it.isNotBlank() } ?: profile.host.orEmpty()
+            val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
+            if (uniqueKeys.contains(key)) {
+                guidsToDelete.add(guid)
+            } else {
+                uniqueKeys.add(key)
+            }
+        }
+
+        for (g in guidsToDelete) {
+            serverMap.remove(g)
+            vipSet.remove(g)
+            if (selectedGuid == g) {
+                selectedGuid = serverMap.keys.firstOrNull()
+            }
+        }
+
+        if (guidsToDelete.isNotEmpty()) {
+            _serversFlow.value = serverMap.entries.map { it.key to it.value }
+        }
+        return guidsToDelete.size
     }
 }

@@ -67,4 +67,11 @@ object MmkvServerRepository : ServerRepository {
         MmkvManager.removeAllServer()
         refresh()
     }
+
+    override fun removeDuplicates(): Int {
+        val count = MmkvManager.removeDuplicateServer()
+        refresh()
+        return count
+    }
 }
+
