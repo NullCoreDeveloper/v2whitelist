@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.core.config.xray
 
+import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -20,7 +21,14 @@ data class XrayGeneratorOptions(
     val customProxyDomains: List<String> = emptyList(),
     val upstreamProxyHost: String? = null,
     val upstreamProxyPort: Int? = null,
-    val upstreamProxyType: String? = null
+    val upstreamProxyType: String? = null,
+    val customEndpointUrl: String? = null,
+    val bypassRussianServices: Boolean = true,
+    val sniffingEnabled: Boolean = true,
+    val routeOnly: Boolean = false,
+    val muxEnabled: Boolean = false,
+    val muxConcurrency: Int = 8,
+    val muxXudpConcurrency: Int = 8
 )
 
 object XrayConfigGenerator {
@@ -47,7 +55,9 @@ object XrayConfigGenerator {
                 protocol = "socks",
                 listen = options.listenAddress,
                 settings = InboundSettings(auth = "noauth", udp = true),
-                sniffing = InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"))
+                sniffing = if (options.sniffingEnabled) {
+                    InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"), routeOnly = options.routeOnly)
+                } else null
             )
         )
 
@@ -60,19 +70,51 @@ object XrayConfigGenerator {
                     protocol = "http",
                     listen = options.listenAddress,
                     settings = null,
-                    sniffing = InboundSniffing(enabled = true, destOverride = listOf("http", "tls"))
+                    sniffing = if (options.sniffingEnabled) {
+                        InboundSniffing(enabled = true, destOverride = listOf("http", "tls"), routeOnly = options.routeOnly)
+                    } else null
                 )
             )
         }
 
-        // Outbounds: [proxy, direct, block] (+ optional upstream proxy)
-        val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
-        val upstreamTag = "upstream-proxy"
+        // Outbounds: [proxy, direct, block] (+ optional custom endpoint chain, + optional upstream proxy)
         val rawProxyOutbound = buildProxyOutbound(profile, options)
-        val proxyOutbound = if (hasUpstream) {
-            rawProxyOutbound.copy(proxySettings = OutboundProxySettings(tag = upstreamTag))
+        val endpointProfile = if (!options.customEndpointUrl.isNullOrBlank()) {
+            UniversalConfigParser.parse(options.customEndpointUrl)
+        } else null
+
+        val outbounds = mutableListOf<XrayOutbound>()
+
+        if (endpointProfile != null) {
+            // Цепочка: Local -> Smart Connect (proxy1) -> Custom Endpoint (proxy) -> Internet
+            val smartConnectOutbound = rawProxyOutbound.copy(tag = "proxy1")
+            val endpointOutbound = buildProxyOutbound(endpointProfile, options).copy(
+                tag = "proxy",
+                proxySettings = OutboundProxySettings(tag = "proxy1")
+            )
+            outbounds.add(endpointOutbound)
+            outbounds.add(smartConnectOutbound)
         } else {
-            rawProxyOutbound
+            val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
+            val upstreamTag = "upstream-proxy"
+            val proxyOutbound = if (hasUpstream) {
+                rawProxyOutbound.copy(proxySettings = OutboundProxySettings(tag = upstreamTag))
+            } else {
+                rawProxyOutbound
+            }
+            outbounds.add(proxyOutbound)
+            if (hasUpstream) {
+                val upProto = if (options.upstreamProxyType?.equals("http", ignoreCase = true) == true) "http" else "socks"
+                outbounds.add(
+                    XrayOutbound(
+                        tag = upstreamTag,
+                        protocol = upProto,
+                        settings = OutboundSettings(
+                            servers = listOf(ServerEntry(address = options.upstreamProxyHost.orEmpty(), port = options.upstreamProxyPort ?: 0))
+                        )
+                    )
+                )
+            }
         }
 
         val directOutbound = XrayOutbound(
@@ -86,22 +128,38 @@ object XrayConfigGenerator {
             settings = OutboundSettings(response = BlackholeResponse("http"))
         )
 
-        val outbounds = mutableListOf(proxyOutbound, directOutbound, blockOutbound)
-        if (hasUpstream) {
-            val upProto = if (options.upstreamProxyType?.equals("http", ignoreCase = true) == true) "http" else "socks"
-            outbounds.add(
-                XrayOutbound(
-                    tag = upstreamTag,
-                    protocol = upProto,
-                    settings = OutboundSettings(
-                        servers = listOf(ServerEntry(address = options.upstreamProxyHost.orEmpty(), port = options.upstreamProxyPort ?: 0))
-                    )
-                )
-            )
-        }
+        outbounds.add(directOutbound)
+        outbounds.add(blockOutbound)
 
         // Routing rules
         val rules = mutableListOf<XrayRule>()
+
+        // Банки, Госуслуги, Ozon, WB и сервисы РФ вне VPN (гранулярный роутинг)
+        if (options.bypassRussianServices) {
+            rules.add(
+                XrayRule(
+                    outboundTag = "direct",
+                    domain = listOf(
+                        "geosite:category-ru",
+                        "geosite:category-gov-ru",
+                        "domain:gosuslugi.ru",
+                        "domain:sber.ru",
+                        "domain:sberbank.ru",
+                        "domain:tbank.ru",
+                        "domain:tinkoff.ru",
+                        "domain:ozon.ru",
+                        "domain:wildberries.ru",
+                        "domain:wb.ru",
+                        "domain:avito.ru",
+                        "domain:yandex.ru",
+                        "domain:ya.ru",
+                        "domain:vk.com",
+                        "domain:mail.ru"
+                    ),
+                    ip = listOf("geoip:ru")
+                )
+            )
+        }
 
         // Direct for private IPs
         if (options.bypassPrivateIps) {
@@ -219,6 +277,14 @@ object XrayConfigGenerator {
     fun buildProxyOutbound(profile: ProfileItem, options: XrayGeneratorOptions): XrayOutbound {
         val serverAddr = profile.server.orEmpty()
         val port = profile.serverPort?.toIntOrNull() ?: 443
+        val mux = if (options.muxEnabled) {
+            XrayMux(
+                enabled = true,
+                concurrency = options.muxConcurrency,
+                xudpConcurrency = options.muxXudpConcurrency,
+                xudpProxyUDP443 = "reject"
+            )
+        } else null
 
         return when (profile.configType) {
             EConfigType.VLESS -> {
@@ -240,7 +306,8 @@ object XrayConfigGenerator {
                             )
                         )
                     ),
-                    streamSettings = buildStreamSettings(profile, options)
+                    streamSettings = buildStreamSettings(profile, options),
+                    mux = mux
                 )
             }
 
@@ -263,7 +330,8 @@ object XrayConfigGenerator {
                             )
                         )
                     ),
-                    streamSettings = buildStreamSettings(profile, options)
+                    streamSettings = buildStreamSettings(profile, options),
+                    mux = mux
                 )
             }
 
@@ -281,7 +349,8 @@ object XrayConfigGenerator {
                             )
                         )
                     ),
-                    streamSettings = buildStreamSettings(profile, options)
+                    streamSettings = buildStreamSettings(profile, options),
+                    mux = mux
                 )
             }
 
@@ -312,7 +381,8 @@ object XrayConfigGenerator {
                                 )
                             )
                         )
-                    } else null
+                    } else null,
+                    mux = mux
                 )
             }
 
@@ -326,7 +396,8 @@ object XrayConfigGenerator {
                         up = profile.bandwidthUp?.ifEmpty { "0" },
                         down = profile.bandwidthDown?.ifEmpty { "0" }
                     ),
-                    streamSettings = buildStreamSettings(profile, options)
+                    streamSettings = buildStreamSettings(profile, options),
+                    mux = mux
                 )
             }
 
@@ -342,7 +413,8 @@ object XrayConfigGenerator {
                                 password = profile.password
                             )
                         )
-                    )
+                    ),
+                    mux = mux
                 )
             }
 
@@ -358,7 +430,8 @@ object XrayConfigGenerator {
                                 password = profile.password
                             )
                         )
-                    )
+                    ),
+                    mux = mux
                 )
             }
 

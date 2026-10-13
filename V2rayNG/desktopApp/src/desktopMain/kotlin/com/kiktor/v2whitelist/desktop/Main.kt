@@ -17,11 +17,14 @@ import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.state.DesktopTab
 import com.kiktor.v2whitelist.desktop.ui.components.Sidebar
-import com.kiktor.v2whitelist.desktop.ui.screens.LogsScreen
-import com.kiktor.v2whitelist.desktop.ui.screens.ServersScreen
+import com.kiktor.v2whitelist.desktop.ui.screens.AppearanceScreen
+import com.kiktor.v2whitelist.desktop.ui.screens.GeekModeScreen
+import com.kiktor.v2whitelist.desktop.ui.screens.MainScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SettingsScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SubscriptionsScreen
 import com.kiktor.v2whitelist.desktop.ui.theme.DesktopTheme
+import com.kiktor.v2whitelist.desktop.ui.theme.MeshGradientBackground
+import com.kiktor.v2whitelist.desktop.ui.theme.getAccentColor
 import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -32,19 +35,16 @@ import javax.imageio.ImageIO
  * Если файл не найден — рисует fallback иконку с буквами "V2".
  */
 private fun loadAppIcon(connected: Boolean): BitmapPainter {
-    // Пробуем загрузить оригинальную иконку из classpath
     val stream = object {}::class.java.classLoader?.getResourceAsStream("icon.png")
     if (stream != null) {
         try {
             val img = ImageIO.read(stream)
             if (img != null) {
-                // Наносим зелёный индикатор в углу при подключении
                 val result = BufferedImage(img.width, img.height, BufferedImage.TYPE_INT_ARGB)
                 val g = result.createGraphics()
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
                 g.drawImage(img, 0, 0, null)
                 if (connected) {
-                    // Зелёная точка подключения в правом нижнем углу
                     val r = img.width / 5
                     val x = img.width - r - img.width / 12
                     val y = img.height - r - img.height / 12
@@ -59,7 +59,6 @@ private fun loadAppIcon(connected: Boolean): BitmapPainter {
         } catch (_: Exception) {}
     }
 
-    // Fallback — рисованная иконка
     val size = 64
     val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
     val g = image.createGraphics()
@@ -80,23 +79,39 @@ fun App(state: DesktopAppState) {
     val currentTab by state.activeTab.collectAsState()
     val servers by state.servers.collectAsState()
     val coreState by state.coreState.collectAsState()
-    val uiTheme by state.uiTheme.collectAsState()
+    val themeMode by state.themeMode.collectAsState()
+    val themePalette by state.themePalette.collectAsState()
+    val isAmoled by state.pureBlackAmoled.collectAsState()
+    val meshEnabled by state.meshGradientEnabled.collectAsState()
+    val meshMode by state.meshGradientMode.collectAsState()
 
-    DesktopTheme(themeName = uiTheme) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            Sidebar(
-                currentTab = currentTab,
-                serverCount = servers.size,
-                coreState = coreState,
-                onTabSelected = { state.setTab(it) }
-            )
+    DesktopTheme(
+        themeMode = themeMode,
+        palette = themePalette,
+        isAmoled = isAmoled
+    ) {
+        MeshGradientBackground(
+            enabled = meshEnabled,
+            mode = meshMode,
+            connected = coreState == DesktopCoreState.RUNNING,
+            accentColor = getAccentColor(themePalette)
+        ) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                Sidebar(
+                    currentTab = currentTab,
+                    serverCount = servers.size,
+                    coreState = coreState,
+                    onTabSelected = { state.setTab(it) }
+                )
 
-            Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                when (currentTab) {
-                    DesktopTab.SERVERS -> ServersScreen(state = state)
-                    DesktopTab.SUBSCRIPTIONS -> SubscriptionsScreen(state = state)
-                    DesktopTab.LOGS -> LogsScreen(state = state)
-                    DesktopTab.SETTINGS -> SettingsScreen(state = state)
+                Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    when (currentTab) {
+                        DesktopTab.MAIN -> MainScreen(state = state)
+                        DesktopTab.SUBSCRIPTIONS -> SubscriptionsScreen(state = state)
+                        DesktopTab.GEEK_MODE -> GeekModeScreen(state = state)
+                        DesktopTab.APPEARANCE -> AppearanceScreen(state = state)
+                        DesktopTab.SETTINGS -> SettingsScreen(state = state)
+                    }
                 }
             }
         }
@@ -111,14 +126,11 @@ fun main() = application {
     val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
     val routingMode by state.routingMode.collectAsState()
     val minimizeToTray by state.minimizeToTray.collectAsState()
-    val servers by state.servers.collectAsState()
 
-    // Иконка трея — оригинальная иконка приложения с индикатором подключения
     val trayIcon = remember(coreState) {
         loadAppIcon(connected = coreState == DesktopCoreState.RUNNING)
     }
 
-    // Системный трей
     if (androidx.compose.ui.window.isTraySupported) {
         Tray(
             state = trayState,
@@ -130,7 +142,6 @@ fun main() = application {
                 DesktopCoreState.STOPPED -> "Отключено"
             }}",
             onAction = {
-                // Клик по трею: показать / скрыть окно
                 isWindowVisible = !isWindowVisible
             },
             menu = {
@@ -159,16 +170,9 @@ fun main() = application {
                 )
                 Separator()
                 Item(
-                    text = "Обновить подписки (${servers.size} серверов)",
-                    enabled = !state.isUpdatingSub.value,
-                    onClick = { state.updateAllActiveSubscriptions() }
-                )
-                Separator()
-                Item(
-                    text = "Выйти из v2whitelist",
+                    text = "Выход",
                     onClick = {
-                        com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
-                        state.xrayRunner.stop()
+                        state.stopCore()
                         exitApplication()
                     }
                 )
@@ -176,26 +180,24 @@ fun main() = application {
         )
     }
 
-    // Корректное завершение при выходе из ОС
-    Runtime.getRuntime().addShutdownHook(Thread {
-        com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
-        state.xrayRunner.stop()
-    })
+    val windowState = rememberWindowState(
+        width = 1100.dp,
+        height = 760.dp
+    )
 
     Window(
         onCloseRequest = {
             if (minimizeToTray && androidx.compose.ui.window.isTraySupported) {
                 isWindowVisible = false
             } else {
-                com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.disableSystemProxy()
-                state.xrayRunner.stop()
+                state.stopCore()
                 exitApplication()
             }
         },
+        state = windowState,
         visible = isWindowVisible,
-        title = "v2whitelist",
-        icon = remember { loadAppIcon(connected = false) },
-        state = rememberWindowState(width = 1100.dp, height = 760.dp)
+        title = "пробел — v2whitelist",
+        icon = trayIcon
     ) {
         App(state = state)
     }

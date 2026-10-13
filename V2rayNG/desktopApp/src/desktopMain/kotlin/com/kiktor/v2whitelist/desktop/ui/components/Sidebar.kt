@@ -7,7 +7,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
@@ -36,21 +37,21 @@ fun Sidebar(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(220.dp)
-            .background(DarkSurface)
+            .width(230.dp)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
-            // App Branding
+            // App Branding (оригинальный "пробел" с цветным бейджем)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 24.dp, top = 8.dp)
+                modifier = Modifier.padding(bottom = 20.dp, top = 6.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(
                             Brush.linearGradient(
                                 listOf(AccentCyan, AccentPurple)
@@ -61,58 +62,72 @@ fun Sidebar(
                     Text(
                         text = "V2",
                         color = Color.Black,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         fontSize = 15.sp
                     )
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "v2whitelist",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
+                        text = "пробел",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 19.sp,
+                        letterSpacing = (-0.5).sp
                     )
                     Text(
-                        text = "PC Edition",
-                        color = AccentCyan,
+                        text = "v2whitelist Desktop",
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(bottom = 16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 16.dp))
 
-            // Navigation items
+            // 1. Меню (Главная)
             NavItem(
-                icon = Icons.Default.Dns,
-                label = "Серверы",
+                icon = Icons.Default.Home,
+                label = "Меню",
                 badge = if (serverCount > 0) serverCount.toString() else null,
-                selected = currentTab == DesktopTab.SERVERS,
-                onClick = { onTabSelected(DesktopTab.SERVERS) }
+                selected = currentTab == DesktopTab.MAIN,
+                onClick = { onTabSelected(DesktopTab.MAIN) }
             )
 
             Spacer(Modifier.height(8.dp))
 
+            // 2. Управление подписками
             NavItem(
                 icon = Icons.Default.CloudDownload,
-                label = "Подписки",
+                label = "Управление подписками",
                 selected = currentTab == DesktopTab.SUBSCRIPTIONS,
                 onClick = { onTabSelected(DesktopTab.SUBSCRIPTIONS) }
             )
 
             Spacer(Modifier.height(8.dp))
 
+            // 3. Geek Mode
             NavItem(
                 icon = Icons.Default.Terminal,
                 label = "Geek Mode",
-                selected = currentTab == DesktopTab.LOGS,
-                onClick = { onTabSelected(DesktopTab.LOGS) }
+                selected = currentTab == DesktopTab.GEEK_MODE,
+                onClick = { onTabSelected(DesktopTab.GEEK_MODE) }
             )
 
             Spacer(Modifier.height(8.dp))
 
+            // 4. Оформление
+            NavItem(
+                icon = Icons.Default.Palette,
+                label = "Оформление",
+                selected = currentTab == DesktopTab.APPEARANCE,
+                onClick = { onTabSelected(DesktopTab.APPEARANCE) }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // 5. Настройки
             NavItem(
                 icon = Icons.Default.Settings,
                 label = "Настройки",
@@ -124,8 +139,8 @@ fun Sidebar(
         // Bottom status badge
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = DarkSurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -134,9 +149,9 @@ fun Sidebar(
             ) {
                 val (color, text) = when (coreState) {
                     DesktopCoreState.RUNNING -> AccentMint to "Подключено"
-                    DesktopCoreState.STARTING -> AccentAmber to "Запуск..."
+                    DesktopCoreState.STARTING -> AccentAmber to "Подключение..."
                     DesktopCoreState.ERROR -> AccentRed to "Ошибка"
-                    DesktopCoreState.STOPPED -> TextTertiary to "Остановлено"
+                    DesktopCoreState.STOPPED -> MaterialTheme.colorScheme.onSurfaceVariant to "Отключено"
                 }
 
                 Box(
@@ -148,7 +163,7 @@ fun Sidebar(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = text,
-                    color = TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -165,51 +180,50 @@ private fun NavItem(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val bgModifier = if (selected) {
-        Modifier.background(
-            color = AccentCyan.copy(alpha = 0.15f),
-            shape = RoundedCornerShape(10.dp)
-        )
-    } else Modifier
+    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
+    val contentColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
 
-    Row(
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = bg,
         modifier = Modifier
             .fillMaxWidth()
-            .then(bgModifier)
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (selected) AccentCyan else TextSecondary,
+                tint = contentColor,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Text(
                 text = label,
-                color = if (selected) TextPrimary else TextSecondary,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 14.sp
+                color = contentColor,
+                fontSize = 13.sp,
+                fontWeight = fontWeight,
+                modifier = Modifier.weight(1f)
             )
-        }
-
-        badge?.let {
-            Surface(
-                shape = CircleShape,
-                color = if (selected) AccentCyan else DarkSurfaceElevated,
-                contentColor = if (selected) Color.Black else TextSecondary
-            ) {
-                Text(
-                    text = it,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+            if (badge != null) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Text(
+                        text = badge,
+                        color = contentColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }

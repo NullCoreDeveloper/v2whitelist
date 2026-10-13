@@ -200,7 +200,10 @@ data class HysteriaUdpHop(
 
 @Serializable
 data class XrayMux(
-    val enabled: Boolean = false
+    val enabled: Boolean = false,
+    val concurrency: Int? = null,
+    val xudpConcurrency: Int? = null,
+    val xudpProxyUDP443: String? = null
 )
 
 @Serializable

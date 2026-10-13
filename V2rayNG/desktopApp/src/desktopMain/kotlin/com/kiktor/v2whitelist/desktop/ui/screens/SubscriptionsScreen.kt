@@ -4,9 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,9 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kiktor.v2whitelist.core.subscription.defaults.DefaultSubscriptions
+import androidx.compose.ui.window.Dialog
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.ui.theme.*
@@ -28,267 +29,136 @@ fun SubscriptionsScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val subscriptions by state.subscriptions.collectAsState()
+    val servers by state.servers.collectAsState()
     val isUpdatingSub by state.isUpdatingSub.collectAsState()
-    val enabledSubIds by state.enabledDefaultSubIds.collectAsState()
-    val customUrl by state.subscriptionUrl.collectAsState()
-    val userAgent by state.subscriptionUserAgent.collectAsState()
-    val updateOnlyViaProxy by state.subscriptionUpdateOnlyViaProxy.collectAsState()
-    val subThreads by state.subscriptionThreads.collectAsState()
-    val autoUpdate by state.subscriptionAutoUpdate.collectAsState()
 
-    var customUrlInput by remember(customUrl) { mutableStateOf(customUrl) }
-    var userAgentInput by remember(userAgent) { mutableStateOf(userAgent) }
-    var threadsInput by remember(subThreads) { mutableStateOf(subThreads.toString()) }
+    var editingSub by remember { mutableStateOf<CustomSubData?>(null) }
+    var isAddingNew by remember { mutableStateOf(false) }
 
-    val scrollState = rememberScrollState()
+    // Подсчет количества серверов для каждой подписки
+    val serverCountBySubId = remember(servers) {
+        val map = mutableMapOf<String, Int>()
+        for ((_, p) in servers) {
+            val sid = p.subscriptionId
+            map[sid] = (map[sid] ?: 0) + 1
+        }
+        map
+    }
+
+    // Диалог редактирования или создания
+    if (editingSub != null || isAddingNew) {
+        val target = editingSub ?: CustomSubData()
+        SubscriptionEditDialog(
+            initialData = target,
+            isNew = isAddingNew,
+            onDismiss = {
+                editingSub = null
+                isAddingNew = false
+            },
+            onSave = { saved ->
+                state.saveSubscription(saved)
+                editingSub = null
+                isAddingNew = false
+            }
+        )
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBg)
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp)
-            .verticalScroll(scrollState)
     ) {
-        // Header Row with Refresh Button
+        // Шапка: заголовок + кнопка добавления + кнопка обновления
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(26.dp))
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = "Подписки и Зеркала",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Управление источниками конфигураций и гонкой зеркал",
-                        fontSize = 12.sp,
-                        color = TextSecondary
-                    )
-                }
+            Column {
+                Text(
+                    text = "Управление подписками",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "Единая система подписок, зеркал и категорий маршрутизации",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
-            Button(
-                onClick = { state.updateAllActiveSubscriptions() },
-                enabled = !isUpdatingSub,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentCyan,
-                    contentColor = Color.Black
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(44.dp)
-            ) {
-                if (isUpdatingSub) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Обновление...", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Обновить все подписки", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Добавить подписку
+                Button(
+                    onClick = { isAddingNew = true },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Добавить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Обновить все подписки
+                Button(
+                    onClick = { state.updateAllActiveSubscriptions() },
+                    enabled = !isUpdatingSub,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    if (isUpdatingSub) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Обновление…", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Обновить все", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
 
         Spacer(Modifier.height(20.dp))
 
-        // Prepopulated Default Subscriptions
-        Text(
-            text = "Встроенные проверенные подписки (Россия / Анти-блокировки):",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
-        )
-        Spacer(Modifier.height(10.dp))
-
-        for (sub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            val isEnabled = enabledSubIds.contains(sub.id)
-            DefaultSubCard(
-                sub = sub,
-                isEnabled = isEnabled,
-                onToggle = { state.toggleDefaultSub(sub.id) }
-            )
-            Spacer(Modifier.height(10.dp))
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Custom User Subscription URL
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = DarkSurface,
-            border = BorderStroke(1.dp, DarkBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+        // Список подписок
+        if (subscriptions.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    text = "Кастомная подписка пользователя:",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = "Можно указать несколько зеркал одной подписки через символ разделителя «|»",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = customUrlInput,
-                    onValueChange = { customUrlInput = it },
-                    placeholder = { Text("https://mirror1.com/sub.txt | https://mirror2.com/sub.txt", color = TextTertiary, fontSize = 12.sp) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = DarkBorder,
-                        focusedContainerColor = DarkSurfaceElevated,
-                        unfocusedContainerColor = DarkSurfaceElevated,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    text = "Нет добавленных подписок. Нажмите «Добавить», чтобы подключить источник.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
                 )
             }
-        }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(subscriptions, key = { it.id }) { sub ->
+                    val serverCount = serverCountBySubId[sub.id] ?: serverCountBySubId[sub.name] ?: 0
+                    val mirrorCount = sub.url.split("|").filter { it.isNotBlank() }.size
 
-        Spacer(Modifier.height(16.dp))
-
-        // Subscription Advanced Settings Card
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = DarkSurface,
-            border = BorderStroke(1.dp, DarkBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    text = "Параметры сетевой загрузки подписок:",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-
-                // User Agent Field
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Кастомный User-Agent HTTP:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text("Используется при запросе зеркал подписок (например v2rayNG/1.10.x, ClashMeta).", color = TextSecondary, fontSize = 11.sp)
-                    }
-                    OutlinedTextField(
-                        value = userAgentInput,
-                        onValueChange = { userAgentInput = it },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentCyan,
-                            unfocusedBorderColor = DarkBorder,
-                            focusedContainerColor = DarkSurfaceElevated,
-                            unfocusedContainerColor = DarkSurfaceElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        modifier = Modifier.width(220.dp).height(50.dp)
-                    )
-                }
-
-                HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f))
-
-                // Parallel Threads
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Потоков для гонки зеркал:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text("Количество одновременных горутин для параллельной гонки зеркал.", color = TextSecondary, fontSize = 11.sp)
-                    }
-                    OutlinedTextField(
-                        value = threadsInput,
-                        onValueChange = { threadsInput = it },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentCyan,
-                            unfocusedBorderColor = DarkBorder,
-                            focusedContainerColor = DarkSurfaceElevated,
-                            unfocusedContainerColor = DarkSurfaceElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        modifier = Modifier.width(100.dp).height(50.dp)
-                    )
-                }
-
-                HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f))
-
-                // Only via VPN / Proxy
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Обновлять только через VPN/прокси:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text("Если прямое подключение к репозиториям заблокировано оператором.", color = TextSecondary, fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = updateOnlyViaProxy,
-                        onCheckedChange = { state.saveSettings(
-                            subUrl = customUrlInput,
-                            xrayPath = state.xrayBinaryPath.value,
-                            v2wPath = state.v2wScanPath.value,
-                            httpP = state.httpPort.value,
-                            socksP = state.socksPort.value,
-                            subOnlyViaProxy = it
-                        ) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = AccentCyan,
-                            uncheckedThumbColor = TextTertiary,
-                            uncheckedTrackColor = DarkSurfaceElevated
-                        )
-                    )
-                }
-
-                HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f))
-
-                // Auto update toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Фоновое автообновление подписок:", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text("Автоматически обновлять списки каждые 12 часов в фоне.", color = TextSecondary, fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = autoUpdate,
-                        onCheckedChange = { state.saveSettings(
-                            subUrl = customUrlInput,
-                            xrayPath = state.xrayBinaryPath.value,
-                            v2wPath = state.v2wScanPath.value,
-                            httpP = state.httpPort.value,
-                            socksP = state.socksPort.value,
-                            subAutoUpdate = it
-                        ) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = AccentMint,
-                            uncheckedThumbColor = TextTertiary,
-                            uncheckedTrackColor = DarkSurfaceElevated
-                        )
+                    SubscriptionCard(
+                        sub = sub,
+                        serverCount = serverCount,
+                        mirrorCount = mirrorCount,
+                        onToggleEnabled = { state.toggleSubscriptionEnabled(sub.id) },
+                        onEdit = { editingSub = sub },
+                        onDelete = { state.deleteSubscription(sub.id) }
                     )
                 }
             }
@@ -297,64 +167,315 @@ fun SubscriptionsScreen(
 }
 
 @Composable
-private fun DefaultSubCard(
+private fun SubscriptionCard(
     sub: CustomSubData,
-    isEnabled: Boolean,
-    onToggle: () -> Unit
+    serverCount: Int,
+    mirrorCount: Int,
+    onToggleEnabled: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    val mirrorsCount = remember(sub.url) { sub.url.split("|").size }
-
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = DarkSurface,
-        border = BorderStroke(1.dp, if (isEnabled) AccentCyan.copy(alpha = 0.5f) else DarkBorder),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(
+            1.dp,
+            if (sub.enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onEdit)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Чекбокс включения
+                Checkbox(
+                    checked = sub.enabled,
+                    onCheckedChange = { onToggleEnabled() },
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                )
+
+                Spacer(Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = sub.name,
-                        fontSize = 14.sp,
+                        text = sub.name.ifBlank { "Без названия" },
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isEnabled) TextPrimary else TextSecondary
+                        color = if (sub.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = AccentCyan.copy(alpha = 0.15f)
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // Количество зеркал и серверов
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "$mirrorsCount зеркал(а)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AccentCyan,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = "Зеркал: $mirrorCount",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = "Серверов: $serverCount",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (serverCount > 0) AccentMint else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        if (sub.sharePercent != null && sub.sharePercent!! > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Text(
+                                    text = "Доля: ${sub.sharePercent}%",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // Режимы (категории): БС, ЧС, YouTube
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) {
+                            CategoryBadge(label = "Белый список", color = AccentMint)
+                        }
+                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) {
+                            CategoryBadge(label = "Чёрный список", color = AccentAmber)
+                        }
+                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE)) {
+                            CategoryBadge(label = "YouTube / Музыка", color = AccentRose)
+                        }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Сценарии: ${sub.targetScenarios.joinToString()}",
-                    fontSize = 12.sp,
-                    color = TextTertiary
-                )
             }
 
-            Switch(
-                checked = isEnabled,
-                onCheckedChange = { onToggle() },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = AccentCyan,
-                    uncheckedThumbColor = TextTertiary,
-                    uncheckedTrackColor = DarkSurfaceElevated
+            Spacer(Modifier.width(16.dp))
+
+            // Иконка корзины справа (удалять можно и свои, и дефолтные)
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = "Удалить подписку",
+                    tint = AccentRed,
+                    modifier = Modifier.size(20.dp)
                 )
-            )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryBadge(label: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.35f))
+    ) {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+/**
+ * Диалог редактирования / создания подписки (в точности поля из Android пробел):
+ * 1. Название подписки
+ * 2. Ссылки на подписку (через | как разделитель)
+ * 3. Фильтр Regex (убирать сервера еще до их появления из списка)
+ * 4. Regex для групп (сортировка по группам)
+ * 5. Процент доли серверов
+ * 6. Категории авто-режима (чекбоксы: Белые списки, Черные списки, YouTube и музыка)
+ */
+@Composable
+private fun SubscriptionEditDialog(
+    initialData: CustomSubData,
+    isNew: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (CustomSubData) -> Unit
+) {
+    var name by remember { mutableStateOf(initialData.name) }
+    var url by remember { mutableStateOf(initialData.url) }
+    var filter by remember { mutableStateOf(initialData.filter) }
+    var groupRegex by remember { mutableStateOf(initialData.groupRegex) }
+    var sharePercentStr by remember { mutableStateOf(initialData.sharePercent?.toString() ?: "") }
+
+    var isWhitelist by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) }
+    var isBlacklist by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) }
+    var isYoutube by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE)) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            modifier = Modifier
+                .width(520.dp)
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = if (isNew) "Добавить подписку" else "Редактирование подписки",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // Название
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Название подписки") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // Ссылки на зеркала через |
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Ссылки на подписку (зеркала через | )") },
+                    maxLines = 4,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // Фильтр Regex
+                OutlinedTextField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    label = { Text("Фильтр Regex (исключать узлы до появления)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // Regex для групп
+                OutlinedTextField(
+                    value = groupRegex,
+                    onValueChange = { groupRegex = it },
+                    label = { Text("Regex для групп") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                // Процент доли серверов
+                OutlinedTextField(
+                    value = sharePercentStr,
+                    onValueChange = { sharePercentStr = it },
+                    label = { Text("Процент доли серверов (%)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                // Категории авто-режима (галочки)
+                Text(
+                    text = "Категории авто-режима:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(6.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isWhitelist, onCheckedChange = { isWhitelist = it })
+                    Text("Белые списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isBlacklist, onCheckedChange = { isBlacklist = it })
+                    Text("Чёрные списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isYoutube, onCheckedChange = { isYoutube = it })
+                    Text("YouTube и музыка", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Кнопки отмена / сохранить
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            val newScenarios = mutableListOf<String>()
+                            if (isWhitelist) newScenarios.add(CustomSubData.SCENARIO_WHITELIST)
+                            if (isBlacklist) newScenarios.add(CustomSubData.SCENARIO_BLACKLIST)
+                            if (isYoutube) newScenarios.add(CustomSubData.SCENARIO_YOUTUBE)
+
+                            val percent = sharePercentStr.trim().toIntOrNull()
+
+                            val result = initialData.copy(
+                                name = name.trim(),
+                                url = url.trim(),
+                                filter = filter.trim(),
+                                groupRegex = groupRegex.trim(),
+                                sharePercent = percent,
+                                targetScenarios = newScenarios
+                            )
+                            onSave(result)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
+                    ) {
+                        Text("Сохранить", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

@@ -65,15 +65,15 @@ class DesktopAppTest {
             serverRepo = serverRepo,
             settingsRepo = settingsRepo,
             xrayRunner = runner,
-            scope = this
+            autoCheckNetworkOnStart = false
         )
 
-        assertEquals(DesktopTab.SERVERS, state.activeTab.value)
+        assertEquals(DesktopTab.MAIN, state.activeTab.value)
         assertEquals(1, state.servers.value.size)
         assertEquals("node-1", state.selectedGuid.value)
 
-        state.setTab(DesktopTab.LOGS)
-        assertEquals(DesktopTab.LOGS, state.activeTab.value)
+        state.setTab(DesktopTab.GEEK_MODE)
+        assertEquals(DesktopTab.GEEK_MODE, state.activeTab.value)
 
         state.setScenario(AppScenario.WHITELIST)
         assertEquals(AppScenario.WHITELIST, state.scenario.value)
@@ -93,7 +93,7 @@ class DesktopAppTest {
             serverRepo = serverRepo,
             settingsRepo = settingsRepo,
             xrayRunner = runner,
-            scope = this
+            autoCheckNetworkOnStart = false
         )
 
         state.saveSettings(
