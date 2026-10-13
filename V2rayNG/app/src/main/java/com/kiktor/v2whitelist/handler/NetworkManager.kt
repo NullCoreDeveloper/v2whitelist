@@ -54,18 +54,8 @@ object NetworkManager {
         if (url1.isBlank()) url1 = "google.com"
         if (url2.isBlank()) url2 = "ya.ru"
 
-        val googleOk = try {
-            Socket().use { it.connect(InetSocketAddress(url1, 443), 800); true }
-        } catch (_: Exception) { false }
-
-        val yandexOk = try {
-            Socket().use { it.connect(InetSocketAddress(url2, 443), 800); true }
-        } catch (_: Exception) { false }
-
-        return when {
-            googleOk && yandexOk -> 0   // Все отлично
-            !googleOk && yandexOk -> 1  // Глушат (Яндекс жив, Гугл нет)
-            else -> 2                   // Интернета нет совсем
+        return kotlinx.coroutines.runBlocking {
+            com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker.checkTcpInternetStatus(url1, url2, 800L)
         }
     }
 

@@ -168,6 +168,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:config"))
     implementation(project(":core:subscription"))
+    implementation(project(":core:domain"))
 
     // Core Libraries
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
