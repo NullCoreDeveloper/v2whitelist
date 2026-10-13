@@ -14,8 +14,13 @@ data class XrayGeneratorOptions(
     val allowInsecureDefault: Boolean = false,
     val dnsServers: List<String> = listOf("1.1.1.1", "8.8.8.8"),
     val bypassPrivateIps: Boolean = true,
+    val scenario: com.kiktor.v2whitelist.core.model.AppScenario = com.kiktor.v2whitelist.core.model.AppScenario.AUTO,
     val customDirectDomains: List<String> = emptyList(),
-    val customDirectIps: List<String> = emptyList()
+    val customDirectIps: List<String> = emptyList(),
+    val customProxyDomains: List<String> = emptyList(),
+    val upstreamProxyHost: String? = null,
+    val upstreamProxyPort: Int? = null,
+    val upstreamProxyType: String? = null
 )
 
 object XrayConfigGenerator {
@@ -60,8 +65,16 @@ object XrayConfigGenerator {
             )
         }
 
-        // Outbounds: [proxy, direct, block]
-        val proxyOutbound = buildProxyOutbound(profile, options)
+        // Outbounds: [proxy, direct, block] (+ optional upstream proxy)
+        val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
+        val upstreamTag = "upstream-proxy"
+        val rawProxyOutbound = buildProxyOutbound(profile, options)
+        val proxyOutbound = if (hasUpstream) {
+            rawProxyOutbound.copy(proxySettings = OutboundProxySettings(tag = upstreamTag))
+        } else {
+            rawProxyOutbound
+        }
+
         val directOutbound = XrayOutbound(
             tag = "direct",
             protocol = "freedom",
@@ -72,7 +85,20 @@ object XrayConfigGenerator {
             protocol = "blackhole",
             settings = OutboundSettings(response = BlackholeResponse("http"))
         )
-        val outbounds = listOf(proxyOutbound, directOutbound, blockOutbound)
+
+        val outbounds = mutableListOf(proxyOutbound, directOutbound, blockOutbound)
+        if (hasUpstream) {
+            val upProto = if (options.upstreamProxyType?.equals("http", ignoreCase = true) == true) "http" else "socks"
+            outbounds.add(
+                XrayOutbound(
+                    tag = upstreamTag,
+                    protocol = upProto,
+                    settings = OutboundSettings(
+                        servers = listOf(ServerEntry(address = options.upstreamProxyHost.orEmpty(), port = options.upstreamProxyPort ?: 0))
+                    )
+                )
+            )
+        }
 
         // Routing rules
         val rules = mutableListOf<XrayRule>()
@@ -87,7 +113,7 @@ object XrayConfigGenerator {
             )
         }
 
-        // Custom direct domains / IPs
+        // Custom direct domains / IPs (раздельное туннелирование)
         if (options.customDirectDomains.isNotEmpty()) {
             rules.add(
                 XrayRule(
@@ -105,13 +131,73 @@ object XrayConfigGenerator {
             )
         }
 
-        // Default route to proxy
-        rules.add(
-            XrayRule(
-                outboundTag = "proxy",
-                network = "tcp,udp"
+        // Custom proxy domains (раздельное туннелирование)
+        if (options.customProxyDomains.isNotEmpty()) {
+            rules.add(
+                XrayRule(
+                    outboundTag = "proxy",
+                    domain = options.customProxyDomains
+                )
             )
-        )
+        }
+
+        // Пресеты маршрутизации сценариев
+        when (options.scenario) {
+            com.kiktor.v2whitelist.core.model.AppScenario.WHITELIST -> {
+                // В сценарии белого списка разрешенные домены РФ идут напрямую, остальное через прокси
+                rules.add(
+                    XrayRule(
+                        outboundTag = "direct",
+                        domain = listOf("geosite:category-gov-ru", "geosite:ru", "domain:gov.ru", "domain:gosuslugi.ru", "domain:ya.ru", "domain:yandex.ru", "domain:vk.com", "domain:mail.ru")
+                    )
+                )
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        network = "tcp,udp"
+                    )
+                )
+            }
+            com.kiktor.v2whitelist.core.model.AppScenario.VPN_BLACKLIST -> {
+                // В сценарии черного списка заблокированные домены идут через прокси, остальное напрямую
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        domain = listOf("geosite:category-ru-blocked", "domain:instagram.com", "domain:cdninstagram.com", "domain:facebook.com", "domain:fbcdn.net", "domain:twitter.com", "domain:x.com", "domain:t.co", "domain:notion.so")
+                    )
+                )
+                rules.add(
+                    XrayRule(
+                        outboundTag = "direct",
+                        network = "tcp,udp"
+                    )
+                )
+            }
+            com.kiktor.v2whitelist.core.model.AppScenario.YOUTUBE -> {
+                // В сценарии YouTube только ютуб через прокси, остальное напрямую
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        domain = listOf("geosite:youtube", "domain:youtube.com", "domain:youtu.be", "domain:googlevideo.com", "domain:ytimg.com", "domain:ggpht.com")
+                    )
+                )
+                rules.add(
+                    XrayRule(
+                        outboundTag = "direct",
+                        network = "tcp,udp"
+                    )
+                )
+            }
+            else -> {
+                // По умолчанию (AUTO) весь интернет через proxy
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        network = "tcp,udp"
+                    )
+                )
+            }
+        }
 
         val routing = XrayRouting(
             domainStrategy = "IPIfNonMatch",
