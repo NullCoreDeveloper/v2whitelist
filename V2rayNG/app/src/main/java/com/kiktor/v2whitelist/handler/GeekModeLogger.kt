@@ -1,36 +1,26 @@
 package com.kiktor.v2whitelist.handler
 
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
+/**
+ * Android-адаптер для GeekModeLogger.
+ * Делегирует в общий KMP-логгер :core:model и транслирует записи в android.util.Log.d.
+ */
 object GeekModeLogger {
-    private const val MAX_LOGS = 500
+    val logs: StateFlow<List<String>> 
+        get() = com.kiktor.v2whitelist.core.model.logger.GeekModeLogger.logs
 
-    private val _logs = MutableStateFlow<List<String>>(emptyList())
-    val logs: StateFlow<List<String>> = _logs.asStateFlow()
-
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
-
-    @Synchronized
-    fun log(tag: String, message: String) {
-        val time = timeFormat.format(Date())
-        val formattedMsg = "[$time] [$tag] $message"
-        android.util.Log.d(tag, message)
-
-        val current = _logs.value.toMutableList()
-        current.add(formattedMsg)
-        if (current.size > MAX_LOGS) {
-            current.removeAt(0)
+    init {
+        com.kiktor.v2whitelist.core.model.logger.GeekModeLogger.platformLogHandler = { tag, message ->
+            android.util.Log.d(tag, message)
         }
-        _logs.value = current
     }
 
-    @Synchronized
+    fun log(tag: String, message: String) {
+        com.kiktor.v2whitelist.core.model.logger.GeekModeLogger.log(tag, message)
+    }
+
     fun clear() {
-        _logs.value = emptyList()
+        com.kiktor.v2whitelist.core.model.logger.GeekModeLogger.clear()
     }
 }
