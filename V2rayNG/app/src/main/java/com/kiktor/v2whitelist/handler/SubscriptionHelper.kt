@@ -272,16 +272,7 @@ object SubscriptionHelper {
         MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(current.toList()))
     }
 
-    /**
-     * Сценарии работы для стартового опросника
-     */
-    enum class AppScenario {
-        AUTO,          // 0. Автоматический выбор под сеть (Рекомендуется)
-        VPN_BLACKLIST, // 1. Просто VPN (Черные списки)
-        WHITELIST,     // 2. БС (Белые списки)
-        YOUTUBE,       // 3. YouTube и Музыка
-        KEEP_CURRENT   // 4. Оставить как есть
-    }
+    typealias AppScenario = com.kiktor.v2whitelist.core.model.AppScenario
 
     /**
      * Применяет выбранный сценарий подписок из стартового опросника.

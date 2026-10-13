@@ -71,10 +71,11 @@ object SmartConnectManager {
     ): List<Pair<String, ProfileItem>> {
         val disabledSubIds = loadCustomSubs().filter { !it.enabled }.map { "custom_sub_${it.id}" }.toSet()
         
-        val filterMode = MmkvManager.decodeSettingsString(
+        val filterModeStr = MmkvManager.decodeSettingsString(
             AppConfig.PREF_LOCATION_FILTER_MODE,
             AppConfig.LOCATION_FILTER_MODE_EXCLUDE
         ) ?: AppConfig.LOCATION_FILTER_MODE_EXCLUDE
+        val locationMode = com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode.fromString(filterModeStr)
 
         val filterSet = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_LOCATION_FILTER_SET)
             ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
@@ -82,71 +83,33 @@ object SmartConnectManager {
         val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
         val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
 
-        val basicFiltered = candidates.filter { (guid, profile) ->
-            if (excludeGuid != null && guid == excludeGuid) return@filter false
-            if (disabledSubIds.contains(profile.subscriptionId)) return@filter false
-            if (filterInsecure && !profile.isSecure()) return@filter false
-            if (profile.configType == com.kiktor.v2whitelist.enums.EConfigType.POLICYGROUP) return@filter false
-            
-            if (filterSet.isEmpty()) return@filter true
-            
-            val regexStr = groupRegexMap[profile.subscriptionId]
-            val tag = com.kiktor.v2whitelist.ui.LocationFilterActivity.resolveServerTag(profile.remarks, regexStr)
-            
-            when (filterMode) {
-                AppConfig.LOCATION_FILTER_MODE_EXCLUDE -> {
-                    !filterSet.contains(tag)
-                }
-                AppConfig.LOCATION_FILTER_MODE_WHITELIST -> {
-                    filterSet.contains(tag)
-                }
-                else -> true
-            }
-        }
-
-        if (!filterByScenario || basicFiltered.isEmpty()) {
-            return basicFiltered
-        }
-
-        val currentScenario = MmkvManager.decodeSettingsString(
+        val currentScenarioStr = MmkvManager.decodeSettingsString(
             AppConfig.PREF_CURRENT_APP_SCENARIO, 
             SubscriptionHelper.AppScenario.AUTO.name
         ) ?: SubscriptionHelper.AppScenario.AUTO.name
-
-        val targetScenarios: Set<String>? = when (currentScenario) {
-            SubscriptionHelper.AppScenario.AUTO.name -> {
-                val internetStatus = NetworkManager.checkInternetStatus()
-                if (internetStatus == 1) { // JAMMED
-                    setOf(SubscriptionHelper.SCENARIO_WHITELIST)
-                } else { // 0 (OK) или 2 (нет сети)
-                    setOf(SubscriptionHelper.SCENARIO_BLACKLIST, SubscriptionHelper.SCENARIO_YOUTUBE)
-                }
-            }
-            SubscriptionHelper.AppScenario.WHITELIST.name -> setOf(SubscriptionHelper.SCENARIO_WHITELIST)
-            SubscriptionHelper.AppScenario.VPN_BLACKLIST.name -> setOf(SubscriptionHelper.SCENARIO_BLACKLIST)
-            SubscriptionHelper.AppScenario.YOUTUBE.name -> setOf(SubscriptionHelper.SCENARIO_YOUTUBE)
-            else -> null // KEEP_CURRENT или неизвестно: без дополнительной фильтрации
+        val scenario = try {
+            com.kiktor.v2whitelist.core.model.AppScenario.valueOf(currentScenarioStr)
+        } catch (_: Exception) {
+            com.kiktor.v2whitelist.core.model.AppScenario.AUTO
         }
 
-        if (targetScenarios == null) {
-            return basicFiltered
-        }
-
+        val internetStatus = NetworkManager.checkInternetStatus()
         val subScenariosMap = SubscriptionHelper.getSubScenariosMap()
-        val scenarioFiltered = basicFiltered.filter { (_, profile) ->
-            val subScenarios = subScenariosMap[profile.subscriptionId]
-            // Если подписка не имеет тегов — считаем ее универсальной
-            subScenarios.isNullOrEmpty() || subScenarios.any { targetScenarios.contains(it) }
-        }
 
-        return if (scenarioFiltered.isNotEmpty()) {
-            scenarioFiltered
-        } else {
-            // Graceful Fallback: если у пользователя нет серверов в целевом пуле (например, добавлены только БС или только ЧС),
-            // возвращаем все доступные базовые серверы, чтобы связь не прерывалась!
-            GeekModeLogger.log("SmartConnect", "Scenario filtering: 0 servers matched $targetScenarios. Fallback to all ${basicFiltered.size} enabled servers")
-            basicFiltered
-        }
+        val config = com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig(
+            excludeGuid = excludeGuid,
+            disabledSubscriptionIds = disabledSubIds,
+            filterInsecure = filterInsecure,
+            locationFilterMode = locationMode,
+            locationFilterSet = filterSet,
+            groupRegexMap = groupRegexMap,
+            appScenario = scenario,
+            internetStatus = internetStatus,
+            subscriptionScenariosMap = subScenariosMap,
+            filterByScenario = filterByScenario
+        )
+
+        return com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector.filterServerPairs(candidates, config)
     }
 
     fun filterServers(allServers: List<String>, excludeGuid: String? = null, filterByScenario: Boolean = true): List<Pair<String, ProfileItem>> {
