@@ -34,17 +34,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object SmartFailoverManager {
 
-    enum class PhysicalNetworkState {
-        NO_INTERNET,      // Физического интернета нет совсем (лифт, метро, режим полета)
-        WHITELIST_ONLY,   // ya.ru доступен, google.com недоступен (белые списки оператора)
-        FULL_INTERNET     // ya.ru и google.com доступны (полноценный интернет)
-    }
+    typealias PhysicalNetworkState = com.kiktor.v2whitelist.core.domain.failover.PhysicalNetworkState
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var monitorJob: Job? = null
 
     private val isProbing = AtomicBoolean(false)
-    private var consecutiveStallSeconds = 0
+    private var stallDetector: com.kiktor.v2whitelist.core.domain.failover.TrafficStallDetector? = null
 
     @Volatile
     private var isMonitoring = false
@@ -60,8 +56,15 @@ object SmartFailoverManager {
 
         stopFailoverMonitor()
         isMonitoring = true
-        consecutiveStallSeconds = 0
         isProbing.set(false)
+
+        val thresholdKbps = MmkvManager.decodeSettingsString(AppConfig.PREF_SMART_FAILOVER_THRESHOLD_KBPS, "3")?.toDoubleOrNull() ?: 3.0
+        val stallSec = MmkvManager.decodeSettingsString(AppConfig.PREF_SMART_FAILOVER_STALL_SEC, "3")?.toIntOrNull() ?: 3
+        stallDetector = com.kiktor.v2whitelist.core.domain.failover.TrafficStallDetector(
+            minUplinkBytes = 1500.0,
+            thresholdDownBytes = thresholdKbps * 1024.0,
+            requiredStallSeconds = stallSec
+        )
 
         monitorJob = scope.launch {
             Log.i(AppConfig.TAG, "Failover monitor started. Waiting 10s warmup...")
@@ -87,7 +90,7 @@ object SmartFailoverManager {
         isMonitoring = false
         monitorJob?.cancel()
         monitorJob = null
-        consecutiveStallSeconds = 0
+        stallDetector?.reset()
         isProbing.set(false)
         Log.d(AppConfig.TAG, "Failover monitor stopped")
     }
@@ -103,28 +106,11 @@ object SmartFailoverManager {
         if (!smartEnabled) return
         if (isProbing.get()) return
 
-        val thresholdKbps = MmkvManager.decodeSettingsString(AppConfig.PREF_SMART_FAILOVER_THRESHOLD_KBPS, "3")?.toDoubleOrNull() ?: 3.0
-        val stallSec = MmkvManager.decodeSettingsString(AppConfig.PREF_SMART_FAILOVER_STALL_SEC, "3")?.toIntOrNull() ?: 3
-
-        val thresholdBytes = thresholdKbps * 1024.0
-        val minUplinkBytes = 1500.0 // 1.5 KB/s порог исходящей активности
-
-        if (proxyUpRate >= minUplinkBytes && proxyDownRate < thresholdBytes) {
-            consecutiveStallSeconds++
-            GeekModeLogger.log(
-                "Failover",
-                "Smart Failover: Potential stall #$consecutiveStallSeconds (Up: ${"%.1f".format(proxyUpRate / 1024)} KB/s, Down: ${"%.1f".format(proxyDownRate / 1024)} KB/s)"
+        if (stallDetector?.onTrafficSample(proxyUpRate, proxyDownRate) == true) {
+            triggerExpressProbe(
+                service,
+                "Traffic stall detected: Up ${"%.1f".format(proxyUpRate / 1024)} KB/s >= 1.5 KB/s but Down ${"%.1f".format(proxyDownRate / 1024)} KB/s"
             )
-
-            if (consecutiveStallSeconds >= stallSec) {
-                consecutiveStallSeconds = 0
-                triggerExpressProbe(
-                    service,
-                    "Traffic stall: Up ${"%.1f".format(proxyUpRate / 1024)} KB/s >= 1.5 KB/s but Down ${"%.1f".format(proxyDownRate / 1024)} KB/s < ${thresholdKbps} KB/s for ${stallSec}s"
-                )
-            }
-        } else {
-            consecutiveStallSeconds = 0
         }
     }
 
@@ -195,28 +181,25 @@ object SmartFailoverManager {
         val physicalState = arbitratePhysicalNetwork(service)
         GeekModeLogger.log("Failover", "Physical network arbitration result: $physicalState (Trigger: $reason)")
 
-        when (physicalState) {
-            PhysicalNetworkState.NO_INTERNET -> {
-                GeekModeLogger.log("Failover", "Physical network is down. Aborting failover, staying on current node.")
-            }
-            PhysicalNetworkState.WHITELIST_ONLY,
-            PhysicalNetworkState.FULL_INTERNET -> {
-                val currentGuid = MmkvManager.getSelectServer()
-                val nextGuid = selectNextServer(currentGuid)
-                if (nextGuid == null || nextGuid == currentGuid) {
-                    GeekModeLogger.log("Failover", "Cannot failover: no alternative server found")
-                    return
-                }
-                val profile = MmkvManager.decodeServerConfig(nextGuid)
-                val remarks = profile?.remarks ?: nextGuid
-                GeekModeLogger.log("Failover", "Hot-swapping from $currentGuid → $nextGuid ($remarks)")
-                NotificationManager.showFailoverNotification()
-                MmkvManager.setSelectServer(nextGuid)
-                MmkvManager.saveLastConnectedServer(nextGuid)
-                MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
-                stopFailoverMonitor()
-            }
+        if (!com.kiktor.v2whitelist.core.domain.failover.FailoverServerSelector.shouldProceedWithFailover(physicalState)) {
+            GeekModeLogger.log("Failover", "Physical network is down. Aborting failover, staying on current node.")
+            return
         }
+
+        val currentGuid = MmkvManager.getSelectServer()
+        val nextGuid = selectNextServer(currentGuid)
+        if (nextGuid == null || nextGuid == currentGuid) {
+            GeekModeLogger.log("Failover", "Cannot failover: no alternative server found")
+            return
+        }
+        val profile = MmkvManager.decodeServerConfig(nextGuid)
+        val remarks = profile?.remarks ?: nextGuid
+        GeekModeLogger.log("Failover", "Hot-swapping from $currentGuid → $nextGuid ($remarks)")
+        NotificationManager.showFailoverNotification()
+        MmkvManager.setSelectServer(nextGuid)
+        MmkvManager.saveLastConnectedServer(nextGuid)
+        MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+        stopFailoverMonitor()
     }
 
     /**
@@ -230,24 +213,14 @@ object SmartFailoverManager {
 
         val filteredPairs = SmartConnectManager.filterServers(allServers, excludeGuid = currentGuid)
         if (filteredPairs.isEmpty()) return null
-        val filteredGuids = filteredPairs.map { it.first }.toSet()
 
-        // 1. VIP Cache
         val vipGuids = MmkvManager.getVipCache()
-        for (guid in vipGuids) {
-            if (guid == currentGuid) continue
-            if (!filteredGuids.contains(guid)) continue
-            val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            GeekModeLogger.log("Failover", "Selected next server from VIP cache: ${profile.remarks} ($guid)")
-            return guid
-        }
-
-        // 2. Следующий по кругу из отфильтрованного списка
-        val currentIndex = if (currentGuid != null) filteredPairs.indexOfFirst { it.first == currentGuid } else -1
-        val startIndex = if (currentIndex != -1) (currentIndex + 1) % filteredPairs.size else 0
-        val selected = filteredPairs[startIndex]
-        GeekModeLogger.log("Failover", "Selected next server from filtered list: ${selected.second.remarks} (${selected.first})")
-        return selected.first
+        val next = com.kiktor.v2whitelist.core.domain.failover.FailoverServerSelector.selectNextServer(
+            currentGuid = currentGuid,
+            candidates = filteredPairs,
+            vipGuids = vipGuids
+        )
+        return next?.first
     }
 
     /**

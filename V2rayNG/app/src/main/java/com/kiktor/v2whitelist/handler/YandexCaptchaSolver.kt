@@ -91,41 +91,11 @@ object YandexCaptchaSolver {
         return AngApplication.getCurrentActivity()
     }
 
-    private const val SOLVER_JS = """
-        (function() {
-            try {
-                var cb = document.querySelector('.CheckboxCaptcha-Button, .SmartCaptcha-Button, .CheckboxCaptcha-Anchor, input[type="checkbox"], [data-testid="checkbox-captcha"]');
-                if (cb && !cb.getAttribute('data-clicked')) {
-                    cb.setAttribute('data-clicked', 'true');
-                    cb.click();
-                }
-                var text = document.body ? (document.body.innerText || document.body.textContent || '') : '';
-                if (text.indexOf('vless://') !== -1 || text.indexOf('vmess://') !== -1 || 
-                    text.indexOf('trojan://') !== -1 || text.indexOf('ss://') !== -1 ||
-                    text.indexOf('hysteria2://') !== -1 || text.indexOf('hy2://') !== -1) {
-                    return 'CONFIGS_FOUND';
-                }
-                var isCaptcha = !!cb || location.href.indexOf('showcaptcha') !== -1 || location.href.indexOf('captcha.yandex') !== -1;
-                if (!isCaptcha && location.href.indexOf('translate.yandex') !== -1) {
-                    return 'CLEAN_TRANSLATE';
-                }
-                return isCaptcha ? 'CAPTCHA_PENDING' : 'READY';
-            } catch(e) {
-                return 'ERROR';
-            }
-        })();
-    """
+    private val SOLVER_JS = com.kiktor.v2whitelist.core.domain.captcha.YandexCaptchaDetector.SOLVER_JS
 
     private fun getCombinedCookies(): String {
         val cm = CookieManager.getInstance()
-        val domains = listOf(
-            "https://translate.yandex.ru",
-            "https://yandex.ru",
-            "https://captcha.yandex.ru",
-            "https://smartcaptcha.yandexcloud.net",
-            "https://yandex.com",
-            "https://.yandex.ru"
-        )
+        val domains = com.kiktor.v2whitelist.core.domain.captcha.YandexCaptchaDetector.YANDEX_DOMAINS
         var res = ""
         for (d in domains) {
             val c = cm.getCookie(d).orEmpty()
@@ -137,26 +107,7 @@ object YandexCaptchaSolver {
     }
 
     fun isSolved(url: String?, cookies: String, bodyText: String? = null): Boolean {
-        if (!bodyText.isNullOrBlank()) {
-            val lowerBody = bodyText.lowercase()
-            if (lowerBody.contains("vless://") ||
-                lowerBody.contains("vmess://") ||
-                lowerBody.contains("trojan://") ||
-                lowerBody.contains("ss://") ||
-                lowerBody.contains("hysteria2://") ||
-                lowerBody.contains("hy2://")
-            ) {
-                return true
-            }
-        }
-        if (cookies.contains("spravka=")) {
-            return true
-        }
-        val lowerUrl = url?.lowercase().orEmpty()
-        val isCaptchaUrl = lowerUrl.contains("showcaptcha") ||
-                lowerUrl.contains("captcha.yandex") ||
-                lowerUrl.contains("smartcaptcha")
-        return !isCaptchaUrl && (lowerUrl.contains("translate.yandex") || lowerUrl.contains("yandex.ru")) && cookies.contains("yandexuid=")
+        return com.kiktor.v2whitelist.core.domain.captcha.YandexCaptchaDetector.isSolved(url, cookies, bodyText)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -366,23 +317,7 @@ object YandexCaptchaSolver {
     }
 
     fun mergeCookies(oldCookies: String, newCookies: String): String {
-        val map = linkedMapOf<String, String>()
-        fun parse(str: String) {
-            str.split(";").forEach { part ->
-                val trimmed = part.trim()
-                val idx = trimmed.indexOf('=')
-                if (idx > 0) {
-                    val key = trimmed.substring(0, idx).trim()
-                    val value = trimmed.substring(idx + 1).trim()
-                    if (key.isNotEmpty() && value.isNotEmpty()) {
-                        map[key] = value
-                    }
-                }
-            }
-        }
-        parse(oldCookies)
-        parse(newCookies)
-        return map.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        return com.kiktor.v2whitelist.core.domain.captcha.YandexCaptchaDetector.mergeCookies(oldCookies, newCookies)
     }
 
     fun saveCookies(cookies: String) {
