@@ -31,6 +31,7 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.cio)
                 implementation(libs.core)
+                implementation("org.slf4j:slf4j-nop:2.0.16")
             }
         }
         val desktopTest by getting {
@@ -45,6 +46,7 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.kiktor.v2whitelist.desktop.MainKt"
+        jvmArgs += listOf("-Djdk.gtk.version=3")
 
         nativeDistributions {
             targetFormats(
