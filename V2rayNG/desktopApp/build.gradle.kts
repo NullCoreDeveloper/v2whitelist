@@ -30,6 +30,7 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.cio)
+                implementation(libs.core)
             }
         }
         val desktopTest by getting {

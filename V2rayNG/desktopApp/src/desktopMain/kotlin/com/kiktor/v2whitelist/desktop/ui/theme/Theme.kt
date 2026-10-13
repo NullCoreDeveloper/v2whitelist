@@ -20,7 +20,7 @@ val TextPrimary = Color(0xFFF0F6FC)
 val TextSecondary = Color(0xFF8B949E)
 val TextTertiary = Color(0xFF6E7681)
 
-private val DesktopDarkColorScheme = darkColorScheme(
+private val CyanThemeScheme = darkColorScheme(
     primary = AccentCyan,
     onPrimary = Color.Black,
     secondary = AccentMint,
@@ -37,10 +37,53 @@ private val DesktopDarkColorScheme = darkColorScheme(
     onError = Color.White
 )
 
+private val AmoledThemeScheme = darkColorScheme(
+    primary = AccentMint,
+    onPrimary = Color.Black,
+    secondary = AccentCyan,
+    onSecondary = Color.Black,
+    tertiary = AccentAmber,
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFFFFFFF),
+    surface = Color(0xFF0A0A0A),
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF141414),
+    onSurfaceVariant = Color(0xFFAAAAAA),
+    outline = Color(0xFF262626),
+    error = AccentRed,
+    onError = Color.White
+)
+
+private val PurpleThemeScheme = darkColorScheme(
+    primary = Color(0xFFB388FF),
+    onPrimary = Color.Black,
+    secondary = Color(0xFF8C9EFF),
+    onSecondary = Color.Black,
+    tertiary = Color(0xFFFF4081),
+    background = Color(0xFF0D0B14),
+    onBackground = Color(0xFFEDE7F6),
+    surface = Color(0xFF171424),
+    onSurface = Color(0xFFEDE7F6),
+    surfaceVariant = Color(0xFF231E38),
+    onSurfaceVariant = Color(0xFFB39DDB),
+    outline = Color(0xFF3B3358),
+    error = AccentRed,
+    onError = Color.White
+)
+
 @Composable
-fun DesktopTheme(content: @Composable () -> Unit) {
+fun DesktopTheme(
+    themeName: String = "CYAN",
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when (themeName.uppercase()) {
+        "AMOLED" -> AmoledThemeScheme
+        "PURPLE" -> PurpleThemeScheme
+        else -> CyanThemeScheme
+    }
+
     MaterialTheme(
-        colorScheme = DesktopDarkColorScheme,
+        colorScheme = colorScheme,
         content = content
     )
 }

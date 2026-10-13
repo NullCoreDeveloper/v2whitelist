@@ -35,7 +35,23 @@ internal data class SettingsStorage(
     val xrayBinaryPath: String = "",
     val v2wScanPath: String = "",
     val autoEnableSystemProxy: Boolean = false,
-    val allowLan: Boolean = false
+    val allowLan: Boolean = false,
+    val minimizeToTray: Boolean = true,
+    val routingMode: String = "PROXY", // PROXY или TUN
+    val uiTheme: String = "CYAN", // CYAN, AMOLED, PURPLE
+    val uiCompactCards: Boolean = false,
+    val subscriptionAutoUpdate: Boolean = false,
+    val subscriptionUpdateIntervalHours: Int = 12,
+    val subscriptionUpdateOnlyViaProxy: Boolean = false,
+    val subscriptionUserAgent: String = "v2rayNG/1.10.x",
+    val subscriptionThreads: Int = 3,
+    val customDirectDomains: String = "",
+    val customProxyDomains: String = "",
+    val upstreamProxyHost: String = "",
+    val upstreamProxyPort: Int = 0,
+    val upstreamProxyType: String = "socks5",
+    val minSpeedMbps: Double = 1.0,
+    val connectivityCheckUrl: String = "https://cp.cloudflare.com/generate_204"
 )
 
 internal object DesktopStorageManager {
@@ -185,6 +201,35 @@ class DesktopFileServerRepository : ServerRepository {
         updateFlow()
         persist()
     }
+
+    override fun removeDuplicates(): Int {
+        val uniqueKeys = mutableSetOf<String>()
+        val guidsToDelete = mutableListOf<String>()
+
+        for ((guid, profile) in serverMap) {
+            val sniOrHost = profile.sni?.takeIf { it.isNotBlank() } ?: profile.host.orEmpty()
+            val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
+            if (uniqueKeys.contains(key)) {
+                guidsToDelete.add(guid)
+            } else {
+                uniqueKeys.add(key)
+            }
+        }
+
+        for (g in guidsToDelete) {
+            serverMap.remove(g)
+            vipSet.remove(g)
+            if (selectedGuid == g) {
+                selectedGuid = serverMap.keys.firstOrNull()
+            }
+        }
+
+        if (guidsToDelete.isNotEmpty()) {
+            updateFlow()
+            persist()
+        }
+        return guidsToDelete.size
+    }
 }
 
 class DesktopFileSettingsRepository : SettingsRepository {
@@ -229,6 +274,14 @@ class DesktopFileSettingsRepository : SettingsRepository {
             "subscription_url" -> cached.subscriptionUrl
             "xray_path" -> cached.xrayBinaryPath
             "v2w_scan_path" -> cached.v2wScanPath
+            "routing_mode" -> cached.routingMode
+            "ui_theme" -> cached.uiTheme
+            "subscription_user_agent" -> cached.subscriptionUserAgent
+            "custom_direct_domains" -> cached.customDirectDomains
+            "custom_proxy_domains" -> cached.customProxyDomains
+            "upstream_proxy_host" -> cached.upstreamProxyHost
+            "upstream_proxy_type" -> cached.upstreamProxyType
+            "connectivity_check_url" -> cached.connectivityCheckUrl
             else -> defaultValue
         }
     }
@@ -238,6 +291,14 @@ class DesktopFileSettingsRepository : SettingsRepository {
             "subscription_url" -> cached.copy(subscriptionUrl = value)
             "xray_path" -> cached.copy(xrayBinaryPath = value)
             "v2w_scan_path" -> cached.copy(v2wScanPath = value)
+            "routing_mode" -> cached.copy(routingMode = value)
+            "ui_theme" -> cached.copy(uiTheme = value)
+            "subscription_user_agent" -> cached.copy(subscriptionUserAgent = value)
+            "custom_direct_domains" -> cached.copy(customDirectDomains = value)
+            "custom_proxy_domains" -> cached.copy(customProxyDomains = value)
+            "upstream_proxy_host" -> cached.copy(upstreamProxyHost = value)
+            "upstream_proxy_type" -> cached.copy(upstreamProxyType = value)
+            "connectivity_check_url" -> cached.copy(connectivityCheckUrl = value)
             else -> cached
         }
         persist()
@@ -248,6 +309,10 @@ class DesktopFileSettingsRepository : SettingsRepository {
             "auto_enable_system_proxy" -> cached.autoEnableSystemProxy
             "allow_lan" -> cached.allowLan
             "smart_failover" -> cached.smartFailover
+            "minimize_to_tray" -> cached.minimizeToTray
+            "ui_compact_cards" -> cached.uiCompactCards
+            "subscription_auto_update" -> cached.subscriptionAutoUpdate
+            "subscription_update_only_via_proxy" -> cached.subscriptionUpdateOnlyViaProxy
             else -> defaultValue
         }
     }
@@ -257,13 +322,33 @@ class DesktopFileSettingsRepository : SettingsRepository {
             "auto_enable_system_proxy" -> cached.copy(autoEnableSystemProxy = value)
             "allow_lan" -> cached.copy(allowLan = value)
             "smart_failover" -> cached.copy(smartFailover = value)
+            "minimize_to_tray" -> cached.copy(minimizeToTray = value)
+            "ui_compact_cards" -> cached.copy(uiCompactCards = value)
+            "subscription_auto_update" -> cached.copy(subscriptionAutoUpdate = value)
+            "subscription_update_only_via_proxy" -> cached.copy(subscriptionUpdateOnlyViaProxy = value)
             else -> cached
         }
         persist()
     }
 
-    override fun getInt(key: String, defaultValue: Int): Int = defaultValue
-    override fun setInt(key: String, value: Int) {}
+    override fun getInt(key: String, defaultValue: Int): Int {
+        return when (key) {
+            "subscription_update_interval_hours" -> cached.subscriptionUpdateIntervalHours
+            "subscription_threads" -> cached.subscriptionThreads
+            "upstream_proxy_port" -> cached.upstreamProxyPort
+            else -> defaultValue
+        }
+    }
+
+    override fun setInt(key: String, value: Int) {
+        cached = when (key) {
+            "subscription_update_interval_hours" -> cached.copy(subscriptionUpdateIntervalHours = value)
+            "subscription_threads" -> cached.copy(subscriptionThreads = value)
+            "upstream_proxy_port" -> cached.copy(upstreamProxyPort = value)
+            else -> cached
+        }
+        persist()
+    }
 
     private fun persist() {
         DesktopStorageManager.saveSettings(cached)
