@@ -37,6 +37,8 @@ class XrayDesktopRunner(
     private var process: Process? = null
     private var tempConfigFile: File? = null
     private var logJob: Job? = null
+    private var currentSudoPassword: String? = null
+    private var isLaunchedWithSudo: Boolean = false
 
     /**
      * Поиск исполняемого файла Xray:
@@ -90,7 +92,8 @@ class XrayDesktopRunner(
         customProxyDomains: List<String> = emptyList(),
         upstreamProxyHost: String? = null,
         upstreamProxyPort: Int? = null,
-        upstreamProxyType: String? = null
+        upstreamProxyType: String? = null,
+        sudoPassword: String? = null
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -131,18 +134,30 @@ class XrayDesktopRunner(
             }
             tempConfigFile = tempFile
 
-            GeekModeLogger.log("DesktopRunner", "Конфигурация создана: ${tempFile.absolutePath}")
-            GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
+            val useSudo = !sudoPassword.isNullOrBlank()
+            currentSudoPassword = if (useSudo) sudoPassword else null
+            isLaunchedWithSudo = useSudo
 
-            val pb = ProcessBuilder(
-                binary.absolutePath,
-                "run",
-                "-c",
-                tempFile.absolutePath
-            ).redirectErrorStream(true)
+            GeekModeLogger.log("DesktopRunner", "Конфигурация создана: ${tempFile.absolutePath}")
+            val pb = if (useSudo) {
+                GeekModeLogger.log("DesktopRunner", "Запуск ядра с правами root (sudo) для режима TUN: ${binary.absolutePath}")
+                ProcessBuilder("sudo", "-S", binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
+            } else {
+                GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
+                ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
+            }
 
             val proc = pb.start()
             process = proc
+
+            if (useSudo) {
+                try {
+                    proc.outputStream.bufferedWriter().use { writer ->
+                        writer.write("$sudoPassword\n")
+                        writer.flush()
+                    }
+                } catch (_: Exception) {}
+            }
 
             // Мониторинг логов
             logJob = scope.launch {
@@ -195,6 +210,18 @@ class XrayDesktopRunner(
         logJob?.cancel()
         logJob = null
 
+        if (isLaunchedWithSudo && currentSudoPassword != null) {
+            try {
+                val killPb = ProcessBuilder("sudo", "-S", "pkill", "-f", "xray.*run.*v2w_xray_config_")
+                val killProc = killPb.start()
+                killProc.outputStream.bufferedWriter().use { writer ->
+                    writer.write("${currentSudoPassword}\n")
+                    writer.flush()
+                }
+                killProc.waitFor(1, TimeUnit.SECONDS)
+            } catch (_: Exception) {}
+        }
+
         process?.let { proc ->
             if (proc.isAlive) {
                 proc.destroy()
@@ -214,5 +241,6 @@ class XrayDesktopRunner(
             tempConfigFile?.delete()
         } catch (_: Exception) {}
         tempConfigFile = null
+        isLaunchedWithSudo = false
     }
 }

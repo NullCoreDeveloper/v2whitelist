@@ -138,6 +138,13 @@ class DesktopAppState(
     val uiCompactCards = MutableStateFlow(settingsRepo.getBoolean("ui_compact_cards", false))
     val minimizeToTray = MutableStateFlow(settingsRepo.getBoolean("minimize_to_tray", true))
 
+    // TUN & Sudo сессия (хранится только в памяти на время работы приложения)
+    var sessionSudoPassword: String? = null
+        private set
+    val showSudoDialog = MutableStateFlow(false)
+    val sudoError = MutableStateFlow<String?>(null)
+    val isVerifyingSudo = MutableStateFlow(false)
+
     // Оформление
     val themeMode = MutableStateFlow(settingsRepo.getString("pref_theme_mode", "DARK")) // SYSTEM, LIGHT, DARK
     val themePalette = MutableStateFlow(settingsRepo.getString("pref_theme_palette", "CYAN")) // CYAN, BLUE, MINT, PURPLE, AMBER, ROSE
@@ -465,11 +472,77 @@ class DesktopAppState(
 
     fun toggleRoutingMode() {
         val next = if (routingMode.value == "PROXY") "TUN" else "PROXY"
-        routingMode.value = next
-        settingsRepo.setString("routing_mode", next)
-        GeekModeLogger.log("AppState", "Режим работы переключен на: $next")
+        setRoutingMode(next)
+    }
+
+    fun setRoutingMode(mode: String) {
+        if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+            sudoError.value = null
+            showSudoDialog.value = true
+            return
+        }
+        applyRoutingMode(mode)
+    }
+
+    private fun applyRoutingMode(mode: String) {
+        routingMode.value = mode
+        settingsRepo.setString("routing_mode", mode)
+        GeekModeLogger.log("AppState", "Режим работы переключен на: $mode")
         if (coreState.value == DesktopCoreState.RUNNING) {
             connectCurrent()
+        }
+    }
+
+    fun submitSudoPassword(password: String) {
+        if (password.isBlank()) {
+            sudoError.value = "Пароль не может быть пустым"
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            isVerifyingSudo.value = true
+            sudoError.value = null
+
+            val valid = verifySudoPassword(password)
+            isVerifyingSudo.value = false
+
+            if (valid) {
+                sessionSudoPassword = password
+                showSudoDialog.value = false
+                sudoError.value = null
+                applyRoutingMode("TUN")
+                GeekModeLogger.log("TUN", "Права sudo успешно подтверждены. Режим TUN активирован.")
+            } else {
+                sudoError.value = "Неверный пароль sudo. Пожалуйста, попробуйте снова."
+                GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: неверный пароль.")
+            }
+        }
+    }
+
+    fun dismissSudoDialog() {
+        showSudoDialog.value = false
+        sudoError.value = null
+    }
+
+    private fun verifySudoPassword(password: String): Boolean {
+        return try {
+            val proc = ProcessBuilder("sudo", "-S", "-k", "-v")
+                .redirectErrorStream(true)
+                .start()
+            proc.outputStream.bufferedWriter().use { writer ->
+                writer.write("$password\n")
+                writer.flush()
+            }
+            val exited = proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+            if (!exited) {
+                proc.destroyForcibly()
+                false
+            } else {
+                proc.exitValue() == 0
+            }
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Исключение при проверке sudo: ${e.message}")
+            false
         }
     }
 
@@ -769,6 +842,12 @@ class DesktopAppState(
             GeekModeLogger.log("GeekMode", "Применён Global SNI: $gSni для ${profile.remarks}")
         }
 
+        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+            sudoError.value = null
+            showSudoDialog.value = true
+            return
+        }
+
         scope.launch {
             val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
             val directDomains = customDirectDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
@@ -787,12 +866,20 @@ class DesktopAppState(
                 customProxyDomains = proxyDomains,
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
-                upstreamProxyType = null
+                upstreamProxyType = null,
+                sudoPassword = if (routingMode.value == "TUN") sessionSudoPassword else null
             )
             if (started) {
-                if (autoEnableSystemProxy.value || routingMode.value == "PROXY") {
-                    DesktopProxyManager.enableSystemProxy(socksPort.value, httpPort.value)
-                    isSystemProxyActive.value = true
+                if (routingMode.value == "PROXY") {
+                    if (autoEnableSystemProxy.value) {
+                        DesktopProxyManager.enableSystemProxy(socksPort.value, httpPort.value)
+                        isSystemProxyActive.value = true
+                    }
+                } else {
+                    if (isSystemProxyActive.value) {
+                        DesktopProxyManager.disableSystemProxy()
+                        isSystemProxyActive.value = false
+                    }
                 }
                 checkNetworkStatus()
                 fetchExitIp()

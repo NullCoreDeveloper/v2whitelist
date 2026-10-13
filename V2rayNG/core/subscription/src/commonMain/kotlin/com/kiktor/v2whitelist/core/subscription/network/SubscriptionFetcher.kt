@@ -11,11 +11,13 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 object SubscriptionFetcher {
 
@@ -123,15 +125,15 @@ object SubscriptionFetcher {
         val client = createHttpClient(httpProxyHost, httpProxyPort, timeoutMs)
         try {
             coroutineScope {
-                val resultChannel = Channel<String>(capacity = urls.size)
+                val winnerDeferred = CompletableDeferred<String>()
 
                 val jobs = urls.map { url ->
-                    async {
+                    launch {
                         try {
                             val res = fetchSingle(client, url, userAgent)
                             val text = res.getOrNull()
                             if (!text.isNullOrBlank()) {
-                                resultChannel.trySend(text)
+                                winnerDeferred.complete(text)
                             }
                         } catch (_: CancellationException) {
                             // Cancelled by winner
@@ -141,30 +143,29 @@ object SubscriptionFetcher {
                     }
                 }
 
-                var winningContent: String? = null
-                var finishedCount = 0
-
-                while (finishedCount < urls.size) {
-                    val candidate = resultChannel.tryReceive().getOrNull()
-                    if (candidate != null) {
-                        winningContent = candidate
-                        break
+                val monitorJob = launch {
+                    jobs.joinAll()
+                    if (!winnerDeferred.isCompleted) {
+                        winnerDeferred.completeExceptionally(IllegalStateException("All mirrors failed (parallel race)"))
                     }
-                    // Check if all jobs finished without success
-                    if (jobs.all { it.isCompleted }) {
-                        break
-                    }
-                    kotlinx.coroutines.delay(50)
-                    finishedCount++
                 }
 
-                // Cancel all losing jobs
-                jobs.forEach { it.cancel() }
+                val winningContent = try {
+                    withTimeoutOrNull(timeoutMs) {
+                        winnerDeferred.await()
+                    }
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    monitorJob.cancel()
+                    jobs.forEach { it.cancel() }
+                }
 
-                if (winningContent != null) {
+                if (!winningContent.isNullOrBlank()) {
                     Result.success(winningContent)
                 } else {
-                    Result.failure(IllegalStateException("All mirrors failed (parallel race)"))
+                    // Фоллбэк: если параллельная гонка не вернула данных, пробуем последовательный опрос
+                    fetchSequential(urls, userAgent, httpProxyHost, httpProxyPort, timeoutMs = 5_000L)
                 }
             }
         } finally {

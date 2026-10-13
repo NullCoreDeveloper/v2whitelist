@@ -1,13 +1,25 @@
 package com.kiktor.v2whitelist.desktop
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -114,8 +126,129 @@ fun App(state: DesktopAppState) {
                     }
                 }
             }
+
+            // Встроенный диалог ввода пароля sudo для TUN на Linux
+            SudoPasswordDialog(state = state)
         }
     }
+}
+
+@Composable
+fun SudoPasswordDialog(state: DesktopAppState) {
+    val showDialog by state.showSudoDialog.collectAsState()
+    val errorText by state.sudoError.collectAsState()
+    val isVerifying by state.isVerifyingSudo.collectAsState()
+
+    if (!showDialog) return
+
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isVerifying) {
+                state.dismissSudoDialog()
+            }
+        },
+        icon = {
+            Icon(
+                Icons.Default.Security,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Активация режима TUN",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Для работы режима TUN (полная переадресация системного трафика) на Linux требуются привилегии суперпользователя (sudo).\n\nПароль вводится один раз и сохраняется только в оперативной памяти до закрытия приложения.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("Пароль sudo", fontSize = 12.sp) },
+                    placeholder = { Text("Введите пароль суперпользователя...", fontSize = 12.sp) },
+                    singleLine = true,
+                    enabled = !isVerifying,
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (passwordInput.isNotBlank() && !isVerifying) {
+                            state.submitSudoPassword(passwordInput)
+                        }
+                    }),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (passwordVisible) "Скрыть пароль" else "Показать пароль"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (!errorText.isNullOrBlank()) {
+                    Text(
+                        text = errorText!!,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (isVerifying) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Проверка прав доступа sudo...",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (passwordInput.isNotBlank() && !isVerifying) {
+                        state.submitSudoPassword(passwordInput)
+                    }
+                },
+                enabled = passwordInput.isNotBlank() && !isVerifying
+            ) {
+                Text("Подтвердить")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { state.dismissSudoDialog() },
+                enabled = !isVerifying
+            ) {
+                Text("Отмена")
+            }
+        }
+    )
 }
 
 fun main() = application {

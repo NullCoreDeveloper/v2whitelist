@@ -390,7 +390,8 @@ fun GeekModeScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Global SNI
                     OutlinedTextField(
@@ -401,9 +402,10 @@ fun GeekModeScreen(
                         },
                         label = { Text("Global SNI", fontSize = 11.sp) },
                         placeholder = { Text("ya.ru, vk.com...", fontSize = 11.sp) },
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         singleLine = true,
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).height(48.dp)
+                        modifier = Modifier.weight(1f)
                     )
 
                     // Cloudflare IP
@@ -415,17 +417,19 @@ fun GeekModeScreen(
                         },
                         label = { Text("Cloudflare Clean IP", fontSize = 11.sp) },
                         placeholder = { Text("104.16.x.x...", fontSize = 11.sp) },
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         singleLine = true,
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f).height(48.dp)
+                        modifier = Modifier.weight(1f)
                     )
 
                     // User-Agent выпадающий
-                    Box(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.weight(1.1f)) {
                         OutlinedTextField(
                             value = currentUa,
                             onValueChange = { state.setCustomUserAgent(it) },
                             label = { Text("Кастомный User-Agent", fontSize = 11.sp) },
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             singleLine = true,
                             trailingIcon = {
                                 IconButton(onClick = { uaExpanded = !uaExpanded }) {
@@ -433,7 +437,7 @@ fun GeekModeScreen(
                                 }
                             },
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
                         DropdownMenu(
                             expanded = uaExpanded,
