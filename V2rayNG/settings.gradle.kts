@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 rootProject.name = "v2rayNG"
 include(":app")
 include(":core:model")
+include(":core:config")
