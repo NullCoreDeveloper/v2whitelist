@@ -105,9 +105,11 @@ class CheckUpdateActivity : BaseActivity() {
             try {
                 val apkFile = UpdateCheckerManager.downloadApk(this@CheckUpdateActivity, result.downloadUrl!!)
                 if (apkFile != null && apkFile.exists()) {
-                    if (result.checksumUrl != null && result.apkFileName != null) {
+                    val checksumUrl = result.checksumUrl
+                    val apkFileName = result.apkFileName
+                    if (checksumUrl != null && apkFileName != null) {
                         toast(R.string.update_verifying_signature)
-                        val isValid = UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
+                        val isValid = UpdateCheckerManager.verifyChecksum(apkFile, checksumUrl, apkFileName)
                         if (!isValid) {
                             apkFile.delete()
                             toastError(getString(R.string.update_signature_failed))

@@ -18,53 +18,17 @@ import java.net.HttpURLConnection
 
 object UpdateCheckerManager {
     suspend fun checkForUpdate(includePreRelease: Boolean = false): CheckUpdateResult = withContext(Dispatchers.IO) {
-        val url = if (includePreRelease) {
-            AppConfig.APP_API_URL
-        } else {
-            AppConfig.APP_API_URL.concatUrl("latest")
-        }
-
-        var response = HttpUtil.getUrlContent(url, 5000)
-        if (response.isNullOrEmpty()) {
-            val httpPort = SettingsManager.getHttpPort()
-            response = HttpUtil.getUrlContent(url, 5000, httpPort)
-                ?: throw IllegalStateException("Failed to get response")
-        }
-
-        val latestRelease = if (includePreRelease) {
-            JsonUtil.fromJson(response, Array<GitHubRelease>::class.java)
-                ?.firstOrNull()
-                ?: throw IllegalStateException("No pre-release found")
-        } else {
-            JsonUtil.fromJson(response, GitHubRelease::class.java)
-        }
-        if (latestRelease == null) {
-            return@withContext CheckUpdateResult(hasUpdate = false)
-        }
-
-        val latestVersion = latestRelease.tagName.removePrefix("v")
-        Log.i(
-            AppConfig.TAG,
-            "Found new version: $latestVersion (current: ${BuildConfig.VERSION_NAME})"
+        val isFdroid = BuildConfig.APPLICATION_ID.endsWith(".fdroid")
+        val platform = com.kiktor.v2whitelist.core.model.update.TargetPlatform.Android(
+            abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a",
+            isFdroid = isFdroid
         )
-
-        return@withContext if (compareVersions(latestVersion, BuildConfig.VERSION_NAME) > 0) {
-            val downloadUrl = getDownloadUrl(latestRelease, Build.SUPPORTED_ABIS[0])
-            val apkFileName = downloadUrl.substringAfterLast("/")
-            val checksumUrl = latestRelease.assets.firstOrNull { it.name == "sha256sum.txt" }?.browserDownloadUrl
-            
-            CheckUpdateResult(
-                hasUpdate = true,
-                latestVersion = latestVersion,
-                releaseNotes = latestRelease.body,
-                downloadUrl = downloadUrl,
-                checksumUrl = checksumUrl,
-                apkFileName = apkFileName,
-                isPreRelease = latestRelease.prerelease
-            )
-        } else {
-            CheckUpdateResult(hasUpdate = false)
-        }
+        com.kiktor.v2whitelist.core.domain.update.UpdateChecker.checkForUpdate(
+            apiUrl = AppConfig.APP_API_URL,
+            currentVersion = BuildConfig.VERSION_NAME,
+            targetPlatform = platform,
+            includePreRelease = includePreRelease
+        )
     }
 
     suspend fun downloadApk(context: Context, downloadUrl: String, onProgress: ((Int) -> Unit)? = null): File? = withContext(Dispatchers.IO) {
@@ -205,14 +169,7 @@ object UpdateCheckerManager {
             val httpPort = if (isRunning) SettingsManager.getHttpPort() else 0
             val response = HttpUtil.getUrlContentWithUserAgent(checksumUrl, null, 5000, httpPort)
             
-            var expectedHash: String? = null
-            for (line in response.lines()) {
-                if (line.contains(apkFileName)) {
-                    expectedHash = line.substringBefore(" ").trim()
-                    break
-                }
-            }
-            
+            val expectedHash = com.kiktor.v2whitelist.core.domain.update.UpdateChecker.extractExpectedChecksum(response, apkFileName)
             if (expectedHash == null) {
                 Log.e(AppConfig.TAG, "Checksum for $apkFileName not found in sha256sum.txt")
                 return@withContext false

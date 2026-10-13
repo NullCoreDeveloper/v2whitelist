@@ -334,9 +334,11 @@ class MainActivity : HelperBaseActivity() {
                 }
                 progressDialog.dismiss()
                 if (apkFile != null && apkFile.exists()) {
-                    if (result.checksumUrl != null && result.apkFileName != null) {
+                    val checksumUrl = result.checksumUrl
+                    val apkFileName = result.apkFileName
+                    if (checksumUrl != null && apkFileName != null) {
                         toast(R.string.update_verifying_signature)
-                        val isValid = com.kiktor.v2whitelist.handler.UpdateCheckerManager.verifyChecksum(apkFile, result.checksumUrl, result.apkFileName)
+                        val isValid = com.kiktor.v2whitelist.handler.UpdateCheckerManager.verifyChecksum(apkFile, checksumUrl, apkFileName)
                         if (!isValid) {
                             apkFile.delete()
                             toast(R.string.update_signature_failed)
