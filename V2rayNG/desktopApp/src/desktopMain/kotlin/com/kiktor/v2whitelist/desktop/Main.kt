@@ -193,9 +193,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = {
-                        if (passwordInput.isNotBlank() && !isVerifying) {
-                            state.submitSudoPassword(passwordInput)
-                        }
+                        state.submitSudoPassword(passwordInput)
                     }),
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -215,54 +213,21 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-
-                    Spacer(Modifier.height(4.dp))
-                    Button(
-                        onClick = { state.enableTunWithoutSudo() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("🚀 Запустить без sudo (прямой режим TUN)", fontSize = 12.sp)
-                    }
-                }
-
-                if (isVerifying) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Проверка прав доступа sudo...",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (passwordInput.isNotBlank() && !isVerifying) {
-                        state.submitSudoPassword(passwordInput)
-                    }
-                },
-                enabled = passwordInput.isNotBlank() && !isVerifying
+                    state.submitSudoPassword(passwordInput)
+                }
             ) {
                 Text("Подтвердить")
             }
         },
         dismissButton = {
             TextButton(
-                onClick = { state.dismissSudoDialog() },
-                enabled = !isVerifying
+                onClick = { state.dismissSudoDialog() }
             ) {
                 Text("Отмена")
             }
