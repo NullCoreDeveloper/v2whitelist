@@ -32,6 +32,7 @@ kotlin {
                 implementation(libs.ktor.client.cio)
                 implementation(libs.core)
                 implementation("org.slf4j:slf4j-nop:2.0.16")
+                implementation("dev.nucleusframework:composenativetray:2.1.7")
             }
         }
         val desktopTest by getting {

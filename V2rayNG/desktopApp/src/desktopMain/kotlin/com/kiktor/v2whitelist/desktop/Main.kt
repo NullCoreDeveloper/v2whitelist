@@ -20,11 +20,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
+import dev.nucleusframework.composenativetray.tray.api.Tray
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.state.DesktopTab
@@ -238,7 +237,6 @@ fun SudoPasswordDialog(state: DesktopAppState) {
 fun main() = application {
     val state = remember { DesktopAppState() }
     var isWindowVisible by remember { mutableStateOf(true) }
-    val trayState = rememberTrayState()
     val coreState by state.coreState.collectAsState()
     val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
     val routingMode by state.routingMode.collectAsState()
@@ -253,92 +251,62 @@ fun main() = application {
         height = 760.dp
     )
 
-    // Гарантированная обработка ЛКМ по иконке в системном трее Linux (X11 / Wayland)
-    LaunchedEffect(Unit) {
-        if (java.awt.SystemTray.isSupported()) {
-            val awtTray = java.awt.SystemTray.getSystemTray()
-            for (attempt in 1..30) {
-                val icons = awtTray.trayIcons
-                if (icons.isNotEmpty()) {
-                    for (icon in icons) {
-                        icon.addMouseListener(object : java.awt.event.MouseAdapter() {
-                            override fun mouseClicked(e: java.awt.event.MouseEvent) {
-                                if (e.button == java.awt.event.MouseEvent.BUTTON1) {
-                                    isWindowVisible = !isWindowVisible
-                                    if (isWindowVisible) {
-                                        windowState.isMinimized = false
-                                    }
-                                }
-                            }
-                        })
-                    }
-                    break
-                }
-                kotlinx.coroutines.delay(200)
+    Tray(
+        icon = trayIcon,
+        tooltip = "ПроБел — ${when (coreState) {
+            DesktopCoreState.RUNNING -> "Подключено"
+            DesktopCoreState.STARTING -> "Подключение..."
+            DesktopCoreState.ERROR -> "Ошибка"
+            DesktopCoreState.STOPPED -> "Отключено"
+        }}",
+        primaryAction = {
+            isWindowVisible = !isWindowVisible
+            if (isWindowVisible) {
+                windowState.isMinimized = false
             }
         }
-    }
-
-    if (androidx.compose.ui.window.isTraySupported) {
-        Tray(
-            state = trayState,
-            icon = trayIcon,
-            tooltip = "ПроБел — ${when (coreState) {
-                DesktopCoreState.RUNNING -> "Подключено"
-                DesktopCoreState.STARTING -> "Подключение..."
-                DesktopCoreState.ERROR -> "Ошибка"
-                DesktopCoreState.STOPPED -> "Отключено"
-            }}",
-            onAction = {
+    ) {
+        Item(
+            label = if (isWindowVisible) "Свернуть в трей" else "Открыть ПроБел",
+            onClick = {
                 isWindowVisible = !isWindowVisible
                 if (isWindowVisible) {
                     windowState.isMinimized = false
                 }
+            }
+        )
+        Divider()
+        Item(
+            label = when (coreState) {
+                DesktopCoreState.RUNNING -> "⏹ Отключить VPN"
+                DesktopCoreState.STARTING -> "⏳ Подключение..."
+                DesktopCoreState.ERROR -> "🔄 Повторить подключение"
+                DesktopCoreState.STOPPED -> "▶ Подключить VPN"
             },
-            menu = {
-                Item(
-                    text = if (isWindowVisible) "Свернуть в трей" else "Открыть ПроБел",
-                    onClick = {
-                        isWindowVisible = !isWindowVisible
-                        if (isWindowVisible) {
-                            windowState.isMinimized = false
-                        }
-                    }
-                )
-                Separator()
-                Item(
-                    text = when (coreState) {
-                        DesktopCoreState.RUNNING -> "⏹ Отключить VPN"
-                        DesktopCoreState.STARTING -> "⏳ Подключение..."
-                        DesktopCoreState.ERROR -> "🔄 Повторить подключение"
-                        DesktopCoreState.STOPPED -> "▶ Подключить VPN"
-                    },
-                    enabled = coreState != DesktopCoreState.STARTING,
-                    onClick = { state.toggleConnect() }
-                )
-                Item(
-                    text = if (routingMode == "TUN") "Режим: TUN → переключить на Прокси" else "Режим: Прокси → переключить на TUN",
-                    onClick = { state.toggleRoutingMode() }
-                )
-                Item(
-                    text = if (isSystemProxyActive) "✔ Системный прокси ОС: ВКЛ (нажать — выкл)" else "Системный прокси ОС: ВЫКЛ (нажать — вкл)",
-                    onClick = { state.toggleSystemProxy() }
-                )
-                Separator()
-                Item(
-                    text = "Выход",
-                    onClick = {
-                        state.stopCore()
-                        exitApplication()
-                    }
-                )
+            isEnabled = coreState != DesktopCoreState.STARTING,
+            onClick = { state.toggleConnect() }
+        )
+        Item(
+            label = if (routingMode == "TUN") "Режим: TUN → переключить на Прокси" else "Режим: Прокси → переключить на TUN",
+            onClick = { state.toggleRoutingMode() }
+        )
+        Item(
+            label = if (isSystemProxyActive) "✔ Системный прокси ОС: ВКЛ (нажать — выкл)" else "Системный прокси ОС: ВЫКЛ (нажать — вкл)",
+            onClick = { state.toggleSystemProxy() }
+        )
+        Divider()
+        Item(
+            label = "Выход",
+            onClick = {
+                state.stopCore()
+                exitApplication()
             }
         )
     }
 
     Window(
         onCloseRequest = {
-            if (minimizeToTray && androidx.compose.ui.window.isTraySupported) {
+            if (minimizeToTray) {
                 isWindowVisible = false
             } else {
                 state.stopCore()
