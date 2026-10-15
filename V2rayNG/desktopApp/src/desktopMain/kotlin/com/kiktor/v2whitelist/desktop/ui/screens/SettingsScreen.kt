@@ -45,6 +45,7 @@ fun SettingsScreen(
     var speedTestBytes by remember { mutableStateOf(state.speedTestDownloadBytes.value.toString()) }
     var speedTestTimeout by remember { mutableStateOf(state.speedTestTimeoutMs.value.toString()) }
     var minSpeedThreshold by remember { mutableStateOf(state.minSpeedThresholdMbps.value.toString()) }
+    var vipCacheLimitInput by remember { mutableStateOf(state.vipCacheLimit.value.toString()) }
 
     // Failover
     var autoFailover by remember { mutableStateOf(state.autoFailover.value) }
@@ -218,7 +219,8 @@ fun SettingsScreen(
                         fragmentIntVal = fragmentInt,
                         fragmentPackVal = fragmentPack,
                         yandexUpdateVal = yandexUpdate,
-                        domainSplitVal = domainSplit
+                        domainSplitVal = domainSplit,
+                        vipLimit = vipCacheLimitInput.toIntOrNull() ?: 5
                     )
                     state.setMinimizeToTray(minimizeToTray)
                     state.setAllowLan(allowLan)
@@ -354,6 +356,14 @@ fun SettingsScreen(
                 value = minSpeedThreshold,
                 onValueChange = { minSpeedThreshold = it },
                 label = { Text("Минимальный порог скорости (Мбит/с): 1.0") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = vipCacheLimitInput,
+                onValueChange = { vipCacheLimitInput = it },
+                label = { Text("Лимит VIP-кэша проверенных серверов: 5") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

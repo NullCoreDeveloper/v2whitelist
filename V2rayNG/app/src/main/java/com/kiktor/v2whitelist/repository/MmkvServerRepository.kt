@@ -38,8 +38,34 @@ object MmkvServerRepository : ServerRepository {
         refresh()
     }
 
+    override fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) {
+        if (configs.isEmpty()) return
+        for ((guid, profile) in configs) {
+            MmkvManager.encodeServerConfig(guid, profile)
+        }
+        refresh()
+    }
+
     override fun removeServer(guid: String) {
         MmkvManager.removeServer(guid)
+        refresh()
+    }
+
+    override fun removeServers(guids: Collection<String>) {
+        if (guids.isEmpty()) return
+        for (g in guids) {
+            MmkvManager.removeServer(g)
+        }
+        refresh()
+    }
+
+    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) {
+        for (g in oldGuids) {
+            MmkvManager.removeServer(g)
+        }
+        for ((guid, profile) in newConfigs) {
+            MmkvManager.encodeServerConfig(guid, profile)
+        }
         refresh()
     }
 

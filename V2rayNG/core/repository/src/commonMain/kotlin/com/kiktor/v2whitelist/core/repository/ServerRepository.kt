@@ -14,14 +14,26 @@ interface ServerRepository {
     fun getAllServerGuids(): List<String>
     fun getServerConfig(guid: String): ProfileItem?
     fun saveServerConfig(guid: String, profile: ProfileItem)
-    fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>)
+    fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) {
+        for ((g, p) in configs) saveServerConfig(g, p)
+    }
     fun removeServer(guid: String)
+    fun removeServers(guids: Collection<String>) {
+        for (g in guids) removeServer(g)
+    }
+    fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) {
+        removeServers(oldGuids)
+        saveServerConfigs(newConfigs)
+    }
 
     fun getSelectedServerGuid(): String?
     fun setSelectedServerGuid(guid: String?)
 
     fun getVipServerGuids(): Set<String>
     fun addVipServer(guid: String)
+    fun addVipServer(guid: String, limit: Int) {
+        addVipServer(guid)
+    }
     fun removeVipServer(guid: String)
     fun setVipServerGuids(guids: Set<String>)
 

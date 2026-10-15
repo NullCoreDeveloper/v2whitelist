@@ -226,6 +226,7 @@ fun MainScreen(
                         val detailText = when {
                             isV2WScanning && smartConnectStatus != null -> smartConnectStatus.orEmpty()
                             coreState == DesktopCoreState.RUNNING -> activeProfile?.remarks ?: "Защищённый туннель активен"
+                            activeProfile != null -> "Выбран: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
                             else -> "Нажмите Старт для безопасного подключения"
                         }
                         Text(

@@ -215,6 +215,18 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = { state.enableTunWithoutSudo() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("🚀 Запустить без sudo (прямой режим TUN)", fontSize = 12.sp)
+                    }
                 }
 
                 if (isVerifying) {
@@ -275,6 +287,32 @@ fun main() = application {
         width = 1100.dp,
         height = 760.dp
     )
+
+    // Гарантированная обработка ЛКМ по иконке в системном трее Linux (X11 / Wayland)
+    LaunchedEffect(Unit) {
+        if (java.awt.SystemTray.isSupported()) {
+            val awtTray = java.awt.SystemTray.getSystemTray()
+            for (attempt in 1..30) {
+                val icons = awtTray.trayIcons
+                if (icons.isNotEmpty()) {
+                    for (icon in icons) {
+                        icon.addMouseListener(object : java.awt.event.MouseAdapter() {
+                            override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                                if (e.button == java.awt.event.MouseEvent.BUTTON1) {
+                                    isWindowVisible = !isWindowVisible
+                                    if (isWindowVisible) {
+                                        windowState.isMinimized = false
+                                    }
+                                }
+                            }
+                        })
+                    }
+                    break
+                }
+                kotlinx.coroutines.delay(200)
+            }
+        }
+    }
 
     if (androidx.compose.ui.window.isTraySupported) {
         Tray(

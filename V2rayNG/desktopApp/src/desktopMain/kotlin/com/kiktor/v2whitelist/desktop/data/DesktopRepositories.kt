@@ -89,7 +89,7 @@ internal object DesktopStorageManager {
 
 class DesktopFileServerRepository : ServerRepository {
     private val serverMap = linkedMapOf<String, ProfileItem>()
-    private val vipSet = linkedSetOf<String>()
+    private val vipList = mutableListOf<String>()
     private var selectedGuid: String? = null
 
     private val _serversFlow = MutableStateFlow<List<Pair<String, ProfileItem>>>(emptyList())
@@ -102,11 +102,11 @@ class DesktopFileServerRepository : ServerRepository {
     private fun loadFromDisk() {
         val storage = DesktopStorageManager.loadServers()
         serverMap.clear()
-        vipSet.clear()
+        vipList.clear()
         for (item in storage.servers) {
             serverMap[item.guid] = item.profile
         }
-        vipSet.addAll(storage.vipGuids)
+        vipList.addAll(storage.vipGuids)
         selectedGuid = storage.selectedGuid ?: serverMap.keys.firstOrNull()
         updateFlow()
     }
@@ -117,7 +117,7 @@ class DesktopFileServerRepository : ServerRepository {
             ServersStorage(
                 servers = records,
                 selectedGuid = selectedGuid,
-                vipGuids = vipSet.toList()
+                vipGuids = vipList.toList()
             )
         )
     }
@@ -152,8 +152,36 @@ class DesktopFileServerRepository : ServerRepository {
 
     override fun removeServer(guid: String) {
         serverMap.remove(guid)
-        vipSet.remove(guid)
+        vipList.remove(guid)
         if (selectedGuid == guid) {
+            selectedGuid = serverMap.keys.firstOrNull()
+        }
+        updateFlow()
+        persist()
+    }
+
+    override fun removeServers(guids: Collection<String>) {
+        if (guids.isEmpty()) return
+        for (g in guids) {
+            serverMap.remove(g)
+            vipList.remove(g)
+        }
+        if (selectedGuid in guids) {
+            selectedGuid = serverMap.keys.firstOrNull()
+        }
+        updateFlow()
+        persist()
+    }
+
+    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) {
+        for (g in oldGuids) {
+            serverMap.remove(g)
+            vipList.remove(g)
+        }
+        for ((guid, profile) in newConfigs) {
+            serverMap[guid] = profile
+        }
+        if (selectedGuid == null || selectedGuid in oldGuids) {
             selectedGuid = serverMap.keys.firstOrNull()
         }
         updateFlow()
@@ -169,27 +197,37 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
-    override fun getVipServerGuids(): Set<String> = vipSet.toSet()
+    override fun getVipServerGuids(): Set<String> = vipList.toSet()
 
     override fun addVipServer(guid: String) {
-        vipSet.add(guid)
+        addVipServer(guid, 5)
+    }
+
+    override fun addVipServer(guid: String, limit: Int) {
+        if (guid.isBlank()) return
+        vipList.remove(guid)
+        vipList.add(0, guid)
+        val maxLimit = if (limit > 0) limit else 5
+        while (vipList.size > maxLimit) {
+            vipList.removeAt(vipList.size - 1)
+        }
         persist()
     }
 
     override fun removeVipServer(guid: String) {
-        vipSet.remove(guid)
+        vipList.remove(guid)
         persist()
     }
 
     override fun setVipServerGuids(guids: Set<String>) {
-        vipSet.clear()
-        vipSet.addAll(guids)
+        vipList.clear()
+        vipList.addAll(guids.take(5))
         persist()
     }
 
     override fun clearAllServers() {
         serverMap.clear()
-        vipSet.clear()
+        vipList.clear()
         selectedGuid = null
         updateFlow()
         persist()
@@ -211,7 +249,7 @@ class DesktopFileServerRepository : ServerRepository {
 
         for (g in guidsToDelete) {
             serverMap.remove(g)
-            vipSet.remove(g)
+            vipList.remove(g)
             if (selectedGuid == g) {
                 selectedGuid = serverMap.keys.firstOrNull()
             }

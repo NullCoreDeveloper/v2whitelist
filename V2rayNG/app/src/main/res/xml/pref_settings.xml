@@ -115,7 +115,13 @@
             android:summary="@string/summary_pref_profile_min_speed_mbps"
             android:title="@string/title_pref_profile_min_speed_mbps" />
 
-        <!-- Настройки авто-переключения -->
+        <!-- Лимит VIP-кэша проверенных серверов -->
+        <EditTextPreference
+            android:inputType="number"
+            android:key="pref_vip_cache_limit"
+            android:defaultValue="5"
+            android:summary="@string/summary_pref_vip_cache_limit"
+            android:title="@string/title_pref_vip_cache_limit" />
 
     </PreferenceCategory>
 

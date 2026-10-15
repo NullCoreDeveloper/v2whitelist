@@ -149,13 +149,118 @@ val StringsEn = AppStrings(
     exit = "Exit"
 )
 
+val StringsZh = AppStrings(
+    appTitle = "ПроБел — v2whitelist",
+    menu = "菜单",
+    subscriptions = "订阅设置",
+    geekMode = "极客模式",
+    appearance = "外观设置",
+    settings = "设置",
+    connected = "已连接",
+    connecting = "正在连接...",
+    disconnected = "未连接",
+    switchServer = "切换节点",
+    proxyMode = "代理模式已启用",
+    tunMode = "TUN 模式已启用",
+    autoRouting = "自动分流",
+    whitelistRouting = "白名单模式",
+    blacklistRouting = "黑名单模式",
+    youtubeRouting = "YouTube 分流",
+    serverList = "服务器列表",
+    searchServers = "搜索服务器...",
+    searchNodesPlaceholder = "通过别名或主机搜索节点...",
+    pingAsc = "⚡ 延迟 ▲",
+    locationsFilter = "国家/地区过滤",
+    locationsFilterExclude = "排除选中地区",
+    locationsFilterWhitelist = "仅限选中地区",
+    locationsFilterDisabled = "已禁用",
+    pingTest = "真连接延迟测试",
+    ping = "延迟",
+    all = "全部",
+    findVip = "查找 VIP 节点",
+    pingVip = "测试 VIP 延迟",
+    dpiBypass = "DPI 绕过 (抗审查伪装参数):",
+    copyLogs = "复制日志",
+    addSub = "添加订阅",
+    updateAll = "更新全部",
+    editSub = "编辑",
+    deleteSub = "删除",
+    theme = "界面主题",
+    language = "应用语言",
+    save = "保存",
+    saved = "设置保存成功！",
+    turnOnVpn = "▶ 开启 VPN",
+    turnOffVpn = "⏹ 停止 VPN",
+    systemProxyOs = "系统代理",
+    quickSwitch = "快捷切换",
+    routingModeCardTitle = "工作模式 (代理 / TUN)",
+    serversNotFound = "未找到服务器",
+    exit = "退出"
+)
+
+val StringsFa = AppStrings(
+    appTitle = "ПроБел — v2whitelist",
+    menu = "منو",
+    subscriptions = "اشتراک‌ها",
+    geekMode = "حالت حرفه‌ای (Geek)",
+    appearance = "ظاهر برنامه",
+    settings = "تنظیمات",
+    connected = "متصل شد",
+    connecting = "در حال اتصال...",
+    disconnected = "قطع شد",
+    switchServer = "تغییر سرور",
+    proxyMode = "حالت پروکسی فعال است",
+    tunMode = "حالت TUN فعال است",
+    autoRouting = "مسیریابی خودکار",
+    whitelistRouting = "لیست سفید",
+    blacklistRouting = "لیست سیاه",
+    youtubeRouting = "مسیریابی یوتیوب",
+    serverList = "لیست سرورها",
+    searchServers = "جستجوی سرورها...",
+    searchNodesPlaceholder = "جستجوی سرور با نام یا آدرس...",
+    pingAsc = "⚡ پینگ ▲",
+    locationsFilter = "فیلتر کشورها",
+    locationsFilterExclude = "به‌جز موارد انتخابی",
+    locationsFilterWhitelist = "فقط موارد انتخابی",
+    locationsFilterDisabled = "غیرفعال",
+    pingTest = "تست پینگ واقعی (204)",
+    ping = "پینگ",
+    all = "همه",
+    findVip = "یافتن سرورهای VIP",
+    pingVip = "تست پینگ VIP",
+    dpiBypass = "دور زدن فیلترینگ هوشمند (DPI Bypass):",
+    copyLogs = "کپی گزارش‌ها",
+    addSub = "افزودن اشتراک",
+    updateAll = "به‌روزرسانی همه",
+    editSub = "ویرایش",
+    deleteSub = "حذف",
+    theme = "پوسته برنامه",
+    language = "زبان برنامه",
+    save = "ذخیره",
+    saved = "تنظیمات با موفقیت ذخیره شد!",
+    turnOnVpn = "▶ اتصال VPN",
+    turnOffVpn = "⏹ قطع اتصال VPN",
+    systemProxyOs = "پروکسی سیستم‌عامل",
+    quickSwitch = "تغییر سریع",
+    routingModeCardTitle = "حالت اتصال (پروکسی / TUN)",
+    serversNotFound = "سروری یافت نشد",
+    exit = "خروج"
+)
+
 object I18n {
     fun get(lang: String): AppStrings {
         return when (lang.uppercase()) {
             "EN" -> StringsEn
+            "ZH", "ZH-CN", "ZH_CN" -> StringsZh
+            "FA" -> StringsFa
             "SYSTEM" -> {
                 val sys = java.util.Locale.getDefault().language.lowercase()
-                if (sys.startsWith("ru")) StringsRu else StringsEn
+                when {
+                    sys.startsWith("ru") -> StringsRu
+                    sys.startsWith("zh") -> StringsZh
+                    sys.startsWith("fa") -> StringsFa
+                    else -> StringsEn
+                }
             }
             else -> StringsRu
         }

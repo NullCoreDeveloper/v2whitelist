@@ -319,6 +319,15 @@ fun GeekModeScreen(
                             fontWeight = FontWeight.Bold,
                             color = AccentAmber
                         )
+                        if (coreState == DesktopCoreState.RUNNING && selectedGuid in vipGuids) {
+                            TextButton(
+                                onClick = { state.stopCore() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(26.dp)
+                            ) {
+                                Text("⏹ Остановить VIP", fontSize = 11.sp, color = AccentRed, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                     FlowRow(
@@ -329,18 +338,42 @@ fun GeekModeScreen(
                         for (guid in vipGuids) {
                             val prof = servers.find { it.first == guid }?.second
                             val ping = pings[guid]
+                            val isSelected = guid == selectedGuid
+                            val isRunning = isSelected && coreState == DesktopCoreState.RUNNING
+
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (guid == selectedGuid) AccentAmber.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, if (guid == selectedGuid) AccentAmber else MaterialTheme.colorScheme.outline),
+                                color = when {
+                                    isRunning -> AccentMint.copy(alpha = 0.25f)
+                                    isSelected -> AccentAmber.copy(alpha = 0.25f)
+                                    else -> MaterialTheme.colorScheme.surface
+                                },
+                                border = BorderStroke(1.dp, when {
+                                    isRunning -> AccentMint
+                                    isSelected -> AccentAmber
+                                    else -> MaterialTheme.colorScheme.outline
+                                }),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable { state.selectServer(guid) }
+                                    .clickable {
+                                        if (isRunning) {
+                                            state.stopCore()
+                                        } else {
+                                            state.selectAndConnectServer(guid)
+                                        }
+                                    }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Icon(
+                                        imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                        contentDescription = if (isRunning) "Остановить" else "Подключить",
+                                        tint = if (isRunning) AccentMint else if (isSelected) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
                                     val displayName = prof?.remarks?.takeIf { it.isNotBlank() }
                                         ?: prof?.server?.takeIf { it.isNotBlank() }
                                         ?: "Узел (${guid.take(6)})"
@@ -348,7 +381,7 @@ fun GeekModeScreen(
                                         text = displayName.take(22),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isRunning) AccentMint else MaterialTheme.colorScheme.onSurface
                                     )
                                     if (ping != null && ping > 0) {
                                         Text(
@@ -358,7 +391,7 @@ fun GeekModeScreen(
                                             color = AccentMint
                                         )
                                     }
-                                    Spacer(Modifier.width(4.dp))
+                                    Spacer(Modifier.width(6.dp))
                                     Icon(
                                         Icons.Default.Close,
                                         contentDescription = "Удалить из VIP",

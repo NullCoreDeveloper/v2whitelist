@@ -31,6 +31,10 @@ class XrayDesktopRunner(
     private val _coreState = MutableStateFlow(DesktopCoreState.STOPPED)
     val coreState: StateFlow<DesktopCoreState> = _coreState.asStateFlow()
 
+    fun markStarting() {
+        _coreState.value = DesktopCoreState.STARTING
+    }
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
@@ -207,8 +211,10 @@ class XrayDesktopRunner(
                 }
             }
 
-            // Проверка, что процесс не упал сразу
-            Thread.sleep(300)
+            // Быстрая проверка, что процесс не завершился с ошибкой мгновенно
+            try {
+                proc.waitFor(60, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (_: Exception) {}
             if (!proc.isAlive) {
                 val exitCode = proc.exitValue()
                 val err = "Процесс Xray завершился сразу с кодом: $exitCode"

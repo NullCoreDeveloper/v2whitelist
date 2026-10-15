@@ -18,6 +18,7 @@ import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
+import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
 import com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
@@ -171,6 +172,7 @@ class DesktopAppState(
     // TUN & Sudo сессия (хранится только в памяти на время работы приложения)
     var sessionSudoPassword: String? = null
         private set
+    val allowNoSudoTun = MutableStateFlow(false)
     val showSudoDialog = MutableStateFlow(false)
     val sudoError = MutableStateFlow<String?>(null)
     val isVerifyingSudo = MutableStateFlow(false)
@@ -213,6 +215,7 @@ class DesktopAppState(
     val isFindingVip = MutableStateFlow(false)
     val isForcePinging = MutableStateFlow(false)
     val vipGuids = MutableStateFlow<Set<String>>(serverRepo.getVipServerGuids())
+    val vipCacheLimit = MutableStateFlow(settingsRepo.getInt("pref_vip_cache_limit", 5))
 
     // Расширенные настройки ядра и VPN
     val smartConnectBatchSize = MutableStateFlow(settingsRepo.getInt("pref_smart_batch_size", 20))
@@ -506,12 +509,21 @@ class DesktopAppState(
     }
 
     fun setRoutingMode(mode: String) {
-        if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+        if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null && !allowNoSudoTun.value) {
             sudoError.value = null
             showSudoDialog.value = true
             return
         }
         applyRoutingMode(mode)
+    }
+
+    fun enableTunWithoutSudo() {
+        allowNoSudoTun.value = true
+        sessionSudoPassword = null
+        showSudoDialog.value = false
+        sudoError.value = null
+        applyRoutingMode("TUN")
+        GeekModeLogger.log("TUN", "Режим TUN активирован без sudo (обход PR_SET_NO_NEW_PRIVS).")
     }
 
     private fun applyRoutingMode(mode: String) {
@@ -678,15 +690,13 @@ class DesktopAppState(
             settingsRepo.setString("pref_removed_custom_sub_ids", jsonHelper.encodeToString(newRemoved.toList()))
         }
 
-        // Удаляем все серверы этой подписки
+        // Удаляем все серверы этой подписки атомарным пакетом
         val allServers = servers.value
         val toRemoveGuids = allServers.filter {
             it.second.subscriptionId == subId || (subToRemove != null && it.second.subscriptionId == subToRemove.name)
         }.map { it.first }
 
-        for (g in toRemoveGuids) {
-            serverRepo.removeServer(g)
-        }
+        serverRepo.removeServers(toRemoveGuids)
         _selectedGuid.value = serverRepo.getSelectedServerGuid()
         GeekModeLogger.log("Subscriptions", "Подписка удалена: $subId (серверов удалено: ${toRemoveGuids.size})")
     }
@@ -761,18 +771,14 @@ class DesktopAppState(
                         }
 
                         if (parsed.isNotEmpty()) {
-                            // Удаляем только старые серверы этой конкретной подписки
+                            // Атомарно заменяем старые серверы новыми в одной транзакции без мерцания счетчика
                             val currentServers = serverRepo.serversFlow.value
                             val oldForSub = currentServers.filter {
                                 it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
                             }.map { it.first }
-                            for (g in oldForSub) {
-                                serverRepo.removeServer(g)
-                            }
 
-                            // Добавляем новые серверы со стабильными GUID
                             val batch = parsed.map { generateStableServerGuid(it) to it }
-                            serverRepo.saveServerConfigs(batch)
+                            serverRepo.replaceSubscriptionServers(oldForSub, batch)
                             anySubUpdated = true
                         }
 
@@ -848,6 +854,12 @@ class DesktopAppState(
         }
     }
 
+    fun selectAndConnectServer(guid: String) {
+        _selectedGuid.value = guid
+        serverRepo.setSelectedServerGuid(guid)
+        connectCurrent()
+    }
+
     fun setScenario(sc: AppScenario) {
         _scenario.value = sc
         settingsRepo.setAppScenario(sc)
@@ -860,6 +872,8 @@ class DesktopAppState(
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
             stopCore()
         } else {
+            // Мгновенный визуальный фидбек для пользователя
+            xrayRunner.markStarting()
             if (_scenario.value == AppScenario.AUTO || _selectedGuid.value == null) {
                 startSmartConnect()
             } else {
@@ -990,7 +1004,7 @@ class DesktopAppState(
             GeekModeLogger.log("GeekMode", "Применён Global SNI: $gSni для ${profile.remarks}")
         }
 
-        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null && !allowNoSudoTun.value) {
             sudoError.value = null
             showSudoDialog.value = true
             return
@@ -1015,7 +1029,7 @@ class DesktopAppState(
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
-                sudoPassword = if (routingMode.value == "TUN") sessionSudoPassword else null
+                sudoPassword = if (routingMode.value == "TUN" && !allowNoSudoTun.value) sessionSudoPassword else null
             )
             if (started) {
                 if (routingMode.value == "PROXY") {
@@ -1040,7 +1054,7 @@ class DesktopAppState(
         if (currentVips.contains(guid)) {
             serverRepo.removeVipServer(guid)
         } else {
-            serverRepo.addVipServer(guid)
+            serverRepo.addVipServer(guid, vipCacheLimit.value)
         }
         vipGuids.value = serverRepo.getVipServerGuids()
     }
@@ -1118,11 +1132,19 @@ class DesktopAppState(
         }
         scope.launch {
             isPingingVip.value = true
-            GeekModeLogger.log("GeekMode", "Пинг ${vips.size} VIP узлов...")
+            GeekModeLogger.log("GeekMode", "HTTP 204 верификация ${vips.size} VIP узлов через Xray...")
+            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
             for (guid in vips) {
                 val profile = serverRepo.getServerConfig(guid) ?: continue
-                val ping = NodePingTester.testSingleTcp(profile)
-                _pingMap.value = _pingMap.value + (guid to ping)
+                val res = DesktopProfileVerifier.verifyProfile(
+                    profile = profile,
+                    xrayBinaryPath = xrayPath,
+                    timeoutMs = 3500L,
+                    speedCheckEnabled = false
+                )
+                val latency = if (res.success && res.latencyMs > 0) res.latencyMs else -1L
+                _pingMap.value = _pingMap.value + (guid to latency)
+                GeekModeLogger.log("GeekMode", "VIP 204: ${profile.remarks} -> ${if (latency > 0) "${latency}ms" else "Сбой"}")
             }
             isPingingVip.value = false
         }
@@ -1133,19 +1155,38 @@ class DesktopAppState(
         if (all.isEmpty()) return
         scope.launch {
             isFindingVip.value = true
-            GeekModeLogger.log("GeekMode", "Поиск новых VIP узлов через v2w-core...")
+            val limit = vipCacheLimit.value
+            GeekModeLogger.log("GeekMode", "Поиск новых VIP узлов (v2w-core + Xray HTTP 204 + скорость, лимит $limit)...")
             val v2wPath = settingsRepo.getString("v2w_scan_path").ifBlank { null }
+            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+
             V2WCoreScanner.runStreamingScan(
                 servers = all,
                 customBinaryPath = v2wPath,
                 firstOnly = false,
                 onNodeSuccess = { guid: String, profile: ProfileItem, delayMs: Long ->
-                    if (delayMs in 1..800) {
-                        serverRepo.addVipServer(guid)
-                        _pingMap.value = _pingMap.value + (guid to delayMs)
-                        vipGuids.value = serverRepo.getVipServerGuids()
+                    if (delayMs in 1..1500) {
+                        // Верификация через Xray ядро и скорость
+                        val verifyRes = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                            DesktopProfileVerifier.verifyProfile(
+                                profile = profile,
+                                xrayBinaryPath = xrayPath,
+                                timeoutMs = 4000L,
+                                speedCheckEnabled = speedTestOnCheck.value,
+                                minSpeedMbps = minSpeedThresholdMbps.value,
+                                bytesToDownload = speedTestDownloadBytes.value.toLong()
+                            )
+                        }
+                        if (verifyRes.success) {
+                            serverRepo.addVipServer(guid, limit)
+                            _pingMap.value = _pingMap.value + (guid to (if (verifyRes.latencyMs > 0) verifyRes.latencyMs else delayMs))
+                            vipGuids.value = serverRepo.getVipServerGuids()
+                            GeekModeLogger.log("GeekMode", "Узел принят в VIP: ${profile.remarks} (204: ${verifyRes.latencyMs}ms, скорость: ${verifyRes.speedMbps ?: "—"} Мбит/с)")
+                        } else {
+                            GeekModeLogger.log("GeekMode", "Узел ${profile.remarks} отклонен: ${verifyRes.errorMessage}")
+                        }
                     }
-                    false
+                    serverRepo.getVipServerGuids().size >= limit
                 }
             )
             vipGuids.value = serverRepo.getVipServerGuids()
@@ -1276,7 +1317,8 @@ class DesktopAppState(
         fragmentIntVal: String = fragmentInterval.value,
         fragmentPackVal: String = fragmentPackets.value,
         yandexUpdateVal: Boolean = yandexTranslateUpdateEnabled.value,
-        domainSplitVal: Boolean = domainSplitTunnelingEnabled.value
+        domainSplitVal: Boolean = domainSplitTunnelingEnabled.value,
+        vipLimit: Int = vipCacheLimit.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
@@ -1409,6 +1451,8 @@ class DesktopAppState(
         settingsRepo.setString("pref_fragment_packets", fragmentPackVal)
         settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
         settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
+        vipCacheLimit.value = vipLimit
+        settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
         if (coreState.value == DesktopCoreState.RUNNING) {
