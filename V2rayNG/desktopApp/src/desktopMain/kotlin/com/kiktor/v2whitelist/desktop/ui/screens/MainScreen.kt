@@ -358,8 +358,10 @@ fun MainScreen(
             AnimatedVisibility(visible = coreState == DesktopCoreState.RUNNING) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(8.dp))
+                    val isSwitchingServer by state.isSwitchingServer.collectAsState()
                     Button(
                         onClick = { state.switchToNextServer() },
+                        enabled = !isSwitchingServer,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -370,9 +372,15 @@ fun MainScreen(
                             .widthIn(min = 220.dp, max = 340.dp)
                             .height(44.dp)
                     ) {
-                        Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Сменить сервер", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        if (isSwitchingServer) {
+                            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Смена сервера…", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        } else {
+                            Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Сменить сервер", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        }
                     }
                 }
             }

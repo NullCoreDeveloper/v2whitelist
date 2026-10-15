@@ -34,7 +34,14 @@ data class XrayInbound(
 @Serializable
 data class InboundSettings(
     val auth: String = "noauth",
-    val udp: Boolean = true
+    val udp: Boolean = true,
+    val accounts: List<SocksAccount>? = null
+)
+
+@Serializable
+data class SocksAccount(
+    val user: String,
+    val pass: String
 )
 
 @Serializable
@@ -51,7 +58,7 @@ data class OutboundProxySettings(
 
 @Serializable
 data class XrayOutbound(
-    val tag: String = "proxy",
+    @EncodeDefault val tag: String = "proxy",
     val protocol: String,
     val settings: OutboundSettings? = null,
     val streamSettings: XrayStreamSettings? = null,

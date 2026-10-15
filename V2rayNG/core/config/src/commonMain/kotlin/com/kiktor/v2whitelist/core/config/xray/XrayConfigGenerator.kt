@@ -28,7 +28,12 @@ data class XrayGeneratorOptions(
     val routeOnly: Boolean = false,
     val muxEnabled: Boolean = false,
     val muxConcurrency: Int = 8,
-    val muxXudpConcurrency: Int = 8
+    val muxXudpConcurrency: Int = 8,
+    val socksUsername: String? = null,
+    val socksPassword: String? = null,
+    val remoteDns: String? = null,
+    val internalDns: String? = null,
+    val dnsHosts: String? = null
 )
 
 object XrayConfigGenerator {
@@ -47,14 +52,24 @@ object XrayConfigGenerator {
     fun buildConfig(profile: ProfileItem, options: XrayGeneratorOptions = XrayGeneratorOptions()): XrayConfig {
         val inbounds = mutableListOf<XrayInbound>()
 
-        // SOCKS inbound
+        // SOCKS inbound with optional authentication
+        val socksSettings = if (!options.socksUsername.isNullOrBlank() && !options.socksPassword.isNullOrBlank()) {
+            InboundSettings(
+                auth = "password",
+                udp = true,
+                accounts = listOf(SocksAccount(user = options.socksUsername, pass = options.socksPassword))
+            )
+        } else {
+            InboundSettings(auth = "noauth", udp = true)
+        }
+
         inbounds.add(
             XrayInbound(
                 tag = "socks-in",
                 port = options.socksPort,
                 protocol = "socks",
                 listen = options.listenAddress,
-                settings = InboundSettings(auth = "noauth", udp = true),
+                settings = socksSettings,
                 sniffing = if (options.sniffingEnabled) {
                     InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"), routeOnly = options.routeOnly)
                 } else null
@@ -283,12 +298,17 @@ object XrayConfigGenerator {
             rules = rules
         )
 
+        val dnsList = mutableListOf<String>()
+        if (!options.remoteDns.isNullOrBlank()) dnsList.add(options.remoteDns)
+        if (!options.internalDns.isNullOrBlank()) dnsList.add(options.internalDns)
+        if (dnsList.isEmpty()) dnsList.addAll(options.dnsServers)
+
         return XrayConfig(
             log = XrayLog(loglevel = options.logLevel),
             inbounds = inbounds,
             outbounds = outbounds,
             routing = routing,
-            dns = XrayDns(servers = options.dnsServers)
+            dns = XrayDns(servers = dnsList)
         )
     }
 

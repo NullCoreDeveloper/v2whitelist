@@ -122,7 +122,18 @@ class XrayDesktopRunner(
         upstreamProxyHost: String? = null,
         upstreamProxyPort: Int? = null,
         upstreamProxyType: String? = null,
-        sudoPassword: String? = null
+        sudoPassword: String? = null,
+        socksUsername: String? = null,
+        socksPassword: String? = null,
+        remoteDns: String? = null,
+        internalDns: String? = null,
+        dnsHosts: String? = null,
+        allowInsecure: Boolean = false,
+        sniffingEnabled: Boolean = true,
+        routeOnly: Boolean = false,
+        muxEnabled: Boolean = false,
+        muxConcurrency: Int = 8,
+        muxXudpConcurrency: Int = 8
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -152,7 +163,18 @@ class XrayDesktopRunner(
                 customProxyDomains = customProxyDomains,
                 upstreamProxyHost = upstreamProxyHost,
                 upstreamProxyPort = upstreamProxyPort,
-                upstreamProxyType = upstreamProxyType
+                upstreamProxyType = upstreamProxyType,
+                socksUsername = socksUsername,
+                socksPassword = socksPassword,
+                remoteDns = remoteDns,
+                internalDns = internalDns,
+                dnsHosts = dnsHosts,
+                allowInsecureDefault = allowInsecure,
+                sniffingEnabled = sniffingEnabled,
+                routeOnly = routeOnly,
+                muxEnabled = muxEnabled,
+                muxConcurrency = muxConcurrency,
+                muxXudpConcurrency = muxXudpConcurrency
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
 

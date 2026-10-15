@@ -874,9 +874,32 @@ class DesktopAppState(
         }
     }
 
+    val isSwitchingServer = MutableStateFlow(false)
+
     fun switchToNextServer() {
+        if (isSwitchingServer.value) return
         scope.launch {
-            smartConnectManager.switchToNextServer(_selectedGuid.value)
+            isSwitchingServer.value = true
+            try {
+                val current = _selectedGuid.value
+                val vips = serverRepo.getVipServerGuids().toList()
+                val nextVip = vips.firstOrNull { it != current }
+                if (nextVip != null) {
+                    GeekModeLogger.log("AppState", "Смена сервера: переключение на следующий VIP ($nextVip)")
+                    selectAndConnectServer(nextVip)
+                } else {
+                    val all = serverRepo.serversFlow.value.map { it.first }
+                    val nextGeneral = all.firstOrNull { it != current }
+                    if (nextGeneral != null) {
+                        GeekModeLogger.log("AppState", "Смена сервера: переключение на следующий узел ($nextGeneral)")
+                        selectAndConnectServer(nextGeneral)
+                    } else {
+                        smartConnectManager.switchToNextServer(current)
+                    }
+                }
+            } finally {
+                isSwitchingServer.value = false
+            }
         }
     }
 
@@ -1004,19 +1027,30 @@ class DesktopAppState(
                 scenario = _scenario.value,
                 xrayBinaryPath = xrayBinaryPath.value.ifBlank { null },
                 httpPort = httpPort.value,
-                socksPort = socksPort.value,
+                socksPort = localProxyPort.value,
                 listenAddress = listenAddr,
                 customDirectDomains = directDomains,
                 customProxyDomains = proxyDomains,
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
-                sudoPassword = if (routingMode.value == "TUN" && !allowNoSudoTun.value) sessionSudoPassword else null
+                sudoPassword = if (routingMode.value == "TUN" && !allowNoSudoTun.value) sessionSudoPassword else null,
+                socksUsername = localProxyLogin.value.ifBlank { null },
+                socksPassword = localProxyPassword.value.ifBlank { null },
+                remoteDns = remoteDns.value.ifBlank { null },
+                internalDns = internalDns.value.ifBlank { null },
+                dnsHosts = dnsHosts.value.ifBlank { null },
+                allowInsecure = allowInsecure.value,
+                sniffingEnabled = sniffingEnabled.value,
+                routeOnly = routeOnly.value,
+                muxEnabled = muxEnabled.value,
+                muxConcurrency = muxTcpConcurrency.value,
+                muxXudpConcurrency = muxXudpConcurrency.value
             )
             if (started) {
                 if (routingMode.value == "PROXY") {
                     if (autoEnableSystemProxy.value) {
-                        DesktopProxyManager.enableSystemProxy(socksPort.value, httpPort.value)
+                        DesktopProxyManager.enableSystemProxy(localProxyPort.value, httpPort.value)
                         isSystemProxyActive.value = true
                     }
                 } else {
