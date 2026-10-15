@@ -279,7 +279,7 @@ class DesktopAppState(
     )
 
     init {
-        GeekModeLogger.log("DesktopApp", "v2whitelist Desktop инициализирован по спецификации UI пробел.")
+        GeekModeLogger.log("DesktopApp", "v2whitelist Desktop инициализирован по спецификации UI ПроБел.")
 
         smartConnectManager.onStageChanged = { _, text ->
             _smartConnectStatus.value = text
@@ -533,7 +533,7 @@ class DesktopAppState(
             isVerifyingSudo.value = true
             sudoError.value = null
 
-            val valid = verifySudoPassword(password)
+            val (valid, errorMsg) = verifySudoPassword(password)
             isVerifyingSudo.value = false
 
             if (valid) {
@@ -543,8 +543,8 @@ class DesktopAppState(
                 applyRoutingMode("TUN")
                 GeekModeLogger.log("TUN", "Права sudo успешно подтверждены. Режим TUN активирован.")
             } else {
-                sudoError.value = "Неверный пароль sudo. Пожалуйста, попробуйте снова."
-                GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: неверный пароль.")
+                sudoError.value = errorMsg ?: "Неверный пароль sudo. Пожалуйста, попробуйте снова."
+                GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: ${sudoError.value}")
             }
         }
     }
@@ -554,7 +554,7 @@ class DesktopAppState(
         sudoError.value = null
     }
 
-    private fun verifySudoPassword(password: String): Boolean {
+    private fun verifySudoPassword(password: String): Pair<Boolean, String?> {
         return try {
             val proc = ProcessBuilder("sudo", "-S", "-k", "-v")
                 .redirectErrorStream(true)
@@ -563,16 +563,37 @@ class DesktopAppState(
                 writer.write("$password\n")
                 writer.flush()
             }
-            val exited = proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+            val output = StringBuilder()
+            val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                output.appendLine(line)
+            }
+            val exited = proc.waitFor(4, java.util.concurrent.TimeUnit.SECONDS)
             if (!exited) {
                 proc.destroyForcibly()
-                false
+                return false to "Таймаут проверки sudo (процесс не ответил вовремя)."
+            }
+            val exitCode = proc.exitValue()
+            if (exitCode == 0) {
+                true to null
             } else {
-                proc.exitValue() == 0
+                val outStr = output.toString().trim()
+                val msg = when {
+                    outStr.contains("без новых привилегий", ignoreCase = true) || outStr.contains("no new privs", ignoreCase = true) ->
+                        "В системе задействован флаг PR_SET_NO_NEW_PRIVS (контейнер/песочница). Запуск sudo от root заблокирован ядром системы."
+                    outStr.contains("incorrect password", ignoreCase = true) || outStr.contains("неверный пароль", ignoreCase = true) ->
+                        "Неверный пароль sudo. Попробуйте снова."
+                    outStr.isNotBlank() ->
+                        "Ошибка sudo: $outStr"
+                    else ->
+                        "Неверный пароль sudo (код ошибки $exitCode)."
+                }
+                false to msg
             }
         } catch (e: Exception) {
             GeekModeLogger.log("TUN", "Исключение при проверке sudo: ${e.message}")
-            false
+            false to "Сбой выполнения sudo: ${e.message}"
         }
     }
 
@@ -670,6 +691,27 @@ class DesktopAppState(
         GeekModeLogger.log("Subscriptions", "Подписка удалена: $subId (серверов удалено: ${toRemoveGuids.size})")
     }
 
+    /**
+     * Генерирует детерминированный стабильный GUID для сервера на основе его конфигурации.
+     * Это гарантирует, что при повторных обновлениях подписок ID серверов не меняются,
+     * а VIP-кэш и пинг не превращаются в осиротевшие shortid.
+     */
+    fun generateStableServerGuid(profile: ProfileItem): String {
+        val key = "${profile.configType}:${profile.server}:${profile.serverPort}:${profile.password}:${profile.sni}:${profile.remarks}:${profile.subscriptionId}"
+        return try {
+            val md = java.security.MessageDigest.getInstance("MD5")
+            val digest = md.digest(key.toByteArray(Charsets.UTF_8))
+            val sb = StringBuilder()
+            for (b in digest) {
+                sb.append(String.format("%02x", b))
+            }
+            val hex = sb.toString()
+            "${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}"
+        } catch (_: Exception) {
+            UUID.randomUUID().toString()
+        }
+    }
+
     fun updateAllActiveSubscriptions() {
         if (_isUpdatingSub.value) return
         scope.launch {
@@ -685,7 +727,7 @@ class DesktopAppState(
                 }
 
                 val updatedSubsList = _subscriptions.value.toMutableList()
-                val newConfigs = mutableListOf<ProfileItem>()
+                var anySubUpdated = false
 
                 for (sub in enabledSubs) {
                     val mirrors = SubscriptionFetcher.parseMirrors(sub.url)
@@ -717,7 +759,22 @@ class DesktopAppState(
                         for (p in parsed) {
                             p.subscriptionId = sub.id
                         }
-                        newConfigs.addAll(parsed)
+
+                        if (parsed.isNotEmpty()) {
+                            // Удаляем только старые серверы этой конкретной подписки
+                            val currentServers = serverRepo.serversFlow.value
+                            val oldForSub = currentServers.filter {
+                                it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
+                            }.map { it.first }
+                            for (g in oldForSub) {
+                                serverRepo.removeServer(g)
+                            }
+
+                            // Добавляем новые серверы со стабильными GUID
+                            val batch = parsed.map { generateStableServerGuid(it) to it }
+                            serverRepo.saveServerConfigs(batch)
+                            anySubUpdated = true
+                        }
 
                         if (subIdx >= 0) {
                             updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
@@ -728,7 +785,11 @@ class DesktopAppState(
                         GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
                     } else {
                         val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
-                        GeekModeLogger.log("Subscriptions", "${sub.name}: ошибка ($err)")
+                        // ПРАВИЛО: если сеть дала сбой, старые серверы подписки НЕ удаляются!
+                        val existingCount = serverRepo.serversFlow.value.count {
+                            it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
+                        }
+                        GeekModeLogger.log("Subscriptions", "${sub.name}: сбой ($err). Ранее полученные серверы сохранены ($existingCount узлов).")
                         if (subIdx >= 0) {
                             updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
                                 lastUpdateFailed = true
@@ -740,12 +801,7 @@ class DesktopAppState(
                 _subscriptions.value = updatedSubsList
                 saveSubscriptionsToStorage(updatedSubsList)
 
-                if (newConfigs.isNotEmpty()) {
-                    serverRepo.clearAllServers()
-                    val batch = newConfigs.map { UUID.randomUUID().toString() to it }
-                    serverRepo.saveServerConfigs(batch)
-
-                    // Автоматическое удаление дубликатов (как в Android версии)
+                if (anySubUpdated) {
                     val removed = serverRepo.removeDuplicates()
                     GeekModeLogger.log("Subscriptions", "Автоматически устранено дубликатов: $removed")
                     _selectedGuid.value = serverRepo.getSelectedServerGuid()
@@ -1174,7 +1230,53 @@ class DesktopAppState(
         customEndpoint: Boolean = useCustomEndpoint.value,
         customEndpointConfig: String = customEndpointUrl.value,
         bypassRu: Boolean = bypassRussianServices.value,
-        checkUrl: String = connectionCheckServiceUrl.value
+        checkUrl: String = connectionCheckServiceUrl.value,
+        smartBatch: Int = smartConnectBatchSize.value,
+        smartPreset: String = smartDistributionPreset.value,
+        v2wCore: Boolean = useV2WCore.value,
+        fallbackScanner: Boolean = useFallbackScanner.value,
+        v2wSockets: Int = v2wCoreSockets.value,
+        removeInsecure: Boolean = removeInsecureProfiles.value,
+        testBeforeConnect: Boolean = testProfileBeforeConnect.value,
+        speedTestCheck: Boolean = speedTestOnCheck.value,
+        speedTestBytes: Int = speedTestDownloadBytes.value,
+        speedTestTimeout: Int = speedTestTimeoutMs.value,
+        minSpeed: Double = minSpeedThresholdMbps.value,
+        autoFailoverEnabled: Boolean = autoFailover.value,
+        heartbeatSec: Int = heartbeatIntervalSeconds.value,
+        smartFailoverEnabled: Boolean = smartFailover.value,
+        degradationKb: Int = failoverDegradationThresholdKb.value,
+        stuckSec: Int = failoverStuckDurationSeconds.value,
+        netCheckEnabled: Boolean = networkCheckEnabled.value,
+        primaryDomain: String = networkCheckPrimaryDomain.value,
+        fallbackDomain: String = networkCheckFallbackDomain.value,
+        betaUpdates: Boolean = receiveBetaUpdates.value,
+        prefIpv6: Boolean = preferIpv6.value,
+        localDnsVal: Boolean = useLocalDns.value,
+        fakeDnsVal: Boolean = useFakeDns.value,
+        addHttpProxyVal: Boolean = additionalHttpProxy.value,
+        vpnDnsVal: String = vpnDns.value,
+        vpnBypassLanVal: Boolean = vpnBypassLan.value,
+        vpnAddressVal: String = vpnInterfaceAddress.value,
+        vpnMtuVal: Int = vpnMtu.value,
+        sniffingVal: Boolean = sniffingEnabled.value,
+        routeOnlyVal: Boolean = routeOnly.value,
+        allowInsecureVal: Boolean = allowInsecure.value,
+        localPortVal: Int = localProxyPort.value,
+        localLoginVal: String = localProxyLogin.value,
+        localPassVal: String = localProxyPassword.value,
+        remoteDnsVal: String = remoteDns.value,
+        internalDnsVal: String = internalDns.value,
+        dnsHostsVal: String = dnsHosts.value,
+        muxVal: Boolean = muxEnabled.value,
+        muxTcpVal: Int = muxTcpConcurrency.value,
+        muxXudpVal: Int = muxXudpConcurrency.value,
+        fragmentVal: Boolean = fragmentEnabled.value,
+        fragmentLenVal: String = fragmentLength.value,
+        fragmentIntVal: String = fragmentInterval.value,
+        fragmentPackVal: String = fragmentPackets.value,
+        yandexUpdateVal: Boolean = yandexTranslateUpdateEnabled.value,
+        domainSplitVal: Boolean = domainSplitTunnelingEnabled.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
@@ -1195,6 +1297,53 @@ class DesktopAppState(
         bypassRussianServices.value = bypassRu
         connectionCheckServiceUrl.value = checkUrl
 
+        smartConnectBatchSize.value = smartBatch
+        smartDistributionPreset.value = smartPreset
+        useV2WCore.value = v2wCore
+        useFallbackScanner.value = fallbackScanner
+        v2wCoreSockets.value = v2wSockets
+        removeInsecureProfiles.value = removeInsecure
+        testProfileBeforeConnect.value = testBeforeConnect
+        speedTestOnCheck.value = speedTestCheck
+        speedTestDownloadBytes.value = speedTestBytes
+        speedTestTimeoutMs.value = speedTestTimeout
+        minSpeedThresholdMbps.value = minSpeed
+        autoFailover.value = autoFailoverEnabled
+        heartbeatIntervalSeconds.value = heartbeatSec
+        smartFailover.value = smartFailoverEnabled
+        failoverDegradationThresholdKb.value = degradationKb
+        failoverStuckDurationSeconds.value = stuckSec
+        networkCheckEnabled.value = netCheckEnabled
+        networkCheckPrimaryDomain.value = primaryDomain
+        networkCheckFallbackDomain.value = fallbackDomain
+        receiveBetaUpdates.value = betaUpdates
+        preferIpv6.value = prefIpv6
+        useLocalDns.value = localDnsVal
+        useFakeDns.value = fakeDnsVal
+        additionalHttpProxy.value = addHttpProxyVal
+        vpnDns.value = vpnDnsVal
+        vpnBypassLan.value = vpnBypassLanVal
+        vpnInterfaceAddress.value = vpnAddressVal
+        vpnMtu.value = vpnMtuVal
+        sniffingEnabled.value = sniffingVal
+        routeOnly.value = routeOnlyVal
+        allowInsecure.value = allowInsecureVal
+        localProxyPort.value = localPortVal
+        localProxyLogin.value = localLoginVal
+        localProxyPassword.value = localPassVal
+        remoteDns.value = remoteDnsVal
+        internalDns.value = internalDnsVal
+        dnsHosts.value = dnsHostsVal
+        muxEnabled.value = muxVal
+        muxTcpConcurrency.value = muxTcpVal
+        muxXudpConcurrency.value = muxXudpVal
+        fragmentEnabled.value = fragmentVal
+        fragmentLength.value = fragmentLenVal
+        fragmentInterval.value = fragmentIntVal
+        fragmentPackets.value = fragmentPackVal
+        yandexTranslateUpdateEnabled.value = yandexUpdateVal
+        domainSplitTunnelingEnabled.value = domainSplitVal
+
         settingsRepo.setString("subscription_url", subUrl)
         settingsRepo.setString("xray_path", xrayPath)
         settingsRepo.setString("v2w_scan_path", v2wPath)
@@ -1213,6 +1362,53 @@ class DesktopAppState(
         settingsRepo.setString("pref_custom_endpoint_url", customEndpointConfig)
         settingsRepo.setBoolean("pref_bypass_russian_services", bypassRu)
         settingsRepo.setString("pref_conn_check_url", checkUrl)
+
+        settingsRepo.setInt("pref_smart_batch_size", smartBatch)
+        settingsRepo.setString("pref_smart_distribution", smartPreset)
+        settingsRepo.setBoolean("pref_use_v2w_core", v2wCore)
+        settingsRepo.setBoolean("pref_use_fallback_scanner", fallbackScanner)
+        settingsRepo.setInt("pref_v2w_core_sockets", v2wSockets)
+        settingsRepo.setBoolean("pref_remove_insecure_profiles", removeInsecure)
+        settingsRepo.setBoolean("pref_test_before_connect", testBeforeConnect)
+        settingsRepo.setBoolean("pref_speed_test_on_check", speedTestCheck)
+        settingsRepo.setInt("pref_speed_test_bytes", speedTestBytes)
+        settingsRepo.setInt("pref_speed_test_timeout_ms", speedTestTimeout)
+        settingsRepo.setString("pref_min_speed_mbps", minSpeed.toString())
+        settingsRepo.setBoolean("pref_auto_failover", autoFailoverEnabled)
+        settingsRepo.setInt("pref_heartbeat_interval", heartbeatSec)
+        settingsRepo.setBoolean("pref_smart_failover", smartFailoverEnabled)
+        settingsRepo.setInt("pref_failover_degradation_kb", degradationKb)
+        settingsRepo.setInt("pref_failover_stuck_sec", stuckSec)
+        settingsRepo.setBoolean("pref_network_check_enabled", netCheckEnabled)
+        settingsRepo.setString("pref_net_check_primary", primaryDomain)
+        settingsRepo.setString("pref_net_check_fallback", fallbackDomain)
+        settingsRepo.setBoolean("pref_receive_beta_updates", betaUpdates)
+        settingsRepo.setBoolean("pref_prefer_ipv6", prefIpv6)
+        settingsRepo.setBoolean("pref_use_local_dns", localDnsVal)
+        settingsRepo.setBoolean("pref_use_fakedns", fakeDnsVal)
+        settingsRepo.setBoolean("pref_add_http_proxy", addHttpProxyVal)
+        settingsRepo.setString("pref_vpn_dns", vpnDnsVal)
+        settingsRepo.setBoolean("pref_vpn_bypass_lan", vpnBypassLanVal)
+        settingsRepo.setString("pref_vpn_address", vpnAddressVal)
+        settingsRepo.setInt("pref_vpn_mtu", vpnMtuVal)
+        settingsRepo.setBoolean("pref_sniffing_enabled", sniffingVal)
+        settingsRepo.setBoolean("pref_route_only", routeOnlyVal)
+        settingsRepo.setBoolean("pref_allow_insecure", allowInsecureVal)
+        settingsRepo.setInt("pref_local_proxy_port", localPortVal)
+        settingsRepo.setString("pref_local_proxy_login", localLoginVal)
+        settingsRepo.setString("pref_local_proxy_pass", localPassVal)
+        settingsRepo.setString("pref_remote_dns", remoteDnsVal)
+        settingsRepo.setString("pref_internal_dns", internalDnsVal)
+        settingsRepo.setString("pref_dns_hosts", dnsHostsVal)
+        settingsRepo.setBoolean("pref_mux_enabled", muxVal)
+        settingsRepo.setInt("pref_mux_tcp", muxTcpVal)
+        settingsRepo.setInt("pref_mux_xudp", muxXudpVal)
+        settingsRepo.setBoolean("pref_fragment_enabled", fragmentVal)
+        settingsRepo.setString("pref_fragment_length", fragmentLenVal)
+        settingsRepo.setString("pref_fragment_interval", fragmentIntVal)
+        settingsRepo.setString("pref_fragment_packets", fragmentPackVal)
+        settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
+        settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
         if (coreState.value == DesktopCoreState.RUNNING) {

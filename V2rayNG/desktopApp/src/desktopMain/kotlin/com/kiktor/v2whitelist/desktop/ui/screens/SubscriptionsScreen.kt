@@ -179,7 +179,7 @@ private fun SubscriptionCard(
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
         border = BorderStroke(
             1.dp,
             if (sub.enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
@@ -317,7 +317,7 @@ private fun CategoryBadge(label: String, color: Color) {
 }
 
 /**
- * Диалог редактирования / создания подписки (в точности поля из Android пробел):
+ * Диалог редактирования / создания подписки (в точности поля из Android ПроБел):
  * 1. Название подписки
  * 2. Ссылки на подписку (через | как разделитель)
  * 3. Фильтр Regex (убирать сервера еще до их появления из списка)

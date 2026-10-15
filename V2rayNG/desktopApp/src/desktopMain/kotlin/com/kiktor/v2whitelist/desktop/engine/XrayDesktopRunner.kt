@@ -78,6 +78,31 @@ class XrayDesktopRunner(
     }
 
     /**
+     * Поиск каталога гео-баз (geosite.dat / geoip.dat):
+     * 1. В ~/.config/v2whitelist/assets
+     * 2. В ./assets и ./bin
+     * 3. В системных путях Linux: /usr/share/xray, /usr/share/v2ray, /usr/local/share/xray
+     */
+    fun findAssetLocation(): File? {
+        val userHome = System.getProperty("user.home") ?: "."
+        val candidates = listOf(
+            File(userHome, ".config/v2whitelist/assets"),
+            File("assets"),
+            File("bin"),
+            File("/usr/share/xray"),
+            File("/usr/share/v2ray"),
+            File("/usr/local/share/xray"),
+            File("/usr/local/share/v2ray")
+        )
+        for (dir in candidates) {
+            if (dir.exists() && (File(dir, "geosite.dat").exists() || File(dir, "geoip.dat").exists())) {
+                return dir
+            }
+        }
+        return null
+    }
+
+    /**
      * Запуск ядра с выбранным профилем и опциями.
      */
     @Synchronized
@@ -145,6 +170,13 @@ class XrayDesktopRunner(
             } else {
                 GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
                 ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
+            }
+
+            // Настройка расположения геофайлов geosite.dat и geoip.dat
+            val assetDir = findAssetLocation()
+            if (assetDir != null) {
+                pb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                GeekModeLogger.log("DesktopRunner", "Каталог геофайлов XRAY_LOCATION_ASSET: ${assetDir.absolutePath}")
             }
 
             val proc = pb.start()

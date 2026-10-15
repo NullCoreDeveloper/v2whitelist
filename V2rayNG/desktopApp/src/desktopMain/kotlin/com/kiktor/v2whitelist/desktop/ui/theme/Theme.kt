@@ -209,6 +209,9 @@ fun MeshGradientBackground(
                 }
             }
 
+            // Базовый темный фон подложки
+            drawRect(color = DarkBg)
+
             // Первое пятно
             drawRect(
                 brush = Brush.radialGradient(

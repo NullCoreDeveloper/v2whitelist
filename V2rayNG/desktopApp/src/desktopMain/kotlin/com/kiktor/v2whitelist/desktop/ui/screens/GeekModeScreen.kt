@@ -341,8 +341,11 @@ fun GeekModeScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val displayName = prof?.remarks?.takeIf { it.isNotBlank() }
+                                        ?: prof?.server?.takeIf { it.isNotBlank() }
+                                        ?: "Узел (${guid.take(6)})"
                                     Text(
-                                        text = prof?.remarks?.take(18) ?: guid.take(8),
+                                        text = displayName.take(22),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface

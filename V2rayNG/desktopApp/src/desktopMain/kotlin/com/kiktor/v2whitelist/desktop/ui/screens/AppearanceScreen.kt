@@ -64,7 +64,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(20.dp))
 
         // 1. Тема интерфейса: Как в системе (авто), светлая, темная
-        AppearanceCard(title = "Тема интерфейса") {
+        AppearanceCard(title = "Тема интерфейса", meshEnabled = meshEnabled) {
             Text(
                 text = "Выберите режим отображения интерфейса:",
                 fontSize = 12.sp,
@@ -93,7 +93,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 2. Цветовая палитра: настраиваемый акцент вместо Material You
-        AppearanceCard(title = "Цветовая палитра") {
+        AppearanceCard(title = "Цветовая палитра", meshEnabled = meshEnabled) {
             Text(
                 text = "Настройка акцентного цвета элементов интерфейса и кнопок:",
                 fontSize = 12.sp,
@@ -116,7 +116,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 3. Чистый черный (AMOLED)
-        AppearanceCard(title = "Чистый чёрный (AMOLED)") {
+        AppearanceCard(title = "Чистый чёрный (AMOLED)", meshEnabled = meshEnabled) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -146,7 +146,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 4. Язык
-        AppearanceCard(title = "Язык приложения") {
+        AppearanceCard(title = "Язык приложения", meshEnabled = meshEnabled) {
             Text(
                 text = "Выберите язык интерфейса:",
                 fontSize = 12.sp,
@@ -165,7 +165,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 5. Градиентные фоны (Mesh)
-        AppearanceCard(title = "Градиентные фоны (Mesh)") {
+        AppearanceCard(title = "Градиентные фоны (Mesh)", meshEnabled = meshEnabled) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -227,11 +227,12 @@ fun AppearanceScreen(
 @Composable
 private fun AppearanceCard(
     title: String,
+    meshEnabled: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (meshEnabled) 0.82f else 1f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier.fillMaxWidth()
     ) {

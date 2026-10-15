@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
@@ -44,6 +46,7 @@ fun MainScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val servers by state.servers.collectAsState()
     val scenarioFilteredServers by state.scenarioFilteredServers.collectAsState()
     val selectedGuid by state.selectedGuid.collectAsState()
@@ -127,10 +130,10 @@ fun MainScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Слева: жирный логотип "пробел"
+                // Слева: жирный логотип "ПроБел"
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "пробел",
+                        text = "ПроБел",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         fontSize = 24.sp,
@@ -168,7 +171,7 @@ fun MainScreen(
             // ================= 2. СТАТУС-КАРТОЧКА =================
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (meshEnabled) 0.82f else 1f),
                 border = BorderStroke(
                     1.dp,
                     when (coreState) {
@@ -534,7 +537,7 @@ fun MainScreen(
                                     Icon(Icons.Default.Speed, null, modifier = Modifier.size(14.dp))
                                 }
                                 Spacer(Modifier.width(4.dp))
-                                Text("Пинг", fontSize = 11.sp)
+                                Text(strings.ping, fontSize = 11.sp)
                             }
                         }
                     }
@@ -547,15 +550,61 @@ fun MainScreen(
                             .fillMaxWidth()
                             .padding(top = 12.dp)
                     ) {
-                        // Строка поиска и фильтров
-                        OutlinedTextField(
+                        // Строка поиска узлов с идеальным вертикальным центрированием без обрезания букв
+                        BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Поиск узлов по названию или хосту...", fontSize = 12.sp) },
-                            leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(16.dp)) },
                             singleLine = true,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                            textStyle = LocalTextStyle.current.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 13.sp
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(42.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (meshEnabled) 0.70f else 0.50f),
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp),
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = strings.searchNodesPlaceholder,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { searchQuery = "" },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = "Очистить",
+                                                modifier = Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         )
 
                         Spacer(Modifier.height(8.dp))
@@ -570,7 +619,7 @@ fun MainScreen(
                                 FilterChip(
                                     selected = selectedProtocol == null,
                                     onClick = { selectedProtocol = null },
-                                    label = { Text("Все", fontSize = 11.sp) }
+                                    label = { Text(strings.all, fontSize = 11.sp) }
                                 )
                             }
                             item {

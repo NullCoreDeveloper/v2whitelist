@@ -271,11 +271,16 @@ fun main() = application {
         loadAppIcon(connected = coreState == DesktopCoreState.RUNNING)
     }
 
+    val windowState = rememberWindowState(
+        width = 1100.dp,
+        height = 760.dp
+    )
+
     if (androidx.compose.ui.window.isTraySupported) {
         Tray(
             state = trayState,
             icon = trayIcon,
-            tooltip = "v2whitelist — ${when (coreState) {
+            tooltip = "ПроБел — ${when (coreState) {
                 DesktopCoreState.RUNNING -> "Подключено"
                 DesktopCoreState.STARTING -> "Подключение..."
                 DesktopCoreState.ERROR -> "Ошибка"
@@ -283,11 +288,19 @@ fun main() = application {
             }}",
             onAction = {
                 isWindowVisible = !isWindowVisible
+                if (isWindowVisible) {
+                    windowState.isMinimized = false
+                }
             },
             menu = {
                 Item(
-                    text = if (isWindowVisible) "Свернуть в трей" else "Открыть v2whitelist",
-                    onClick = { isWindowVisible = !isWindowVisible }
+                    text = if (isWindowVisible) "Свернуть в трей" else "Открыть ПроБел",
+                    onClick = {
+                        isWindowVisible = !isWindowVisible
+                        if (isWindowVisible) {
+                            windowState.isMinimized = false
+                        }
+                    }
                 )
                 Separator()
                 Item(
@@ -320,11 +333,6 @@ fun main() = application {
         )
     }
 
-    val windowState = rememberWindowState(
-        width = 1100.dp,
-        height = 760.dp
-    )
-
     Window(
         onCloseRequest = {
             if (minimizeToTray && androidx.compose.ui.window.isTraySupported) {
@@ -336,11 +344,12 @@ fun main() = application {
         },
         state = windowState,
         visible = isWindowVisible,
-        title = "пробел — v2whitelist",
+        title = "ПроБел — v2whitelist",
         icon = trayIcon
     ) {
         LaunchedEffect(isWindowVisible) {
             if (isWindowVisible) {
+                windowState.isMinimized = false
                 window.toFront()
                 window.requestFocus()
             }

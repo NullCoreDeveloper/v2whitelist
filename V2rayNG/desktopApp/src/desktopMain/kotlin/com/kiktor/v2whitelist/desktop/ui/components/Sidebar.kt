@@ -72,7 +72,7 @@ fun Sidebar(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "пробел",
+                        text = "ПроБел",
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 19.sp,

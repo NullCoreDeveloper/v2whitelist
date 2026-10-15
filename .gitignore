@@ -19,6 +19,8 @@ V2rayNG/app/release/output.json
 /captures
 build/
 **/build/
+bin/
+**/bin/
 .konan/
 V2rayNG/local.properties
 

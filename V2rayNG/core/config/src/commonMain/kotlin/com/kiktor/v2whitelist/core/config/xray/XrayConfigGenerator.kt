@@ -206,7 +206,17 @@ object XrayConfigGenerator {
                 rules.add(
                     XrayRule(
                         outboundTag = "direct",
-                        domain = listOf("geosite:category-gov-ru", "geosite:ru", "domain:gov.ru", "domain:gosuslugi.ru", "domain:ya.ru", "domain:yandex.ru", "domain:vk.com", "domain:mail.ru")
+                        domain = listOf(
+                            "geosite:category-gov-ru",
+                            "geosite:category-ru",
+                            "geosite:tld-ru",
+                            "domain:gov.ru",
+                            "domain:gosuslugi.ru",
+                            "domain:ya.ru",
+                            "domain:yandex.ru",
+                            "domain:vk.com",
+                            "domain:mail.ru"
+                        )
                     )
                 )
                 rules.add(
@@ -221,7 +231,18 @@ object XrayConfigGenerator {
                 rules.add(
                     XrayRule(
                         outboundTag = "proxy",
-                        domain = listOf("geosite:category-ru-blocked", "domain:instagram.com", "domain:cdninstagram.com", "domain:facebook.com", "domain:fbcdn.net", "domain:twitter.com", "domain:x.com", "domain:t.co", "domain:notion.so")
+                        domain = listOf(
+                            "geosite:category-media-ru-blocked",
+                            "domain:instagram.com",
+                            "domain:cdninstagram.com",
+                            "domain:facebook.com",
+                            "domain:fbcdn.net",
+                            "domain:twitter.com",
+                            "domain:x.com",
+                            "domain:t.co",
+                            "domain:notion.so",
+                            "domain:rutracker.org"
+                        )
                     )
                 )
                 rules.add(
