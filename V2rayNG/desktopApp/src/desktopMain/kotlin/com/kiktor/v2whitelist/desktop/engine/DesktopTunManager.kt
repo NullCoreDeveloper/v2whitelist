@@ -133,6 +133,11 @@ object DesktopTunManager {
             GeekModeLogger.log("TUN", "Целевой сервер для исключения из туннеля: $serverIp ($serverAddress)")
         }
 
+        // 0. Подгрузка модуля ядра Linux tun
+        if (!sudoPassword.isNullOrBlank()) {
+            runSudoCommand(listOf("modprobe", "tun"), sudoPassword)
+        }
+
         // Очищаем старый интерфейс v2w-tun на случай аварийного завершения прошлого сеанса
         runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
 

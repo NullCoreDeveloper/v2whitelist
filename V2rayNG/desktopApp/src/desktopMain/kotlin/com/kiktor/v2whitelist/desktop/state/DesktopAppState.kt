@@ -1115,7 +1115,10 @@ class DesktopAppState(
                             isSystemProxyActive.value = false
                         }
                     } else {
-                        GeekModeLogger.log("TUN", "TUN интерфейс не может быть поднят. Включен системный прокси как резерв.")
+                        GeekModeLogger.log("TUN", "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав). Включен системный прокси как резерв.")
+                        if (allowNoSudoTun.value) {
+                            allowNoSudoTun.value = false
+                        }
                         if (autoEnableSystemProxy.value) {
                             DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                             isSystemProxyActive.value = true
