@@ -21,6 +21,7 @@ import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
+import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
 import io.ktor.client.request.get
@@ -543,6 +544,9 @@ class DesktopAppState(
         settingsRepo.setString("routing_mode", mode)
         GeekModeLogger.log("AppState", "Режим работы переключен на: $mode")
         if (coreState.value == DesktopCoreState.RUNNING) {
+            if (mode == "PROXY" && DesktopTunManager.isTunActive) {
+                DesktopTunManager.stop(sessionSudoPassword)
+            }
             connectCurrent()
         }
     }
@@ -983,6 +987,9 @@ class DesktopAppState(
 
     fun stopCore() {
         xrayRunner.stop()
+        if (DesktopTunManager.isTunActive) {
+            DesktopTunManager.stop(sessionSudoPassword)
+        }
         if (isSystemProxyActive.value) {
             DesktopProxyManager.disableSystemProxy()
             isSystemProxyActive.value = false
@@ -1087,23 +1094,32 @@ class DesktopAppState(
             )
             if (started) {
                 if (routingMode.value == "PROXY") {
+                    if (DesktopTunManager.isTunActive) {
+                        DesktopTunManager.stop(sessionSudoPassword)
+                    }
                     if (autoEnableSystemProxy.value) {
                         DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                         isSystemProxyActive.value = true
                     }
                 } else {
-                    // В режиме TUN, если привилегии ядра заблокированы песочницей/PR_SET_NO_NEW_PRIVS,
-                    // подстраховываем пользователя системным прокси, чтобы интернет не отваливался
-                    if (DesktopProxyManager.isLinux && !xrayRunner.isLaunchedWithSudo && autoEnableSystemProxy.value) {
-                        GeekModeLogger.log("TUN", "TUN адаптер не запущен с root правами. Включен системный прокси как резерв.")
-                        DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
-                        isSystemProxyActive.value = true
-                    } else if (autoEnableSystemProxy.value) {
-                        DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
-                        isSystemProxyActive.value = true
-                    } else if (isSystemProxyActive.value) {
-                        DesktopProxyManager.disableSystemProxy()
-                        isSystemProxyActive.value = false
+                    // Режим TUN: запуск сетевого адаптера v2w-tun через tun2socks
+                    val tunStarted = DesktopTunManager.start(
+                        socksPort = currentSocksPort,
+                        serverAddress = profile.server,
+                        sudoPassword = if (!allowNoSudoTun.value) sessionSudoPassword else null
+                    )
+                    if (tunStarted) {
+                        GeekModeLogger.log("TUN", "Сетевой интерфейс v2w-tun успешно поднят. Весь трафик ОС направлен через TUN.")
+                        if (isSystemProxyActive.value) {
+                            DesktopProxyManager.disableSystemProxy()
+                            isSystemProxyActive.value = false
+                        }
+                    } else {
+                        GeekModeLogger.log("TUN", "TUN интерфейс не может быть поднят. Включен системный прокси как резерв.")
+                        if (autoEnableSystemProxy.value) {
+                            DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
+                            isSystemProxyActive.value = true
+                        }
                     }
                 }
                 checkNetworkStatus()
