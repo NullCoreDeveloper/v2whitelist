@@ -85,6 +85,11 @@ internal object DesktopStorageManager {
             settingsFile.writeText(content)
         } catch (_: Exception) {}
     }
+
+    fun clearDiskStorage() {
+        try { serversFile.delete() } catch (_: Exception) {}
+        try { settingsFile.delete() } catch (_: Exception) {}
+    }
 }
 
 class DesktopFileServerRepository : ServerRepository {
@@ -174,15 +179,44 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
+    private fun getNetworkIdentityKey(profile: ProfileItem): String {
+        val hostOrSni = (profile.sni?.takeIf { it.isNotBlank() } ?: profile.host).orEmpty().trim().lowercase()
+        val srv = profile.server.orEmpty().trim().lowercase()
+        val pwd = profile.password.orEmpty().trim()
+        return "${profile.configType}:$srv:${profile.serverPort}:$pwd:$hostOrSni"
+    }
+
     override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) {
+        val oldVipGuids = vipList.filter { it in oldGuids }.toSet()
+        val oldVipKeys = oldVipGuids.mapNotNull { g ->
+            serverMap[g]?.let { getNetworkIdentityKey(it) }
+        }.toSet()
+
+        val oldSelectedKey = selectedGuid?.let { serverMap[it]?.let { p -> getNetworkIdentityKey(p) } }
+
         for (g in oldGuids) {
             serverMap.remove(g)
             vipList.remove(g)
         }
+
+        var restoredSelectedGuid: String? = null
+
         for ((guid, profile) in newConfigs) {
             serverMap[guid] = profile
+            val key = getNetworkIdentityKey(profile)
+            if (guid in oldVipGuids || key in oldVipKeys) {
+                if (!vipList.contains(guid)) {
+                    vipList.add(guid)
+                }
+            }
+            if (oldSelectedKey != null && key == oldSelectedKey) {
+                restoredSelectedGuid = guid
+            }
         }
-        if (selectedGuid == null || selectedGuid in oldGuids) {
+
+        if (restoredSelectedGuid != null) {
+            selectedGuid = restoredSelectedGuid
+        } else if (selectedGuid == null || selectedGuid in oldGuids) {
             selectedGuid = serverMap.keys.firstOrNull()
         }
         updateFlow()
@@ -205,14 +239,14 @@ class DesktopFileServerRepository : ServerRepository {
     override fun getVipServerGuids(): Set<String> = vipList.toSet()
 
     override fun addVipServer(guid: String) {
-        addVipServer(guid, 5)
+        addVipServer(guid, 10)
     }
 
     override fun addVipServer(guid: String, limit: Int) {
         if (guid.isBlank()) return
         vipList.remove(guid)
         vipList.add(0, guid)
-        val maxLimit = if (limit > 0) limit else 5
+        val maxLimit = if (limit > 0) limit else 10
         while (vipList.size > maxLimit) {
             vipList.removeAt(vipList.size - 1)
         }
@@ -226,7 +260,7 @@ class DesktopFileServerRepository : ServerRepository {
 
     override fun setVipServerGuids(guids: Set<String>) {
         vipList.clear()
-        vipList.addAll(guids.take(5))
+        vipList.addAll(guids)
         persist()
     }
 
@@ -324,12 +358,24 @@ class DesktopFileSettingsRepository : SettingsRepository {
     override fun getSocksPort(): Int = socksPort
     override fun setSocksPort(port: Int) {
         socksPort = port
+        httpPort = port + 1
         persist()
     }
 
-    override fun getHttpPort(): Int = httpPort
+    override fun getHttpPort(): Int = if (httpPort == socksPort || httpPort <= 0) socksPort + 1 else httpPort
     override fun setHttpPort(port: Int) {
         httpPort = port
+        persist()
+    }
+
+    override fun clearAll() {
+        appScenario = AppScenario.AUTO
+        smartFailover = true
+        socksPort = 10808
+        httpPort = 10809
+        stringMap.clear()
+        boolMap.clear()
+        intMap.clear()
         persist()
     }
 

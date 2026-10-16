@@ -40,6 +40,9 @@ class DesktopSmartConnectManager(
 ) {
     var onStageChanged: ((SmartConnectStage, String) -> Unit)? = null
     var onServerConnected: ((guid: String, profile: ProfileItem) -> Unit)? = null
+    var connectAction: ((guid: String, profile: ProfileItem) -> Unit)? = null
+
+    private val vipFailCounters = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     private fun loadLocationFilterConfig(excludeGuid: String? = null, scenario: AppScenario): SmartServerFilterConfig {
         val filterModeStr = settingsRepo.getString("pref_location_filter_mode", "EXCLUDE")
@@ -101,13 +104,21 @@ class DesktopSmartConnectManager(
                     minSpeedMbps = minSpeedMbps
                 )
                 if (res.success) {
+                    vipFailCounters[guid] = 0
                     GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден: ${profile.remarks} (${res.latencyMs}ms, ${res.speedMbps ?: "—"} Мбит/с)")
                     connectAndFinish(guid, profile)
                     onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено к VIP: ${profile.remarks}")
                     return@withContext true
                 } else {
-                    GeekModeLogger.log("SmartConnect", "VIP сервер ${profile.remarks} не прошел проверку, удаляем из VIP.")
-                    serverRepo.removeVipServer(guid)
+                    val fails = (vipFailCounters[guid] ?: 0) + 1
+                    vipFailCounters[guid] = fails
+                    if (fails >= 3) {
+                        GeekModeLogger.log("SmartConnect", "VIP сервер ${profile.remarks} не прошел проверку 3 раза подряд ($fails/3), удаляем из VIP.")
+                        serverRepo.removeVipServer(guid)
+                        vipFailCounters.remove(guid)
+                    } else {
+                        GeekModeLogger.log("SmartConnect", "VIP сервер ${profile.remarks} временно недоступен (неудача $fails/3), сохраняем в VIP.")
+                    }
                 }
             }
         }
@@ -200,8 +211,9 @@ class DesktopSmartConnectManager(
                     minSpeedMbps = minSpeedMbps
                 )
                 if (res.success) {
+                    val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
                     GeekModeLogger.log("SmartConnect", "Классический фоллбек нашел узел: ${profile.remarks}")
-                    serverRepo.addVipServer(guid)
+                    serverRepo.addVipServer(guid, limit)
                     connectAndFinish(guid, profile)
                     onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
                     return@withContext true
@@ -216,27 +228,30 @@ class DesktopSmartConnectManager(
 
     private fun connectAndFinish(guid: String, profile: ProfileItem) {
         serverRepo.setSelectedServerGuid(guid)
-        xrayRunner.start(
-            profile = profile,
-            scenario = settingsRepo.getAppScenario(),
-            xrayBinaryPath = settingsRepo.getString("xray_path").ifBlank { null },
-            httpPort = settingsRepo.getHttpPort(),
-            socksPort = settingsRepo.getSocksPort()
-        )
+        if (connectAction != null) {
+            connectAction?.invoke(guid, profile)
+        } else {
+            xrayRunner.start(
+                profile = profile,
+                scenario = settingsRepo.getAppScenario(),
+                xrayBinaryPath = settingsRepo.getString("xray_path").ifBlank { null },
+                httpPort = settingsRepo.getHttpPort(),
+                socksPort = settingsRepo.getSocksPort()
+            )
+        }
         onServerConnected?.invoke(guid, profile)
     }
 
     /**
-     * Очистка VIP-кэша от узлов, не проходящих новый фильтр локаций.
+     * Очистка VIP-кэша только от удаленных серверов (не удаляет сервера других локаций/сценариев).
      */
     fun cleanVipCacheForFilter() {
         val vips = serverRepo.getVipServerGuids()
-        val allServers = serverRepo.serversFlow.value
-        val filterConfig = loadLocationFilterConfig(scenario = settingsRepo.getAppScenario())
-        val validGuids = SmartServerSelector.filterServerPairs(allServers, filterConfig).map { it.first }.toSet()
+        val allGuids = serverRepo.serversFlow.value.map { it.first }.toSet()
         for (g in vips) {
-            if (!validGuids.contains(g)) {
+            if (!allGuids.contains(g)) {
                 serverRepo.removeVipServer(g)
+                vipFailCounters.remove(g)
             }
         }
     }
@@ -253,6 +268,7 @@ class DesktopSmartConnectManager(
 
         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск следующего узла...")
         val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+        val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
         for ((guid, profile) in candidates.shuffled()) {
             val res = DesktopProfileVerifier.verifyProfile(
                 profile = profile,
@@ -261,7 +277,7 @@ class DesktopSmartConnectManager(
                 minSpeedMbps = 0.5
             )
             if (res.success) {
-                serverRepo.addVipServer(guid)
+                serverRepo.addVipServer(guid, limit)
                 connectAndFinish(guid, profile)
                 onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
                 return@withContext true
@@ -281,6 +297,7 @@ class DesktopSmartConnectManager(
         scope.launch(Dispatchers.IO) {
             GeekModeLogger.log("SmartConnect", "Фоновое пополнение VIP-кэша: ${leftovers.size} узлов...")
             var added = 0
+            val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
             for ((guid, profile, _) in leftovers.take(8)) {
                 val res = DesktopProfileVerifier.verifyProfile(
                     profile = profile,
@@ -289,7 +306,7 @@ class DesktopSmartConnectManager(
                     minSpeedMbps = minSpeedMbps
                 )
                 if (res.success) {
-                    serverRepo.addVipServer(guid)
+                    serverRepo.addVipServer(guid, limit)
                     added++
                     GeekModeLogger.log("SmartConnect", "Узел ${profile.remarks} добавлен в VIP кэш.")
                 }

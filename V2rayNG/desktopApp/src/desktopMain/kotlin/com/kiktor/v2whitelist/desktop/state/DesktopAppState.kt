@@ -17,6 +17,7 @@ import com.kiktor.v2whitelist.core.subscription.parser.SubscriptionParser
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
+import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
@@ -289,6 +290,10 @@ class DesktopAppState(
         }
         smartConnectManager.onServerConnected = { guid, _ ->
             _selectedGuid.value = guid
+        }
+        smartConnectManager.connectAction = { guid, _ ->
+            _selectedGuid.value = guid
+            connectCurrent()
         }
 
         // Автопоиск Xray бинарника, если не задан
@@ -689,7 +694,10 @@ class DesktopAppState(
      * а VIP-кэш и пинг не превращаются в осиротевшие shortid.
      */
     fun generateStableServerGuid(profile: ProfileItem): String {
-        val key = "${profile.configType}:${profile.server}:${profile.serverPort}:${profile.password}:${profile.sni}:${profile.remarks}:${profile.subscriptionId}"
+        val hostOrSni = (profile.sni?.takeIf { it.isNotBlank() } ?: profile.host).orEmpty().trim().lowercase()
+        val srv = profile.server.orEmpty().trim().lowercase()
+        val pwd = profile.password.orEmpty().trim()
+        val key = "${profile.configType}:$srv:${profile.serverPort}:$pwd:$hostOrSni"
         return try {
             val md = java.security.MessageDigest.getInstance("MD5")
             val digest = md.digest(key.toByteArray(Charsets.UTF_8))
@@ -856,11 +864,7 @@ class DesktopAppState(
         } else {
             // Мгновенный визуальный фидбек для пользователя
             xrayRunner.markStarting()
-            if (_scenario.value == AppScenario.AUTO || _selectedGuid.value == null) {
-                startSmartConnect()
-            } else {
-                connectCurrent()
-            }
+            startSmartConnect()
         }
     }
 
@@ -882,20 +886,14 @@ class DesktopAppState(
             isSwitchingServer.value = true
             try {
                 val current = _selectedGuid.value
-                val vips = serverRepo.getVipServerGuids().toList()
-                val nextVip = vips.firstOrNull { it != current }
-                if (nextVip != null) {
-                    GeekModeLogger.log("AppState", "Смена сервера: переключение на следующий VIP ($nextVip)")
-                    selectAndConnectServer(nextVip)
-                } else {
-                    val all = serverRepo.serversFlow.value.map { it.first }
-                    val nextGeneral = all.firstOrNull { it != current }
-                    if (nextGeneral != null) {
-                        GeekModeLogger.log("AppState", "Смена сервера: переключение на следующий узел ($nextGeneral)")
-                        selectAndConnectServer(nextGeneral)
-                    } else {
-                        smartConnectManager.switchToNextServer(current)
-                    }
+                val success = smartConnectManager.switchToNextServer(current)
+                if (!success) {
+                    GeekModeLogger.log("AppState", "Быстрое переключение не нашло узлов, запуск полного поиска...")
+                    smartConnectManager.startSmartConnect(
+                        scenario = _scenario.value,
+                        minSpeedMbps = minSpeedThresholdMbps.value,
+                        speedCheckEnabled = speedTestOnCheck.value
+                    )
                 }
             } finally {
                 isSwitchingServer.value = false
@@ -1022,12 +1020,15 @@ class DesktopAppState(
 
             val endpoint = if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) customEndpointUrl.value.trim() else null
 
+            val currentSocksPort = socksPort.value
+            val currentHttpPort = currentSocksPort + 1
+
             val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
                 xrayBinaryPath = xrayBinaryPath.value.ifBlank { null },
-                httpPort = httpPort.value,
-                socksPort = localProxyPort.value,
+                httpPort = currentHttpPort,
+                socksPort = currentSocksPort,
                 listenAddress = listenAddr,
                 customDirectDomains = directDomains,
                 customProxyDomains = proxyDomains,
@@ -1050,11 +1051,20 @@ class DesktopAppState(
             if (started) {
                 if (routingMode.value == "PROXY") {
                     if (autoEnableSystemProxy.value) {
-                        DesktopProxyManager.enableSystemProxy(localProxyPort.value, httpPort.value)
+                        DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                         isSystemProxyActive.value = true
                     }
                 } else {
-                    if (isSystemProxyActive.value) {
+                    // В режиме TUN, если привилегии ядра заблокированы песочницей/PR_SET_NO_NEW_PRIVS,
+                    // подстраховываем пользователя системным прокси, чтобы интернет не отваливался
+                    if (DesktopProxyManager.isLinux && !xrayRunner.isLaunchedWithSudo && autoEnableSystemProxy.value) {
+                        GeekModeLogger.log("TUN", "TUN адаптер не запущен с root правами. Включен системный прокси как резерв.")
+                        DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
+                        isSystemProxyActive.value = true
+                    } else if (autoEnableSystemProxy.value) {
+                        DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
+                        isSystemProxyActive.value = true
+                    } else if (isSystemProxyActive.value) {
                         DesktopProxyManager.disableSystemProxy()
                         isSystemProxyActive.value = false
                     }
@@ -1386,7 +1396,12 @@ class DesktopAppState(
         sniffingEnabled.value = sniffingVal
         routeOnly.value = routeOnlyVal
         allowInsecure.value = allowInsecureVal
-        localProxyPort.value = localPortVal
+        val effectiveSocks = localPortVal
+        val effectiveHttp = effectiveSocks + 1
+        localProxyPort.value = effectiveSocks
+        socksPort.value = effectiveSocks
+        httpPort.value = effectiveHttp
+
         localProxyLogin.value = localLoginVal
         localProxyPassword.value = localPassVal
         remoteDns.value = remoteDnsVal
@@ -1405,8 +1420,9 @@ class DesktopAppState(
         settingsRepo.setString("subscription_url", subUrl)
         settingsRepo.setString("xray_path", xrayPath)
         settingsRepo.setString("v2w_scan_path", v2wPath)
-        settingsRepo.setHttpPort(httpP)
-        settingsRepo.setSocksPort(socksP)
+        settingsRepo.setHttpPort(effectiveHttp)
+        settingsRepo.setSocksPort(effectiveSocks)
+        settingsRepo.setInt("pref_local_proxy_port", effectiveSocks)
         settingsRepo.setBoolean("auto_enable_system_proxy", autoSystemProxy)
         settingsRepo.setBoolean("allow_lan", lan)
         settingsRepo.setString("custom_direct_domains", directDomains)
@@ -1452,7 +1468,6 @@ class DesktopAppState(
         settingsRepo.setBoolean("pref_sniffing_enabled", sniffingVal)
         settingsRepo.setBoolean("pref_route_only", routeOnlyVal)
         settingsRepo.setBoolean("pref_allow_insecure", allowInsecureVal)
-        settingsRepo.setInt("pref_local_proxy_port", localPortVal)
         settingsRepo.setString("pref_local_proxy_login", localLoginVal)
         settingsRepo.setString("pref_local_proxy_pass", localPassVal)
         settingsRepo.setString("pref_remote_dns", remoteDnsVal)
@@ -1474,5 +1489,40 @@ class DesktopAppState(
         if (coreState.value == DesktopCoreState.RUNNING) {
             connectCurrent()
         }
+    }
+
+    /**
+     * Сброс всех настроек, серверов, подписок и кэша к заводскому состоянию по одной кнопке.
+     */
+    fun resetAllSettingsAndData() {
+        stopCore()
+        DesktopProxyManager.disableSystemProxy()
+        isSystemProxyActive.value = false
+
+        serverRepo.clearAllServers()
+        settingsRepo.clearAll()
+        DesktopStorageManager.clearDiskStorage()
+
+        // Сброс StateFlow к дефолтным значениям
+        _scenario.value = AppScenario.AUTO
+        _selectedGuid.value = null
+        vipGuids.value = emptySet()
+        socksPort.value = 10808
+        httpPort.value = 10809
+        localProxyPort.value = 10808
+        autoEnableSystemProxy.value = false
+        allowLan.value = false
+        routingMode.value = "PROXY"
+        minSpeedThresholdMbps.value = 1.0
+        speedTestOnCheck.value = true
+        smartConnectBatchSize.value = 20
+        smartFailover.value = true
+
+        // Восстановление подписок по умолчанию
+        _subscriptions.value = DefaultSubscriptions.PREPOPULATED_SUBS
+        saveSubscriptionsToStorage(_subscriptions.value)
+
+        clipboardNotice.value = "Все настройки, серверы и кэш успешно сброшены к начальным значениям."
+        GeekModeLogger.log("AppState", "Полный сброс всех настроек, подписок и серверов выполнен.")
     }
 }

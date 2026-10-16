@@ -42,7 +42,8 @@ class XrayDesktopRunner(
     private var tempConfigFile: File? = null
     private var logJob: Job? = null
     private var currentSudoPassword: String? = null
-    private var isLaunchedWithSudo: Boolean = false
+    var isLaunchedWithSudo: Boolean = false
+        private set
 
     /**
      * Поиск исполняемого файла Xray:

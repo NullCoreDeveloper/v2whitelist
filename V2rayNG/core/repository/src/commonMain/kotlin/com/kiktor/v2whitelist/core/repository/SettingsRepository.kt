@@ -26,6 +26,8 @@ interface SettingsRepository {
 
     fun getInt(key: String, defaultValue: Int = 0): Int
     fun setInt(key: String, value: Int)
+
+    fun clearAll() {}
 }
 
 /**
@@ -83,5 +85,15 @@ class InMemorySettingsRepository : SettingsRepository {
 
     override fun setInt(key: String, value: Int) {
         intMap[key] = value
+    }
+
+    override fun clearAll() {
+        appScenario = AppScenario.AUTO
+        smartFailover = true
+        socksPort = 10808
+        httpPort = 10809
+        stringMap.clear()
+        boolMap.clear()
+        intMap.clear()
     }
 }

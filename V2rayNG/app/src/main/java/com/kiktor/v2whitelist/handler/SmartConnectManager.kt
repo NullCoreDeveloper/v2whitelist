@@ -42,6 +42,7 @@ import libv2ray.CoreController
 
 object SmartConnectManager {
     val isScanning = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val vipFailCounters = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     private fun sendStatus(context: Context, status: String) {
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
@@ -121,16 +122,16 @@ object SmartConnectManager {
     }
 
     fun cleanVipCacheForFilter() {
-        val allServers = MmkvManager.decodeServerList()
-        val validFilteredGuids = filterServers(allServers, filterByScenario = false).map { it.first }.toSet()
+        val allServers = MmkvManager.decodeServerList().toSet()
         val currentVipGuids = MmkvManager.getVipCache()
         for (guid in currentVipGuids) {
-            if (!validFilteredGuids.contains(guid)) {
+            if (!allServers.contains(guid)) {
                 MmkvManager.removeVipServer(guid)
+                vipFailCounters.remove(guid)
             }
         }
         val currentSelected = MmkvManager.getSelectServer()
-        if (currentSelected != null && currentSelected.isNotEmpty() && !validFilteredGuids.contains(currentSelected)) {
+        if (currentSelected != null && currentSelected.isNotEmpty() && !allServers.contains(currentSelected)) {
             MmkvManager.setSelectServer("")
         }
     }
@@ -222,6 +223,7 @@ object SmartConnectManager {
         if (profileCheckEnabled) {
             for (candidate in validResults) {
                 if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                    vipFailCounters[candidate.first] = 0
                     connectToBest(context, candidate, isStartup, isFromVipCache = true)
                     val leftovers = validResults.filter { it.first != candidate.first }
                     if (leftovers.isNotEmpty()) {
@@ -229,13 +231,21 @@ object SmartConnectManager {
                     }
                     return true
                 } else {
-                    GeekModeLogger.log("SmartConnect", "VIP Cache: server ${candidate.first} failed deep check, removing")
-                    MmkvManager.removeVipServer(candidate.first)
+                    val fails = (vipFailCounters[candidate.first] ?: 0) + 1
+                    vipFailCounters[candidate.first] = fails
+                    if (fails >= 3) {
+                        GeekModeLogger.log("SmartConnect", "VIP Cache: server ${candidate.first} failed deep check 3 times ($fails/3), removing")
+                        MmkvManager.removeVipServer(candidate.first)
+                        vipFailCounters.remove(candidate.first)
+                    } else {
+                        GeekModeLogger.log("SmartConnect", "VIP Cache: server ${candidate.first} temporarily failed check ($fails/3), keeping in VIP")
+                    }
                 }
             }
         } else {
             val candidate = validResults.firstOrNull()
             if (candidate != null) {
+                vipFailCounters[candidate.first] = 0
                 connectToBest(context, candidate, isStartup, isFromVipCache = true)
                 val leftovers = validResults.filter { it.first != candidate.first }
                 if (leftovers.isNotEmpty()) {

@@ -608,7 +608,19 @@ fun SettingsScreen(
             SettingSwitchRow(title = "Домен только для маршрутизации", desc = "Использовать доменное имя только для маршрутизации", checked = routeOnly, onCheckedChange = { routeOnly = it })
             SettingSwitchRow(title = "Разрешать соединения из LAN", desc = "Другие устройства в домашней сети могут использовать ваш прокси", checked = allowLan, onCheckedChange = { allowLan = it })
             SettingSwitchRow(title = "Разрешать небезопасные соединения (Insecure)", desc = "Отключить строгую проверку TLS сертификатов", checked = allowInsecure, onCheckedChange = { allowInsecure = it })
-            OutlinedTextField(value = localPort, onValueChange = { localPort = it }, label = { Text("Порт локального прокси (35255)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = localPort,
+                onValueChange = { localPort = it },
+                label = { Text("Порт SOCKS5 прокси (по умолчанию 10808)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            val socksPortInt = localPort.toIntOrNull() ?: 10808
+            Text(
+                text = "HTTP порт прокси: ${socksPortInt + 1} (автоматически SOCKS5 + 1)",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(value = localLogin, onValueChange = { localLogin = it }, label = { Text("Логин локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
@@ -653,6 +665,54 @@ fun SettingsScreen(
             Spacer(Modifier.height(10.dp))
             SettingSwitchRow(title = "Получать Pre-release (Beta) обновления", desc = "Только для разработчиков и тестировщиков! Экспериментальные сборки.", checked = betaUpdates, onCheckedChange = { betaUpdates = it })
             SettingSwitchRow(title = "Сворачивать в системный трей", desc = "При закрытии окна программа продолжает работать в фоне", checked = minimizeToTray, onCheckedChange = { minimizeToTray = it })
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 14. Сброс всех настроек и данных
+        var showResetConfirmDialog by remember { mutableStateOf(false) }
+
+        AccordionSection(title = "Сброс и очистка приложения", icon = Icons.Default.DeleteForever) {
+            Text(
+                text = "Сбросить все настройки, подписки, серверы и VIP-кэш к начальному заводскому состоянию.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = { showResetConfirmDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Сбросить все настройки и серверы")
+            }
+        }
+
+        if (showResetConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetConfirmDialog = false },
+                title = { Text("Сбросить все данные?") },
+                text = {
+                    Text("Это действие остановит ядро, очистит все добавленные серверы, подписки, историю VIP-кэша и вернет все настройки приложения к значениям по умолчанию. Продолжить?")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showResetConfirmDialog = false
+                            state.resetAllSettingsAndData()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Да, сбросить всё")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showResetConfirmDialog = false }) {
+                        Text("Отмена")
+                    }
+                }
+            )
         }
 
         Spacer(Modifier.height(40.dp))

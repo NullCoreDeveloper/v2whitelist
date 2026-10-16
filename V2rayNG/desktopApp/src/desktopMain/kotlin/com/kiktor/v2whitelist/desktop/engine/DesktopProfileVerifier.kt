@@ -36,10 +36,10 @@ object DesktopProfileVerifier {
     suspend fun verifyProfile(
         profile: ProfileItem,
         xrayBinaryPath: String? = null,
-        timeoutMs: Long = 4000L,
+        timeoutMs: Long = 7000L,
         speedCheckEnabled: Boolean = true,
         minSpeedMbps: Double = 1.0,
-        bytesToDownload: Long = 1_500_000L
+        bytesToDownload: Long = 500_000L
     ): VerifyResult = withContext(Dispatchers.IO) {
         val runner = XrayDesktopRunner()
         val binary = runner.findXrayExecutable(xrayBinaryPath)
@@ -96,7 +96,7 @@ object DesktopProfileVerifier {
             // ── Шаг 2: Замер скорости (если включен) ──
             var mbps: Double? = null
             if (speedCheckEnabled) {
-                mbps = measureSpeed(testPort, bytesToDownload, timeoutMs = 5000L)
+                mbps = measureSpeed(testPort, bytesToDownload, timeoutMs = timeoutMs)
                 if (mbps != null) {
                     val formatted = "%.2f".format(mbps)
                     GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости = $formatted Мбит/с")
@@ -112,13 +112,8 @@ object DesktopProfileVerifier {
                             errorMessage = "Скорость ниже минимального порога"
                         )
                     }
-                } else if (minSpeedMbps > 0.0) {
-                    GeekModeLogger.log("Verifier", "${profile.remarks}: не удалось замерить скорость -> отклонен")
-                    return@withContext VerifyResult(
-                        success = false,
-                        latencyMs = latency,
-                        errorMessage = "Таймаут замера скорости"
-                    )
+                } else {
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости завершился таймаутом, но HTTP 204 успешен -> узел допущен")
                 }
             }
 
