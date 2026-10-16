@@ -106,8 +106,9 @@ class DesktopFileServerRepository : ServerRepository {
         for (item in storage.servers) {
             serverMap[item.guid] = item.profile
         }
-        vipList.addAll(storage.vipGuids)
-        selectedGuid = storage.selectedGuid ?: serverMap.keys.firstOrNull()
+        vipList.addAll(storage.vipGuids.filter { serverMap.containsKey(it) })
+        val saved = storage.selectedGuid
+        selectedGuid = if (saved != null && serverMap.containsKey(saved)) saved else serverMap.keys.firstOrNull()
         updateFlow()
     }
 
@@ -189,7 +190,11 @@ class DesktopFileServerRepository : ServerRepository {
     }
 
     override fun getSelectedServerGuid(): String? {
-        return selectedGuid ?: serverMap.keys.firstOrNull()
+        val guid = selectedGuid
+        if (guid != null && serverMap.containsKey(guid)) {
+            return guid
+        }
+        return serverMap.keys.firstOrNull()
     }
 
     override fun setSelectedServerGuid(guid: String?) {
