@@ -242,37 +242,15 @@ class XrayDesktopRunner(
 
             // Быстрая проверка, что процесс не завершился с ошибкой мгновенно
             try {
-                proc.waitFor(80, java.util.concurrent.TimeUnit.MILLISECONDS)
+                proc.waitFor(100, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (_: Exception) {}
             if (!proc.isAlive) {
-                if (useSudo) {
-                    GeekModeLogger.log("DesktopRunner", "Запуск через sudo завершился с кодом ${proc.exitValue()}. Пробуем резервный прямой запуск ядра...")
-                    logJob?.cancel()
-                    logJob = null
-                    val directPb = ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
-                    if (assetDir != null) directPb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
-                    val directProc = directPb.start()
-                    process = directProc
-                    isLaunchedWithSudo = false
-                    logJob = scope.launch {
-                        try {
-                            BufferedReader(InputStreamReader(directProc.inputStream)).use { reader ->
-                                var line: String? = null
-                                while (isActive && reader.readLine().also { line = it } != null) {
-                                    line?.let { GeekModeLogger.log("XrayCore", it) }
-                                }
-                            }
-                        } catch (_: Exception) {}
-                    }
-                    try { directProc.waitFor(80, java.util.concurrent.TimeUnit.MILLISECONDS) } catch (_: Exception) {}
-                    if (directProc.isAlive) {
-                        _coreState.value = DesktopCoreState.RUNNING
-                        GeekModeLogger.log("DesktopRunner", "Ядро успешно запущено в прямом режиме. HTTP: $httpPort, SOCKS: $socksPort")
-                        return true
-                    }
-                }
                 val exitCode = proc.exitValue()
-                val err = "Процесс Xray завершился сразу с кодом: $exitCode"
+                val err = if (useSudo) {
+                    "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале либо настройте: sudo setcap cap_net_admin,cap_net_bind_service=+ep ${binary.absolutePath}"
+                } else {
+                    "Процесс Xray завершился сразу с кодом: $exitCode"
+                }
                 GeekModeLogger.log("DesktopRunner", err)
                 _lastError.value = err
                 _coreState.value = DesktopCoreState.ERROR

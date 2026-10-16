@@ -213,20 +213,53 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+
+                if (isVerifying) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Проверка прав доступа sudo...",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = { state.enableTunWithoutSudo() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("🚀 Запустить без sudo (через setcap)", fontSize = 12.sp)
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    state.submitSudoPassword(passwordInput)
-                }
+                    if (passwordInput.isNotBlank() && !isVerifying) {
+                        state.submitSudoPassword(passwordInput)
+                    }
+                },
+                enabled = passwordInput.isNotBlank() && !isVerifying
             ) {
                 Text("Подтвердить")
             }
         },
         dismissButton = {
             TextButton(
-                onClick = { state.dismissSudoDialog() }
+                onClick = { state.dismissSudoDialog() },
+                enabled = !isVerifying
             ) {
                 Text("Отмена")
             }

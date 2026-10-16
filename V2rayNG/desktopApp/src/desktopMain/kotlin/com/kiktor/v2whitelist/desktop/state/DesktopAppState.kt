@@ -548,11 +548,29 @@ class DesktopAppState(
     }
 
     fun submitSudoPassword(password: String) {
-        sessionSudoPassword = password
-        showSudoDialog.value = false
-        sudoError.value = null
-        applyRoutingMode("TUN")
-        GeekModeLogger.log("TUN", "Режим TUN активирован. Пароль sudo сохранен в оперативной памяти.")
+        if (password.isBlank()) {
+            sudoError.value = "Пароль не может быть пустым"
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            isVerifyingSudo.value = true
+            sudoError.value = null
+
+            val (valid, errorMsg) = verifySudoPassword(password)
+            isVerifyingSudo.value = false
+
+            if (valid) {
+                sessionSudoPassword = password
+                showSudoDialog.value = false
+                sudoError.value = null
+                applyRoutingMode("TUN")
+                GeekModeLogger.log("TUN", "Права sudo успешно подтверждены. Режим TUN активирован.")
+            } else {
+                sudoError.value = errorMsg ?: "Неверный пароль sudo. Пожалуйста, попробуйте снова."
+                GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: ${sudoError.value}")
+            }
+        }
     }
 
     fun dismissSudoDialog() {
