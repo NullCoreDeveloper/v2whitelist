@@ -64,6 +64,7 @@ fun MainScreen(
     val exitIp by state.exitIp.collectAsState()
     val meshEnabled by state.meshGradientEnabled.collectAsState()
     val vipGuids by state.vipGuids.collectAsState()
+    val isManualSelection by state.isManualSelection.collectAsState()
 
     var isServerListExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -226,8 +227,12 @@ fun MainScreen(
 
                         val detailText = when {
                             isV2WScanning && smartConnectStatus != null -> smartConnectStatus.orEmpty()
-                            coreState == DesktopCoreState.RUNNING -> activeProfile?.remarks ?: "Защищённый туннель активен"
-                            activeProfile != null -> "Выбран: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
+                            coreState == DesktopCoreState.RUNNING -> {
+                                val modePrefix = if (isManualSelection) "Ручной выбор: " else ""
+                                "$modePrefix${activeProfile?.remarks ?: "Защищённый туннель активен"}"
+                            }
+                            isManualSelection && activeProfile != null -> "Выбран вручную: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
+                            activeProfile != null -> "Сценарий: ${scenario.name} (готов к автопоиску)"
                             else -> "Нажмите Старт для безопасного подключения"
                         }
                         Text(
@@ -442,10 +447,10 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Сценарий маршрутизации:",
+                        text = if (isManualSelection) "Сценарий: Ручной выбор узла" else "Сценарий: Автопоиск",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isManualSelection) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     OutlinedButton(
                         onClick = { state.promptLocationFilterDialog() },
@@ -466,28 +471,28 @@ fun MainScreen(
                     ScenarioChip(
                         title = "Авто",
                         subtitle = "Баланс БС и ЧС",
-                        selected = scenario == AppScenario.AUTO,
+                        selected = !isManualSelection && scenario == AppScenario.AUTO,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.AUTO) }
                     )
                     ScenarioChip(
                         title = "Белый список",
                         subtitle = "БС (Только РФ)",
-                        selected = scenario == AppScenario.WHITELIST,
+                        selected = !isManualSelection && scenario == AppScenario.WHITELIST,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.WHITELIST) }
                     )
                     ScenarioChip(
                         title = "Чёрный список",
                         subtitle = "ЧС (Обход блоков)",
-                        selected = scenario == AppScenario.VPN_BLACKLIST,
+                        selected = !isManualSelection && scenario == AppScenario.VPN_BLACKLIST,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.VPN_BLACKLIST) }
                     )
                     ScenarioChip(
                         title = "YouTube",
                         subtitle = "YouTube и Музыка",
-                        selected = scenario == AppScenario.YOUTUBE,
+                        selected = !isManualSelection && scenario == AppScenario.YOUTUBE,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.YOUTUBE) }
                     )

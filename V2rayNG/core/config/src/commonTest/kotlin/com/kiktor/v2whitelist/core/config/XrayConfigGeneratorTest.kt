@@ -61,4 +61,24 @@ class XrayConfigGeneratorTest {
         val jsonStr = XrayConfigGenerator.generateJson(profile, XrayGeneratorOptions(listenAddress = "0.0.0.0"))
         assertTrue(jsonStr.contains("\"listen\": \"0.0.0.0\""))
     }
+
+    @Test
+    fun testGenerateProxyChainWithCustomEndpoint() {
+        val baseNodeUri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=reality&sni=dl.google.com&fp=chrome&pbk=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789&sid=1234abcd&spx=%2F&type=tcp#BaseNode"
+        val customEndpointUri = "trojan://mypassword@mycustomendpoint.com:443?security=tls&sni=mycustomendpoint.com#CustomEndpoint"
+
+        val profile = UniversalConfigParser.parse(baseNodeUri)!!
+        val options = XrayGeneratorOptions(
+            socksPort = 10808,
+            customEndpointUrl = customEndpointUri
+        )
+
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+        println("Generated Proxy Chain JSON:\n$jsonStr")
+
+        assertTrue(jsonStr.contains("\"tag\": \"proxy\""))
+        assertTrue(jsonStr.contains("\"tag\": \"proxy1\""))
+        assertTrue(jsonStr.contains("\"dialerProxy\": \"proxy1\""))
+        assertTrue(jsonStr.contains("mycustomendpoint.com"))
+    }
 }

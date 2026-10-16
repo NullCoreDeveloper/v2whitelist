@@ -103,8 +103,14 @@ object XrayConfigGenerator {
         if (endpointProfile != null) {
             // Цепочка: Local -> Smart Connect (proxy1) -> Custom Endpoint (proxy) -> Internet
             val smartConnectOutbound = rawProxyOutbound.copy(tag = "proxy1")
-            val endpointOutbound = buildProxyOutbound(endpointProfile, options).copy(
+            val baseEndpointOutbound = buildProxyOutbound(endpointProfile, options)
+            val currentStream = baseEndpointOutbound.streamSettings ?: XrayStreamSettings()
+            val chainedStream = currentStream.copy(
+                sockopt = (currentStream.sockopt ?: SockoptSettings()).copy(dialerProxy = "proxy1")
+            )
+            val endpointOutbound = baseEndpointOutbound.copy(
                 tag = "proxy",
+                streamSettings = chainedStream,
                 proxySettings = OutboundProxySettings(tag = "proxy1")
             )
             outbounds.add(endpointOutbound)
@@ -113,7 +119,14 @@ object XrayConfigGenerator {
             val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
             val upstreamTag = "upstream-proxy"
             val proxyOutbound = if (hasUpstream) {
-                rawProxyOutbound.copy(proxySettings = OutboundProxySettings(tag = upstreamTag))
+                val currentStream = rawProxyOutbound.streamSettings ?: XrayStreamSettings()
+                val chainedStream = currentStream.copy(
+                    sockopt = (currentStream.sockopt ?: SockoptSettings()).copy(dialerProxy = upstreamTag)
+                )
+                rawProxyOutbound.copy(
+                    streamSettings = chainedStream,
+                    proxySettings = OutboundProxySettings(tag = upstreamTag)
+                )
             } else {
                 rawProxyOutbound
             }

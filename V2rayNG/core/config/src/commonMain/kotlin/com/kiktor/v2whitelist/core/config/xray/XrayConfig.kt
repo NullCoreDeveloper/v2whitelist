@@ -116,6 +116,13 @@ data class ServerEntry(
 )
 
 @Serializable
+data class SockoptSettings(
+    val dialerProxy: String? = null,
+    val tcpKeepAliveInterval: Int? = null,
+    val mark: Int? = null
+)
+
+@Serializable
 data class XrayStreamSettings(
     val network: String = "tcp",
     val security: String? = null,
@@ -126,7 +133,8 @@ data class XrayStreamSettings(
     val xhttpSettings: XhttpSettings? = null,
     val tlsSettings: TlsSettings? = null,
     val realitySettings: RealitySettings? = null,
-    val hysteriaSettings: HysteriaSettings? = null
+    val hysteriaSettings: HysteriaSettings? = null,
+    val sockopt: SockoptSettings? = null
 )
 
 @Serializable

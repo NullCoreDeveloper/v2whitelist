@@ -237,7 +237,10 @@ class DesktopSmartConnectManager(
                 scenario = settingsRepo.getAppScenario(),
                 xrayBinaryPath = settingsRepo.getString("xray_path").ifBlank { null },
                 httpPort = settingsRepo.getHttpPort(),
-                socksPort = settingsRepo.getSocksPort()
+                socksPort = settingsRepo.getSocksPort(),
+                customEndpointUrl = if (settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)) {
+                    settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
+                } else null
             )
         }
         onServerConnected?.invoke(guid, profile)

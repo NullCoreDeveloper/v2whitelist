@@ -207,6 +207,9 @@ class DesktopAppState(
     val useCustomEndpoint = MutableStateFlow(settingsRepo.getBoolean("pref_custom_endpoint_enabled", false))
     val customEndpointUrl = MutableStateFlow(settingsRepo.getString("pref_custom_endpoint_url", ""))
 
+    // Ручной выбор сервера vs сценарий (Авто, БС, ЧС, YouTube)
+    val isManualSelection = MutableStateFlow(settingsRepo.getBoolean("pref_manual_server_selected", false))
+
     // Geek Mode state
     val globalSni = MutableStateFlow(settingsRepo.getString("pref_global_sni", ""))
     val cloudflareIp = MutableStateFlow(settingsRepo.getString("pref_cloudflare_ip", ""))
@@ -290,9 +293,13 @@ class DesktopAppState(
         }
         smartConnectManager.onServerConnected = { guid, _ ->
             _selectedGuid.value = guid
+            isManualSelection.value = false
+            settingsRepo.setBoolean("pref_manual_server_selected", false)
         }
         smartConnectManager.connectAction = { guid, _ ->
             _selectedGuid.value = guid
+            isManualSelection.value = false
+            settingsRepo.setBoolean("pref_manual_server_selected", false)
             connectCurrent()
         }
 
@@ -839,6 +846,8 @@ class DesktopAppState(
     fun selectServer(guid: String) {
         _selectedGuid.value = guid
         serverRepo.setSelectedServerGuid(guid)
+        isManualSelection.value = true
+        settingsRepo.setBoolean("pref_manual_server_selected", true)
         if (coreState.value == DesktopCoreState.RUNNING) {
             connectCurrent()
         }
@@ -847,14 +856,19 @@ class DesktopAppState(
     fun selectAndConnectServer(guid: String) {
         _selectedGuid.value = guid
         serverRepo.setSelectedServerGuid(guid)
+        isManualSelection.value = true
+        settingsRepo.setBoolean("pref_manual_server_selected", true)
         connectCurrent()
     }
 
     fun setScenario(sc: AppScenario) {
         _scenario.value = sc
         settingsRepo.setAppScenario(sc)
-        if (coreState.value == DesktopCoreState.RUNNING) {
-            connectCurrent()
+        isManualSelection.value = false
+        settingsRepo.setBoolean("pref_manual_server_selected", false)
+        if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
+            // Запуск автопоиска узлов под выбранный сценарий (Авто / БС / ЧС / YouTube)
+            startSmartConnect()
         }
     }
 
@@ -864,7 +878,13 @@ class DesktopAppState(
         } else {
             // Мгновенный визуальный фидбек для пользователя
             xrayRunner.markStarting()
-            startSmartConnect()
+            if (isManualSelection.value && !_selectedGuid.value.isNullOrBlank()) {
+                GeekModeLogger.log("DesktopApp", "Ручной режим: запуск выбранного сервера ${_selectedGuid.value}")
+                connectCurrent()
+            } else {
+                GeekModeLogger.log("DesktopApp", "Авто-режим (${_scenario.value}): запуск SmartConnect...")
+                startSmartConnect()
+            }
         }
     }
 
@@ -884,6 +904,8 @@ class DesktopAppState(
         if (isSwitchingServer.value) return
         scope.launch {
             isSwitchingServer.value = true
+            isManualSelection.value = false
+            settingsRepo.setBoolean("pref_manual_server_selected", false)
             try {
                 val current = _selectedGuid.value
                 val success = smartConnectManager.switchToNextServer(current)
@@ -1042,7 +1064,8 @@ class DesktopAppState(
                 routeOnly = routeOnly.value,
                 muxEnabled = muxEnabled.value,
                 muxConcurrency = muxTcpConcurrency.value,
-                muxXudpConcurrency = muxXudpConcurrency.value
+                muxXudpConcurrency = muxXudpConcurrency.value,
+                customEndpointUrl = endpoint
             )
             if (started) {
                 if (routingMode.value == "PROXY") {

@@ -134,7 +134,8 @@ class XrayDesktopRunner(
         routeOnly: Boolean = false,
         muxEnabled: Boolean = false,
         muxConcurrency: Int = 8,
-        muxXudpConcurrency: Int = 8
+        muxXudpConcurrency: Int = 8,
+        customEndpointUrl: String? = null
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -153,6 +154,10 @@ class XrayDesktopRunner(
         }
 
         try {
+            if (!customEndpointUrl.isNullOrBlank()) {
+                GeekModeLogger.log("DesktopRunner", "Активирована цепочка прокси: конечный узел $customEndpointUrl")
+            }
+
             // Генерация JSON конфига
             val options = XrayGeneratorOptions(
                 socksPort = socksPort,
@@ -165,6 +170,7 @@ class XrayDesktopRunner(
                 upstreamProxyHost = upstreamProxyHost,
                 upstreamProxyPort = upstreamProxyPort,
                 upstreamProxyType = upstreamProxyType,
+                customEndpointUrl = customEndpointUrl,
                 socksUsername = socksUsername,
                 socksPassword = socksPassword,
                 remoteDns = remoteDns,
