@@ -353,53 +353,61 @@ fun GeekModeScreen(
                                     isSelected -> AccentAmber
                                     else -> MaterialTheme.colorScheme.outline
                                 }),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        if (isRunning) {
-                                            state.stopCore()
-                                        } else {
-                                            state.selectAndConnectServer(guid)
-                                        }
-                                    }
+                                modifier = Modifier.clip(RoundedCornerShape(6.dp))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                        contentDescription = if (isRunning) "Остановить" else "Подключить",
-                                        tint = if (isRunning) AccentMint else if (isSelected) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    val displayName = prof?.remarks?.takeIf { it.isNotBlank() }
-                                        ?: prof?.server?.takeIf { it.isNotBlank() }
-                                        ?: "Узел (${guid.take(6)})"
-                                    Text(
-                                        text = displayName.take(22),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isRunning) AccentMint else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (ping != null && ping > 0) {
+                                    Row(
+                                        modifier = Modifier
+                                            .clickable {
+                                                if (isRunning) {
+                                                    state.stopCore()
+                                                } else {
+                                                    state.selectAndConnectServer(guid)
+                                                }
+                                            }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                            contentDescription = if (isRunning) "Остановить" else "Подключить",
+                                            tint = if (isRunning) AccentMint else if (isSelected) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        val displayName = prof?.remarks?.takeIf { it.isNotBlank() }
+                                            ?: prof?.server?.takeIf { it.isNotBlank() }
+                                            ?: "Узел (${guid.take(6)})"
                                         Text(
-                                            text = " ${ping}ms",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AccentMint
+                                            text = displayName.take(22),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isRunning) AccentMint else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (ping != null && ping > 0) {
+                                            Text(
+                                                text = " ${ping}ms",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AccentMint
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = { state.removeVipServer(guid) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Удалить из VIP",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(13.dp)
                                         )
                                     }
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Удалить из VIP",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .size(13.dp)
-                                            .clickable { state.removeVipServer(guid) }
-                                    )
                                 }
                             }
                         }

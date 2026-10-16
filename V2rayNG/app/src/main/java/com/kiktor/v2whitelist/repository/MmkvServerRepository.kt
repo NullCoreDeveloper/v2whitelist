@@ -16,6 +16,9 @@ object MmkvServerRepository : ServerRepository {
     private val _serversFlow = MutableStateFlow<List<Pair<String, ProfileItem>>>(emptyList())
     override val serversFlow: StateFlow<List<Pair<String, ProfileItem>>> = _serversFlow.asStateFlow()
 
+    private val _vipGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
+    override val vipGuidsFlow: StateFlow<Set<String>> = _vipGuidsFlow.asStateFlow()
+
     init {
         refresh()
     }
@@ -27,6 +30,7 @@ object MmkvServerRepository : ServerRepository {
             if (profile != null) guid to profile else null
         }
         _serversFlow.value = list
+        _vipGuidsFlow.value = MmkvManager.getVipCache().toSet()
     }
 
     override fun getAllServerGuids(): List<String> = MmkvManager.decodeServerList()
@@ -79,14 +83,17 @@ object MmkvServerRepository : ServerRepository {
 
     override fun addVipServer(guid: String) {
         MmkvManager.addVipServer(guid)
+        refresh()
     }
 
     override fun removeVipServer(guid: String) {
         MmkvManager.removeVipServer(guid)
+        refresh()
     }
 
     override fun setVipServerGuids(guids: Set<String>) {
         MmkvManager.replaceVipCache(guids.toList())
+        refresh()
     }
 
     override fun clearAllServers() {

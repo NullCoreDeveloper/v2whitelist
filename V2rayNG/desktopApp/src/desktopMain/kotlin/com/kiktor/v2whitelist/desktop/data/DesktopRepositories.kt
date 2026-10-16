@@ -100,6 +100,9 @@ class DesktopFileServerRepository : ServerRepository {
     private val _serversFlow = MutableStateFlow<List<Pair<String, ProfileItem>>>(emptyList())
     override val serversFlow: StateFlow<List<Pair<String, ProfileItem>>> = _serversFlow.asStateFlow()
 
+    private val _vipGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
+    override val vipGuidsFlow: StateFlow<Set<String>> = _vipGuidsFlow.asStateFlow()
+
     init {
         loadFromDisk()
     }
@@ -130,6 +133,7 @@ class DesktopFileServerRepository : ServerRepository {
 
     private fun updateFlow() {
         _serversFlow.value = serverMap.entries.map { it.key to it.value }
+        _vipGuidsFlow.value = vipList.toSet()
     }
 
     override fun getAllServerGuids(): List<String> = serverMap.keys.toList()
@@ -239,28 +243,31 @@ class DesktopFileServerRepository : ServerRepository {
     override fun getVipServerGuids(): Set<String> = vipList.toSet()
 
     override fun addVipServer(guid: String) {
-        addVipServer(guid, 10)
+        addVipServer(guid, 5)
     }
 
     override fun addVipServer(guid: String, limit: Int) {
         if (guid.isBlank()) return
         vipList.remove(guid)
         vipList.add(0, guid)
-        val maxLimit = if (limit > 0) limit else 10
+        val maxLimit = if (limit > 0) limit else 5
         while (vipList.size > maxLimit) {
             vipList.removeAt(vipList.size - 1)
         }
+        updateFlow()
         persist()
     }
 
     override fun removeVipServer(guid: String) {
         vipList.remove(guid)
+        updateFlow()
         persist()
     }
 
     override fun setVipServerGuids(guids: Set<String>) {
         vipList.clear()
-        vipList.addAll(guids)
+        vipList.addAll(guids.filter { serverMap.containsKey(it) })
+        updateFlow()
         persist()
     }
 

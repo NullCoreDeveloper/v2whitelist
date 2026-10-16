@@ -306,14 +306,14 @@ object YandexTranslateUpdater {
         val vipIdentities = vipGuids.mapNotNull { guid ->
             MmkvManager.decodeServerConfig(guid)?.let { p ->
                 val sniOrHost = (p.sni?.takeIf { it.isNotBlank() } ?: p.host).orEmpty().trim().lowercase()
-                ServerIdentity(
+                Pair(guid, ServerIdentity(
                     configType = p.configType.name,
                     server = p.server.orEmpty(),
                     port = p.serverPort.orEmpty(),
                     password = p.password.orEmpty(),
                     sniOrHost = sniOrHost,
                     remarks = p.remarks
-                )
+                ))
             }
         }
 
@@ -462,13 +462,17 @@ object YandexTranslateUpdater {
             }
 
             if (vipIdentities.isNotEmpty()) {
-                val remapped = vipIdentities.mapNotNull { id ->
+                val updatedSet = updatedServers.toSet()
+                val remapped = vipIdentities.mapNotNull { (oldGuid, id) ->
+                    if (updatedSet.contains(oldGuid)) {
+                        return@mapNotNull oldGuid
+                    }
                     val exactKey = "${id.server}|${id.port}|${id.remarks}"
                     val netKey = "${id.configType}:${id.server.trim().lowercase()}:${id.port}:${id.password.trim()}:${id.sniOrHost}"
                     identityIndex[exactKey] ?: networkIndex[netKey]
                 }
                 if (remapped.isNotEmpty()) {
-                    MmkvManager.replaceVipCache(remapped)
+                    MmkvManager.replaceVipCache(remapped.distinct())
                 }
             }
         }

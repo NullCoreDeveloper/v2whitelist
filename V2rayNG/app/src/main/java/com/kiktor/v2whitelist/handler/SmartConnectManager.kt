@@ -188,7 +188,7 @@ object SmartConnectManager {
     /**
      * Быстрый путь (Fast Path): проверяем серверы из VIP-кэша.
      */
-    private suspend fun checkVipCacheAndConnect(context: Context, isStartup: Boolean = false): Boolean {
+    private suspend fun checkVipCacheAndConnect(context: Context, isStartup: Boolean = false, excludeGuid: String? = null): Boolean {
         val vipGuids = MmkvManager.getVipCache()
         if (vipGuids.isEmpty()) return false
 
@@ -207,7 +207,7 @@ object SmartConnectManager {
         
         invalidGuids.forEach { MmkvManager.removeVipServer(it) }
         
-        val filteredVipCandidates = filterServerPairs(vipCandidates)
+        val filteredVipCandidates = filterServerPairs(vipCandidates, excludeGuid = excludeGuid)
         if (filteredVipCandidates.isEmpty()) {
             GeekModeLogger.log("SmartConnect", "VIP Cache: no VIP servers match current filters")
             return false
@@ -474,16 +474,6 @@ object SmartConnectManager {
             NetworkManager.waitForInternet(context)
             
             val currentGuid = MmkvManager.getSelectServer()
-            
-            // Если пользователь вручную нажал "Сменить сервер", значит текущий сервер его чем-то
-            // не устроил (например, забанен IP). Удаляем его из VIP-кэша, чтобы:
-            // 1. Не зацикливаться между одними и теми же серверами при многократном нажатии.
-            // 2. Не подключаться к этому отвергнутому серверу при следующем запуске.
-            if (currentGuid != null) {
-                GeekModeLogger.log("SmartConnect", "switchServer: user manually rejected current server, removing from VIP cache")
-                MmkvManager.removeVipServer(currentGuid)
-            }
-            
             val allServers = MmkvManager.decodeServerList()
             val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
 
@@ -511,7 +501,7 @@ object SmartConnectManager {
             }
 
             // ── Быстрый путь: VIP Кэш (Auto Failover) ──────────────────────────────
-            if (checkVipCacheAndConnect(context, isStartup = false)) {
+            if (checkVipCacheAndConnect(context, isStartup = false, excludeGuid = currentGuid)) {
                 NotificationManager.cancelFailoverNotification()
                 return@withContext true
             }

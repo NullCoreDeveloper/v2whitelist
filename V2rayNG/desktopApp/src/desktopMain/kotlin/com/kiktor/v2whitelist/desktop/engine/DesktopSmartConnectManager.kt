@@ -168,7 +168,8 @@ class DesktopSmartConnectManager(
                 GeekModeLogger.log("SmartConnect", "Победитель найден и верифицирован: ${candidate.second.remarks}!")
 
                 // Добавляем победителя в VIP
-                serverRepo.addVipServer(candidate.first)
+                val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
+                serverRepo.addVipServer(candidate.first, limit)
 
                 // Останавливаем сканирование v2w-core
                 scanJob.cancel()
@@ -211,7 +212,7 @@ class DesktopSmartConnectManager(
                     minSpeedMbps = minSpeedMbps
                 )
                 if (res.success) {
-                    val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
+                    val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
                     GeekModeLogger.log("SmartConnect", "Классический фоллбек нашел узел: ${profile.remarks}")
                     serverRepo.addVipServer(guid, limit)
                     connectAndFinish(guid, profile)
@@ -268,7 +269,7 @@ class DesktopSmartConnectManager(
 
         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск следующего узла...")
         val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
-        val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
+        val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
         for ((guid, profile) in candidates.shuffled()) {
             val res = DesktopProfileVerifier.verifyProfile(
                 profile = profile,
@@ -295,10 +296,16 @@ class DesktopSmartConnectManager(
         minSpeedMbps: Double
     ) {
         scope.launch(Dispatchers.IO) {
-            GeekModeLogger.log("SmartConnect", "Фоновое пополнение VIP-кэша: ${leftovers.size} узлов...")
+            val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
+            val currentVips = serverRepo.getVipServerGuids()
+            if (currentVips.size >= limit) {
+                return@launch
+            }
+            val needed = limit - currentVips.size
+            GeekModeLogger.log("SmartConnect", "Фоновое пополнение VIP-кэша (свободно мест: $needed)...")
             var added = 0
-            val limit = settingsRepo.getString("pref_vip_cache_limit", "10").toIntOrNull() ?: 10
-            for ((guid, profile, _) in leftovers.take(8)) {
+            for ((guid, profile, _) in leftovers) {
+                if (serverRepo.getVipServerGuids().size >= limit) break
                 val res = DesktopProfileVerifier.verifyProfile(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
@@ -309,9 +316,12 @@ class DesktopSmartConnectManager(
                     serverRepo.addVipServer(guid, limit)
                     added++
                     GeekModeLogger.log("SmartConnect", "Узел ${profile.remarks} добавлен в VIP кэш.")
+                    if (added >= needed) break
                 }
             }
-            GeekModeLogger.log("SmartConnect", "Фоновое пополнение VIP завершено. Добавлено: $added узлов.")
+            if (added > 0) {
+                GeekModeLogger.log("SmartConnect", "Фоновое пополнение VIP завершено. Добавлено: $added узлов.")
+            }
         }
     }
 }

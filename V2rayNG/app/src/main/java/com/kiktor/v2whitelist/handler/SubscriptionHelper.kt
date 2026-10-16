@@ -612,14 +612,15 @@ object SubscriptionHelper {
         }
 
         val vipGuids = MmkvManager.getVipCache()
-        val vipIdentities = vipGuids.mapNotNull { guid ->
+        val vipRecords = vipGuids.mapNotNull { guid ->
             MmkvManager.decodeServerConfig(guid)?.let { p ->
-                ServerIdentity(p.server, p.serverPort, p.remarks)
+                val netKey = "${p.configType.name}:${p.server.orEmpty().trim().lowercase()}:${p.serverPort.orEmpty().trim()}:${p.password.orEmpty().trim()}"
+                Triple(guid, "${p.server}|${p.serverPort}|${p.remarks}", netKey)
             }
         }
 
-        if (vipIdentities.isNotEmpty()) {
-            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipIdentities.size} серверов (${vipIdentities.joinToString { it.remarks }})")
+        if (vipRecords.isNotEmpty()) {
+            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipRecords.size} серверов")
         }
 
         val candidateSocksPort = SettingsManager.getSocksPort()
@@ -746,15 +747,16 @@ object SubscriptionHelper {
         // Строим индекс identity → newGuid для быстрого поиска.
         // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
         // ══════════════════════════════════════════════════════════════════════
-        if (lastServerIdentity != null || vipIdentities.isNotEmpty()) {
+        if (lastServerIdentity != null || vipRecords.isNotEmpty()) {
             val updatedServers = MmkvManager.decodeServerList()
             val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
+            val networkIndex = mutableMapOf<String, String>()  // "type:server:port:password" → newGuid
             for (guid in updatedServers) {
                 val profile = MmkvManager.decodeServerConfig(guid) ?: continue
                 val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
-                if (!identityIndex.containsKey(key)) {
-                    identityIndex[key] = guid
-                }
+                val netKey = "${profile.configType.name}:${profile.server.orEmpty().trim().lowercase()}:${profile.serverPort.orEmpty().trim()}:${profile.password.orEmpty().trim()}"
+                identityIndex.putIfAbsent(key, guid)
+                networkIndex.putIfAbsent(netKey, guid)
             }
 
             // ── Ремаппим LastServerCache ──
@@ -771,17 +773,27 @@ object SubscriptionHelper {
             }
 
             // ── Ремаппим VIP-кэш ──
-            if (vipIdentities.isNotEmpty()) {
-                val remapped = vipIdentities.mapNotNull { id ->
-                    val key = "${id.server}|${id.port}|${id.remarks}"
-                    identityIndex[key]
+            if (vipRecords.isNotEmpty()) {
+                val updatedSet = updatedServers.toSet()
+                val remapped = mutableListOf<String>()
+                for ((oldGuid, exactKey, netKey) in vipRecords) {
+                    if (updatedSet.contains(oldGuid)) {
+                        remapped.add(oldGuid)
+                        continue
+                    }
+                    val byExact = identityIndex[exactKey]
+                    if (byExact != null) {
+                        remapped.add(byExact)
+                        continue
+                    }
+                    val byNet = networkIndex[netKey]
+                    if (byNet != null) {
+                        remapped.add(byNet)
+                    }
                 }
                 if (remapped.isNotEmpty()) {
-                    MmkvManager.replaceVipCache(remapped)
-                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipIdentities.size} серверов сохранено")
-                } else {
-                    MmkvManager.clearVipCache()
-                    Log.w(AppConfig.TAG, "updateSubscription: все VIP-серверы исчезли после обновления, кэш очищен")
+                    MmkvManager.replaceVipCache(remapped.distinct())
+                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipRecords.size} серверов сохранено")
                 }
             }
         }

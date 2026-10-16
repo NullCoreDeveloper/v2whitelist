@@ -46,6 +46,7 @@ interface ServerRepository {
     fun removeDuplicates(): Int
 
     val serversFlow: StateFlow<List<Pair<String, ProfileItem>>>
+    val vipGuidsFlow: StateFlow<Set<String>>
 }
 
 /**
@@ -62,6 +63,9 @@ class InMemoryServerRepository(
 
     private val _serversFlow = MutableStateFlow<List<Pair<String, ProfileItem>>>(emptyList())
     override val serversFlow: StateFlow<List<Pair<String, ProfileItem>>> = _serversFlow.asStateFlow()
+
+    private val _vipGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
+    override val vipGuidsFlow: StateFlow<Set<String>> = _vipGuidsFlow.asStateFlow()
 
     init {
         for ((guid, profile) in initialServers) {
@@ -98,7 +102,9 @@ class InMemoryServerRepository(
 
     override fun removeServer(guid: String) {
         serverMap.remove(guid)
-        vipSet.remove(guid)
+        if (vipSet.remove(guid)) {
+            _vipGuidsFlow.value = vipSet.toSet()
+        }
         if (selectedGuid == guid) {
             selectedGuid = serverMap.keys.firstOrNull()
         }
@@ -118,16 +124,22 @@ class InMemoryServerRepository(
     }
 
     override fun addVipServer(guid: String) {
-        vipSet.add(guid)
+        if (guid.isNotBlank()) {
+            vipSet.add(guid)
+            _vipGuidsFlow.value = vipSet.toSet()
+        }
     }
 
     override fun removeVipServer(guid: String) {
-        vipSet.remove(guid)
+        if (vipSet.remove(guid)) {
+            _vipGuidsFlow.value = vipSet.toSet()
+        }
     }
 
     override fun setVipServerGuids(guids: Set<String>) {
         vipSet.clear()
         vipSet.addAll(guids)
+        _vipGuidsFlow.value = vipSet.toSet()
     }
 
     override fun clearAllServers() {
@@ -135,6 +147,7 @@ class InMemoryServerRepository(
         vipSet.clear()
         selectedGuid = null
         _serversFlow.value = emptyList()
+        _vipGuidsFlow.value = emptySet()
     }
 
     override fun removeDuplicates(): Int {

@@ -63,6 +63,7 @@ fun MainScreen(
     val subscriptions by state.subscriptions.collectAsState()
     val exitIp by state.exitIp.collectAsState()
     val meshEnabled by state.meshGradientEnabled.collectAsState()
+    val vipGuids by state.vipGuids.collectAsState()
 
     var isServerListExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -694,6 +695,7 @@ fun MainScreen(
                             ) {
                                 items(displayServers, key = { it.first }) { (guid, profile) ->
                                     val isSelected = guid == selectedGuid
+                                    val isVip = guid in vipGuids
                                     val ping = pingMap[guid]
                                     val subName = subNamesMap[profile.subscriptionId] ?: profile.subscriptionId.ifBlank { "Подписка" }
 
@@ -701,8 +703,10 @@ fun MainScreen(
                                         profile = profile,
                                         subscriptionName = subName,
                                         isSelected = isSelected,
+                                        isVip = isVip,
                                         ping = ping,
                                         onSelect = { state.selectServer(guid) },
+                                        onToggleVip = { state.toggleVip(guid) },
                                         onPing = { state.pingServer(guid) },
                                         onQr = { qrProfile = profile },
                                         onDelete = { state.deleteServer(guid) }
@@ -790,8 +794,10 @@ private fun ServerCardItem(
     profile: ProfileItem,
     subscriptionName: String,
     isSelected: Boolean,
+    isVip: Boolean,
     ping: Long?,
     onSelect: () -> Unit,
+    onToggleVip: () -> Unit,
     onPing: () -> Unit,
     onQr: () -> Unit,
     onDelete: () -> Unit
@@ -881,6 +887,15 @@ private fun ServerCardItem(
                         fontWeight = FontWeight.Bold,
                         color = pingColor,
                         modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
+
+                IconButton(onClick = onToggleVip, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = if (isVip) "Удалить из VIP" else "Добавить в VIP",
+                        tint = if (isVip) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 

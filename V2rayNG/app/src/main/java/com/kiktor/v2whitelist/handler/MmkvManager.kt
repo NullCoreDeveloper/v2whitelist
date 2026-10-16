@@ -233,6 +233,7 @@ object MmkvManager {
         profileFullStorage.remove(guid)
         //profileStorage.remove(guid)
         serverAffStorage.remove(guid)
+        removeVipServer(guid)
     }
 
     /**
@@ -288,6 +289,7 @@ object MmkvManager {
             profileFullStorage.remove(guid)
             serverRawStorage.remove(guid)
             serverAffStorage.remove(guid)
+            removeVipServer(guid)
         }
 
         if (toDelete.isNotEmpty()) {
@@ -341,6 +343,7 @@ object MmkvManager {
                 profileFullStorage.remove(key)
                 serverAffStorage.remove(key)
             }
+            removeVipServer(key)
         }
         
         if (keysToRemove.isNotEmpty()) {
@@ -412,6 +415,7 @@ object MmkvManager {
         profileFullStorage.clearAll()
         //profileStorage.clearAll()
         serverAffStorage.clearAll()
+        clearVipCache()
         return count
     }
 
@@ -997,16 +1001,26 @@ object MmkvManager {
         if (str.isNullOrBlank()) return mutableListOf()
         
         // Backward compatibility for old JSON format
-        if (str.startsWith("[")) {
-            return try {
+        val rawList = if (str.startsWith("[")) {
+            try {
                 val type = object : com.google.gson.reflect.TypeToken<MutableList<String>>() {}.type
                 com.google.gson.Gson().fromJson<MutableList<String>>(str, type) ?: mutableListOf()
             } catch (e: Exception) {
                 mutableListOf()
             }
+        } else {
+            str.split(",").filter { it.isNotBlank() }.toMutableList()
         }
-        
-        return str.split(",").filter { it.isNotBlank() }.toMutableList()
+
+        val validList = rawList.filter { decodeServerConfig(it) != null }.toMutableList()
+        if (validList.size != rawList.size) {
+            if (validList.isEmpty()) {
+                clearVipCache()
+            } else {
+                settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, validList.joinToString(","))
+            }
+        }
+        return validList
     }
 
     /**
@@ -1061,7 +1075,8 @@ object MmkvManager {
             clearVipCache()
             return
         }
-        val trimmed = guids.take(5)
+        val limit = getVipCacheLimit()
+        val trimmed = guids.take(limit)
         settingsStorage.encode(com.kiktor.v2whitelist.AppConfig.PREF_VIP_CACHE, trimmed.joinToString(","))
     }
 

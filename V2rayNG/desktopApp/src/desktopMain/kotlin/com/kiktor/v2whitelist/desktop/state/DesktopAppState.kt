@@ -215,7 +215,7 @@ class DesktopAppState(
     val isPingingVip = MutableStateFlow(false)
     val isFindingVip = MutableStateFlow(false)
     val isForcePinging = MutableStateFlow(false)
-    val vipGuids = MutableStateFlow<Set<String>>(serverRepo.getVipServerGuids())
+    val vipGuids: StateFlow<Set<String>> = serverRepo.vipGuidsFlow
     val vipCacheLimit = MutableStateFlow(settingsRepo.getInt("pref_vip_cache_limit", 5))
 
     // Расширенные настройки ядра и VPN
@@ -913,7 +913,6 @@ class DesktopAppState(
         locationFilterMode.value = mode
         settingsRepo.setString("pref_location_filter_mode", mode.name)
         smartConnectManager.cleanVipCacheForFilter()
-        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun toggleLocationFilter(tag: String) {
@@ -926,7 +925,6 @@ class DesktopAppState(
         locationFilterSet.value = current
         settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(current))
         smartConnectManager.cleanVipCacheForFilter()
-        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun resetLocationFilterToDefault() {
@@ -934,7 +932,6 @@ class DesktopAppState(
         locationFilterSet.value = defaults
         settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(defaults))
         smartConnectManager.cleanVipCacheForFilter()
-        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun clearAllLocations() {
@@ -942,7 +939,6 @@ class DesktopAppState(
         locationFilterSet.value = empty
         settingsRepo.setString("pref_location_filter_set", jsonHelper.encodeToString(empty))
         smartConnectManager.cleanVipCacheForFilter()
-        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun stopCore() {
@@ -1082,12 +1078,10 @@ class DesktopAppState(
         } else {
             serverRepo.addVipServer(guid, vipCacheLimit.value)
         }
-        vipGuids.value = serverRepo.getVipServerGuids()
     }
 
     fun removeVipServer(guid: String) {
         serverRepo.removeVipServer(guid)
-        vipGuids.value = serverRepo.getVipServerGuids()
         GeekModeLogger.log("GeekMode", "Сервер удален из VIP списка")
     }
 
@@ -1206,7 +1200,6 @@ class DesktopAppState(
                         if (verifyRes.success) {
                             serverRepo.addVipServer(guid, limit)
                             _pingMap.value = _pingMap.value + (guid to (if (verifyRes.latencyMs > 0) verifyRes.latencyMs else delayMs))
-                            vipGuids.value = serverRepo.getVipServerGuids()
                             GeekModeLogger.log("GeekMode", "Узел принят в VIP: ${profile.remarks} (204: ${verifyRes.latencyMs}ms, скорость: ${verifyRes.speedMbps ?: "—"} Мбит/с)")
                         } else {
                             GeekModeLogger.log("GeekMode", "Узел ${profile.remarks} отклонен: ${verifyRes.errorMessage}")
@@ -1215,7 +1208,6 @@ class DesktopAppState(
                     serverRepo.getVipServerGuids().size >= limit
                 }
             )
-            vipGuids.value = serverRepo.getVipServerGuids()
             isFindingVip.value = false
         }
     }
@@ -1396,8 +1388,8 @@ class DesktopAppState(
         sniffingEnabled.value = sniffingVal
         routeOnly.value = routeOnlyVal
         allowInsecure.value = allowInsecureVal
-        val effectiveSocks = localPortVal
-        val effectiveHttp = effectiveSocks + 1
+        val effectiveSocks = if (socksP > 0) socksP else localPortVal
+        val effectiveHttp = if (httpP > 0 && httpP != effectiveSocks) httpP else effectiveSocks + 1
         localProxyPort.value = effectiveSocks
         socksPort.value = effectiveSocks
         httpPort.value = effectiveHttp
@@ -1506,7 +1498,6 @@ class DesktopAppState(
         // Сброс StateFlow к дефолтным значениям
         _scenario.value = AppScenario.AUTO
         _selectedGuid.value = null
-        vipGuids.value = emptySet()
         socksPort.value = 10808
         httpPort.value = 10809
         localProxyPort.value = 10808
