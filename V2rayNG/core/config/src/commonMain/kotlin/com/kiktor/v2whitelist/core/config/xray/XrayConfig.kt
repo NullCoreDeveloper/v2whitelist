@@ -31,9 +31,12 @@ data class XrayInbound(
     val sniffing: InboundSniffing? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class InboundSettings(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val auth: String = "noauth",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val udp: Boolean = true,
     val accounts: List<SocksAccount>? = null
 )

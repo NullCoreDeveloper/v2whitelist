@@ -162,7 +162,8 @@ class DesktopAppState(
     val allowLan = MutableStateFlow(settingsRepo.getBoolean("allow_lan", false))
     val clipboardNotice = MutableStateFlow<String?>(null)
 
-    val routingMode = MutableStateFlow(settingsRepo.getString("routing_mode", "PROXY"))
+    // Режим маршрутизации при старте всегда сбрасывается на PROXY (сессионный выбор, исключающий запросы sudo при обычном запуске)
+    val routingMode = MutableStateFlow("PROXY")
     val uiTheme = MutableStateFlow(settingsRepo.getString("ui_theme", "CYAN"))
     val uiCompactCards = MutableStateFlow(settingsRepo.getBoolean("ui_compact_cards", false))
     val minimizeToTray = MutableStateFlow(settingsRepo.getBoolean("minimize_to_tray", true))
@@ -537,7 +538,6 @@ class DesktopAppState(
 
     private fun applyRoutingMode(mode: String) {
         routingMode.value = mode
-        settingsRepo.setString("routing_mode", mode)
         GeekModeLogger.log("AppState", "Режим работы переключен на: $mode")
         if (coreState.value == DesktopCoreState.RUNNING) {
             if (mode == "PROXY" && DesktopTunManager.isTunActive) {
