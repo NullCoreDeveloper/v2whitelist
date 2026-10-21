@@ -910,8 +910,11 @@ class DesktopAppState(
         }
     }
 
+    private var smartConnectJob: Job? = null
+
     fun startSmartConnect() {
-        scope.launch {
+        smartConnectJob?.cancel()
+        smartConnectJob = scope.launch {
             smartConnectManager.startSmartConnect(
                 scenario = _scenario.value,
                 minSpeedMbps = minSpeedThresholdMbps.value,
