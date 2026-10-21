@@ -270,10 +270,38 @@ class DesktopSmartConnectManager(
         val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
         if (candidates.isEmpty()) return@withContext false
 
-        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск следующего узла...")
         val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
         val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
+
+        // 1. Быстрый путь: VIP Cache (как на Android)
+        val vipGuids = serverRepo.getVipServerGuids().filter { it != currentGuid }
+        if (vipGuids.isNotEmpty()) {
+            onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Проверка сохранённых VIP-узлов (${vipGuids.size})…")
+            GeekModeLogger.log("SmartConnect", "Смена сервера: проверка ${vipGuids.size} узлов из VIP кэша...")
+            val vipCandidates = candidates.filter { vipGuids.contains(it.first) }
+            for ((guid, profile) in vipCandidates) {
+                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "VIP тест: ${profile.remarks.ifBlank { profile.server }}")
+                val res = DesktopProfileVerifier.verifyProfile(
+                    profile = profile,
+                    xrayBinaryPath = xrayPath,
+                    speedCheckEnabled = false,
+                    minSpeedMbps = 0.5
+                )
+                if (res.success) {
+                    GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден при смене: ${profile.remarks}")
+                    connectAndFinish(guid, profile)
+                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
+                    return@withContext true
+                }
+            }
+        }
+
+        // 2. Если VIP не ответил — перебор остальных кандидатов
+        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск альтернативного узла…")
+        GeekModeLogger.log("SmartConnect", "Смена сервера: перебор ${candidates.size} кандидатов...")
         for ((guid, profile) in candidates.shuffled()) {
+            if (vipGuids.contains(guid)) continue
+            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Тестирование: ${profile.remarks.ifBlank { profile.server }}")
             val res = DesktopProfileVerifier.verifyProfile(
                 profile = profile,
                 xrayBinaryPath = xrayPath,

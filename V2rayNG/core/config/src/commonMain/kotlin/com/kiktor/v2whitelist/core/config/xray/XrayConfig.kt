@@ -56,6 +56,7 @@ data class OutboundProxySettings(
     val tag: String? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class XrayOutbound(
     @EncodeDefault val tag: String = "proxy",
@@ -80,7 +81,16 @@ data class OutboundSettings(
     val version: Int? = null,
     val auth: String? = null,
     val up: String? = null,
-    val down: String? = null
+    val down: String? = null,
+    // Fragment
+    val fragment: FragmentSettings? = null
+)
+
+@Serializable
+data class FragmentSettings(
+    val packets: String = "tlshello",
+    val length: String = "50-100",
+    val interval: String = "10-20"
 )
 
 @OptIn(ExperimentalSerializationApi::class)

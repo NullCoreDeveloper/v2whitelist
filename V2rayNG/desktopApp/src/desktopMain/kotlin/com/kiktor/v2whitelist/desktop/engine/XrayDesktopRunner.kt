@@ -35,6 +35,15 @@ class XrayDesktopRunner(
         _coreState.value = DesktopCoreState.STARTING
     }
 
+    fun setError(msg: String) {
+        _lastError.value = msg
+        _coreState.value = DesktopCoreState.ERROR
+    }
+
+    fun setStopped() {
+        _coreState.value = DesktopCoreState.STOPPED
+    }
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
@@ -135,7 +144,13 @@ class XrayDesktopRunner(
         muxEnabled: Boolean = false,
         muxConcurrency: Int = 8,
         muxXudpConcurrency: Int = 8,
-        customEndpointUrl: String? = null
+        customEndpointUrl: String? = null,
+        bypassRussianServices: Boolean = true,
+        preferIpv6: Boolean = false,
+        fragmentEnabled: Boolean = false,
+        fragmentPackets: String = "tlshello",
+        fragmentLength: String = "50-100",
+        fragmentInterval: String = "10-20"
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -181,7 +196,13 @@ class XrayDesktopRunner(
                 routeOnly = routeOnly,
                 muxEnabled = muxEnabled,
                 muxConcurrency = muxConcurrency,
-                muxXudpConcurrency = muxXudpConcurrency
+                muxXudpConcurrency = muxXudpConcurrency,
+                bypassRussianServices = bypassRussianServices,
+                preferIpv6 = preferIpv6,
+                fragmentEnabled = fragmentEnabled,
+                fragmentPackets = fragmentPackets,
+                fragmentLength = fragmentLength,
+                fragmentInterval = fragmentInterval
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
 

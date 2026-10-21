@@ -226,7 +226,9 @@ fun MainScreen(
                         )
 
                         val detailText = when {
-                            isV2WScanning && smartConnectStatus != null -> smartConnectStatus.orEmpty()
+                            coreState == DesktopCoreState.STARTING -> {
+                                smartConnectStatus?.ifBlank { null } ?: "Поиск и тестирование серверов…"
+                            }
                             coreState == DesktopCoreState.RUNNING -> {
                                 val modePrefix = if (isManualSelection) "Ручной выбор: " else ""
                                 "$modePrefix${activeProfile?.remarks ?: "Защищённый туннель активен"}"

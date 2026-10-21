@@ -33,7 +33,12 @@ data class XrayGeneratorOptions(
     val socksPassword: String? = null,
     val remoteDns: String? = null,
     val internalDns: String? = null,
-    val dnsHosts: String? = null
+    val dnsHosts: String? = null,
+    val preferIpv6: Boolean = false,
+    val fragmentEnabled: Boolean = false,
+    val fragmentPackets: String = "tlshello",
+    val fragmentLength: String = "50-100",
+    val fragmentInterval: String = "10-20"
 )
 
 object XrayConfigGenerator {
@@ -100,9 +105,26 @@ object XrayConfigGenerator {
 
         val outbounds = mutableListOf<XrayOutbound>()
 
+        val isTlsOrReality = profile.security?.lowercase().let { it == "tls" || it == "reality" }
+        val useFragment = options.fragmentEnabled && isTlsOrReality
+        val fragmentTag = "fragment"
+        val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
+        val upstreamTag = "upstream-proxy"
+
         if (endpointProfile != null) {
             // Цепочка: Local -> Smart Connect (proxy1) -> Custom Endpoint (proxy) -> Internet
-            val smartConnectOutbound = rawProxyOutbound.copy(tag = "proxy1")
+            val baseSmartOutbound = if (useFragment) {
+                val sStream = rawProxyOutbound.streamSettings ?: XrayStreamSettings()
+                rawProxyOutbound.copy(
+                    tag = "proxy1",
+                    streamSettings = sStream.copy(
+                        sockopt = (sStream.sockopt ?: SockoptSettings()).copy(dialerProxy = fragmentTag)
+                    )
+                )
+            } else {
+                rawProxyOutbound.copy(tag = "proxy1")
+            }
+
             val baseEndpointOutbound = buildProxyOutbound(endpointProfile, options)
             val currentStream = baseEndpointOutbound.streamSettings ?: XrayStreamSettings()
             val chainedStream = currentStream.copy(
@@ -114,18 +136,21 @@ object XrayConfigGenerator {
                 proxySettings = OutboundProxySettings(tag = "proxy1")
             )
             outbounds.add(endpointOutbound)
-            outbounds.add(smartConnectOutbound)
+            outbounds.add(baseSmartOutbound)
         } else {
-            val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
-            val upstreamTag = "upstream-proxy"
-            val proxyOutbound = if (hasUpstream) {
+            val nextHopTag = when {
+                useFragment -> fragmentTag
+                hasUpstream -> upstreamTag
+                else -> null
+            }
+            val proxyOutbound = if (nextHopTag != null) {
                 val currentStream = rawProxyOutbound.streamSettings ?: XrayStreamSettings()
                 val chainedStream = currentStream.copy(
-                    sockopt = (currentStream.sockopt ?: SockoptSettings()).copy(dialerProxy = upstreamTag)
+                    sockopt = (currentStream.sockopt ?: SockoptSettings()).copy(dialerProxy = nextHopTag)
                 )
                 rawProxyOutbound.copy(
                     streamSettings = chainedStream,
-                    proxySettings = OutboundProxySettings(tag = upstreamTag)
+                    proxySettings = OutboundProxySettings(tag = nextHopTag)
                 )
             } else {
                 rawProxyOutbound
@@ -143,6 +168,33 @@ object XrayConfigGenerator {
                     )
                 )
             }
+        }
+
+        if (useFragment) {
+            var packets = options.fragmentPackets.ifBlank { "tlshello" }
+            if (profile.security?.lowercase() == "reality" && packets == "tlshello") {
+                packets = "1-3"
+            } else if (profile.security?.lowercase() == "tls" && packets != "tlshello") {
+                packets = "tlshello"
+            }
+            val fragmentOutbound = XrayOutbound(
+                tag = fragmentTag,
+                protocol = "freedom",
+                settings = OutboundSettings(
+                    domainStrategy = "AsIs",
+                    fragment = FragmentSettings(
+                        packets = packets,
+                        length = options.fragmentLength.ifBlank { "50-100" },
+                        interval = options.fragmentInterval.ifBlank { "10-20" }
+                    )
+                ),
+                streamSettings = XrayStreamSettings(
+                    sockopt = SockoptSettings(
+                        dialerProxy = if (hasUpstream) upstreamTag else null
+                    )
+                )
+            )
+            outbounds.add(fragmentOutbound)
         }
 
         val directOutbound = XrayOutbound(
@@ -307,7 +359,7 @@ object XrayConfigGenerator {
         }
 
         val routing = XrayRouting(
-            domainStrategy = "IPIfNonMatch",
+            domainStrategy = if (options.preferIpv6) "UseIPv6" else "IPIfNonMatch",
             rules = rules
         )
 

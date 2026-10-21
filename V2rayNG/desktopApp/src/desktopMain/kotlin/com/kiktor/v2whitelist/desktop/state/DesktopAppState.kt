@@ -26,10 +26,7 @@ import com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +34,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -914,12 +910,30 @@ class DesktopAppState(
 
     fun startSmartConnect() {
         smartConnectJob?.cancel()
+        _smartConnectStatus.value = "Инициализация автопоиска…"
+        xrayRunner.markStarting()
         smartConnectJob = scope.launch {
-            smartConnectManager.startSmartConnect(
-                scenario = _scenario.value,
-                minSpeedMbps = minSpeedThresholdMbps.value,
-                speedCheckEnabled = speedTestOnCheck.value
-            )
+            try {
+                val ok = smartConnectManager.startSmartConnect(
+                    scenario = _scenario.value,
+                    minSpeedMbps = minSpeedThresholdMbps.value,
+                    speedCheckEnabled = speedTestOnCheck.value
+                )
+                if (!ok && coreState.value == DesktopCoreState.STARTING) {
+                    xrayRunner.setError("Нет доступных серверов под сценарий ${_scenario.value}")
+                    _smartConnectStatus.value = null
+                }
+            } catch (e: CancellationException) {
+                GeekModeLogger.log("AppState", "Автопоиск отменён пользователем.")
+                _smartConnectStatus.value = null
+                if (coreState.value == DesktopCoreState.STARTING) {
+                    xrayRunner.setStopped()
+                }
+            } catch (e: Exception) {
+                GeekModeLogger.log("AppState", "Ошибка автопоиска: ${e.message}")
+                xrayRunner.setError(e.message ?: "Сбой автопоиска")
+                _smartConnectStatus.value = null
+            }
         }
     }
 
@@ -931,17 +945,31 @@ class DesktopAppState(
             isSwitchingServer.value = true
             isManualSelection.value = false
             settingsRepo.setBoolean("pref_manual_server_selected", false)
+            xrayRunner.markStarting()
+            _smartConnectStatus.value = "Переключение на следующий сервер…"
             try {
                 val current = _selectedGuid.value
                 val success = smartConnectManager.switchToNextServer(current)
                 if (!success) {
                     GeekModeLogger.log("AppState", "Быстрое переключение не нашло узлов, запуск полного поиска...")
-                    smartConnectManager.startSmartConnect(
+                    _smartConnectStatus.value = "Поиск альтернативных узлов…"
+                    val fullSuccess = smartConnectManager.startSmartConnect(
                         scenario = _scenario.value,
                         minSpeedMbps = minSpeedThresholdMbps.value,
                         speedCheckEnabled = speedTestOnCheck.value
                     )
+                    if (!fullSuccess) {
+                        xrayRunner.setError("Нет доступных серверов под текущий сценарий")
+                        _smartConnectStatus.value = null
+                    }
                 }
+            } catch (e: CancellationException) {
+                GeekModeLogger.log("AppState", "Смена сервера отменена пользователем.")
+                _smartConnectStatus.value = null
+            } catch (e: Exception) {
+                GeekModeLogger.log("AppState", "Ошибка смены сервера: ${e.message}")
+                xrayRunner.setError(e.message ?: "Сбой смены сервера")
+                _smartConnectStatus.value = null
             } finally {
                 isSwitchingServer.value = false
             }
@@ -989,6 +1017,11 @@ class DesktopAppState(
     }
 
     fun stopCore() {
+        smartConnectJob?.cancel()
+        smartConnectJob = null
+        isSwitchingServer.value = false
+        stopFailoverWatchdog()
+        _smartConnectStatus.value = null
         xrayRunner.stop()
         if (DesktopTunManager.isTunActive) {
             DesktopTunManager.stop(sessionSudoPassword)
@@ -1061,14 +1094,19 @@ class DesktopAppState(
 
         scope.launch {
             val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
-            val directDomains = customDirectDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
-            val proxyDomains = customProxyDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
+            val directDomains = if (domainSplitTunnelingEnabled.value) {
+                customDirectDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
+            } else emptyList()
+            val proxyDomains = if (domainSplitTunnelingEnabled.value) {
+                customProxyDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
+            } else emptyList()
 
             val endpoint = if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) customEndpointUrl.value.trim() else null
 
             val currentSocksPort = socksPort.value
             val currentHttpPort = currentSocksPort + 1
 
+            _smartConnectStatus.value = "Запуск сетевого ядра Xray…"
             val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
@@ -1093,9 +1131,16 @@ class DesktopAppState(
                 muxEnabled = muxEnabled.value,
                 muxConcurrency = muxTcpConcurrency.value,
                 muxXudpConcurrency = muxXudpConcurrency.value,
-                customEndpointUrl = endpoint
+                customEndpointUrl = endpoint,
+                bypassRussianServices = bypassRussianServices.value,
+                preferIpv6 = preferIpv6.value,
+                fragmentEnabled = fragmentEnabled.value,
+                fragmentPackets = fragmentPackets.value,
+                fragmentLength = fragmentLength.value,
+                fragmentInterval = fragmentInterval.value
             )
             if (started) {
+                _smartConnectStatus.value = "Настройка маршрутизации (${routingMode.value})…"
                 if (routingMode.value == "PROXY") {
                     if (DesktopTunManager.isTunActive) {
                         DesktopTunManager.stop(sessionSudoPassword)
@@ -1130,6 +1175,94 @@ class DesktopAppState(
                 }
                 checkNetworkStatus()
                 fetchExitIp()
+                _smartConnectStatus.value = null
+                startFailoverWatchdog()
+            } else {
+                stopFailoverWatchdog()
+                _smartConnectStatus.value = null
+            }
+        }
+    }
+
+    private var failoverJob: Job? = null
+
+    private fun startFailoverWatchdog() {
+        failoverJob?.cancel()
+        if (!autoFailover.value) {
+            GeekModeLogger.log("Failover", "Auto-Failover отключён в настройках.")
+            return
+        }
+
+        failoverJob = scope.launch(Dispatchers.IO) {
+            GeekModeLogger.log("Failover", "Watchdog авто-переключения запущен. Ожидание прогрева туннеля (10 сек)...")
+            delay(10_000L)
+            var consecutiveFails = 0
+            while (isActive && coreState.value == DesktopCoreState.RUNNING) {
+                val intervalSec = heartbeatIntervalSeconds.value.coerceAtLeast(5)
+                delay(intervalSec * 1000L)
+                if (!isActive || coreState.value != DesktopCoreState.RUNNING) break
+
+                val isAlive = testTunnelConnectivity()
+                if (!isAlive) {
+                    consecutiveFails++
+                    GeekModeLogger.log("Failover", "Heartbeat проверка туннеля завершилась неудачей ($consecutiveFails/2)")
+                    if (consecutiveFails >= 2) {
+                        val physOk = isPhysicalNetworkAlive()
+                        if (physOk) {
+                            GeekModeLogger.log("Failover", "Физическая сеть доступна, но туннель не отвечает. Запуск Auto-Failover...")
+                            consecutiveFails = 0
+                            withContext(Dispatchers.Main) {
+                                switchToNextServer()
+                            }
+                            break
+                        } else {
+                            GeekModeLogger.log("Failover", "Физическая сеть недоступна, сбой не связан с сервером. Ожидание сети...")
+                        }
+                    }
+                } else {
+                    consecutiveFails = 0
+                }
+            }
+        }
+    }
+
+    private fun stopFailoverWatchdog() {
+        failoverJob?.cancel()
+        failoverJob = null
+    }
+
+    private fun testTunnelConnectivity(): Boolean {
+        return try {
+            val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", socksPort.value))
+            val checkUrl = connectionCheckServiceUrl.value.ifBlank { "http://cp.cloudflare.com/generate_204" }
+            val url = java.net.URL(checkUrl)
+            val conn = url.openConnection(proxy) as java.net.HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.instanceFollowRedirects = false
+            conn.requestMethod = "HEAD"
+            val code = conn.responseCode
+            conn.disconnect()
+            code in 200..399
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isPhysicalNetworkAlive(): Boolean {
+        return try {
+            java.net.Socket().use { socket ->
+                socket.connect(java.net.InetSocketAddress("1.1.1.1", 53), 2000)
+                true
+            }
+        } catch (_: Exception) {
+            try {
+                java.net.Socket().use { socket ->
+                    socket.connect(java.net.InetSocketAddress("77.88.8.8", 53), 2000)
+                    true
+                }
+            } catch (_: Exception) {
+                false
             }
         }
     }
