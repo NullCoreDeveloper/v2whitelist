@@ -5,9 +5,12 @@ import com.kiktor.v2whitelist.core.domain.ping.NodePingTester
 import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
+import com.kiktor.v2whitelist.core.domain.update.UpdateChecker
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
+import com.kiktor.v2whitelist.core.model.update.CheckUpdateResult
+import com.kiktor.v2whitelist.core.model.update.TargetPlatform
 import com.kiktor.v2whitelist.core.repository.ServerRepository
 import com.kiktor.v2whitelist.core.repository.SettingsRepository
 import com.kiktor.v2whitelist.core.subscription.defaults.DefaultSubscriptions
@@ -258,6 +261,12 @@ class DesktopAppState(
     val receiveBetaUpdates = MutableStateFlow(settingsRepo.getBoolean("pref_receive_beta_updates", false))
     val connectionCheckServiceUrl = MutableStateFlow(settingsRepo.getString("pref_conn_check_url", "https://api.ip.sb/geoip"))
 
+    // Обновления приложения ПроБел
+    val isCheckingAppUpdate = MutableStateFlow(false)
+    val availableAppUpdate = MutableStateFlow<CheckUpdateResult?>(null)
+    val showAppUpdateDialog = MutableStateFlow(false)
+    val appUpdateCheckMessage = MutableStateFlow<String?>(null)
+
     // Базовые параметры VPN и ядра
     val preferIpv6 = MutableStateFlow(settingsRepo.getBoolean("pref_prefer_ipv6", false))
     val useLocalDns = MutableStateFlow(settingsRepo.getBoolean("pref_use_local_dns", true))
@@ -360,6 +369,14 @@ class DesktopAppState(
                         updateAllActiveSubscriptions()
                     }
                 }
+            }
+        }
+
+        // Автоматическая проверка обновлений при старте (если включено в настройках)
+        if (autoCheckUpdates.value) {
+            scope.launch(Dispatchers.Default) {
+                delay(3000L)
+                checkAppUpdate(manual = false)
             }
         }
     }
@@ -1946,5 +1963,85 @@ class DesktopAppState(
 
         clipboardNotice.value = "Все настройки, серверы и кэш успешно сброшены к начальным значениям."
         GeekModeLogger.log("AppState", "Полный сброс всех настроек, подписок и серверов выполнен.")
+    }
+
+    fun dismissUpdateBanner() {
+        availableAppUpdate.value = null
+    }
+
+    fun openWebUrl(url: String) {
+        try {
+            if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(java.net.URI(url))
+            } else {
+                ProcessBuilder("xdg-open", url).start()
+            }
+        } catch (_: Exception) {
+            try {
+                ProcessBuilder("xdg-open", url).start()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun getDesktopTargetPlatform(): TargetPlatform.Desktop {
+        val osProp = System.getProperty("os.name")?.lowercase().orEmpty()
+        val archProp = System.getProperty("os.arch")?.lowercase().orEmpty()
+        val os = when {
+            osProp.contains("win") -> "windows"
+            osProp.contains("mac") -> "mac"
+            else -> "linux"
+        }
+        val arch = when {
+            archProp.contains("aarch64") || archProp.contains("arm64") -> "arm64"
+            archProp.contains("64") -> "x64"
+            else -> "x86"
+        }
+        return TargetPlatform.Desktop(os = os, arch = arch)
+    }
+
+    fun checkAppUpdate(manual: Boolean = false) {
+        if (isCheckingAppUpdate.value) return
+        scope.launch(Dispatchers.IO) {
+            isCheckingAppUpdate.value = true
+            appUpdateCheckMessage.value = null
+            try {
+                GeekModeLogger.log("UpdateChecker", "Проверка обновлений ПроБел (manual=$manual, beta=${receiveBetaUpdates.value})...")
+                val platform = getDesktopTargetPlatform()
+                val result = UpdateChecker.checkForUpdate(
+                    apiUrl = GITHUB_REPO_API,
+                    currentVersion = APP_VERSION,
+                    targetPlatform = platform,
+                    includePreRelease = receiveBetaUpdates.value
+                )
+                if (result.hasUpdate) {
+                    GeekModeLogger.log("UpdateChecker", "Найдено обновление: v${result.latestVersion}")
+                    availableAppUpdate.value = result
+                    showAppUpdateDialog.value = true
+                } else {
+                    if (manual) {
+                        if (result.error != null) {
+                            appUpdateCheckMessage.value = "Ошибка проверки: ${result.error}"
+                            GeekModeLogger.log("UpdateChecker", "Ошибка проверки: ${result.error}")
+                        } else {
+                            appUpdateCheckMessage.value = "У вас установлена последняя версия (v$APP_VERSION)"
+                            GeekModeLogger.log("UpdateChecker", "Установлена актуальная версия (v$APP_VERSION).")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                GeekModeLogger.log("UpdateChecker", "Сбой проверки обновлений: ${e.message}")
+                if (manual) {
+                    appUpdateCheckMessage.value = "Ошибка: ${e.message}"
+                }
+            } finally {
+                isCheckingAppUpdate.value = false
+            }
+        }
+    }
+
+    companion object {
+        const val APP_VERSION = "2.0.0"
+        const val GITHUB_REPO_API = "https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases"
+        const val GITHUB_RELEASES_WEB = "https://github.com/NullCoreDeveloper/v2whitelist/releases"
     }
 }

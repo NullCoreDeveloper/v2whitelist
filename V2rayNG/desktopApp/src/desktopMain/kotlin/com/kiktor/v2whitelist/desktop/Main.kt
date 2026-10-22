@@ -41,6 +41,10 @@ import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.DesktopTheme
 import com.kiktor.v2whitelist.desktop.ui.theme.MeshGradientBackground
 import com.kiktor.v2whitelist.desktop.ui.theme.getAccentColor
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.NewReleases
+import com.kiktor.v2whitelist.core.model.update.CheckUpdateResult
 import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
@@ -140,6 +144,13 @@ fun App(state: DesktopAppState) {
 
                 // Предупреждение о несохраненных изменениях в настройках
                 UnsavedSettingsDialog(state = state)
+
+                // Диалог уведомления о новой версии приложения
+                val availableUpdate by state.availableAppUpdate.collectAsState()
+                val showUpdateDialog by state.showAppUpdateDialog.collectAsState()
+                if (showUpdateDialog && availableUpdate != null) {
+                    AppUpdateDialog(state = state, update = availableUpdate!!)
+                }
             }
         }
     }
@@ -333,6 +344,173 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
                 ) {
                     Text("Не сохранять")
+                }
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
+    )
+}
+
+@Composable
+fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
+    AlertDialog(
+        onDismissRequest = {
+            state.showAppUpdateDialog.value = false
+        },
+        icon = {
+            Icon(
+                Icons.Default.NewReleases,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Доступно обновление",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (update.isPreRelease) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "BETA",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Текущая версия",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "v${DesktopAppState.APP_VERSION}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Text("➔", fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Новая версия",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "v${update.latestVersion ?: "—"}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                if (!update.releaseNotes.isNullOrBlank()) {
+                    Text(
+                        text = "Что нового:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = update.releaseNotes.orEmpty().trim(),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                if (!update.fileName.isNullOrBlank()) {
+                    Text(
+                        text = "Файл: ${update.fileName}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val url = update.downloadUrl ?: DesktopAppState.GITHUB_RELEASES_WEB
+                    state.openWebUrl(url)
+                    state.showAppUpdateDialog.value = false
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = androidx.compose.ui.graphics.Color.Black
+                ),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = if (update.downloadUrl != null) "Скачать обновление" else "Перейти к релизу",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = {
+                        state.openWebUrl(DesktopAppState.GITHUB_RELEASES_WEB)
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Все релизы")
+                }
+                TextButton(
+                    onClick = {
+                        state.showAppUpdateDialog.value = false
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Позже")
                 }
             }
         },

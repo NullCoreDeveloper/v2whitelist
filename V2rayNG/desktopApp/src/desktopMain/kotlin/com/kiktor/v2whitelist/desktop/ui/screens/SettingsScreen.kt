@@ -715,6 +715,57 @@ fun SettingsScreen(
                     checked = autoUpdateCheck,
                     onCheckedChange = { autoUpdateCheck = it }
                 )
+
+                // Ручная проверка обновлений
+                val isCheckingUpdate by state.isCheckingAppUpdate.collectAsState()
+                val updateMessage by state.appUpdateCheckMessage.collectAsState()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Версия приложения: v${DesktopAppState.APP_VERSION}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!updateMessage.isNullOrBlank()) {
+                            Text(
+                                text = updateMessage!!,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (updateMessage!!.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { state.checkAppUpdate(manual = true) },
+                        enabled = !isCheckingUpdate,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Проверка...", fontSize = 12.sp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Проверить сейчас", fontSize = 12.sp)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
                 SettingSwitchRow(
                     title = "Использовать свой прокси как конечный узел",
                     desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка прокси)",
