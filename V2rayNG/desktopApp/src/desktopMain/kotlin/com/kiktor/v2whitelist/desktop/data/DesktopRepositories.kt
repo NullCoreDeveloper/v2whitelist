@@ -93,6 +93,7 @@ internal object DesktopStorageManager {
 }
 
 class DesktopFileServerRepository : ServerRepository {
+    private val repoLock = Any()
     private val serverMap = linkedMapOf<String, ProfileItem>()
     private val vipList = mutableListOf<String>()
     private var selectedGuid: String? = null
@@ -107,7 +108,7 @@ class DesktopFileServerRepository : ServerRepository {
         loadFromDisk()
     }
 
-    private fun loadFromDisk() {
+    private fun loadFromDisk() = synchronized(repoLock) {
         val storage = DesktopStorageManager.loadServers()
         serverMap.clear()
         vipList.clear()
@@ -120,7 +121,7 @@ class DesktopFileServerRepository : ServerRepository {
         updateFlow()
     }
 
-    private fun persist() {
+    private fun persist() = synchronized(repoLock) {
         val records = serverMap.entries.map { ServerRecord(it.key, it.value) }
         DesktopStorageManager.saveServers(
             ServersStorage(
@@ -136,11 +137,15 @@ class DesktopFileServerRepository : ServerRepository {
         _vipGuidsFlow.value = vipList.toSet()
     }
 
-    override fun getAllServerGuids(): List<String> = serverMap.keys.toList()
+    override fun getAllServerGuids(): List<String> = synchronized(repoLock) {
+        serverMap.keys.toList()
+    }
 
-    override fun getServerConfig(guid: String): ProfileItem? = serverMap[guid]
+    override fun getServerConfig(guid: String): ProfileItem? = synchronized(repoLock) {
+        serverMap[guid]
+    }
 
-    override fun saveServerConfig(guid: String, profile: ProfileItem) {
+    override fun saveServerConfig(guid: String, profile: ProfileItem) = synchronized(repoLock) {
         serverMap[guid] = profile
         if (selectedGuid == null) {
             selectedGuid = guid
@@ -149,7 +154,7 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
-    override fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) {
+    override fun saveServerConfigs(configs: List<Pair<String, ProfileItem>>) = synchronized(repoLock) {
         for ((guid, profile) in configs) {
             serverMap[guid] = profile
         }
@@ -171,16 +176,18 @@ class DesktopFileServerRepository : ServerRepository {
     }
 
     override fun removeServers(guids: Collection<String>) {
-        if (guids.isEmpty()) return
-        for (g in guids) {
-            serverMap.remove(g)
-            vipList.remove(g)
+        synchronized(repoLock) {
+            if (guids.isEmpty()) return
+            for (g in guids) {
+                serverMap.remove(g)
+                vipList.remove(g)
+            }
+            if (selectedGuid in guids) {
+                selectedGuid = serverMap.keys.firstOrNull()
+            }
+            updateFlow()
+            persist()
         }
-        if (selectedGuid in guids) {
-            selectedGuid = serverMap.keys.firstOrNull()
-        }
-        updateFlow()
-        persist()
     }
 
     private fun getNetworkIdentityKey(profile: ProfileItem): String {
@@ -190,7 +197,7 @@ class DesktopFileServerRepository : ServerRepository {
         return "${profile.configType}:$srv:${profile.serverPort}:$pwd:$hostOrSni"
     }
 
-    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) {
+    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) = synchronized(repoLock) {
         val oldVipGuids = vipList.filter { it in oldGuids }.toSet()
         val oldVipKeys = oldVipGuids.mapNotNull { g ->
             serverMap[g]?.let { getNetworkIdentityKey(it) }
@@ -227,7 +234,7 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
-    override fun getSelectedServerGuid(): String? {
+    override fun getSelectedServerGuid(): String? = synchronized(repoLock) {
         val guid = selectedGuid
         if (guid != null && serverMap.containsKey(guid)) {
             return guid
@@ -235,43 +242,45 @@ class DesktopFileServerRepository : ServerRepository {
         return serverMap.keys.firstOrNull()
     }
 
-    override fun setSelectedServerGuid(guid: String?) {
+    override fun setSelectedServerGuid(guid: String?) = synchronized(repoLock) {
         selectedGuid = guid
         persist()
     }
 
-    override fun getVipServerGuids(): Set<String> = vipList.toSet()
+    override fun getVipServerGuids(): Set<String> = synchronized(repoLock) { vipList.toSet() }
 
     override fun addVipServer(guid: String) {
         addVipServer(guid, 5)
     }
 
     override fun addVipServer(guid: String, limit: Int) {
-        if (guid.isBlank()) return
-        vipList.remove(guid)
-        vipList.add(0, guid)
-        val maxLimit = if (limit > 0) limit else 5
-        while (vipList.size > maxLimit) {
-            vipList.removeAt(vipList.size - 1)
+        synchronized(repoLock) {
+            if (guid.isBlank()) return
+            vipList.remove(guid)
+            vipList.add(0, guid)
+            val maxLimit = if (limit > 0) limit else 5
+            while (vipList.size > maxLimit) {
+                vipList.removeAt(vipList.size - 1)
+            }
+            updateFlow()
+            persist()
         }
-        updateFlow()
-        persist()
     }
 
-    override fun removeVipServer(guid: String) {
+    override fun removeVipServer(guid: String) = synchronized(repoLock) {
         vipList.remove(guid)
         updateFlow()
         persist()
     }
 
-    override fun setVipServerGuids(guids: Set<String>) {
+    override fun setVipServerGuids(guids: Set<String>) = synchronized(repoLock) {
         vipList.clear()
         vipList.addAll(guids.filter { serverMap.containsKey(it) })
         updateFlow()
         persist()
     }
 
-    override fun clearAllServers() {
+    override fun clearAllServers() = synchronized(repoLock) {
         serverMap.clear()
         vipList.clear()
         selectedGuid = null
@@ -279,7 +288,7 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
-    override fun removeDuplicates(): Int {
+    override fun removeDuplicates(): Int = synchronized(repoLock) {
         val uniqueKeys = mutableSetOf<String>()
         val guidsToDelete = mutableListOf<String>()
 

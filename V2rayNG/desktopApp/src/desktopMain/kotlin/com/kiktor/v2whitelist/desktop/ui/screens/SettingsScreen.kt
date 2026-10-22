@@ -62,6 +62,7 @@ fun SettingsScreen(
     // Группы
     var subAutoUpdate by remember { mutableStateOf(state.subscriptionAutoUpdate.value) }
     var subIntervalMins by remember { mutableStateOf(state.subscriptionUpdateIntervalMinutes.value.toString()) }
+    var subUpdateOnStart by remember { mutableStateOf(state.subscriptionUpdateOnStartup.value) }
     var subOnlyProxy by remember { mutableStateOf(state.subscriptionUpdateOnlyViaProxy.value) }
     var subThreads by remember { mutableStateOf(state.subscriptionThreads.value.toString()) }
     var yandexUpdate by remember { mutableStateOf(state.yandexTranslateUpdateEnabled.value) }
@@ -133,6 +134,7 @@ fun SettingsScreen(
             subThreads = subThreads.toIntOrNull() ?: 3,
             subAutoUpdate = subAutoUpdate,
             subIntervalMins = subIntervalMins.toIntOrNull() ?: 60,
+            subUpdateOnStart = subUpdateOnStart,
             subOnlyViaProxy = subOnlyProxy,
             customEndpoint = useCustomEp,
             customEndpointConfig = customEpConfig,
@@ -216,6 +218,7 @@ fun SettingsScreen(
         fallbackDomain = state.networkCheckFallbackDomain.value
         subAutoUpdate = state.subscriptionAutoUpdate.value
         subIntervalMins = state.subscriptionUpdateIntervalMinutes.value.toString()
+        subUpdateOnStart = state.subscriptionUpdateOnStartup.value
         subOnlyProxy = state.subscriptionUpdateOnlyViaProxy.value
         subThreads = state.subscriptionThreads.value.toString()
         yandexUpdate = state.yandexTranslateUpdateEnabled.value
@@ -283,6 +286,7 @@ fun SettingsScreen(
         fallbackDomain != state.networkCheckFallbackDomain.value ||
         subAutoUpdate != state.subscriptionAutoUpdate.value ||
         subIntervalMins != state.subscriptionUpdateIntervalMinutes.value.toString() ||
+        subUpdateOnStart != state.subscriptionUpdateOnStartup.value ||
         subOnlyProxy != state.subscriptionUpdateOnlyViaProxy.value ||
         subThreads != state.subscriptionThreads.value.toString() ||
         yandexUpdate != state.yandexTranslateUpdateEnabled.value ||
@@ -592,6 +596,12 @@ fun SettingsScreen(
                 desc = "Автоматическое обновление подписок в фоновом режиме с указанным интервалом.",
                 checked = subAutoUpdate,
                 onCheckedChange = { subAutoUpdate = it }
+            )
+            SettingSwitchRow(
+                title = "Обновлять подписки при запуске",
+                desc = "Автоматически проверять и обновлять подписки при старте приложения (если база серверов пуста или устарела).",
+                checked = subUpdateOnStart,
+                onCheckedChange = { subUpdateOnStart = it }
             )
             OutlinedTextField(
                 value = subIntervalMins,

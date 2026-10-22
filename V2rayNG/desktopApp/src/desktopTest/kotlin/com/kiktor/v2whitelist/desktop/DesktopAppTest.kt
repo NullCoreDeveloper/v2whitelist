@@ -162,4 +162,44 @@ class DesktopAppTest {
         manager.startSmartConnect(minSpeedMbps = 0.0, speedCheckEnabled = false)
         assertNotNull(lastStage)
     }
+
+    @Test
+    fun testSubscriptionSettingsAndScheduler() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val runner = XrayDesktopRunner()
+
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = runner,
+            autoCheckNetworkOnStart = false
+        )
+
+        state.saveSettings(
+            subUrl = "https://sub.example.com",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            subAutoUpdate = true,
+            subIntervalMins = 30,
+            subUpdateOnStart = false,
+            subOnlyViaProxy = true,
+            subThreads = 5
+        )
+
+        assertEquals(true, state.subscriptionAutoUpdate.value)
+        assertEquals(30, state.subscriptionUpdateIntervalMinutes.value)
+        assertEquals(false, state.subscriptionUpdateOnStartup.value)
+        assertEquals(true, state.subscriptionUpdateOnlyViaProxy.value)
+        assertEquals(5, state.subscriptionThreads.value)
+
+        assertEquals(true, settingsRepo.getBoolean("subscription_auto_update"))
+        assertEquals(30, settingsRepo.getInt("subscription_update_interval_minutes"))
+        assertEquals(false, settingsRepo.getBoolean("subscription_update_on_startup"))
+        assertEquals(true, settingsRepo.getBoolean("subscription_update_only_via_proxy"))
+        assertEquals(5, settingsRepo.getInt("subscription_threads"))
+    }
 }
+

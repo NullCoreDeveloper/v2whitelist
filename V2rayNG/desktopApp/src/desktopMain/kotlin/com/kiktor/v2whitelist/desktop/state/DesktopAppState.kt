@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -200,6 +203,7 @@ class DesktopAppState(
     val subscriptionThreads = MutableStateFlow(settingsRepo.getInt("subscription_threads", 3))
     val subscriptionAutoUpdate = MutableStateFlow(settingsRepo.getBoolean("subscription_auto_update", true))
     val subscriptionUpdateIntervalMinutes = MutableStateFlow(settingsRepo.getInt("subscription_update_interval_minutes", 60))
+    val subscriptionUpdateOnStartup = MutableStateFlow(settingsRepo.getBoolean("subscription_update_on_startup", true))
     val yandexTranslateUpdateEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_yandex_translate_update", false))
 
     // Сплит-туннелинг и раздельная маршрутизация
@@ -335,6 +339,28 @@ class DesktopAppState(
         // Проверка сети при старте (если разрешено)
         if (autoCheckNetworkOnStart) {
             checkNetworkStatus()
+        }
+
+        // Запуск планировщика фонового обновления подписок
+        restartPeriodicSubscriptionUpdates()
+
+        // Проверка автообновления подписок при старте (если разрешено в настройках)
+        checkStartupSubscriptionUpdate()
+
+        // Наблюдатель за состоянием VPN: отложенное обновление через VPN при подключении
+        scope.launch {
+            coreState.collect { state ->
+                if (state == DesktopCoreState.RUNNING && subscriptionUpdateOnlyViaProxy.value && subscriptionAutoUpdate.value) {
+                    val enabledSubs = _subscriptions.value.filter { it.enabled }
+                    val oldestUpdate = enabledSubs.minOfOrNull { it.lastUpdated } ?: 0L
+                    val intervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
+                    if (oldestUpdate <= 0L || (System.currentTimeMillis() - oldestUpdate) >= intervalMs) {
+                        delay(3000L)
+                        GeekModeLogger.log("Subscriptions", "VPN активен: запуск отложенного обновления подписок через защищённое соединение...")
+                        updateAllActiveSubscriptions()
+                    }
+                }
+            }
         }
     }
 
@@ -780,13 +806,143 @@ class DesktopAppState(
         }
     }
 
+    private var periodicSubUpdateJob: Job? = null
+
+    fun restartPeriodicSubscriptionUpdates() {
+        periodicSubUpdateJob?.cancel()
+        if (!subscriptionAutoUpdate.value) {
+            GeekModeLogger.log("Subscriptions", "Фоновое автообновление подписок отключено в настройках.")
+            return
+        }
+
+        val intervalMins = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15)
+        GeekModeLogger.log("Subscriptions", "Служба фонового автообновления активна (интервал: $intervalMins мин).")
+
+        periodicSubUpdateJob = scope.launch(Dispatchers.Default) {
+            while (isActive) {
+                val currentIntervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
+                delay(currentIntervalMs)
+
+                if (!subscriptionAutoUpdate.value) break
+
+                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                    GeekModeLogger.log(
+                        "Subscriptions",
+                        "Плановое фоновое обновление пропущено: в настройках включено «Только через VPN», но VPN сейчас не запущен."
+                    )
+                    continue
+                }
+
+                GeekModeLogger.log(
+                    "Subscriptions",
+                    "Плановое фоновое обновление подписок по расписанию (${subscriptionUpdateIntervalMinutes.value} мин)..."
+                )
+                updateAllActiveSubscriptions()
+            }
+        }
+    }
+
+    private fun checkStartupSubscriptionUpdate() {
+        if (!subscriptionUpdateOnStartup.value) {
+            GeekModeLogger.log("Subscriptions", "Автообновление подписок при запуске выключено в настройках.")
+            return
+        }
+
+        scope.launch(Dispatchers.Default) {
+            delay(1500L)
+
+            val enabledSubs = _subscriptions.value.filter { it.enabled }
+            if (enabledSubs.isEmpty()) return@launch
+
+            val oldestUpdate = enabledSubs.minOfOrNull { it.lastUpdated } ?: 0L
+            val intervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
+            val now = System.currentTimeMillis()
+            val isExpired = oldestUpdate <= 0L || (now - oldestUpdate) >= intervalMs
+            val noServers = serverRepo.serversFlow.value.isEmpty()
+
+            if (isExpired || noServers) {
+                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                    GeekModeLogger.log(
+                        "Subscriptions",
+                        "Автообновление подписок при старте отложено: включено «Только через VPN», ожидаем подключения."
+                    )
+                } else {
+                    val reason = if (noServers) "список серверов пуст" else "подписки устарели (> ${subscriptionUpdateIntervalMinutes.value} мин)"
+                    GeekModeLogger.log("Subscriptions", "Запуск автообновления подписок при старте ($reason)...")
+                    updateAllActiveSubscriptions()
+                }
+            } else {
+                val minsAgo = (now - oldestUpdate) / (60 * 1000L)
+                GeekModeLogger.log("Subscriptions", "Подписки актуальны (обновлены $minsAgo мин назад), автообновление при старте не требуется.")
+            }
+        }
+    }
+
+    private suspend fun fetchViaYandexFirstMirror(
+        mirrors: List<String>,
+        userAgent: String,
+        timeoutMs: Long
+    ): Result<String> {
+        val client = SubscriptionFetcher.createHttpClient(timeoutMs = timeoutMs)
+        return try {
+            var lastError: Throwable? = null
+            for (mirror in mirrors) {
+                try {
+                    val encoded = java.net.URLEncoder.encode(mirror, "UTF-8")
+                    val yandexUrl = "https://translate.yandex.ru/translate?lang=en-ru&view=compact&url=$encoded"
+                    val res = SubscriptionFetcher.fetchSingle(client, yandexUrl, userAgent)
+                    if (res.isSuccess) {
+                        val body = res.getOrNull().orEmpty()
+                        val preMatcher = Regex("<pre[^>]*>([\\s\\S]*?)</pre>", RegexOption.IGNORE_CASE).find(body)
+                        val extracted = if (preMatcher != null) {
+                            preMatcher.groupValues[1]
+                        } else if (!body.contains("<html", ignoreCase = true)) {
+                            body
+                        } else {
+                            body.replace(Regex("(?i)<br\\s*/?>"), "\n")
+                                .replace(Regex("(?i)</p>"), "\n")
+                                .replace(Regex("<[^>]+>"), "")
+                        }
+                        val unescaped = extracted
+                            .replace("&amp;", "&")
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&quot;", "\"")
+                            .replace("&#39;", "'")
+                            .replace("&#x2F;", "/")
+                            .replace("&#47;", "/")
+                            .trim()
+                        if (unescaped.isNotBlank()) {
+                            return Result.success(unescaped)
+                        }
+                    } else {
+                        lastError = res.exceptionOrNull()
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                }
+            }
+            Result.failure(lastError ?: IllegalStateException("Все зеркала через Яндекс.Переводчик не ответили"))
+        } finally {
+            client.close()
+        }
+    }
+
     fun updateAllActiveSubscriptions() {
         if (_isUpdatingSub.value) return
         scope.launch {
             _isUpdatingSub.value = true
             GeekModeLogger.log("Subscriptions", "Начало обновления активных подписок...")
             try {
-                val proxyP = if (subscriptionUpdateOnlyViaProxy.value && coreState.value == DesktopCoreState.RUNNING) httpPort.value else 0
+                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                    GeekModeLogger.log(
+                        "Subscriptions",
+                        "Обновление отменено: включена опция «Обновлять подписки только через VPN», но VPN сейчас не запущен."
+                    )
+                    return@launch
+                }
+
+                val proxyP = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else 0
                 val enabledSubs = _subscriptions.value.filter { it.enabled }
 
                 if (enabledSubs.isEmpty()) {
@@ -794,78 +950,109 @@ class DesktopAppState(
                     return@launch
                 }
 
+                val concurrency = subscriptionThreads.value.coerceIn(1, 10)
+                val semaphore = Semaphore(concurrency)
+                val ua = subscriptionUserAgent.value.takeIf { it.isNotBlank() } ?: "v2rayNG/1.10.x"
+
+                val isBsMode = networkStatus.value == NetworkStatusChecker.STATUS_WHITELIST_ONLY
+                val useYandex = yandexTranslateUpdateEnabled.value && isBsMode && coreState.value != DesktopCoreState.RUNNING
+
+                GeekModeLogger.log(
+                    "Subscriptions",
+                    "Обновление ${enabledSubs.size} подписок (потоков: $concurrency, UA: $ua" +
+                            (if (useYandex) ", обход через Яндекс.Переводчик" else "") +
+                            (if (proxyP > 0) ", через локальный прокси :$proxyP" else "") +
+                            ")..."
+                )
+
                 val updatedSubsList = _subscriptions.value.toMutableList()
-                var anySubUpdated = false
+                val updatedSubsLock = Any()
+                val anySubUpdated = AtomicBoolean(false)
 
-                for (sub in enabledSubs) {
-                    val mirrors = SubscriptionFetcher.parseMirrors(sub.url)
-                    if (mirrors.isEmpty()) continue
+                coroutineScope {
+                    val jobs = enabledSubs.map { sub ->
+                        launch(Dispatchers.IO) {
+                            semaphore.withPermit {
+                                val mirrors = SubscriptionFetcher.parseMirrors(sub.url)
+                                if (mirrors.isEmpty()) return@withPermit
 
-                    GeekModeLogger.log("Subscriptions", "Загрузка: ${sub.name} (зеркал: ${mirrors.size})")
-                    val result = SubscriptionFetcher.fetchParallel(
-                        urls = mirrors,
-                        userAgent = subscriptionUserAgent.value,
-                        httpProxyHost = "127.0.0.1",
-                        httpProxyPort = proxyP,
-                        timeoutMs = 12000L
-                    )
+                                GeekModeLogger.log("Subscriptions", "Загрузка: ${sub.name} (зеркал: ${mirrors.size})")
 
-                    val subIdx = updatedSubsList.indexOfFirst { it.id == sub.id }
-                    if (result.isSuccess) {
-                        val content = result.getOrNull().orEmpty()
-                        var parsed = SubscriptionParser.parse(content)
+                                var result = if (useYandex) {
+                                    fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                                } else {
+                                    SubscriptionFetcher.fetchParallel(
+                                        urls = mirrors,
+                                        userAgent = ua,
+                                        httpProxyHost = "127.0.0.1",
+                                        httpProxyPort = proxyP,
+                                        timeoutMs = 12000L
+                                    )
+                                }
 
-                        // Применение regex фильтра подписки
-                        if (sub.filter.isNotBlank()) {
-                            try {
-                                val filterRegex = Regex(sub.filter)
-                                parsed = parsed.filter { !filterRegex.containsMatchIn(it.remarks) }
-                            } catch (_: Exception) {}
-                        }
+                                if (result.isFailure && yandexTranslateUpdateEnabled.value && !useYandex && coreState.value != DesktopCoreState.RUNNING) {
+                                    GeekModeLogger.log("Subscriptions", "${sub.name}: прямой запрос не удался, попытка через Яндекс.Переводчик...")
+                                    result = fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                                }
 
-                        // Привязка серверов к id подписки
-                        for (p in parsed) {
-                            p.subscriptionId = sub.id
-                        }
+                                synchronized(updatedSubsLock) {
+                                    val subIdx = updatedSubsList.indexOfFirst { it.id == sub.id }
+                                    if (result.isSuccess) {
+                                        val content = result.getOrNull().orEmpty()
+                                        var parsed = SubscriptionParser.parse(content)
 
-                        if (parsed.isNotEmpty()) {
-                            // Атомарно заменяем старые серверы новыми в одной транзакции без мерцания счетчика
-                            val currentServers = serverRepo.serversFlow.value
-                            val oldForSub = currentServers.filter {
-                                it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
-                            }.map { it.first }
+                                        if (sub.filter.isNotBlank()) {
+                                            try {
+                                                val filterRegex = Regex(sub.filter)
+                                                parsed = parsed.filter { !filterRegex.containsMatchIn(it.remarks) }
+                                            } catch (_: Exception) {}
+                                        }
 
-                            val batch = parsed.map { generateStableServerGuid(it) to it }
-                            serverRepo.replaceSubscriptionServers(oldForSub, batch)
-                            anySubUpdated = true
-                        }
+                                        for (p in parsed) {
+                                            p.subscriptionId = sub.id
+                                        }
 
-                        if (subIdx >= 0) {
-                            updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
-                                lastUpdated = System.currentTimeMillis(),
-                                lastUpdateFailed = false
-                            )
-                        }
-                        GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
-                    } else {
-                        val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
-                        // ПРАВИЛО: если сеть дала сбой, старые серверы подписки НЕ удаляются!
-                        val existingCount = serverRepo.serversFlow.value.count {
-                            it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
-                        }
-                        GeekModeLogger.log("Subscriptions", "${sub.name}: сбой ($err). Ранее полученные серверы сохранены ($existingCount узлов).")
-                        if (subIdx >= 0) {
-                            updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
-                                lastUpdateFailed = true
-                            )
+                                        if (parsed.isNotEmpty()) {
+                                            val currentServers = serverRepo.serversFlow.value
+                                            val oldForSub = currentServers.filter {
+                                                it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
+                                            }.map { it.first }
+
+                                            val batch = parsed.map { generateStableServerGuid(it) to it }
+                                            serverRepo.replaceSubscriptionServers(oldForSub, batch)
+                                            anySubUpdated.set(true)
+                                        }
+
+                                        if (subIdx >= 0) {
+                                            updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                                                lastUpdated = System.currentTimeMillis(),
+                                                lastUpdateFailed = false
+                                            )
+                                        }
+                                        GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
+                                    } else {
+                                        val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
+                                        val existingCount = serverRepo.serversFlow.value.count {
+                                            it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
+                                        }
+                                        GeekModeLogger.log("Subscriptions", "${sub.name}: сбой ($err). Ранее полученные серверы сохранены ($existingCount узлов).")
+                                        if (subIdx >= 0) {
+                                            updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                                                lastUpdateFailed = true
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                    jobs.joinAll()
                 }
 
                 _subscriptions.value = updatedSubsList
                 saveSubscriptionsToStorage(updatedSubsList)
 
-                if (anySubUpdated) {
+                if (anySubUpdated.get()) {
                     val removed = serverRepo.removeDuplicates()
                     GeekModeLogger.log("Subscriptions", "Автоматически устранено дубликатов: $removed")
                     _selectedGuid.value = serverRepo.getSelectedServerGuid()
@@ -1524,6 +1711,7 @@ class DesktopAppState(
         subThreads: Int = subscriptionThreads.value,
         subAutoUpdate: Boolean = subscriptionAutoUpdate.value,
         subIntervalMins: Int = subscriptionUpdateIntervalMinutes.value,
+        subUpdateOnStart: Boolean = subscriptionUpdateOnStartup.value,
         subOnlyViaProxy: Boolean = subscriptionUpdateOnlyViaProxy.value,
         customEndpoint: Boolean = useCustomEndpoint.value,
         customEndpointConfig: String = customEndpointUrl.value,
@@ -1590,6 +1778,7 @@ class DesktopAppState(
         subscriptionThreads.value = subThreads
         subscriptionAutoUpdate.value = subAutoUpdate
         subscriptionUpdateIntervalMinutes.value = subIntervalMins
+        subscriptionUpdateOnStartup.value = subUpdateOnStart
         subscriptionUpdateOnlyViaProxy.value = subOnlyViaProxy
         useCustomEndpoint.value = customEndpoint
         customEndpointUrl.value = customEndpointConfig
@@ -1662,6 +1851,7 @@ class DesktopAppState(
         settingsRepo.setInt("subscription_threads", subThreads)
         settingsRepo.setBoolean("subscription_auto_update", subAutoUpdate)
         settingsRepo.setInt("subscription_update_interval_minutes", subIntervalMins)
+        settingsRepo.setBoolean("subscription_update_on_startup", subUpdateOnStart)
         settingsRepo.setBoolean("subscription_update_only_via_proxy", subOnlyViaProxy)
         settingsRepo.setBoolean("pref_custom_endpoint_enabled", customEndpoint)
         settingsRepo.setString("pref_custom_endpoint_url", customEndpointConfig)
@@ -1715,6 +1905,8 @@ class DesktopAppState(
         settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
         vipCacheLimit.value = vipLimit
         settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
+
+        restartPeriodicSubscriptionUpdates()
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
         if (coreState.value == DesktopCoreState.RUNNING) {
