@@ -99,8 +99,14 @@ object SmartServerSelector {
 
         // 3. Сопоставление сценариев серверов и подписок
         val scenarioFiltered = basicFiltered.filter { (_, profile) ->
-            val subScenarios = config.subscriptionScenariosMap[profile.subscriptionId]
-            subScenarios.isNullOrEmpty() || subScenarios.any { targetScenarios.contains(it) }
+            val sid = profile.subscriptionId
+            if (sid.isNotBlank() && config.subscriptionScenariosMap.isNotEmpty()) {
+                val subScenarios = config.subscriptionScenariosMap[sid]
+                subScenarios?.any { targetScenarios.contains(it) } ?: false
+            } else {
+                // Ручной узел без подписки или карта сценариев не задана
+                true
+            }
         }
 
         return if (scenarioFiltered.isNotEmpty()) {

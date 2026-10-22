@@ -176,6 +176,13 @@ class DesktopAppState(
     val sudoError = MutableStateFlow<String?>(null)
     val isVerifyingSudo = MutableStateFlow(false)
 
+    // Предупреждение о несохраненных настройках при смене экрана
+    val showUnsavedSettingsDialog = MutableStateFlow(false)
+    var pendingTabToNavigate: DesktopTab? = null
+    var isSettingsDirty: (() -> Boolean)? = null
+    var saveSettingsAction: (() -> Unit)? = null
+    var discardSettingsAction: (() -> Unit)? = null
+
     // Оформление
     val themeMode = MutableStateFlow(settingsRepo.getString("pref_theme_mode", "DARK")) // SYSTEM, LIGHT, DARK
     val themePalette = MutableStateFlow(settingsRepo.getString("pref_theme_palette", "CYAN")) // CYAN, BLUE, MINT, PURPLE, AMBER, ROSE
@@ -280,6 +287,8 @@ class DesktopAppState(
         serverRepo = serverRepo,
         settingsRepo = settingsRepo,
         xrayRunner = xrayRunner,
+        subscriptionsProvider = { _subscriptions.value },
+        networkStatusProvider = { networkStatus.value },
         scope = scope
     )
 
@@ -507,6 +516,40 @@ class DesktopAppState(
 
     fun setTab(tab: DesktopTab) {
         _activeTab.value = tab
+    }
+
+    fun promptTabChange(tab: DesktopTab) {
+        if (_activeTab.value == DesktopTab.SETTINGS && tab != DesktopTab.SETTINGS && isSettingsDirty?.invoke() == true) {
+            pendingTabToNavigate = tab
+            showUnsavedSettingsDialog.value = true
+        } else {
+            setTab(tab)
+        }
+    }
+
+    fun confirmSaveAndNavigate() {
+        saveSettingsAction?.invoke()
+        showUnsavedSettingsDialog.value = false
+        val next = pendingTabToNavigate
+        pendingTabToNavigate = null
+        if (next != null) {
+            setTab(next)
+        }
+    }
+
+    fun confirmDiscardAndNavigate() {
+        discardSettingsAction?.invoke()
+        showUnsavedSettingsDialog.value = false
+        val next = pendingTabToNavigate
+        pendingTabToNavigate = null
+        if (next != null) {
+            setTab(next)
+        }
+    }
+
+    fun cancelUnsavedDialog() {
+        showUnsavedSettingsDialog.value = false
+        pendingTabToNavigate = null
     }
 
     fun setSearchQuery(query: String) {

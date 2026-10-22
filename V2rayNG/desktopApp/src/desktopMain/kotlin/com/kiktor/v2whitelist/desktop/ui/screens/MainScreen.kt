@@ -1,8 +1,10 @@
 package com.kiktor.v2whitelist.desktop.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -211,7 +213,7 @@ fun MainScreen(
                         Text(
                             text = when (coreState) {
                                 DesktopCoreState.RUNNING -> "Подключено"
-                                DesktopCoreState.STARTING -> "Поиск и подключение…"
+                                DesktopCoreState.STARTING -> "Тестирование соединения…"
                                 DesktopCoreState.ERROR -> "Ошибка соединения"
                                 DesktopCoreState.STOPPED -> "Не подключено"
                             },
@@ -227,11 +229,12 @@ fun MainScreen(
 
                         val detailText = when {
                             coreState == DesktopCoreState.STARTING -> {
-                                smartConnectStatus?.ifBlank { null } ?: "Поиск и тестирование серверов…"
+                                smartConnectStatus?.ifBlank { null } ?: "Тестирование серверов…"
                             }
                             coreState == DesktopCoreState.RUNNING -> {
                                 val modePrefix = if (isManualSelection) "Ручной выбор: " else ""
-                                "$modePrefix${activeProfile?.remarks ?: "Защищённый туннель активен"}"
+                                val name = activeProfile?.remarks.orEmpty().ifBlank { activeProfile?.server.orEmpty() }
+                                if (name.isNotBlank()) "Соединение через $modePrefix$name активно" else "Защищённый туннель активен"
                             }
                             isManualSelection && activeProfile != null -> "Выбран вручную: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
                             activeProfile != null -> "Сценарий: ${scenario.name} (готов к автопоиску)"
@@ -241,7 +244,7 @@ fun MainScreen(
                             text = detailText,
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
 
@@ -358,6 +361,44 @@ fun MainScreen(
                                 color = if (coreState == DesktopCoreState.STOPPED) MaterialTheme.colorScheme.onSurface else Color.Black
                             )
                         }
+                    }
+                }
+            }
+
+            // Живой статус подключения под центральной кнопкой (1-в-1 как на Android)
+            AnimatedVisibility(
+                visible = isAnimating,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = AccentAmber.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .widthIn(max = 500.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            color = AccentAmber,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = smartConnectStatus?.ifBlank { null } ?: "Тестирование серверов…",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = AccentAmber,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }

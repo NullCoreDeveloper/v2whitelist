@@ -118,6 +118,223 @@ fun SettingsScreen(
 
     var isSavedNotice by remember { mutableStateOf(false) }
 
+    val doSave = {
+        state.saveSettings(
+            subUrl = state.subscriptionUrl.value,
+            xrayPath = xrayPathInput,
+            v2wPath = v2wPathInput,
+            httpP = state.httpPort.value,
+            socksP = state.socksPort.value,
+            autoSystemProxy = state.autoEnableSystemProxy.value,
+            lan = allowLan,
+            directDomains = customDirect,
+            proxyDomains = customProxy,
+            subUserAgent = userAgent,
+            subThreads = subThreads.toIntOrNull() ?: 3,
+            subAutoUpdate = subAutoUpdate,
+            subIntervalMins = subIntervalMins.toIntOrNull() ?: 60,
+            subOnlyViaProxy = subOnlyProxy,
+            customEndpoint = useCustomEp,
+            customEndpointConfig = customEpConfig,
+            bypassRu = bypassRu,
+            checkUrl = connCheckUrl,
+            smartBatch = smartBatchSize.toIntOrNull() ?: 20,
+            smartPreset = smartPreset,
+            v2wCore = useV2w,
+            fallbackScanner = useFallback,
+            v2wSockets = v2wSockets.toIntOrNull() ?: 35,
+            removeInsecure = removeInsecure,
+            testBeforeConnect = testBeforeConnect,
+            speedTestCheck = speedTestOnCheck,
+            speedTestBytes = speedTestBytes.toIntOrNull() ?: 2000000,
+            speedTestTimeout = speedTestTimeout.toIntOrNull() ?: 3000,
+            minSpeed = minSpeedThreshold.toDoubleOrNull() ?: 1.0,
+            autoFailoverEnabled = autoFailover,
+            heartbeatSec = heartbeatSec.toIntOrNull() ?: 30,
+            smartFailoverEnabled = smartFailover,
+            degradationKb = degradationKb.toIntOrNull() ?: 3,
+            stuckSec = stuckSec.toIntOrNull() ?: 3,
+            netCheckEnabled = netCheckEnabled,
+            primaryDomain = primaryDomain,
+            fallbackDomain = fallbackDomain,
+            betaUpdates = betaUpdates,
+            prefIpv6 = preferIpv6,
+            localDnsVal = localDns,
+            fakeDnsVal = fakeDns,
+            addHttpProxyVal = addHttpProxy,
+            vpnDnsVal = vpnDns,
+            vpnBypassLanVal = bypassLan,
+            vpnAddressVal = vpnAddress,
+            vpnMtuVal = vpnMtu.toIntOrNull() ?: 1500,
+            sniffingVal = sniffing,
+            routeOnlyVal = routeOnly,
+            allowInsecureVal = allowInsecure,
+            localPortVal = localPort.toIntOrNull() ?: 35255,
+            localLoginVal = localLogin,
+            localPassVal = localPass,
+            remoteDnsVal = remoteDns,
+            internalDnsVal = internalDns,
+            dnsHostsVal = dnsHosts,
+            muxVal = muxEnabled,
+            muxTcpVal = muxTcp.toIntOrNull() ?: 8,
+            muxXudpVal = muxXudp.toIntOrNull() ?: 8,
+            fragmentVal = fragmentEnabled,
+            fragmentLenVal = fragmentLen,
+            fragmentIntVal = fragmentInt,
+            fragmentPackVal = fragmentPack,
+            yandexUpdateVal = yandexUpdate,
+            domainSplitVal = domainSplit,
+            vipLimit = vipCacheLimitInput.toIntOrNull() ?: 5
+        )
+        state.setMinimizeToTray(minimizeToTray)
+        state.setAllowLan(allowLan)
+        isSavedNotice = true
+    }
+
+    val doDiscard = {
+        smartBatchSize = state.smartConnectBatchSize.value.toString()
+        smartPreset = state.smartDistributionPreset.value
+        useV2w = state.useV2WCore.value
+        useFallback = state.useFallbackScanner.value
+        v2wSockets = state.v2wCoreSockets.value.toString()
+        xrayPathInput = state.xrayBinaryPath.value
+        v2wPathInput = state.v2wScanPath.value
+        removeInsecure = state.removeInsecureProfiles.value
+        testBeforeConnect = state.testProfileBeforeConnect.value
+        speedTestOnCheck = state.speedTestOnCheck.value
+        speedTestBytes = state.speedTestDownloadBytes.value.toString()
+        speedTestTimeout = state.speedTestTimeoutMs.value.toString()
+        minSpeedThreshold = state.minSpeedThresholdMbps.value.toString()
+        vipCacheLimitInput = state.vipCacheLimit.value.toString()
+        autoFailover = state.autoFailover.value
+        heartbeatSec = state.heartbeatIntervalSeconds.value.toString()
+        smartFailover = state.smartFailover.value
+        degradationKb = state.failoverDegradationThresholdKb.value.toString()
+        stuckSec = state.failoverStuckDurationSeconds.value.toString()
+        netCheckEnabled = state.networkCheckEnabled.value
+        primaryDomain = state.networkCheckPrimaryDomain.value
+        fallbackDomain = state.networkCheckFallbackDomain.value
+        subAutoUpdate = state.subscriptionAutoUpdate.value
+        subIntervalMins = state.subscriptionUpdateIntervalMinutes.value.toString()
+        subOnlyProxy = state.subscriptionUpdateOnlyViaProxy.value
+        subThreads = state.subscriptionThreads.value.toString()
+        yandexUpdate = state.yandexTranslateUpdateEnabled.value
+        domainSplit = state.domainSplitTunnelingEnabled.value
+        customDirect = state.customDirectDomains.value
+        customProxy = state.customProxyDomains.value
+        bypassRu = state.bypassRussianServices.value
+        autoUpdateCheck = state.autoCheckUpdates.value
+        useCustomEp = state.useCustomEndpoint.value
+        customEpConfig = state.customEndpointUrl.value
+        userAgent = state.subscriptionUserAgent.value
+        preferIpv6 = state.preferIpv6.value
+        localDns = state.useLocalDns.value
+        fakeDns = state.useFakeDns.value
+        addHttpProxy = state.additionalHttpProxy.value
+        vpnDns = state.vpnDns.value
+        bypassLan = state.vpnBypassLan.value
+        vpnAddress = state.vpnInterfaceAddress.value
+        vpnMtu = state.vpnMtu.value.toString()
+        sniffing = state.sniffingEnabled.value
+        routeOnly = state.routeOnly.value
+        allowLan = state.allowLan.value
+        allowInsecure = state.allowInsecure.value
+        localPort = state.localProxyPort.value.toString()
+        localLogin = state.localProxyLogin.value
+        localPass = state.localProxyPassword.value
+        remoteDns = state.remoteDns.value
+        internalDns = state.internalDns.value
+        dnsHosts = state.dnsHosts.value
+        muxEnabled = state.muxEnabled.value
+        muxTcp = state.muxTcpConcurrency.value.toString()
+        muxXudp = state.muxXudpConcurrency.value.toString()
+        fragmentEnabled = state.fragmentEnabled.value
+        fragmentLen = state.fragmentLength.value
+        fragmentInt = state.fragmentInterval.value
+        fragmentPack = state.fragmentPackets.value
+        minimizeToTray = state.minimizeToTray.value
+        connCheckUrl = state.connectionCheckServiceUrl.value
+        betaUpdates = state.receiveBetaUpdates.value
+        isSavedNotice = false
+    }
+
+    val checkDirty: () -> Boolean = {
+        smartBatchSize != state.smartConnectBatchSize.value.toString() ||
+        smartPreset != state.smartDistributionPreset.value ||
+        useV2w != state.useV2WCore.value ||
+        useFallback != state.useFallbackScanner.value ||
+        v2wSockets != state.v2wCoreSockets.value.toString() ||
+        xrayPathInput != state.xrayBinaryPath.value ||
+        v2wPathInput != state.v2wScanPath.value ||
+        removeInsecure != state.removeInsecureProfiles.value ||
+        testBeforeConnect != state.testProfileBeforeConnect.value ||
+        speedTestOnCheck != state.speedTestOnCheck.value ||
+        speedTestBytes != state.speedTestDownloadBytes.value.toString() ||
+        speedTestTimeout != state.speedTestTimeoutMs.value.toString() ||
+        minSpeedThreshold != state.minSpeedThresholdMbps.value.toString() ||
+        vipCacheLimitInput != state.vipCacheLimit.value.toString() ||
+        autoFailover != state.autoFailover.value ||
+        heartbeatSec != state.heartbeatIntervalSeconds.value.toString() ||
+        smartFailover != state.smartFailover.value ||
+        degradationKb != state.failoverDegradationThresholdKb.value.toString() ||
+        stuckSec != state.failoverStuckDurationSeconds.value.toString() ||
+        netCheckEnabled != state.networkCheckEnabled.value ||
+        primaryDomain != state.networkCheckPrimaryDomain.value ||
+        fallbackDomain != state.networkCheckFallbackDomain.value ||
+        subAutoUpdate != state.subscriptionAutoUpdate.value ||
+        subIntervalMins != state.subscriptionUpdateIntervalMinutes.value.toString() ||
+        subOnlyProxy != state.subscriptionUpdateOnlyViaProxy.value ||
+        subThreads != state.subscriptionThreads.value.toString() ||
+        yandexUpdate != state.yandexTranslateUpdateEnabled.value ||
+        domainSplit != state.domainSplitTunnelingEnabled.value ||
+        customDirect != state.customDirectDomains.value ||
+        customProxy != state.customProxyDomains.value ||
+        bypassRu != state.bypassRussianServices.value ||
+        autoUpdateCheck != state.autoCheckUpdates.value ||
+        useCustomEp != state.useCustomEndpoint.value ||
+        customEpConfig != state.customEndpointUrl.value ||
+        userAgent != state.subscriptionUserAgent.value ||
+        preferIpv6 != state.preferIpv6.value ||
+        localDns != state.useLocalDns.value ||
+        fakeDns != state.useFakeDns.value ||
+        addHttpProxy != state.additionalHttpProxy.value ||
+        vpnDns != state.vpnDns.value ||
+        bypassLan != state.vpnBypassLan.value ||
+        vpnAddress != state.vpnInterfaceAddress.value ||
+        vpnMtu != state.vpnMtu.value.toString() ||
+        sniffing != state.sniffingEnabled.value ||
+        routeOnly != state.routeOnly.value ||
+        allowLan != state.allowLan.value ||
+        allowInsecure != state.allowInsecure.value ||
+        localPort != state.localProxyPort.value.toString() ||
+        localLogin != state.localProxyLogin.value ||
+        localPass != state.localProxyPassword.value ||
+        remoteDns != state.remoteDns.value ||
+        internalDns != state.internalDns.value ||
+        dnsHosts != state.dnsHosts.value ||
+        muxEnabled != state.muxEnabled.value ||
+        muxTcp != state.muxTcpConcurrency.value.toString() ||
+        muxXudp != state.muxXudpConcurrency.value.toString() ||
+        fragmentEnabled != state.fragmentEnabled.value ||
+        fragmentLen != state.fragmentLength.value ||
+        fragmentInt != state.fragmentInterval.value ||
+        fragmentPack != state.fragmentPackets.value ||
+        minimizeToTray != state.minimizeToTray.value ||
+        connCheckUrl != state.connectionCheckServiceUrl.value ||
+        betaUpdates != state.receiveBetaUpdates.value
+    }
+
+    DisposableEffect(state) {
+        state.isSettingsDirty = { checkDirty() }
+        state.saveSettingsAction = { doSave() }
+        state.discardSettingsAction = { doDiscard() }
+        onDispose {
+            state.isSettingsDirty = null
+            state.saveSettingsAction = null
+            state.discardSettingsAction = null
+        }
+    }
+
     val scrollState = rememberScrollState()
 
     val meshEnabled by state.meshGradientEnabled.collectAsState()
@@ -154,78 +371,7 @@ fun SettingsScreen(
             }
 
             Button(
-                onClick = {
-                    state.saveSettings(
-                        subUrl = state.subscriptionUrl.value,
-                        xrayPath = xrayPathInput,
-                        v2wPath = v2wPathInput,
-                        httpP = state.httpPort.value,
-                        socksP = state.socksPort.value,
-                        autoSystemProxy = state.autoEnableSystemProxy.value,
-                        lan = allowLan,
-                        directDomains = customDirect,
-                        proxyDomains = customProxy,
-                        subUserAgent = userAgent,
-                        subThreads = subThreads.toIntOrNull() ?: 3,
-                        subAutoUpdate = subAutoUpdate,
-                        subIntervalMins = subIntervalMins.toIntOrNull() ?: 60,
-                        subOnlyViaProxy = subOnlyProxy,
-                        customEndpoint = useCustomEp,
-                        customEndpointConfig = customEpConfig,
-                        bypassRu = bypassRu,
-                        checkUrl = connCheckUrl,
-                        smartBatch = smartBatchSize.toIntOrNull() ?: 20,
-                        smartPreset = smartPreset,
-                        v2wCore = useV2w,
-                        fallbackScanner = useFallback,
-                        v2wSockets = v2wSockets.toIntOrNull() ?: 35,
-                        removeInsecure = removeInsecure,
-                        testBeforeConnect = testBeforeConnect,
-                        speedTestCheck = speedTestOnCheck,
-                        speedTestBytes = speedTestBytes.toIntOrNull() ?: 2000000,
-                        speedTestTimeout = speedTestTimeout.toIntOrNull() ?: 3000,
-                        minSpeed = minSpeedThreshold.toDoubleOrNull() ?: 1.0,
-                        autoFailoverEnabled = autoFailover,
-                        heartbeatSec = heartbeatSec.toIntOrNull() ?: 30,
-                        smartFailoverEnabled = smartFailover,
-                        degradationKb = degradationKb.toIntOrNull() ?: 3,
-                        stuckSec = stuckSec.toIntOrNull() ?: 3,
-                        netCheckEnabled = netCheckEnabled,
-                        primaryDomain = primaryDomain,
-                        fallbackDomain = fallbackDomain,
-                        betaUpdates = betaUpdates,
-                        prefIpv6 = preferIpv6,
-                        localDnsVal = localDns,
-                        fakeDnsVal = fakeDns,
-                        addHttpProxyVal = addHttpProxy,
-                        vpnDnsVal = vpnDns,
-                        vpnBypassLanVal = bypassLan,
-                        vpnAddressVal = vpnAddress,
-                        vpnMtuVal = vpnMtu.toIntOrNull() ?: 1500,
-                        sniffingVal = sniffing,
-                        routeOnlyVal = routeOnly,
-                        allowInsecureVal = allowInsecure,
-                        localPortVal = localPort.toIntOrNull() ?: 35255,
-                        localLoginVal = localLogin,
-                        localPassVal = localPass,
-                        remoteDnsVal = remoteDns,
-                        internalDnsVal = internalDns,
-                        dnsHostsVal = dnsHosts,
-                        muxVal = muxEnabled,
-                        muxTcpVal = muxTcp.toIntOrNull() ?: 8,
-                        muxXudpVal = muxXudp.toIntOrNull() ?: 8,
-                        fragmentVal = fragmentEnabled,
-                        fragmentLenVal = fragmentLen,
-                        fragmentIntVal = fragmentInt,
-                        fragmentPackVal = fragmentPack,
-                        yandexUpdateVal = yandexUpdate,
-                        domainSplitVal = domainSplit,
-                        vipLimit = vipCacheLimitInput.toIntOrNull() ?: 5
-                    )
-                    state.setMinimizeToTray(minimizeToTray)
-                    state.setAllowLan(allowLan)
-                    isSavedNotice = true
-                },
+                onClick = { doSave() },
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
             ) {

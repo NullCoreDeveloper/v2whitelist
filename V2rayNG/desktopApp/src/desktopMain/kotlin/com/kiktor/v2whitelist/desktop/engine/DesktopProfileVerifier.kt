@@ -39,7 +39,8 @@ object DesktopProfileVerifier {
         timeoutMs: Long = 7000L,
         speedCheckEnabled: Boolean = true,
         minSpeedMbps: Double = 1.0,
-        bytesToDownload: Long = 500_000L
+        bytesToDownload: Long = 500_000L,
+        onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
         val runner = XrayDesktopRunner()
         val binary = runner.findXrayExecutable(xrayBinaryPath)
@@ -82,9 +83,12 @@ object DesktopProfileVerifier {
             }
 
             // ── Шаг 1: e2e HTTP 204 проверка через SOCKS ──
+            val serverTitle = profile.remarks.ifBlank { profile.server }
+            onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
             val latency = measureE2ELatency(testPort, timeoutMs)
             if (latency <= 0) {
                 GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
+                onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
                 return@withContext VerifyResult(
                     success = false,
                     errorMessage = "e2e проверка не прошла"
@@ -96,6 +100,7 @@ object DesktopProfileVerifier {
             // ── Шаг 2: Замер скорости (если включен) ──
             var mbps: Double? = null
             if (speedCheckEnabled) {
+                onStatusUpdate?.invoke("Замер скорости соединения: $serverTitle…")
                 mbps = measureSpeed(testPort, bytesToDownload, timeoutMs = timeoutMs)
                 if (mbps != null) {
                     val formatted = "%.2f".format(mbps)
@@ -105,6 +110,7 @@ object DesktopProfileVerifier {
                             "Verifier",
                             "${profile.remarks}: скорость $formatted Мбит/с ниже порога $minSpeedMbps Мбит/с -> отклонен"
                         )
+                        onStatusUpdate?.invoke("Низкая скорость ($formatted Мбит/с < $minSpeedMbps Мбит/с), ищем следующий…")
                         return@withContext VerifyResult(
                             success = false,
                             latencyMs = latency,
@@ -112,9 +118,13 @@ object DesktopProfileVerifier {
                             errorMessage = "Скорость ниже минимального порога"
                         )
                     }
+                    onStatusUpdate?.invoke("Профиль проверен ✔ · $formatted Мбит/с")
                 } else {
                     GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости завершился таймаутом, но HTTP 204 успешен -> узел допущен")
+                    onStatusUpdate?.invoke("Профиль прошёл проверку ✔")
                 }
+            } else {
+                onStatusUpdate?.invoke("Профиль прошёл проверку ✔")
             }
 
             return@withContext VerifyResult(

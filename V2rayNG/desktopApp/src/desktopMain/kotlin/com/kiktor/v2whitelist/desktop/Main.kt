@@ -1,12 +1,15 @@
 package com.kiktor.v2whitelist.desktop
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -118,7 +121,7 @@ fun App(state: DesktopAppState) {
                         currentTab = currentTab,
                         serverCount = servers.size,
                         coreState = coreState,
-                        onTabSelected = { state.setTab(it) }
+                        onTabSelected = { state.promptTabChange(it) }
                     )
 
                     Box(modifier = Modifier.weight(1f).fillMaxSize()) {
@@ -134,6 +137,9 @@ fun App(state: DesktopAppState) {
 
                 // Встроенный диалог ввода пароля sudo для TUN на Linux
                 SudoPasswordDialog(state = state)
+
+                // Предупреждение о несохраненных изменениях в настройках
+                UnsavedSettingsDialog(state = state)
             }
         }
     }
@@ -264,6 +270,74 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 Text("Отмена")
             }
         }
+    )
+}
+
+@Composable
+fun UnsavedSettingsDialog(state: DesktopAppState) {
+    val showDialog by state.showUnsavedSettingsDialog.collectAsState()
+    if (!showDialog) return
+
+    AlertDialog(
+        onDismissRequest = {
+            state.cancelUnsavedDialog()
+        },
+        icon = {
+            Icon(
+                Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Несохранённые изменения",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "В настройках есть несохранённые изменения. Сохранить их перед переходом в другой раздел?",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { state.confirmSaveAndNavigate() },
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = androidx.compose.ui.graphics.Color.Black
+                )
+            ) {
+                Text("Сохранить", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { state.cancelUnsavedDialog() },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Отмена")
+                }
+                OutlinedButton(
+                    onClick = { state.confirmDiscardAndNavigate() },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Text("Не сохранять")
+                }
+            }
+        },
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     )
 }
 

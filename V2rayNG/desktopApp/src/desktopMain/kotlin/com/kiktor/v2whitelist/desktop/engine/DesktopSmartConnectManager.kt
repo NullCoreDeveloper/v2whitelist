@@ -7,6 +7,8 @@ import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
+import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
+import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.core.repository.ServerRepository
 import com.kiktor.v2whitelist.core.repository.SettingsRepository
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
@@ -36,6 +38,8 @@ class DesktopSmartConnectManager(
     private val serverRepo: ServerRepository,
     private val settingsRepo: SettingsRepository,
     private val xrayRunner: XrayDesktopRunner,
+    private val subscriptionsProvider: () -> List<CustomSubData> = { emptyList() },
+    private val networkStatusProvider: () -> Int = { NetworkStatusChecker.STATUS_FULL_INTERNET },
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) {
     var onStageChanged: ((SmartConnectStage, String) -> Unit)? = null
@@ -54,11 +58,40 @@ class DesktopSmartConnectManager(
             ServerTagResolver.getDefaultFilterSet()
         }
 
+        val subs = subscriptionsProvider()
+        val disabledSubIds = subs.filter { !it.enabled }
+            .flatMap { listOf(it.id, it.name, "custom_sub_${it.id}") }
+            .toSet()
+
+        val groupRegexMap = mutableMapOf<String, String>()
+        for (sub in subs) {
+            if (sub.groupRegex.isNotBlank()) {
+                groupRegexMap[sub.id] = sub.groupRegex
+                groupRegexMap[sub.name] = sub.groupRegex
+                groupRegexMap["custom_sub_${sub.id}"] = sub.groupRegex
+            }
+        }
+
+        val subScenariosMap = mutableMapOf<String, Set<String>>()
+        for (sub in subs) {
+            val scSet = sub.targetScenarios.toSet()
+            if (scSet.isNotEmpty()) {
+                subScenariosMap[sub.id] = scSet
+                subScenariosMap[sub.name] = scSet
+                subScenariosMap["custom_sub_${sub.id}"] = scSet
+            }
+        }
+
         return SmartServerFilterConfig(
             excludeGuid = excludeGuid,
-            appScenario = scenario,
+            disabledSubscriptionIds = disabledSubIds,
             locationFilterMode = locMode,
-            locationFilterSet = locSet
+            locationFilterSet = locSet,
+            groupRegexMap = groupRegexMap,
+            appScenario = scenario,
+            internetStatus = networkStatusProvider(),
+            subscriptionScenariosMap = subScenariosMap,
+            filterByScenario = true
         )
     }
 
@@ -91,23 +124,28 @@ class DesktopSmartConnectManager(
         // ══════════════════════════════════════════════════════════════════════════════
         val vipGuids = serverRepo.getVipServerGuids()
         if (vipGuids.isNotEmpty()) {
-            onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Проверка VIP-серверов (${vipGuids.size})...")
+            onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Быстрое подключение через топ серверов…")
             GeekModeLogger.log("SmartConnect", "VIP Cache: проверка ${vipGuids.size} узлов...")
 
             val vipCandidates = candidates.filter { vipGuids.contains(it.first) }
             for ((guid, profile) in vipCandidates) {
-                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "VIP тест: ${profile.remarks}")
+                val serverName = profile.remarks.ifBlank { profile.server }
+                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Быстрое подключение к $serverName…")
                 val res = DesktopProfileVerifier.verifyProfile(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = speedCheckEnabled,
-                    minSpeedMbps = minSpeedMbps
+                    minSpeedMbps = minSpeedMbps,
+                    onStatusUpdate = { text ->
+                        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
+                    }
                 )
                 if (res.success) {
                     vipFailCounters[guid] = 0
                     GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден: ${profile.remarks} (${res.latencyMs}ms, ${res.speedMbps ?: "—"} Мбит/с)")
+                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
+                    delay(350)
                     connectAndFinish(guid, profile)
-                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено к VIP: ${profile.remarks}")
                     return@withContext true
                 } else {
                     val fails = (vipFailCounters[guid] ?: 0) + 1
@@ -126,7 +164,7 @@ class DesktopSmartConnectManager(
         // ══════════════════════════════════════════════════════════════════════════════
         // ЭТАП 2: Потоковое сканирование через ядро v2w-core
         // ══════════════════════════════════════════════════════════════════════════════
-        onStageChanged?.invoke(SmartConnectStage.V2W_SCANNING, "Запуск ядра v2w-core (глубокий скан)...")
+        onStageChanged?.invoke(SmartConnectStage.V2W_SCANNING, "Ищем лучший сервер для вас…")
         GeekModeLogger.log("SmartConnect", "Запуск ядра v2w-core для ${candidates.size} узлов...")
 
         val channel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
@@ -153,19 +191,23 @@ class DesktopSmartConnectManager(
         for (candidate in channel) {
             if (!isActive) break
 
-            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Верификация узла: ${candidate.second.remarks}")
-            GeekModeLogger.log("SmartConnect", "v2w-core нашел узел ${candidate.second.remarks} (${candidate.third}ms) -> Xray верификация...")
+            val serverName = candidate.second.remarks.ifBlank { candidate.second.server }
+            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем профиль: $serverName…")
+            GeekModeLogger.log("SmartConnect", "v2w-core нашел узел $serverName (${candidate.third}ms) -> Xray верификация...")
 
             val verifyRes = DesktopProfileVerifier.verifyProfile(
                 profile = candidate.second,
                 xrayBinaryPath = xrayPath,
                 speedCheckEnabled = speedCheckEnabled,
-                minSpeedMbps = minSpeedMbps
+                minSpeedMbps = minSpeedMbps,
+                onStatusUpdate = { text ->
+                    onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
+                }
             )
 
             if (verifyRes.success) {
                 winner = candidate.first to candidate.second
-                GeekModeLogger.log("SmartConnect", "Победитель найден и верифицирован: ${candidate.second.remarks}!")
+                GeekModeLogger.log("SmartConnect", "Победитель найден и верифицирован: $serverName!")
 
                 // Добавляем победителя в VIP
                 val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
@@ -187,11 +229,12 @@ class DesktopSmartConnectManager(
                     warmupLeftoversInVip(leftovers, xrayPath, minSpeedMbps)
                 }
 
+                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
+                delay(350)
                 connectAndFinish(candidate.first, candidate.second)
-                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${candidate.second.remarks}")
                 return@withContext true
             } else {
-                GeekModeLogger.log("SmartConnect", "Узел ${candidate.second.remarks} не прошел порог скорости/e2e, берем следующий из очереди...")
+                GeekModeLogger.log("SmartConnect", "Узел $serverName не прошел порог скорости/e2e, берем следующий из очереди...")
             }
         }
 
@@ -199,31 +242,36 @@ class DesktopSmartConnectManager(
         // ЭТАП 3: Фоллбек на классический сканер (Fallback)
         // ══════════════════════════════════════════════════════════════════════════════
         GeekModeLogger.log("SmartConnect", "v2w-core не нашел подходящих узлов. Фоллбек на классический сканер...")
-        onStageChanged?.invoke(SmartConnectStage.FALLBACK_SCANNING, "Фоллбек: классический TCP-тест...")
+        onStageChanged?.invoke(SmartConnectStage.FALLBACK_SCANNING, "v2w-core: переключение на старый сканер…")
 
         val tcpResults = NodePingTester.testBatchTcp(candidates, timeoutMs = 1500L)
         if (tcpResults.isNotEmpty()) {
             for ((guid, profile, delayMs) in tcpResults) {
-                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Фоллбек тест: ${profile.remarks}")
+                val serverName = profile.remarks.ifBlank { profile.server }
+                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем скорость серверов…")
                 val res = DesktopProfileVerifier.verifyProfile(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = speedCheckEnabled,
-                    minSpeedMbps = minSpeedMbps
+                    minSpeedMbps = minSpeedMbps,
+                    onStatusUpdate = { text ->
+                        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
+                    }
                 )
                 if (res.success) {
                     val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
-                    GeekModeLogger.log("SmartConnect", "Классический фоллбек нашел узел: ${profile.remarks}")
+                    GeekModeLogger.log("SmartConnect", "Классический фоллбек нашел узел: $serverName")
                     serverRepo.addVipServer(guid, limit)
+                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
+                    delay(350)
                     connectAndFinish(guid, profile)
-                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
                     return@withContext true
                 }
             }
         }
 
         GeekModeLogger.log("SmartConnect", "Все этапы завершены. Ни один узел не прошел проверку.")
-        onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет доступных серверов")
+        onStageChanged?.invoke(SmartConnectStage.FAILED, "Серверы не найдены. Попробуйте обновить список.")
         return@withContext false
     }
 
@@ -276,45 +324,59 @@ class DesktopSmartConnectManager(
         // 1. Быстрый путь: VIP Cache (как на Android)
         val vipGuids = serverRepo.getVipServerGuids().filter { it != currentGuid }
         if (vipGuids.isNotEmpty()) {
-            onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Проверка сохранённых VIP-узлов (${vipGuids.size})…")
+            onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Быстрое подключение через топ серверов…")
             GeekModeLogger.log("SmartConnect", "Смена сервера: проверка ${vipGuids.size} узлов из VIP кэша...")
             val vipCandidates = candidates.filter { vipGuids.contains(it.first) }
             for ((guid, profile) in vipCandidates) {
-                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "VIP тест: ${profile.remarks.ifBlank { profile.server }}")
+                val serverName = profile.remarks.ifBlank { profile.server }
+                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Быстрое подключение к $serverName…")
                 val res = DesktopProfileVerifier.verifyProfile(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = false,
-                    minSpeedMbps = 0.5
+                    minSpeedMbps = 0.5,
+                    onStatusUpdate = { text ->
+                        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
+                    }
                 )
                 if (res.success) {
-                    GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден при смене: ${profile.remarks}")
+                    GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден при смене: $serverName")
+                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключаемся к $serverName…")
+                    delay(350)
                     connectAndFinish(guid, profile)
-                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
                     return@withContext true
                 }
             }
         }
 
         // 2. Если VIP не ответил — перебор остальных кандидатов
-        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Поиск альтернативного узла…")
+        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Выбираем другой сервер…")
         GeekModeLogger.log("SmartConnect", "Смена сервера: перебор ${candidates.size} кандидатов...")
         for ((guid, profile) in candidates.shuffled()) {
             if (vipGuids.contains(guid)) continue
-            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Тестирование: ${profile.remarks.ifBlank { profile.server }}")
+            val serverName = profile.remarks.ifBlank { profile.server }
+            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем профиль: $serverName…")
             val res = DesktopProfileVerifier.verifyProfile(
                 profile = profile,
                 xrayBinaryPath = xrayPath,
                 speedCheckEnabled = false,
-                minSpeedMbps = 0.5
+                minSpeedMbps = 0.5,
+                onStatusUpdate = { text ->
+                    onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
+                }
             )
             if (res.success) {
+                val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
                 serverRepo.addVipServer(guid, limit)
+                GeekModeLogger.log("SmartConnect", "Новый узел подтвержден при смене: $serverName")
+                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключаемся к $serverName…")
+                delay(350)
                 connectAndFinish(guid, profile)
-                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено: ${profile.remarks}")
                 return@withContext true
             }
         }
+        GeekModeLogger.log("SmartConnect", "Смена сервера: ни один узел не подошел.")
+        onStageChanged?.invoke(SmartConnectStage.FAILED, "Серверы не найдены. Попробуйте обновить список.")
         return@withContext false
     }
 
