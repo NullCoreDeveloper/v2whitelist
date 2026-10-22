@@ -29,6 +29,11 @@ data class ConfiguredServerRoute(
  */
 object DesktopTunManager {
 
+    private val osName = System.getProperty("os.name")?.lowercase().orEmpty()
+    val isWindows = osName.contains("windows")
+    val isMac = osName.contains("mac")
+    val isLinux = !isWindows && !isMac
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var tunProcess: Process? = null
     private var logJob: Job? = null
@@ -62,9 +67,20 @@ object DesktopTunManager {
         }
 
         val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+        val isMac = System.getProperty("os.name").lowercase().contains("mac")
         val execName = if (isWindows) "tun2socks.exe" else "tun2socks"
 
-        val candidates = listOf(
+        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+        val appDataBin = when {
+            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
+            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
+            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
+        }
+
+        val candidates = listOfNotNull(
+            appResDir?.let { File(it, execName) },
+            appResDir?.let { File(it, "bin/$execName") },
+            appDataBin?.let { File(it, execName) },
             File("bin", execName),
             File("../bin", execName),
             File("../../bin", execName),
@@ -133,23 +149,29 @@ object DesktopTunManager {
             GeekModeLogger.log("TUN", "Целевой сервер для исключения из туннеля: $serverIp ($serverAddress)")
         }
 
-        // 0. Подгрузка модуля ядра Linux tun
-        if (!sudoPassword.isNullOrBlank()) {
-            runSudoCommand(listOf("modprobe", "tun"), sudoPassword)
+        // 0. Подготовка виртуального интерфейса
+        val deviceName = when {
+            isWindows -> "wintun"
+            isMac -> "utun"
+            else -> "v2w-tun"
         }
 
-        // Очищаем старый интерфейс v2w-tun на случай аварийного завершения прошлого сеанса
-        runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
+        if (isLinux) {
+            if (!sudoPassword.isNullOrBlank()) {
+                runSudoCommand(listOf("modprobe", "tun"), sudoPassword)
+            }
+            runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
+        }
 
         // 3. Запуск tun2socks
-        val useSudo = !sudoPassword.isNullOrBlank()
+        val useSudo = !sudoPassword.isNullOrBlank() && isLinux
         val tunArgs = mutableListOf<String>()
         if (useSudo) {
             tunArgs.addAll(listOf("sudo", "-S"))
         }
         tunArgs.addAll(listOf(
             binary.absolutePath,
-            "-device", "v2w-tun",
+            "-device", deviceName,
             "-proxy", "socks5://127.0.0.1:$socksPort",
             "-loglevel", "warn"
         ))
@@ -184,8 +206,8 @@ object DesktopTunManager {
                 } catch (_: Exception) {}
             }
 
-            // Ждём инициализации виртуального интерфейса v2w-tun в ядре Linux
-            Thread.sleep(250)
+            // Ждём инициализации виртуального интерфейса
+            Thread.sleep(350)
 
             if (!proc.isAlive) {
                 val code = proc.exitValue()
@@ -194,47 +216,68 @@ object DesktopTunManager {
                 return false
             }
 
-            // 4. Конфигурация интерфейса v2w-tun
-            val addrRes = runSudoCommand(listOf("ip", "addr", "add", "198.18.0.1/15", "dev", "v2w-tun"), sudoPassword)
-            if (addrRes.first != 0 && !addrRes.second.contains("File exists", ignoreCase = true)) {
-                GeekModeLogger.log("TUN", "Ошибка назначения IP интерфейсу v2w-tun: ${addrRes.second}")
-                cleanupProcess(sudoPassword)
-                return false
-            }
+            // 4. Конфигурация интерфейса и маршрутов
+            when {
+                isLinux -> {
+                    val addrRes = runSudoCommand(listOf("ip", "addr", "add", "198.18.0.1/15", "dev", "v2w-tun"), sudoPassword)
+                    if (addrRes.first != 0 && !addrRes.second.contains("File exists", ignoreCase = true)) {
+                        GeekModeLogger.log("TUN", "Ошибка назначения IP интерфейсу v2w-tun: ${addrRes.second}")
+                        cleanupProcess(sudoPassword)
+                        return false
+                    }
 
-            val linkRes = runSudoCommand(listOf("ip", "link", "set", "dev", "v2w-tun", "up"), sudoPassword)
-            if (linkRes.first != 0) {
-                GeekModeLogger.log("TUN", "Ошибка поднятия интерфейса v2w-tun: ${linkRes.second}")
-                cleanupProcess(sudoPassword)
-                return false
-            }
+                    val linkRes = runSudoCommand(listOf("ip", "link", "set", "dev", "v2w-tun", "up"), sudoPassword)
+                    if (linkRes.first != 0) {
+                        GeekModeLogger.log("TUN", "Ошибка поднятия интерфейса v2w-tun: ${linkRes.second}")
+                        cleanupProcess(sudoPassword)
+                        return false
+                    }
 
-            // 5. Маршрутизация: исключение прямого соединения Xray с удаленным сервером
-            if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
-                val routeServerRes = runSudoCommand(
-                    listOf("ip", "route", "add", "$serverIp/32", "via", gateway, "dev", physicalDev),
-                    sudoPassword
-                )
-                if (routeServerRes.first == 0 || routeServerRes.second.contains("File exists", ignoreCase = true)) {
-                    configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
-                    GeekModeLogger.log("TUN", "Добавлен прямой маршрут до сервера: $serverIp/32 via $gateway dev $physicalDev")
-                } else {
-                    GeekModeLogger.log("TUN", "Предупреждение: не удалось добавить прямой маршрут к серверу: ${routeServerRes.second}")
+                    if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
+                        val routeServerRes = runSudoCommand(
+                            listOf("ip", "route", "add", "$serverIp/32", "via", gateway, "dev", physicalDev),
+                            sudoPassword
+                        )
+                        if (routeServerRes.first == 0 || routeServerRes.second.contains("File exists", ignoreCase = true)) {
+                            configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
+                            GeekModeLogger.log("TUN", "Добавлен прямой маршрут до сервера: $serverIp/32 via $gateway dev $physicalDev")
+                        }
+                    }
+
+                    val r1 = runSudoCommand(listOf("ip", "route", "add", "0.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
+                    val r2 = runSudoCommand(listOf("ip", "route", "add", "128.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
+                    if (r1.first != 0 || r2.first != 0) {
+                        GeekModeLogger.log("TUN", "Сбой установки маршрутов TUN: ${r1.second} / ${r2.second}")
+                        stop(sudoPassword)
+                        return false
+                    }
+                }
+
+                isWindows -> {
+                    if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
+                        val routeRes = runCommand("cmd", "/c", "route add $serverIp mask 255.255.255.255 $gateway")
+                        if (routeRes.first == 0) {
+                            configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
+                            GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к серверу: $serverIp -> $gateway")
+                        }
+                    }
+                    runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1")
+                    runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1")
+                }
+
+                isMac -> {
+                    runSudoCommand(listOf("ifconfig", deviceName, "198.18.0.1", "198.18.0.2", "up"), sudoPassword)
+                    if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
+                        runSudoCommand(listOf("route", "add", "-host", serverIp, gateway), sudoPassword)
+                        configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
+                    }
+                    runSudoCommand(listOf("route", "add", "-net", "0.0.0.0/1", "-interface", deviceName), sudoPassword)
+                    runSudoCommand(listOf("route", "add", "-net", "128.0.0.0/1", "-interface", deviceName), sudoPassword)
                 }
             }
 
-            // 6. Перенаправление всего интернет-трафика в интерфейс v2w-tun (0.0.0.0/1 и 128.0.0.0/1)
-            val r1 = runSudoCommand(listOf("ip", "route", "add", "0.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
-            val r2 = runSudoCommand(listOf("ip", "route", "add", "128.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
-
-            if (r1.first != 0 || r2.first != 0) {
-                GeekModeLogger.log("TUN", "Сбой установки маршрутов TUN: ${r1.second} / ${r2.second}")
-                stop(sudoPassword)
-                return false
-            }
-
             isTunActive = true
-            GeekModeLogger.log("TUN", "Адаптер v2w-tun успешно активен. Все соединения ОС направлены через Xray TUN.")
+            GeekModeLogger.log("TUN", "Адаптер $deviceName успешно активен. Все соединения ОС направлены через Xray TUN.")
             return true
         } catch (e: Exception) {
             GeekModeLogger.log("TUN", "Исключение при запуске TUN: ${e.message}")
@@ -255,14 +298,33 @@ object DesktopTunManager {
         GeekModeLogger.log("TUN", "Остановка TUN адаптера и снятие маршрутов...")
         isTunActive = false
 
-        // Удаление туннельных маршрутов
-        runSudoCommand(listOf("ip", "route", "del", "0.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
-        runSudoCommand(listOf("ip", "route", "del", "128.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
+        when {
+            isLinux -> {
+                runSudoCommand(listOf("ip", "route", "del", "0.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
+                runSudoCommand(listOf("ip", "route", "del", "128.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
+                configuredRoute?.let { route ->
+                    runSudoCommand(listOf("ip", "route", "del", "${route.ip}/32", "via", route.gateway, "dev", route.dev), sudoPassword)
+                    configuredRoute = null
+                }
+            }
 
-        // Удаление прямого маршрута до сервера
-        configuredRoute?.let { route ->
-            runSudoCommand(listOf("ip", "route", "del", "${route.ip}/32", "via", route.gateway, "dev", route.dev), sudoPassword)
-            configuredRoute = null
+            isWindows -> {
+                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0")
+                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0")
+                configuredRoute?.let { route ->
+                    runCommand("cmd", "/c", "route delete ${route.ip}")
+                    configuredRoute = null
+                }
+            }
+
+            isMac -> {
+                runSudoCommand(listOf("route", "delete", "-net", "0.0.0.0/1"), sudoPassword)
+                runSudoCommand(listOf("route", "delete", "-net", "128.0.0.0/1"), sudoPassword)
+                configuredRoute?.let { route ->
+                    runSudoCommand(listOf("route", "delete", "-host", route.ip), sudoPassword)
+                    configuredRoute = null
+                }
+            }
         }
 
         cleanupProcess(sudoPassword)
@@ -285,26 +347,63 @@ object DesktopTunManager {
         }
         tunProcess = null
 
-        // Удаление интерфейса
-        runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
+        if (isLinux) {
+            runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
+        }
     }
 
     /**
-     * Определение активного шлюза и физического интерфейса через `ip route show default`.
+     * Определение активного шлюза и физического интерфейса.
      */
     private fun detectDefaultGateway(): Pair<String?, String?> {
-        val (code, output) = runCommand("ip", "route", "show", "default")
-        if (code == 0 && output.isNotBlank()) {
-            val lines = output.lines()
-            for (line in lines) {
-                val viaMatch = Regex("""via\s+([^\s]+)""").find(line)
-                val devMatch = Regex("""dev\s+([^\s]+)""").find(line)
-                if (viaMatch != null && devMatch != null) {
-                    val gw = viaMatch.groupValues[1]
-                    val dev = devMatch.groupValues[1]
-                    if (dev != "v2w-tun" && !dev.startsWith("tun")) {
-                        return gw to dev
+        if (isLinux) {
+            val (code, output) = runCommand("ip", "route", "show", "default")
+            if (code == 0 && output.isNotBlank()) {
+                val lines = output.lines()
+                for (line in lines) {
+                    val viaMatch = Regex("""via\s+([^\s]+)""").find(line)
+                    val devMatch = Regex("""dev\s+([^\s]+)""").find(line)
+                    if (viaMatch != null && devMatch != null) {
+                        val gw = viaMatch.groupValues[1]
+                        val dev = devMatch.groupValues[1]
+                        if (dev != "v2w-tun" && !dev.startsWith("tun")) {
+                            return gw to dev
+                        }
                     }
+                }
+            }
+        } else if (isWindows) {
+            val (code, output) = runCommand("cmd", "/c", "route print 0.0.0.0")
+            if (code == 0 && output.isNotBlank()) {
+                for (line in output.lines()) {
+                    val trimmed = line.trim()
+                    if (trimmed.startsWith("0.0.0.0")) {
+                        val tokens = trimmed.split(Regex("""\s+"""))
+                        if (tokens.size >= 4) {
+                            val gw = tokens[2]
+                            val iface = tokens[3]
+                            if (gw != "0.0.0.0" && gw != "On-link" && !gw.startsWith("198.18.")) {
+                                return gw to iface
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (isMac) {
+            val (code, output) = runCommand("route", "-n", "get", "default")
+            if (code == 0 && output.isNotBlank()) {
+                var gw: String? = null
+                var iface: String? = null
+                for (line in output.lines()) {
+                    val trimmed = line.trim()
+                    if (trimmed.startsWith("gateway:")) {
+                        gw = trimmed.removePrefix("gateway:").trim()
+                    } else if (trimmed.startsWith("interface:")) {
+                        iface = trimmed.removePrefix("interface:").trim()
+                    }
+                }
+                if (gw != null && iface != null) {
+                    return gw to iface
                 }
             }
         }

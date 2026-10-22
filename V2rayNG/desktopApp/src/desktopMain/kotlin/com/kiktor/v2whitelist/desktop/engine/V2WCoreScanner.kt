@@ -32,13 +32,25 @@ object V2WCoreScanner {
         }
 
         val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+        val isMac = System.getProperty("os.name").lowercase().contains("mac")
         val execName = if (isWindows) "v2w-scan.exe" else "v2w-scan"
 
-        val candidates = listOf(
+        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+        val appDataBin = when {
+            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
+            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
+            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
+        }
+
+        val candidates = listOfNotNull(
+            appResDir?.let { File(it, execName) },
+            appResDir?.let { File(it, "bin/$execName") },
+            appDataBin?.let { File(it, execName) },
             File("v2w-core", execName),
             File("../v2w-core", execName),
             File("../../v2w-core", execName),
             File("bin", execName),
+            File("V2rayNG/desktopApp/bin", execName),
             File(execName)
         )
 

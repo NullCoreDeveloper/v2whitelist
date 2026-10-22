@@ -68,23 +68,39 @@ class XrayDesktopRunner(
         }
 
         val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+        val isMac = System.getProperty("os.name").lowercase().contains("mac")
         val execName = if (isWindows) "xray.exe" else "xray"
 
-        // 1. Текущая директория
-        val local = File(execName)
-        if (local.exists() && local.canExecute()) return local
+        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+        val appDataBin = when {
+            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
+            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
+            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
+        }
 
-        // 2. В папке bin
-        val binDir = File("bin", execName)
-        if (binDir.exists() && binDir.canExecute()) return binDir
+        val candidates = listOfNotNull(
+            appResDir?.let { File(it, execName) },
+            appResDir?.let { File(it, "bin/$execName") },
+            appDataBin?.let { File(it, execName) },
+            File(execName),
+            File("bin", execName),
+            File("../bin", execName),
+            File("V2rayNG/desktopApp/bin", execName)
+        )
 
-        // 3. Системный PATH
+        for (candidate in candidates) {
+            if (candidate.exists() && candidate.canExecute()) {
+                return candidate.canonicalFile
+            }
+        }
+
+        // Системный PATH
         val pathEnv = System.getenv("PATH") ?: ""
         val paths = pathEnv.split(File.pathSeparator)
         for (dir in paths) {
             val candidate = File(dir, execName)
             if (candidate.exists() && candidate.canExecute()) {
-                return candidate
+                return candidate.canonicalFile
             }
         }
 
@@ -93,13 +109,27 @@ class XrayDesktopRunner(
 
     /**
      * Поиск каталога гео-баз (geosite.dat / geoip.dat):
-     * 1. В ~/.config/v2whitelist/assets
-     * 2. В ./assets и ./bin
-     * 3. В системных путях Linux: /usr/share/xray, /usr/share/v2ray, /usr/local/share/xray
+     * 1. В compose.application.resources.dir
+     * 2. В системном профиле пользователя (~/.config, %LOCALAPPDATA%, Library)
+     * 3. В ./assets и ./bin
+     * 4. В системных путях Linux: /usr/share/xray, /usr/share/v2ray, /usr/local/share/xray
      */
     fun findAssetLocation(): File? {
         val userHome = System.getProperty("user.home") ?: "."
-        val candidates = listOf(
+        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+        val isMac = System.getProperty("os.name").lowercase().contains("mac")
+        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
+
+        val appDataAssets = when {
+            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/assets") }
+            isMac -> File(userHome, "Library/Application Support/v2whitelist/assets")
+            else -> File(userHome, ".config/v2whitelist/assets")
+        }
+
+        val candidates = listOfNotNull(
+            appResDir?.let { File(it, "assets") },
+            appResDir,
+            appDataAssets,
             File(userHome, ".config/v2whitelist/assets"),
             File("assets"),
             File("bin"),

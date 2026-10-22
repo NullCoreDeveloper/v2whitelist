@@ -111,19 +111,22 @@ object DesktopProxyManager {
                     runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "1", "/f")
                     val proxyServer = "http=127.0.0.1:$httpPort;https=127.0.0.1:$httpPort;socks=127.0.0.1:$socksPort"
                     runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyServer", "/t", "REG_SZ", "/d", proxyServer, "/f")
+                    notifyWindowsSettingsChanged()
                     GeekModeLogger.log("ProxyManager", "Windows: Системный прокси включен в реестре Internet Settings")
                     success = true
                 }
 
                 isMac -> {
-                    val networkService = "Wi-Fi"
-                    runCommand("networksetup", "-setwebproxy", networkService, "127.0.0.1", httpPort.toString())
-                    runCommand("networksetup", "-setsecurewebproxy", networkService, "127.0.0.1", httpPort.toString())
-                    runCommand("networksetup", "-setsocksfirewallproxy", networkService, "127.0.0.1", socksPort.toString())
-                    runCommand("networksetup", "-setwebproxystate", networkService, "on")
-                    runCommand("networksetup", "-setsecurewebproxystate", networkService, "on")
-                    runCommand("networksetup", "-setsocksfirewallproxystate", networkService, "on")
-                    GeekModeLogger.log("ProxyManager", "macOS: Системный прокси включен через networksetup ($networkService)")
+                    val services = getMacNetworkServices()
+                    for (networkService in services) {
+                        runCommand("networksetup", "-setwebproxy", networkService, "127.0.0.1", httpPort.toString())
+                        runCommand("networksetup", "-setsecurewebproxy", networkService, "127.0.0.1", httpPort.toString())
+                        runCommand("networksetup", "-setsocksfirewallproxy", networkService, "127.0.0.1", socksPort.toString())
+                        runCommand("networksetup", "-setwebproxystate", networkService, "on")
+                        runCommand("networksetup", "-setsecurewebproxystate", networkService, "on")
+                        runCommand("networksetup", "-setsocksfirewallproxystate", networkService, "on")
+                    }
+                    GeekModeLogger.log("ProxyManager", "macOS: Системный прокси включен для служб: ${services.joinToString()}")
                     success = true
                 }
             }
@@ -163,16 +166,19 @@ object DesktopProxyManager {
 
                 isWindows -> {
                     runCommand("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings", "/v", "ProxyEnable", "/t", "REG_DWORD", "/d", "0", "/f")
+                    notifyWindowsSettingsChanged()
                     GeekModeLogger.log("ProxyManager", "Windows: Системный прокси отключен в реестре (ProxyEnable 0)")
                     success = true
                 }
 
                 isMac -> {
-                    val networkService = "Wi-Fi"
-                    runCommand("networksetup", "-setwebproxystate", networkService, "off")
-                    runCommand("networksetup", "-setsecurewebproxystate", networkService, "off")
-                    runCommand("networksetup", "-setsocksfirewallproxystate", networkService, "off")
-                    GeekModeLogger.log("ProxyManager", "macOS: Системный прокси отключен через networksetup")
+                    val services = getMacNetworkServices()
+                    for (networkService in services) {
+                        runCommand("networksetup", "-setwebproxystate", networkService, "off")
+                        runCommand("networksetup", "-setsecurewebproxystate", networkService, "off")
+                        runCommand("networksetup", "-setsocksfirewallproxystate", networkService, "off")
+                    }
+                    GeekModeLogger.log("ProxyManager", "macOS: Системный прокси отключен для служб: ${services.joinToString()}")
                     success = true
                 }
             }
@@ -181,6 +187,22 @@ object DesktopProxyManager {
         }
 
         return success
+    }
+
+    private fun notifyWindowsSettingsChanged() {
+        try {
+            val script = "\$w=Add-Type -MemberDefinition '[DllImport(\"wininet.dll\")] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);' -Name W -PassThru; \$w::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0); \$w::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)"
+            ProcessBuilder("powershell", "-WindowStyle", "Hidden", "-Command", script).start()
+        } catch (_: Exception) {}
+    }
+
+    private fun getMacNetworkServices(): List<String> {
+        val (code, out) = runCommand("networksetup", "-listallnetworkservices")
+        if (code != 0 || out.isBlank()) return listOf("Wi-Fi")
+        return out.lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.startsWith("An asterisk", ignoreCase = true) && !it.startsWith("*") }
+            .ifEmpty { listOf("Wi-Fi") }
     }
 
     /**
@@ -278,6 +300,12 @@ object DesktopProxyManager {
         return try {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(URI(uriString))
+                true
+            } else if (isWindows) {
+                ProcessBuilder("cmd", "/c", "start", "", uriString).start()
+                true
+            } else if (isMac) {
+                ProcessBuilder("open", uriString).start()
                 true
             } else if (isLinux) {
                 runCommand("xdg-open", uriString)

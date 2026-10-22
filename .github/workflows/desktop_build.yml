@@ -1,0 +1,160 @@
+name: Desktop Multiplatform Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    name: Build Desktop (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os_name: Linux
+            platform: linux
+            arch: amd64
+            xray_asset: Xray-linux-64.zip
+            tun2socks_asset: tun2socks-linux-amd64.zip
+            binary_ext: ""
+          - os: windows-latest
+            os_name: Windows
+            platform: windows
+            arch: amd64
+            xray_asset: Xray-windows-64.zip
+            tun2socks_asset: tun2socks-windows-amd64.zip
+            binary_ext: ".exe"
+          - os: macos-latest
+            os_name: macOS
+            platform: darwin
+            arch: arm64
+            xray_asset: Xray-macos-arm64-v8a.zip
+            tun2socks_asset: tun2socks-darwin-arm64.zip
+            binary_ext: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Build v2w-scan for ${{ matrix.os_name }}
+        shell: bash
+        run: |
+          mkdir -p V2rayNG/desktopApp/bin
+          pushd v2w-core
+          CGO_ENABLED=0 GOOS=${{ matrix.platform }} GOARCH=${{ matrix.arch }} \
+            go build -trimpath -ldflags="-s -w" -o ../V2rayNG/desktopApp/bin/v2w-scan${{ matrix.binary_ext }} ./cmd/v2w-scan
+          popd
+          chmod +x V2rayNG/desktopApp/bin/* || true
+
+      - name: Download Xray Core & GeoData
+        shell: bash
+        run: |
+          mkdir -p V2rayNG/desktopApp/bin
+          mkdir -p V2rayNG/desktopApp/assets
+          
+          XRAY_VER="v25.1.30"
+          curl -sSL -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${{ matrix.xray_asset }}"
+          unzip -q xray.zip -d xray_tmp
+          
+          # Копируем бинарник xray
+          cp xray_tmp/xray${{ matrix.binary_ext }} V2rayNG/desktopApp/bin/
+          # Копируем гео-базы в assets
+          cp xray_tmp/geoip.dat V2rayNG/desktopApp/assets/
+          cp xray_tmp/geosite.dat V2rayNG/desktopApp/assets/
+          
+          rm -rf xray.zip xray_tmp
+          chmod +x V2rayNG/desktopApp/bin/* || true
+
+      - name: Download tun2socks & Wintun (Windows)
+        shell: bash
+        run: |
+          TUN2SOCKS_VER="v2.5.2"
+          curl -sSL -o tun2socks.zip "https://github.com/xjasonlyu/tun2socks/releases/download/${TUN2SOCKS_VER}/${{ matrix.tun2socks_asset }}" || true
+          if [ -f tun2socks.zip ]; then
+            unzip -q tun2socks.zip -d tun2socks_tmp || true
+            find tun2socks_tmp -name "tun2socks*" -type f -exec cp {} V2rayNG/desktopApp/bin/tun2socks${{ matrix.binary_ext }} \; || true
+            rm -rf tun2socks.zip tun2socks_tmp
+          fi
+
+          if [ "${{ matrix.platform }}" == "windows" ]; then
+            # Скачиваем Wintun драйвер для Windows TUN режима
+            curl -sSL -o wintun.zip "https://www.wintun.net/builds/wintun-0.14.1.zip"
+            unzip -q wintun.zip -d wintun_tmp
+            cp wintun_tmp/wintun/bin/amd64/wintun.dll V2rayNG/desktopApp/bin/
+            rm -rf wintun.zip wintun_tmp
+          fi
+
+          chmod +x V2rayNG/desktopApp/bin/* || true
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x V2rayNG/gradlew
+
+      - name: Build Native Distribution Packages
+        shell: bash
+        run: |
+          cd V2rayNG
+          ./gradlew :desktopApp:packageDistributionForCurrentOS --no-daemon --stacktrace
+
+      - name: Prepare Release Artifacts
+        shell: bash
+        run: |
+          mkdir -p release-desktop
+          
+          # Linux: AppImage и DEB
+          if [ "${{ matrix.platform }}" == "linux" ]; then
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.AppImage" -exec cp {} release-desktop/ \;
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.deb" -exec cp {} release-desktop/ \;
+          fi
+          
+          # Windows: MSI и Portable ZIP
+          if [ "${{ matrix.platform }}" == "windows" ]; then
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
+            if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app" ]; then
+              pushd V2rayNG/desktopApp/build/compose/binaries/main/app
+              zip -r ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+              popd
+            fi
+          fi
+          
+          # macOS: DMG и PKG
+          if [ "${{ matrix.platform }}" == "darwin" ]; then
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.dmg" -exec cp {} release-desktop/ \;
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.pkg" -exec cp {} release-desktop/ \;
+          fi
+
+          cd release-desktop
+          ls -la
+          sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+
+      - name: Upload Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          prerelease: true
+          files: |
+            release-desktop/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

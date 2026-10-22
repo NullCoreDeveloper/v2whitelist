@@ -51,12 +51,41 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Pkg
             )
             packageName = "v2whitelist"
             packageVersion = "2.0.0"
-            description = "v2whitelist Desktop Client"
+            description = "ПроБел — v2whitelist Desktop"
             vendor = "NullCore"
+            copyright = "© 2026 NullCore"
+
+            linux {
+                iconFile.set(project.file("src/desktopMain/resources/icon.png"))
+                debMaintainer = "developer@nullcore.dev"
+                menuGroup = "Network"
+                appCategory = "Network"
+            }
+
+            windows {
+                iconFile.set(project.file("src/desktopMain/resources/icon.ico"))
+                menu = true
+                menuGroup = "ПроБел"
+                upgradeUuid = "d7e98a35-43a1-4ee3-b0be-0e54b6b19812"
+                dirChooser = true
+                perUserInstall = false
+            }
+
+            macOS {
+                iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
+                bundleID = "com.kiktor.v2whitelist"
+                dockName = "ПроБел"
+                packageBuildVersion = "2.0.0"
+            }
         }
     }
 }
