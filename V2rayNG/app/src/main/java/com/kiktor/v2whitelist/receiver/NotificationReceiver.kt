@@ -9,6 +9,9 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.MessageUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class NotificationReceiver : BroadcastReceiver() {
     companion object {
@@ -22,11 +25,15 @@ class NotificationReceiver : BroadcastReceiver() {
         Log.i(AppConfig.TAG, "NotificationReceiver received action: $action")
         when (action) {
             ACTION_NEXT -> {
-                val currentGuid = MmkvManager.getSelectServer()
-                val nextGuid = com.kiktor.v2whitelist.handler.SmartFailoverManager.selectNextServer(currentGuid)
-                if (nextGuid != null && nextGuid != currentGuid) {
-                    MmkvManager.setSelectServer(nextGuid)
-                    MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                val pendingResult = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(context.applicationContext)
+                    } catch (e: Exception) {
+                        Log.e(AppConfig.TAG, "NotificationReceiver: switchServer failed", e)
+                    } finally {
+                        pendingResult.finish()
+                    }
                 }
             }
             ACTION_RESUME -> {

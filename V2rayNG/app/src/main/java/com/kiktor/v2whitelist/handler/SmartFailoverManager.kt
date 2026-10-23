@@ -186,20 +186,10 @@ object SmartFailoverManager {
             return
         }
 
-        val currentGuid = MmkvManager.getSelectServer()
-        val nextGuid = selectNextServer(currentGuid)
-        if (nextGuid == null || nextGuid == currentGuid) {
-            GeekModeLogger.log("Failover", "Cannot failover: no alternative server found")
-            return
-        }
-        val profile = MmkvManager.decodeServerConfig(nextGuid)
-        val remarks = profile?.remarks ?: nextGuid
-        GeekModeLogger.log("Failover", "Hot-swapping from $currentGuid → $nextGuid ($remarks)")
+        GeekModeLogger.log("Failover", "Triggering SmartConnectManager.switchServer due to: $reason")
         NotificationManager.showFailoverNotification()
-        MmkvManager.setSelectServer(nextGuid)
-        MmkvManager.saveLastConnectedServer(nextGuid)
-        MessageUtil.sendMsg2Service(service, AppConfig.MSG_STATE_SWITCH_SERVER, "")
         stopFailoverMonitor()
+        SmartConnectManager.switchServer(service.applicationContext)
     }
 
     /**
