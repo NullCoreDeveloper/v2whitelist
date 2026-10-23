@@ -90,3 +90,50 @@ compose.desktop {
         }
     }
 }
+
+tasks.matching {
+    it.name in listOf("createDistributable", "packageAppImage", "packageReleaseAppImage", "packageDistributionForCurrentOS")
+}.configureEach {
+    doLast {
+        val appDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist").get().asFile
+        if (appDir.exists() && org.gradle.internal.os.OperatingSystem.current().isLinux) {
+            val runtimeBinDir = file("$appDir/lib/runtime/bin")
+            runtimeBinDir.mkdirs()
+            val javaDest = file("$runtimeBinDir/java")
+            if (!javaDest.exists()) {
+                val currentJava = file("${System.getProperty("java.home")}/bin/java")
+                if (currentJava.exists()) {
+                    currentJava.copyTo(javaDest, overwrite = true)
+                    javaDest.setExecutable(true)
+                }
+            }
+            val binFile = file("$appDir/bin/v2whitelist")
+            val launcherScript = """
+                #!/bin/sh
+                APPDIR="${'$'}(dirname "${'$'}(dirname "${'$'}(readlink -f "${'$'}0")")")"
+                RUNTIME="${'$'}APPDIR/lib/runtime"
+                if [ -x "${'$'}RUNTIME/bin/java" ]; then
+                    JAVA_EXEC="${'$'}RUNTIME/bin/java"
+                elif command -v java >/dev/null 2>&1; then
+                    JAVA_EXEC="java"
+                elif [ -x "/usr/lib/jvm/default/bin/java" ]; then
+                    JAVA_EXEC="/usr/lib/jvm/default/bin/java"
+                else
+                    echo "Error: Java runtime not found" >&2
+                    exit 1
+                fi
+                exec "${'$'}JAVA_EXEC" \
+                    -Djdk.gtk.version=3 \
+                    -Dskiko.library.path="${'$'}APPDIR/lib/app" \
+                    -Dcompose.application.resources.dir="${'$'}APPDIR/lib/app/resources" \
+                    -Dcompose.application.configure.swing.globals=true \
+                    -Djpackage.app-version=2.0.0 \
+                    -cp "${'$'}APPDIR/lib/app/*" \
+                    com.kiktor.v2whitelist.desktop.MainKt \
+                    "${'$'}@"
+            """.trimIndent()
+            binFile.writeText(launcherScript)
+            binFile.setExecutable(true)
+        }
+    }
+}
