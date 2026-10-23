@@ -841,6 +841,8 @@ object MmkvManager {
         AppConfig.PREF_PROFILE_CHECK_ENABLED,
         AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED,
         AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED,
+        AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED,
+        AppConfig.PREF_DOMAIN_SPLIT_TUNNELING_ENABLED,
         AppConfig.PREF_USE_BUILTIN_SUB,
         AppConfig.PREF_IS_PAUSED,
         AppConfig.PREF_V2W_CORE_ENABLED,

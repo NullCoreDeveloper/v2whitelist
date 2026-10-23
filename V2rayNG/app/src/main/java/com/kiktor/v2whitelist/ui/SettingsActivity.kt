@@ -225,6 +225,28 @@ class SettingsActivity : BaseActivity() {
                     .show()
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_proxy_domain_list_settings")?.setOnPreferenceClickListener {
+                val currentDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST) ?: ""
+                val editText = android.widget.EditText(requireContext()).apply {
+                    setText(currentDomains)
+                    hint = "domain.com, sub.example.com, geosite:category-media-ru-blocked"
+                    minLines = 4
+                    gravity = android.view.Gravity.TOP
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                }
+                val padding = (16 * resources.displayMetrics.density).toInt()
+                android.app.AlertDialog.Builder(requireContext())
+                    .setTitle(getString(R.string.title_pref_proxy_domain_list_settings))
+                    .setMessage(getString(R.string.summary_pref_proxy_domain_list_settings))
+                    .setView(editText.also { it.setPadding(padding, padding / 2, padding, padding / 2) })
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        val value = editText.text.toString().trim()
+                        MmkvManager.encodeSettings(AppConfig.PREF_PROXY_DOMAIN_LIST, value)
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
             findPreference<androidx.preference.Preference>("pref_domain_geo_files")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), UserAssetActivity::class.java))
                 true

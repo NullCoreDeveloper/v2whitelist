@@ -522,9 +522,11 @@
     <string name="tv_server_name">Server: %s</string>
     <!-- Domain split tunneling -->
     <string name="title_pref_domain_split_tunneling">Domain Split Tunneling</string>
-    <string name="summary_pref_domain_split_tunneling">Exclude specific domains from VPN tunnel (direct access). Off by default.</string>
-    <string name="title_pref_domain_split_tunneling_settings">Manage Excluded Domains</string>
-    <string name="summary_pref_domain_split_tunneling_settings">Add domains that should bypass the VPN</string>
+    <string name="summary_pref_domain_split_tunneling">Domain routing rules (direct access or via VPN). Off by default.</string>
+    <string name="title_pref_domain_split_tunneling_settings">Excluded domains (Bypass VPN)</string>
+    <string name="summary_pref_domain_split_tunneling_settings">Add domains that should bypass the VPN (direct connection)</string>
+    <string name="title_pref_proxy_domain_list_settings">Domains via VPN</string>
+    <string name="summary_pref_proxy_domain_list_settings">Add domains that must be routed through the VPN</string>
     <string name="title_pref_domain_geo_files">Geo Files</string>
     <string name="summary_pref_domain_geo_files">Download geosite.dat / geoip.dat by URL or from GitHub for advanced geosite: rules</string>
     <!-- Network check settings section -->

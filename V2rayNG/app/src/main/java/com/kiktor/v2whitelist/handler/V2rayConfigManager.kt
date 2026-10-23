@@ -547,16 +547,34 @@ object V2rayConfigManager {
             if (domainSplitEnabled == true) {
                 val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
                 if (!directDomainsStr.isNullOrBlank()) {
-                    val domains = directDomainsStr.split(",")
+                    val domains = directDomainsStr.split(",", "\n")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
-                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:")) it else "domain:$it" }
+                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
 
                     if (domains.isNotEmpty()) {
                         v2rayConfig.routing.rules.add(
                             0,
                             RulesBean(
                                 outboundTag = AppConfig.TAG_DIRECT,
+                                domain = ArrayList(domains)
+                            )
+                        )
+                    }
+                }
+
+                val proxyDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST)
+                if (!proxyDomainsStr.isNullOrBlank()) {
+                    val domains = proxyDomainsStr.split(",", "\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
+
+                    if (domains.isNotEmpty()) {
+                        v2rayConfig.routing.rules.add(
+                            0,
+                            RulesBean(
+                                outboundTag = AppConfig.TAG_PROXY,
                                 domain = ArrayList(domains)
                             )
                         )

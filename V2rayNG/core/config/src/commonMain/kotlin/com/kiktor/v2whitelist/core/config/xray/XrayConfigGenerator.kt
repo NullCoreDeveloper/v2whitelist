@@ -251,12 +251,28 @@ object XrayConfigGenerator {
             )
         }
 
+        // Custom proxy domains (раздельное туннелирование - наивысший приоритет)
+        if (options.customProxyDomains.isNotEmpty()) {
+            val formattedProxy = options.customProxyDomains.map {
+                if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+            }
+            rules.add(
+                XrayRule(
+                    outboundTag = "proxy",
+                    domain = formattedProxy
+                )
+            )
+        }
+
         // Custom direct domains / IPs (раздельное туннелирование)
         if (options.customDirectDomains.isNotEmpty()) {
+            val formattedDirect = options.customDirectDomains.map {
+                if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+            }
             rules.add(
                 XrayRule(
                     outboundTag = "direct",
-                    domain = options.customDirectDomains
+                    domain = formattedDirect
                 )
             )
         }
@@ -265,16 +281,6 @@ object XrayConfigGenerator {
                 XrayRule(
                     outboundTag = "direct",
                     ip = options.customDirectIps
-                )
-            )
-        }
-
-        // Custom proxy domains (раздельное туннелирование)
-        if (options.customProxyDomains.isNotEmpty()) {
-            rules.add(
-                XrayRule(
-                    outboundTag = "proxy",
-                    domain = options.customProxyDomains
                 )
             )
         }

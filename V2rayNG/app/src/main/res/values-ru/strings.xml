@@ -697,9 +697,11 @@
 
     <!-- Сплит-туннелинг по доменам -->
     <string name="title_pref_domain_split_tunneling">Сплит-туннелинг по доменам</string>
-    <string name="summary_pref_domain_split_tunneling">Исключить отдельные домены из туннеля VPN (прямой доступ). Отключено по умолчанию.</string>
-    <string name="title_pref_domain_split_tunneling_settings">Управление исключениями</string>
-    <string name="summary_pref_domain_split_tunneling_settings">Добавить домены, которые должны обходить VPN</string>
+    <string name="summary_pref_domain_split_tunneling">Раздельная маршрутизация доменов (в обход или через VPN). Отключено по умолчанию.</string>
+    <string name="title_pref_domain_split_tunneling_settings">Исключения (в обход VPN)</string>
+    <string name="summary_pref_domain_split_tunneling_settings">Добавить домены, которые должны идти напрямую в обход VPN</string>
+    <string name="title_pref_proxy_domain_list_settings">Домены только через VPN</string>
+    <string name="summary_pref_proxy_domain_list_settings">Добавить домены, которые принудительно направляются через VPN</string>
     <string name="title_pref_domain_geo_files">Geo файлы</string>
     <string name="summary_pref_domain_geo_files">Скачать geosite.dat / geoip.dat по ссылке или с GitHub для расширенных правил geosite:</string>
     <!-- Заголовок раздела проверки сети -->

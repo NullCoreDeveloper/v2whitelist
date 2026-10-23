@@ -154,6 +154,7 @@ object AppConfig {
     const val PREF_CUSTOM_USER_AGENT = "pref_custom_user_agent"
 
     const val PREF_DIRECT_DOMAIN_LIST = "pref_direct_domain_list"
+    const val PREF_PROXY_DOMAIN_LIST = "pref_proxy_domain_list"
     const val PREF_DOMAIN_SPLIT_TUNNELING_ENABLED = "pref_domain_split_tunneling_enabled"
 
     /** Custom subscriptions */

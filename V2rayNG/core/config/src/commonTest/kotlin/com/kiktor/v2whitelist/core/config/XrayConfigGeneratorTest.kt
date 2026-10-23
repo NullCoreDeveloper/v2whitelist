@@ -81,4 +81,25 @@ class XrayConfigGeneratorTest {
         assertTrue(jsonStr.contains("\"dialerProxy\": \"proxy1\""))
         assertTrue(jsonStr.contains("mycustomendpoint.com"))
     }
+
+    @Test
+    fun testGenerateCustomProxyAndDirectDomains() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=reality&sni=dl.google.com&fp=chrome&pbk=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789&sid=1234abcd&spx=%2F&type=tcp#Node"
+        val profile = UniversalConfigParser.parse(uri)!!
+        val options = XrayGeneratorOptions(
+            customProxyDomains = listOf("blocked-site.com", "geosite:category-media-ru-blocked"),
+            customDirectDomains = listOf("internal-company.ru")
+        )
+
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+        println("Generated Split Tunneling JSON:\n$jsonStr")
+
+        assertTrue(jsonStr.contains("\"domain:blocked-site.com\""))
+        assertTrue(jsonStr.contains("\"geosite:category-media-ru-blocked\""))
+        assertTrue(jsonStr.contains("\"domain:internal-company.ru\""))
+        // Proxy rule should appear before direct rule
+        val proxyIdx = jsonStr.indexOf("\"domain:blocked-site.com\"")
+        val directIdx = jsonStr.indexOf("\"domain:internal-company.ru\"")
+        assertTrue(proxyIdx != -1 && directIdx != -1 && proxyIdx < directIdx)
+    }
 }
