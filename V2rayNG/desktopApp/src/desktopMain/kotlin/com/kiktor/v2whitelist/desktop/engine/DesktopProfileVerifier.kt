@@ -29,6 +29,20 @@ data class VerifyResult(
  */
 object DesktopProfileVerifier {
 
+    private val activeProcesses = java.util.concurrent.ConcurrentHashMap.newKeySet<Process>()
+
+    fun stop() {
+        val procs = activeProcesses.toList()
+        activeProcesses.clear()
+        for (proc in procs) {
+            try {
+                if (proc.isAlive) {
+                    proc.destroyForcibly()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun findFreePort(): Int {
         return ServerSocket(0).use { it.localPort }
     }
@@ -44,6 +58,7 @@ object DesktopProfileVerifier {
         endpointE2eCheckEnabled: Boolean = true,
         onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
+        if (!isActive) throw CancellationException("Верификация отменена")
         val runner = XrayDesktopRunner()
         val binary = runner.findXrayExecutable(xrayBinaryPath)
         if (binary == null) {
@@ -76,6 +91,7 @@ object DesktopProfileVerifier {
             val pb = ProcessBuilder(binary.absolutePath, "run", "-c", tempConfig.absolutePath)
                 .redirectErrorStream(true)
             process = pb.start()
+            activeProcesses.add(process)
 
             // Ждем поднятия ядра
             delay(400)
@@ -122,6 +138,7 @@ object DesktopProfileVerifier {
                     val chainedPb = ProcessBuilder(binary.absolutePath, "run", "-c", chainedTempConfig.absolutePath)
                         .redirectErrorStream(true)
                     chainedProcess = chainedPb.start()
+                    activeProcesses.add(chainedProcess)
                     delay(400)
                     if (!chainedProcess.isAlive) {
                         val exitCode = try { chainedProcess.exitValue() } catch (_: Exception) { -1 }
@@ -133,6 +150,7 @@ object DesktopProfileVerifier {
                         )
                     }
 
+                    if (!isActive) throw CancellationException("Верификация отменена")
                     val chainedLatency = measureE2ELatency(chainedPort, timeoutMs)
                     if (chainedLatency <= 0) {
                         GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
@@ -154,6 +172,7 @@ object DesktopProfileVerifier {
             // ── Шаг 2: Замер скорости (если включен) ──
             var mbps: Double? = null
             if (speedCheckEnabled) {
+                if (!isActive) throw CancellationException("Верификация отменена")
                 onStatusUpdate?.invoke("Замер скорости соединения: $serverTitle…")
                 mbps = measureSpeed(testPortForSpeed, bytesToDownload, timeoutMs = timeoutMs)
                 if (mbps != null) {
@@ -195,11 +214,13 @@ object DesktopProfileVerifier {
             )
         } finally {
             process?.let { proc ->
+                activeProcesses.remove(proc)
                 if (proc.isAlive) {
                     try { proc.destroyForcibly() } catch (_: Exception) {}
                 }
             }
             chainedProcess?.let { proc ->
+                activeProcesses.remove(proc)
                 if (proc.isAlive) {
                     try { proc.destroyForcibly() } catch (_: Exception) {}
                 }
@@ -220,14 +241,15 @@ object DesktopProfileVerifier {
             "https://connectivitycheck.gstatic.com/generate_204"
         )
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+        val perUrlTimeout = minOf(timeoutMs.toInt(), 4000)
 
         for (urlStr in testUrls) {
             try {
                 val url = java.net.URI.create(urlStr).toURL()
                 val start = System.currentTimeMillis()
                 val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
-                    connectTimeout = timeoutMs.toInt()
-                    readTimeout = timeoutMs.toInt()
+                    connectTimeout = perUrlTimeout
+                    readTimeout = perUrlTimeout
                     instanceFollowRedirects = false
                     requestMethod = "GET"
                 }

@@ -102,4 +102,27 @@ class XrayConfigGeneratorTest {
         val directIdx = jsonStr.indexOf("\"domain:internal-company.ru\"")
         assertTrue(proxyIdx != -1 && directIdx != -1 && proxyIdx < directIdx)
     }
+
+    @Test
+    fun testGenerateProxyChainWithXhttpCustomEndpoint() {
+        val baseNodeUri = "trojan://mitivpn@104.25.47.216:443?security=tls&sni=de.mitivpn.in.net&type=ws#BaseTrojan"
+        val xhttpEndpointUri = "vless://9f07bfd9-715e-4372-8aa6-ec1a39b4157b@media.kali9124123s.space:8443?type=xhttp&host=media.kali9124123s.space&path=%2Fmedia%2Fvideos&encryption=none&security=tls&sni=media.kali9124123s.space&fp=qq&alpn=h2,http/1.1,h3#EndpointXHTTP"
+
+        val profile = UniversalConfigParser.parse(baseNodeUri)!!
+        val options = XrayGeneratorOptions(
+            socksPort = 10808,
+            customEndpointUrl = xhttpEndpointUri
+        )
+
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+        println("Generated XHTTP Proxy Chain JSON:\n$jsonStr")
+
+        assertTrue(jsonStr.contains("\"tag\": \"proxy\""))
+        assertTrue(jsonStr.contains("\"tag\": \"proxy1\""))
+        assertTrue(jsonStr.contains("\"dialerProxy\": \"proxy1\""))
+        assertTrue(jsonStr.contains("\"network\": \"xhttp\""))
+        assertTrue(jsonStr.contains("\"xhttpSettings\""))
+        assertTrue(jsonStr.contains("\"path\": \"/media/videos\""))
+        assertTrue(jsonStr.contains("\"host\": \"media.kali9124123s.space\""))
+    }
 }

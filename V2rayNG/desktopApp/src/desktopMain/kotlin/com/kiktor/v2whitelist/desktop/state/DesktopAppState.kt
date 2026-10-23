@@ -1152,6 +1152,7 @@ class DesktopAppState(
         smartConnectJob?.cancel()
         smartConnectManager.stop()
         V2WCoreScanner.stop()
+        DesktopProfileVerifier.stop()
         _smartConnectStatus.value = "Инициализация автопоиска…"
         xrayRunner.markStarting()
         smartConnectJob = scope.launch {
@@ -1178,6 +1179,7 @@ class DesktopAppState(
             } finally {
                 smartConnectManager.stop()
                 V2WCoreScanner.stop()
+                DesktopProfileVerifier.stop()
             }
         }
     }
@@ -1555,7 +1557,7 @@ class DesktopAppState(
                 if (resp.status.value in 200..299) {
                     val text = resp.bodyAsText()
                     val ipMatch = Regex("\"ip\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
-                    val country = Regex("\"country_name\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+                    val country = Regex("\"(?:country_name|country)\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
                     if (ipMatch != null) {
                         val full = "$ipMatch (${country ?: "Online"})"
                         exitIp.value = full

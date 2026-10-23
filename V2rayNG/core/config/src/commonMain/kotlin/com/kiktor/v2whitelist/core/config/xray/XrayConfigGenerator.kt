@@ -114,12 +114,17 @@ object XrayConfigGenerator {
 
         if (endpointProfile != null) {
             // Цепочка: Local -> Smart Connect (proxy1) -> Custom Endpoint (proxy) -> Internet
-            val baseSmartOutbound = if (useFragment) {
+            val nextHopTag = when {
+                useFragment -> fragmentTag
+                hasUpstream -> upstreamTag
+                else -> null
+            }
+            val baseSmartOutbound = if (nextHopTag != null) {
                 val sStream = rawProxyOutbound.streamSettings ?: XrayStreamSettings()
                 rawProxyOutbound.copy(
                     tag = "proxy1",
                     streamSettings = sStream.copy(
-                        sockopt = (sStream.sockopt ?: SockoptSettings()).copy(dialerProxy = fragmentTag)
+                        sockopt = (sStream.sockopt ?: SockoptSettings()).copy(dialerProxy = nextHopTag)
                     )
                 )
             } else {
@@ -137,6 +142,18 @@ object XrayConfigGenerator {
             )
             outbounds.add(endpointOutbound)
             outbounds.add(baseSmartOutbound)
+            if (hasUpstream) {
+                val upProto = if (options.upstreamProxyType?.equals("http", ignoreCase = true) == true) "http" else "socks"
+                outbounds.add(
+                    XrayOutbound(
+                        tag = upstreamTag,
+                        protocol = upProto,
+                        settings = OutboundSettings(
+                            servers = listOf(ServerEntry(address = options.upstreamProxyHost.orEmpty(), port = options.upstreamProxyPort ?: 0))
+                        )
+                    )
+                )
+            }
         } else {
             val nextHopTag = when {
                 useFragment -> fragmentTag
@@ -609,6 +626,22 @@ object XrayConfigGenerator {
             )
         } else null
 
+        val xhttpSettings = if (network == "xhttp" || network == "splithttp") {
+            val extraJson = profile.xhttpExtra?.let {
+                try {
+                    Json.parseToJsonElement(it)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            XhttpSettings(
+                host = profile.host ?: sni,
+                path = profile.path ?: "/",
+                mode = profile.xhttpMode ?: profile.mode ?: "auto",
+                extra = extraJson
+            )
+        } else null
+
         val hysteriaSettings = if (network == "hysteria" || profile.configType == EConfigType.HYSTERIA2) {
             val udphop = profile.portHopping?.let {
                 HysteriaUdpHop(
@@ -629,6 +662,7 @@ object XrayConfigGenerator {
             wsSettings = wsSettings,
             grpcSettings = grpcSettings,
             httpupgradeSettings = httpUpgradeSettings,
+            xhttpSettings = xhttpSettings,
             tlsSettings = tlsSettings,
             realitySettings = realitySettings,
             hysteriaSettings = hysteriaSettings
