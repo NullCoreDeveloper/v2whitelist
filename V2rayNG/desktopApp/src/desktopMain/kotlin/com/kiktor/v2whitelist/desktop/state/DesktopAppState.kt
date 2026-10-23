@@ -177,7 +177,6 @@ class DesktopAppState(
     // TUN & Sudo сессия (хранится только в памяти на время работы приложения)
     var sessionSudoPassword: String? = null
         private set
-    val allowNoSudoTun = MutableStateFlow(false)
     val showSudoDialog = MutableStateFlow(false)
     val sudoError = MutableStateFlow<String?>(null)
     val isVerifyingSudo = MutableStateFlow(false)
@@ -608,21 +607,12 @@ class DesktopAppState(
     }
 
     fun setRoutingMode(mode: String) {
-        if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null && !allowNoSudoTun.value) {
+        if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
             sudoError.value = null
             showSudoDialog.value = true
             return
         }
         applyRoutingMode(mode)
-    }
-
-    fun enableTunWithoutSudo() {
-        allowNoSudoTun.value = true
-        sessionSudoPassword = null
-        showSudoDialog.value = false
-        sudoError.value = null
-        applyRoutingMode("TUN")
-        GeekModeLogger.log("TUN", "Режим TUN активирован без sudo (обход PR_SET_NO_NEW_PRIVS).")
     }
 
     private fun applyRoutingMode(mode: String) {
@@ -1336,7 +1326,7 @@ class DesktopAppState(
             GeekModeLogger.log("GeekMode", "Применён Global SNI: $gSni для ${profile.remarks}")
         }
 
-        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null && !allowNoSudoTun.value) {
+        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
             sudoError.value = null
             showSudoDialog.value = true
             return
@@ -1370,7 +1360,7 @@ class DesktopAppState(
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
-                sudoPassword = if (routingMode.value == "TUN" && !allowNoSudoTun.value) sessionSudoPassword else null,
+                sudoPassword = if (routingMode.value == "TUN") sessionSudoPassword else null,
                 socksUsername = localProxyLogin.value.ifBlank { null },
                 socksPassword = localProxyPassword.value.ifBlank { null },
                 remoteDns = remoteDns.value.ifBlank { null },
@@ -1405,7 +1395,7 @@ class DesktopAppState(
                     val tunStarted = DesktopTunManager.start(
                         socksPort = currentSocksPort,
                         serverAddress = profile.server,
-                        sudoPassword = if (!allowNoSudoTun.value) sessionSudoPassword else null
+                        sudoPassword = sessionSudoPassword
                     )
                     if (tunStarted) {
                         GeekModeLogger.log("TUN", "Сетевой интерфейс v2w-tun успешно поднят. Весь трафик ОС направлен через TUN.")
@@ -1415,9 +1405,6 @@ class DesktopAppState(
                         }
                     } else {
                         GeekModeLogger.log("TUN", "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав). Включен системный прокси как резерв.")
-                        if (allowNoSudoTun.value) {
-                            allowNoSudoTun.value = false
-                        }
                         if (autoEnableSystemProxy.value) {
                             DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                             isSystemProxyActive.value = true

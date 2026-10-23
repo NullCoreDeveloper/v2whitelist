@@ -838,25 +838,25 @@ fun SettingsScreen(
                             if (customEpSubUrl.isNotBlank()) {
                                 epLoading = true
                                 epStatusMessage = "Загрузка подписки..."
-                                scope.launch(Dispatchers.IO) {
-                                    val res = CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
-                                    withContext(Dispatchers.Main) {
-                                        epLoading = false
-                                        res.fold(
-                                            onSuccess = { servers ->
-                                                if (servers.isEmpty()) {
-                                                    epStatusMessage = "В подписке не найдено серверов"
-                                                } else {
-                                                    epSubServers = servers
-                                                    showEpServerPicker = true
-                                                    epStatusMessage = null
-                                                }
-                                            },
-                                            onFailure = { err ->
-                                                epStatusMessage = "Ошибка: ${err.message}"
-                                            }
-                                        )
+                                scope.launch {
+                                    val res = withContext(Dispatchers.IO) {
+                                        CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
                                     }
+                                    epLoading = false
+                                    res.fold(
+                                        onSuccess = { servers ->
+                                            if (servers.isEmpty()) {
+                                                epStatusMessage = "В подписке не найдено серверов"
+                                            } else {
+                                                epSubServers = servers
+                                                showEpServerPicker = true
+                                                epStatusMessage = null
+                                            }
+                                        },
+                                        onFailure = { err ->
+                                            epStatusMessage = "Ошибка: ${err.message}"
+                                        }
+                                    )
                                 }
                             } else {
                                 epStatusMessage = "Сначала укажите URL подписки"

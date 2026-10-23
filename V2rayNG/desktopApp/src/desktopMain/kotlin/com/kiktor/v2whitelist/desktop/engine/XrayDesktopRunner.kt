@@ -300,7 +300,7 @@ class XrayDesktopRunner(
             if (!proc.isAlive) {
                 val exitCode = proc.exitValue()
                 val err = if (useSudo) {
-                    "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале либо настройте: sudo setcap cap_net_admin,cap_net_bind_service=+ep ${binary.absolutePath}"
+                    "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале."
                 } else {
                     "Процесс Xray завершился сразу с кодом: $exitCode"
                 }

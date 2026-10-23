@@ -247,18 +247,6 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                         )
                     }
                 }
-
-                Spacer(Modifier.height(4.dp))
-                Button(
-                    onClick = { state.enableTunWithoutSudo() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("🚀 Запустить без sudo (через setcap)", fontSize = 12.sp)
-                }
             }
         },
         confirmButton = {

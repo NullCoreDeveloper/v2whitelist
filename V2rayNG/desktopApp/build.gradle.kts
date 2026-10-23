@@ -27,6 +27,7 @@ kotlin {
                 implementation(project(":core:repository"))
 
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.cio)
