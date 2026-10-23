@@ -19,8 +19,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.ui.theme.*
+import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(
@@ -73,10 +80,17 @@ fun SettingsScreen(
     var customProxy by remember { mutableStateOf(state.customProxyDomains.value) }
 
     // Отдельные настройки
+    val scope = rememberCoroutineScope()
     var bypassRu by remember { mutableStateOf(state.bypassRussianServices.value) }
     var autoUpdateCheck by remember { mutableStateOf(state.autoCheckUpdates.value) }
     var useCustomEp by remember { mutableStateOf(state.useCustomEndpoint.value) }
     var customEpConfig by remember { mutableStateOf(state.customEndpointUrl.value) }
+    var customEpSubUrl by remember { mutableStateOf(state.customEndpointSubUrl.value) }
+    var endpointE2eCheck by remember { mutableStateOf(state.endpointE2eCheckEnabled.value) }
+    var epSubServers by remember { mutableStateOf<List<ProfileItem>>(emptyList()) }
+    var showEpServerPicker by remember { mutableStateOf(false) }
+    var epLoading by remember { mutableStateOf(false) }
+    var epStatusMessage by remember { mutableStateOf<String?>(null) }
     var userAgent by remember { mutableStateOf(state.subscriptionUserAgent.value) }
 
     // Базовые VPN
@@ -138,6 +152,8 @@ fun SettingsScreen(
             subOnlyViaProxy = subOnlyProxy,
             customEndpoint = useCustomEp,
             customEndpointConfig = customEpConfig,
+            customEndpointSub = customEpSubUrl,
+            endpointE2eCheck = endpointE2eCheck,
             bypassRu = bypassRu,
             checkUrl = connCheckUrl,
             smartBatch = smartBatchSize.toIntOrNull() ?: 20,
@@ -229,6 +245,8 @@ fun SettingsScreen(
         autoUpdateCheck = state.autoCheckUpdates.value
         useCustomEp = state.useCustomEndpoint.value
         customEpConfig = state.customEndpointUrl.value
+        customEpSubUrl = state.customEndpointSubUrl.value
+        endpointE2eCheck = state.endpointE2eCheckEnabled.value
         userAgent = state.subscriptionUserAgent.value
         preferIpv6 = state.preferIpv6.value
         localDns = state.useLocalDns.value
@@ -297,6 +315,8 @@ fun SettingsScreen(
         autoUpdateCheck != state.autoCheckUpdates.value ||
         useCustomEp != state.useCustomEndpoint.value ||
         customEpConfig != state.customEndpointUrl.value ||
+        customEpSubUrl != state.customEndpointSubUrl.value ||
+        endpointE2eCheck != state.endpointE2eCheckEnabled.value ||
         userAgent != state.subscriptionUserAgent.value ||
         preferIpv6 != state.preferIpv6.value ||
         localDns != state.useLocalDns.value ||
@@ -479,6 +499,12 @@ fun SettingsScreen(
                 desc = "Обеспечивает 100% стабильность. Без нее вы можете попасть на мертвый сервер.",
                 checked = testBeforeConnect,
                 onCheckedChange = { testBeforeConnect = it }
+            )
+            SettingSwitchRow(
+                title = "e2e проверка конечного узла",
+                desc = "Проверять сквозное HTTP 204 соединение через цепочку до конечного узла перед замером скорости",
+                checked = endpointE2eCheck,
+                onCheckedChange = { endpointE2eCheck = it }
             )
             SettingSwitchRow(
                 title = "Тест скорости при проверке профиля",
@@ -765,27 +791,105 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                SettingSwitchRow(
-                    title = "Использовать свой прокси как конечный узел",
-                    desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка прокси)",
-                    checked = useCustomEp,
-                    onCheckedChange = { useCustomEp = it }
-                )
-                if (useCustomEp) {
-                    OutlinedTextField(
-                        value = customEpConfig,
-                        onValueChange = { customEpConfig = it },
-                        label = { Text("Конфиг конечного узла (vless://, hysteria2://, vmess://, shadowsocks://, trojan://)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
                 OutlinedTextField(
                     value = userAgent,
                     onValueChange = { userAgent = it },
                     label = { Text("Пользовательский User-Agent (v2rayNG/1.10.x)") },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Конечный узел (Proxy Chaining) — отдельная раскрывающаяся категория
+        AccordionSection(title = "Конечный узел (Proxy Chaining)", icon = Icons.Default.Share) {
+            SettingSwitchRow(
+                title = "Использовать свой прокси как конечный узел",
+                desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка)",
+                checked = useCustomEp,
+                onCheckedChange = { useCustomEp = it }
+            )
+            if (useCustomEp) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customEpSubUrl,
+                    onValueChange = { customEpSubUrl = it },
+                    label = { Text("URL подписки конечного узла") },
+                    placeholder = { Text("https://example.com/sub/...") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            if (customEpSubUrl.isNotBlank()) {
+                                epLoading = true
+                                epStatusMessage = "Загрузка подписки..."
+                                scope.launch(Dispatchers.IO) {
+                                    val res = CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
+                                    withContext(Dispatchers.Main) {
+                                        epLoading = false
+                                        res.fold(
+                                            onSuccess = { servers ->
+                                                if (servers.isEmpty()) {
+                                                    epStatusMessage = "В подписке не найдено серверов"
+                                                } else {
+                                                    epSubServers = servers
+                                                    showEpServerPicker = true
+                                                    epStatusMessage = null
+                                                }
+                                            },
+                                            onFailure = { err ->
+                                                epStatusMessage = "Ошибка: ${err.message}"
+                                            }
+                                        )
+                                    }
+                                }
+                            } else {
+                                epStatusMessage = "Сначала укажите URL подписки"
+                            }
+                        },
+                        enabled = !epLoading
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (epLoading) "Загрузка…" else "Выбрать из подписки", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val allServers = state.servers.value.map { it.second }
+                            if (allServers.isNotEmpty()) {
+                                epSubServers = allServers
+                                showEpServerPicker = true
+                                epStatusMessage = null
+                            } else {
+                                epStatusMessage = "Список серверов приложения пуст"
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Из серверов приложения", fontSize = 12.sp)
+                    }
+                }
+
+                if (epStatusMessage != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = epStatusMessage!!,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = customEpConfig,
+                    onValueChange = { customEpConfig = it },
+                    label = { Text("Конфиг конечного узла (vless://, vmess://, shadowsocks://, trojan://)") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -917,6 +1021,41 @@ fun SettingsScreen(
                 dismissButton = {
                     OutlinedButton(onClick = { showResetConfirmDialog = false }) {
                         Text("Отмена")
+                    }
+                }
+            )
+        }
+
+        if (showEpServerPicker && epSubServers.isNotEmpty()) {
+            AlertDialog(
+                onDismissRequest = { showEpServerPicker = false },
+                title = { Text("Выберите конечный узел") },
+                text = {
+                    LazyColumn(modifier = Modifier.heightIn(max = 350.dp).fillMaxWidth()) {
+                        items(epSubServers) { server ->
+                            val name = CustomEndpointManager.getDisplayName(server)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val uri = CustomEndpointManager.profileToUri(server)
+                                        if (uri != null) {
+                                            customEpConfig = uri
+                                        }
+                                        showEpServerPicker = false
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(name, fontSize = 14.sp)
+                            }
+                            HorizontalDivider()
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showEpServerPicker = false }) {
+                        Text("Закрыть")
                     }
                 }
             )

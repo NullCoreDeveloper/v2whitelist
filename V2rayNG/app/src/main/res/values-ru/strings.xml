@@ -555,11 +555,22 @@
     <string name="summary_pref_bypass_ru_apps">Сбер, Тинькофф, Госуслуги, Озон, Wildberries, Авито и др. не будут маршрутизироваться через VPN. Включено по умолчанию.</string>
 
 
-    <!-- Smart Auto-Failover string removed as it was duplicate -->
+    <!-- Custom Endpoint (Proxy Chain) -->
+    <string name="title_pref_category_custom_endpoint">Конечный узел (Proxy Chaining)</string>
     <string name="title_pref_custom_endpoint_enabled">Использовать свой прокси как конечный узел</string>
-    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (не используется при сканировании и проверке скорости)</string>
+    <string name="summary_pref_custom_endpoint_enabled">Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка)</string>
+    <string name="title_pref_custom_endpoint_sub_url">URL подписки конечного узла</string>
+    <string name="summary_pref_custom_endpoint_sub_url">Укажите ссылку на подписку для выбора серверов</string>
+    <string name="title_pref_custom_endpoint_select_server">Выбрать сервер конечного узла</string>
+    <string name="summary_pref_custom_endpoint_select_server">Выбрать конкретный сервер из подписки или из списка</string>
     <string name="title_pref_custom_endpoint_url">Конфиг конечного узла</string>
-    <string name="summary_pref_custom_endpoint_url">Вставьте ссылку (vless://, vmess://, и т.д.)</string>
+    <string name="summary_pref_custom_endpoint_url">Ссылка на выбранный узел (vless://, vmess://, trojan://, ss://)</string>
+    <string name="title_pref_endpoint_e2e_check_enabled">e2e проверка конечного узла</string>
+    <string name="summary_pref_endpoint_e2e_check_enabled">Проверять сквозное HTTP 204 соединение через цепочку до конечного узла перед замером скорости</string>
+    <string name="status_verifying_endpoint">Проверка конечного узла…</string>
+    <string name="toast_custom_endpoint_selected">Выбран конечный узел: %s</string>
+    <string name="toast_custom_endpoint_loading">Загрузка подписки конечного узла…</string>
+    <string name="toast_custom_endpoint_empty">В подписке не найдено серверов</string>
     <string name="title_custom_subscriptions">Управление подписками</string>
     <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>
     <string name="summary_pref_use_builtin_sub">Встроенная подписка ПроБел Official</string>

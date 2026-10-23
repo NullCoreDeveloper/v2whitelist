@@ -218,6 +218,8 @@ class DesktopAppState(
     // Личный прокси как конечный узел (цепочка: SmartConnect -> Конечный узел)
     val useCustomEndpoint = MutableStateFlow(settingsRepo.getBoolean("pref_custom_endpoint_enabled", false))
     val customEndpointUrl = MutableStateFlow(settingsRepo.getString("pref_custom_endpoint_url", ""))
+    val customEndpointSubUrl = MutableStateFlow(settingsRepo.getString("pref_custom_endpoint_sub_url", ""))
+    val endpointE2eCheckEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true))
 
     // Ручной выбор сервера vs сценарий (Авто, БС, ЧС, YouTube)
     val isManualSelection = MutableStateFlow(settingsRepo.getBoolean("pref_manual_server_selected", false))
@@ -1732,6 +1734,8 @@ class DesktopAppState(
         subOnlyViaProxy: Boolean = subscriptionUpdateOnlyViaProxy.value,
         customEndpoint: Boolean = useCustomEndpoint.value,
         customEndpointConfig: String = customEndpointUrl.value,
+        customEndpointSub: String = customEndpointSubUrl.value,
+        endpointE2eCheck: Boolean = endpointE2eCheckEnabled.value,
         bypassRu: Boolean = bypassRussianServices.value,
         checkUrl: String = connectionCheckServiceUrl.value,
         smartBatch: Int = smartConnectBatchSize.value,
@@ -1799,6 +1803,8 @@ class DesktopAppState(
         subscriptionUpdateOnlyViaProxy.value = subOnlyViaProxy
         useCustomEndpoint.value = customEndpoint
         customEndpointUrl.value = customEndpointConfig
+        customEndpointSubUrl.value = customEndpointSub
+        endpointE2eCheckEnabled.value = endpointE2eCheck
         bypassRussianServices.value = bypassRu
         connectionCheckServiceUrl.value = checkUrl
 
@@ -1872,6 +1878,8 @@ class DesktopAppState(
         settingsRepo.setBoolean("subscription_update_only_via_proxy", subOnlyViaProxy)
         settingsRepo.setBoolean("pref_custom_endpoint_enabled", customEndpoint)
         settingsRepo.setString("pref_custom_endpoint_url", customEndpointConfig)
+        settingsRepo.setString("pref_custom_endpoint_sub_url", customEndpointSub)
+        settingsRepo.setBoolean("pref_endpoint_e2e_check_enabled", endpointE2eCheck)
         settingsRepo.setBoolean("pref_bypass_russian_services", bypassRu)
         settingsRepo.setString("pref_conn_check_url", checkUrl)
 

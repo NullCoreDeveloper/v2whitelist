@@ -118,6 +118,10 @@ class DesktopSmartConnectManager(
 
         val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
         val v2wPath = settingsRepo.getString("v2w_scan_path").ifBlank { null }
+        val customEndpointUrl = if (settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)) {
+            settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
+        } else null
+        val endpointE2eCheck = settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true)
 
         // ══════════════════════════════════════════════════════════════════════════════
         // ЭТАП 1: Проверка VIP-серверов (Fast Path)
@@ -136,6 +140,8 @@ class DesktopSmartConnectManager(
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = speedCheckEnabled,
                     minSpeedMbps = minSpeedMbps,
+                    customEndpointUrl = customEndpointUrl,
+                    endpointE2eCheckEnabled = endpointE2eCheck,
                     onStatusUpdate = { text ->
                         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                     }
@@ -200,6 +206,8 @@ class DesktopSmartConnectManager(
                 xrayBinaryPath = xrayPath,
                 speedCheckEnabled = speedCheckEnabled,
                 minSpeedMbps = minSpeedMbps,
+                customEndpointUrl = customEndpointUrl,
+                endpointE2eCheckEnabled = endpointE2eCheck,
                 onStatusUpdate = { text ->
                     onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                 }
@@ -254,6 +262,8 @@ class DesktopSmartConnectManager(
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = speedCheckEnabled,
                     minSpeedMbps = minSpeedMbps,
+                    customEndpointUrl = customEndpointUrl,
+                    endpointE2eCheckEnabled = endpointE2eCheck,
                     onStatusUpdate = { text ->
                         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                     }
@@ -319,6 +329,10 @@ class DesktopSmartConnectManager(
         if (candidates.isEmpty()) return@withContext false
 
         val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+        val customEndpointUrl = if (settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)) {
+            settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
+        } else null
+        val endpointE2eCheck = settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true)
         val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
 
         // 1. Быстрый путь: VIP Cache (как на Android)
@@ -335,6 +349,8 @@ class DesktopSmartConnectManager(
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = false,
                     minSpeedMbps = 0.5,
+                    customEndpointUrl = customEndpointUrl,
+                    endpointE2eCheckEnabled = endpointE2eCheck,
                     onStatusUpdate = { text ->
                         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                     }
@@ -361,6 +377,8 @@ class DesktopSmartConnectManager(
                 xrayBinaryPath = xrayPath,
                 speedCheckEnabled = false,
                 minSpeedMbps = 0.5,
+                customEndpointUrl = customEndpointUrl,
+                endpointE2eCheckEnabled = endpointE2eCheck,
                 onStatusUpdate = { text ->
                     onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                 }

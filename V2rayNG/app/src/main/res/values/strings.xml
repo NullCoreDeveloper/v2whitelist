@@ -591,10 +591,21 @@
     <string name="status_profile_speed_too_low">Speed too low (%1$s Mbps &lt; %2$s Mbps), searching next…</string>
 
     <!-- Custom Endpoint (Proxy Chain) -->
+    <string name="title_pref_category_custom_endpoint">Custom Endpoint (Proxy Chaining)</string>
     <string name="title_pref_custom_endpoint_enabled">Use custom proxy as final endpoint</string>
-    <string name="summary_pref_custom_endpoint_enabled">Route traffic through your personal proxy after connecting to Smart Connect server (not used during scanning and speed check)</string>
+    <string name="summary_pref_custom_endpoint_enabled">Route traffic through your personal proxy after connecting to Smart Connect server (chain)</string>
+    <string name="title_pref_custom_endpoint_sub_url">Custom endpoint subscription URL</string>
+    <string name="summary_pref_custom_endpoint_sub_url">Enter subscription URL to load servers</string>
+    <string name="title_pref_custom_endpoint_select_server">Select custom endpoint server</string>
+    <string name="summary_pref_custom_endpoint_select_server">Select a specific server from subscription or server list</string>
     <string name="title_pref_custom_endpoint_url">Final endpoint config</string>
-    <string name="summary_pref_custom_endpoint_url">Paste URL (vless://, vmess://, etc.)</string>
+    <string name="summary_pref_custom_endpoint_url">Paste or select URL (vless://, vmess://, trojan://, ss://)</string>
+    <string name="title_pref_endpoint_e2e_check_enabled">e2e custom endpoint check</string>
+    <string name="summary_pref_endpoint_e2e_check_enabled">Verify end-to-end HTTP 204 connection through chain before speed check</string>
+    <string name="status_verifying_endpoint">Verifying custom endpoint…</string>
+    <string name="toast_custom_endpoint_selected">Selected custom endpoint: %s</string>
+    <string name="toast_custom_endpoint_loading">Loading custom endpoint subscription…</string>
+    <string name="toast_custom_endpoint_empty">No valid servers found in subscription</string>
 
     <!-- Custom Subscriptions -->
     <string name="title_custom_subscriptions">Manage Subscriptions</string>

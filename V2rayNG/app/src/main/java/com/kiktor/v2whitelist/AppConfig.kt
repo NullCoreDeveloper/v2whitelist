@@ -144,6 +144,9 @@ object AppConfig {
     /** Custom Endpoint (Proxy Chain) */
     const val PREF_CUSTOM_ENDPOINT_ENABLED = "pref_custom_endpoint_enabled"
     const val PREF_CUSTOM_ENDPOINT_URL = "pref_custom_endpoint_url"
+    const val PREF_CUSTOM_ENDPOINT_SUB_URL = "pref_custom_endpoint_sub_url"
+    const val PREF_CUSTOM_ENDPOINT_SELECTED_NAME = "pref_custom_endpoint_selected_name"
+    const val PREF_ENDPOINT_E2E_CHECK_ENABLED = "pref_endpoint_e2e_check_enabled"
 
     /** DPI Bypass (Geek Mode) */
     const val PREF_GLOBAL_SNI = "pref_global_sni"

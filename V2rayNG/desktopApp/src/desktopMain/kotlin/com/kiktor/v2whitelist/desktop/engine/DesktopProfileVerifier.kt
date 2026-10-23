@@ -40,6 +40,8 @@ object DesktopProfileVerifier {
         speedCheckEnabled: Boolean = true,
         minSpeedMbps: Double = 1.0,
         bytesToDownload: Long = 500_000L,
+        customEndpointUrl: String? = null,
+        endpointE2eCheckEnabled: Boolean = true,
         onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
         val runner = XrayDesktopRunner()
@@ -61,6 +63,8 @@ object DesktopProfileVerifier {
 
         var tempConfig: File? = null
         var process: Process? = null
+        var chainedTempConfig: File? = null
+        var chainedProcess: Process? = null
 
         try {
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
@@ -97,11 +101,54 @@ object DesktopProfileVerifier {
 
             GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
 
+            // ── Шаг 1.5 (предпоследний этап перед проверкой скорости): e2e HTTP 204 через конечный узел ──
+            var testPortForSpeed = testPort
+            if (!customEndpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
+                val chainedPort = findFreePort()
+                val chainedOptions = options.copy(
+                    socksPort = chainedPort,
+                    customEndpointUrl = customEndpointUrl
+                )
+                try {
+                    val chainedJson = XrayConfigGenerator.generateJson(profile, chainedOptions)
+                    chainedTempConfig = File.createTempFile("v2w_endpoint_e2e_", ".json").apply {
+                        deleteOnExit()
+                        writeText(chainedJson)
+                    }
+                    val chainedPb = ProcessBuilder(binary.absolutePath, "run", "-c", chainedTempConfig.absolutePath)
+                        .redirectErrorStream(true)
+                    chainedProcess = chainedPb.start()
+                    delay(400)
+                    if (!chainedProcess.isAlive) {
+                        GeekModeLogger.log("Verifier", "Тестовый инстанс Xray для цепочки конечного узла упал при старте")
+                        return@withContext VerifyResult(
+                            success = false,
+                            errorMessage = "Инстанс цепочки не запустился"
+                        )
+                    }
+
+                    val chainedLatency = measureE2ELatency(chainedPort, timeoutMs)
+                    if (chainedLatency <= 0) {
+                        GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                        return@withContext VerifyResult(
+                            success = false,
+                            errorMessage = "Конечный узел не отвечает через данный сервер"
+                        )
+                    }
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
+                    testPortForSpeed = chainedPort
+                } catch (e: Exception) {
+                    GeekModeLogger.log("Verifier", "Ошибка при проверке цепочки: ${e.message}")
+                    return@withContext VerifyResult(success = false, errorMessage = e.message)
+                }
+            }
+
             // ── Шаг 2: Замер скорости (если включен) ──
             var mbps: Double? = null
             if (speedCheckEnabled) {
                 onStatusUpdate?.invoke("Замер скорости соединения: $serverTitle…")
-                mbps = measureSpeed(testPort, bytesToDownload, timeoutMs = timeoutMs)
+                mbps = measureSpeed(testPortForSpeed, bytesToDownload, timeoutMs = timeoutMs)
                 if (mbps != null) {
                     val formatted = "%.2f".format(mbps)
                     GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости = $formatted Мбит/с")
@@ -147,8 +194,20 @@ object DesktopProfileVerifier {
                     }
                 }
             }
+            chainedProcess?.let { proc ->
+                if (proc.isAlive) {
+                    proc.destroy()
+                    val exited = proc.waitFor(400, TimeUnit.MILLISECONDS)
+                    if (!exited && proc.isAlive) {
+                        proc.destroyForcibly()
+                    }
+                }
+            }
             try {
                 tempConfig?.delete()
+            } catch (_: Exception) {}
+            try {
+                chainedTempConfig?.delete()
             } catch (_: Exception) {}
         }
     }

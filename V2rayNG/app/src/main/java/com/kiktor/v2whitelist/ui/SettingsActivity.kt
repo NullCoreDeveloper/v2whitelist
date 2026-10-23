@@ -19,6 +19,13 @@ import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.helper.BackupManager
 import com.kiktor.v2whitelist.helper.MmkvPreferenceDataStore
 import com.kiktor.v2whitelist.util.Utils
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
+import com.kiktor.v2whitelist.handler.AngConfigManager
 
 class SettingsActivity : BaseActivity() {
     private var lastNightMode: String? = null
@@ -251,6 +258,81 @@ class SettingsActivity : BaseActivity() {
                 true
             }
 
+            // Конечный узел: выбор сервера из подписки / списка
+            val selectServerPref = findPreference<androidx.preference.Preference>("pref_custom_endpoint_select_server")
+            val endpointUrlPref = findPreference<EditTextPreference>(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+
+            fun updateEndpointServerSummary() {
+                val currentName = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME)
+                val currentUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+                selectServerPref?.summary = when {
+                    !currentName.isNullOrBlank() -> "Выбран: $currentName"
+                    !currentUrl.isNullOrBlank() -> {
+                        val profile = AngConfigManager.identifyConfigType(currentUrl)
+                        if (profile != null && profile.remarks.isNotBlank()) "Выбран: ${profile.remarks}" else "Выбран: ${currentUrl.take(30)}…"
+                    }
+                    else -> getString(R.string.summary_pref_custom_endpoint_select_server)
+                }
+            }
+            updateEndpointServerSummary()
+
+            endpointUrlPref?.setOnPreferenceChangeListener { _, _ ->
+                view?.post { updateEndpointServerSummary() }
+                true
+            }
+
+            selectServerPref?.setOnPreferenceClickListener {
+                val subUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_SUB_URL)?.trim()
+                if (!subUrl.isNullOrBlank()) {
+                    requireContext().toast(getString(R.string.toast_custom_endpoint_loading))
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val result = CustomEndpointManager.fetchServersFromSubscription(subUrl)
+                        withContext(Dispatchers.Main) {
+                            if (!isAdded) return@withContext
+                            result.fold(
+                                onSuccess = { servers ->
+                                    if (servers.isEmpty()) {
+                                        requireContext().toast(getString(R.string.toast_custom_endpoint_empty))
+                                    } else {
+                                        showServerSelectionDialog(servers) { selectedProfile ->
+                                            val uri = CustomEndpointManager.profileToUri(selectedProfile)
+                                            if (!uri.isNullOrBlank()) {
+                                                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
+                                                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, selectedProfile.remarks)
+                                                endpointUrlPref?.text = uri
+                                                updateEndpointServerSummary()
+                                                requireContext().toast(getString(R.string.toast_custom_endpoint_selected, selectedProfile.remarks))
+                                            }
+                                        }
+                                    }
+                                },
+                                onFailure = { e ->
+                                    requireContext().toast("Ошибка загрузки: ${e.message ?: "неизвестная ошибка"}")
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    val allGuids = MmkvManager.decodeServerList()
+                    val allServers = allGuids.mapNotNull { MmkvManager.decodeServerConfig(it) }
+                    if (allServers.isEmpty()) {
+                        requireContext().toast("Сначала укажите URL подписки или добавьте серверы в приложение")
+                    } else {
+                        showServerSelectionDialog(allServers) { selectedProfile ->
+                            val uri = CustomEndpointManager.profileToUri(selectedProfile)
+                            if (!uri.isNullOrBlank()) {
+                                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
+                                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, selectedProfile.remarks)
+                                endpointUrlPref?.text = uri
+                                updateEndpointServerSummary()
+                                requireContext().toast(getString(R.string.toast_custom_endpoint_selected, selectedProfile.remarks))
+                            }
+                        }
+                    }
+                }
+                true
+            }
+
             // Логи
             findPreference<androidx.preference.Preference>("pref_logcat")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), LogcatActivity::class.java))
@@ -407,6 +489,31 @@ class SettingsActivity : BaseActivity() {
         private fun updateHevTunSettings(enabled: Boolean) {
             hevTunLogLevel?.isEnabled = enabled
             hevTunRwTimeout?.isEnabled = enabled
+        }
+
+        private fun showServerSelectionDialog(servers: List<ProfileItem>, onSelected: (ProfileItem) -> Unit) {
+            val names = servers.map { CustomEndpointManager.getDisplayName(it) }.toTypedArray()
+            val currentUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            var selectedIndex = -1
+            if (!currentUrl.isNullOrBlank()) {
+                val currentProfile = AngConfigManager.identifyConfigType(currentUrl)
+                if (currentProfile != null) {
+                    selectedIndex = servers.indexOfFirst { 
+                        it.remarks == currentProfile.remarks && it.server == currentProfile.server && it.serverPort == currentProfile.serverPort 
+                    }
+                }
+            }
+
+            android.app.AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.title_pref_custom_endpoint_select_server))
+                .setSingleChoiceItems(names, selectedIndex) { dialog, which ->
+                    dialog.dismiss()
+                    if (which in servers.indices) {
+                        onSelected(servers[which])
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
     }
 

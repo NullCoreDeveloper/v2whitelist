@@ -84,6 +84,13 @@
             android:summary="@string/summary_pref_profile_check"
             android:title="@string/title_pref_profile_check" />
 
+        <!-- e2e проверка конечного узла перед замером скорости -->
+        <CheckBoxPreference
+            android:key="pref_endpoint_e2e_check_enabled"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_endpoint_e2e_check_enabled"
+            android:title="@string/title_pref_endpoint_e2e_check_enabled" />
+
         <!-- Тест скорости в составе проверки -->
         <CheckBoxPreference
             android:key="pref_profile_speed_check_enabled"
@@ -216,16 +223,33 @@
             android:summary="@string/summary_pref_auto_check_update"
             android:title="@string/title_pref_auto_check_update" />
 
-        <!-- Custom Endpoint (Proxy Chain) -->
+    <!-- Конечный узел (Proxy Chain) — отдельная раскрывающаяся категория -->
+    <PreferenceCategory
+        android:title="@string/title_pref_category_custom_endpoint"
+        app:initialExpandedChildrenCount="0">
+
         <CheckBoxPreference
             android:key="pref_custom_endpoint_enabled"
+            android:defaultValue="false"
             android:summary="@string/summary_pref_custom_endpoint_enabled"
             android:title="@string/title_pref_custom_endpoint_enabled" />
+
+        <EditTextPreference
+            android:key="pref_custom_endpoint_sub_url"
+            android:summary="@string/summary_pref_custom_endpoint_sub_url"
+            android:title="@string/title_pref_custom_endpoint_sub_url" />
+
+        <androidx.preference.Preference
+            android:key="pref_custom_endpoint_select_server"
+            android:summary="@string/summary_pref_custom_endpoint_select_server"
+            android:title="@string/title_pref_custom_endpoint_select_server" />
 
         <EditTextPreference
             android:key="pref_custom_endpoint_url"
             android:summary="@string/summary_pref_custom_endpoint_url"
             android:title="@string/title_pref_custom_endpoint_url" />
+
+    </PreferenceCategory>
 
         <EditTextPreference
             android:key="pref_custom_user_agent"

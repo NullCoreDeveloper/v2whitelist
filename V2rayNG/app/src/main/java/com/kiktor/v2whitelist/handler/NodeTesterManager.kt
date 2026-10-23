@@ -193,6 +193,7 @@ object NodeTesterManager {
         }
 
         var coreController: CoreController? = null
+        var chainedController: CoreController? = null
         return try {
             // Запускаем отдельный экземпляр ядра V2Ray
             coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
@@ -227,6 +228,60 @@ object NodeTesterManager {
                 GeekModeLogger.log("NodeTester", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
 
+                // --- Предпоследний этап: e2e проверка HTTP 204 через полноценный туннель к конечному узлу ---
+                val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+                val endpointE2eCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
+                var testPortForSpeed = port
+
+                if (ignoreCustomEndpoint && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                    if (showStatus) {
+                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
+                            context.getString(R.string.status_verifying_endpoint))
+                    }
+
+                    val chainedPort = try {
+                        ServerSocket(0).use { it.localPort }
+                    } catch (e: Exception) {
+                        GeekModeLogger.log("NodeTester", "verifyProfile: failed to allocate chained port for $guid")
+                        return false
+                    }
+
+                    val chainedConfig = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, chainedPort, ignoreCustomEndpoint = false)
+                    if (!chainedConfig.status) {
+                        GeekModeLogger.log("NodeTester", "verifyProfile: failed to create chained config for $guid")
+                        return false
+                    }
+
+                    try {
+                        chainedController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                            override fun startup(): Long = 0
+                            override fun shutdown(): Long = 0
+                            override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+                        })
+                        chainedController.startLoop(chainedConfig.content, 0)
+                        delay(if (isHysteria) 800L else 500L)
+                        if (!currentCoroutineContext().isActive) {
+                            chainedController?.stopLoop()
+                            return false
+                        }
+
+                        val (chainedElapsed, _) = SpeedtestManager.testConnection(context, chainedPort, timeout)
+                        if (chainedElapsed <= 0) {
+                            GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ e2e check through custom endpoint FAILED for server $guid")
+                            chainedController?.stopLoop()
+                            return false
+                        }
+
+                        GeekModeLogger.log("NodeTester", "verifyProfile: e2e custom endpoint check PASSED (${chainedElapsed}ms)")
+                        testPortForSpeed = chainedPort
+                    } catch (e: Exception) {
+                        GeekModeLogger.log("NodeTester", "verifyProfile: exception during custom endpoint e2e check: ${e.message}")
+                        chainedController?.stopLoop()
+                        return false
+                    }
+                }
+
                 // --- Тест скорости (если включён) ---
                 val speedCheckEnabled = customMinMbps != null || MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
                 if (speedCheckEnabled) {
@@ -240,7 +295,7 @@ object NodeTesterManager {
                             context.getString(R.string.status_speed_check_running))
                     }
 
-                    val mbps = SpeedtestManager.measureSpeedThroughProxy(port, bytes, timeout)
+                    val mbps = SpeedtestManager.measureSpeedThroughProxy(testPortForSpeed, bytes, timeout)
                     
                     if (!currentCoroutineContext().isActive) return false
                     
@@ -287,6 +342,9 @@ object NodeTesterManager {
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
             try {
                 coreController?.stopLoop()
+            } catch (_: Exception) {}
+            try {
+                chainedController?.stopLoop()
             } catch (_: Exception) {}
         }
     }
