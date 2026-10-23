@@ -80,9 +80,12 @@ object DesktopProfileVerifier {
             // Ждем поднятия ядра
             delay(400)
             if (!process.isAlive) {
+                val exitCode = try { process.exitValue() } catch (_: Exception) { -1 }
+                val err = try { process.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
+                GeekModeLogger.log("Verifier", "Тестовый инстанс Xray упал при старте (code=$exitCode): $err")
                 return@withContext VerifyResult(
                     success = false,
-                    errorMessage = "Тестовый инстанс Xray упал при старте"
+                    errorMessage = "Тестовый инстанс Xray упал при старте: $err"
                 )
             }
 
@@ -121,10 +124,12 @@ object DesktopProfileVerifier {
                     chainedProcess = chainedPb.start()
                     delay(400)
                     if (!chainedProcess.isAlive) {
-                        GeekModeLogger.log("Verifier", "Тестовый инстанс Xray для цепочки конечного узла упал при старте")
+                        val exitCode = try { chainedProcess.exitValue() } catch (_: Exception) { -1 }
+                        val err = try { chainedProcess.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
+                        GeekModeLogger.log("Verifier", "Тестовый инстанс Xray для цепочки конечного узла упал при старте (code=$exitCode): $err")
                         return@withContext VerifyResult(
                             success = false,
-                            errorMessage = "Инстанс цепочки не запустился"
+                            errorMessage = "Инстанс цепочки не запустился: $err"
                         )
                     }
 
@@ -138,6 +143,8 @@ object DesktopProfileVerifier {
                     }
                     GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                     testPortForSpeed = chainedPort
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     GeekModeLogger.log("Verifier", "Ошибка при проверке цепочки: ${e.message}")
                     return@withContext VerifyResult(success = false, errorMessage = e.message)
@@ -179,6 +186,8 @@ object DesktopProfileVerifier {
                 latencyMs = latency,
                 speedMbps = mbps
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext VerifyResult(
                 success = false,
@@ -187,20 +196,12 @@ object DesktopProfileVerifier {
         } finally {
             process?.let { proc ->
                 if (proc.isAlive) {
-                    proc.destroy()
-                    val exited = proc.waitFor(400, TimeUnit.MILLISECONDS)
-                    if (!exited && proc.isAlive) {
-                        proc.destroyForcibly()
-                    }
+                    try { proc.destroyForcibly() } catch (_: Exception) {}
                 }
             }
             chainedProcess?.let { proc ->
                 if (proc.isAlive) {
-                    proc.destroy()
-                    val exited = proc.waitFor(400, TimeUnit.MILLISECONDS)
-                    if (!exited && proc.isAlive) {
-                        proc.destroyForcibly()
-                    }
+                    try { proc.destroyForcibly() } catch (_: Exception) {}
                 }
             }
             try {

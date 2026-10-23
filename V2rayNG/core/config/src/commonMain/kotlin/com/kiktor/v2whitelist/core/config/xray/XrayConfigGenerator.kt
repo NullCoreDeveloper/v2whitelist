@@ -133,8 +133,7 @@ object XrayConfigGenerator {
             )
             val endpointOutbound = baseEndpointOutbound.copy(
                 tag = "proxy",
-                streamSettings = chainedStream,
-                proxySettings = OutboundProxySettings(tag = "proxy1")
+                streamSettings = chainedStream
             )
             outbounds.add(endpointOutbound)
             outbounds.add(baseSmartOutbound)
@@ -150,8 +149,7 @@ object XrayConfigGenerator {
                     sockopt = (currentStream.sockopt ?: SockoptSettings()).copy(dialerProxy = nextHopTag)
                 )
                 rawProxyOutbound.copy(
-                    streamSettings = chainedStream,
-                    proxySettings = OutboundProxySettings(tag = nextHopTag)
+                    streamSettings = chainedStream
                 )
             } else {
                 rawProxyOutbound

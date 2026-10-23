@@ -25,6 +25,22 @@ data class V2WScanSummary(
  */
 object V2WCoreScanner {
 
+    private val processLock = Any()
+    private var activeProcess: Process? = null
+
+    fun stop() {
+        synchronized(processLock) {
+            activeProcess?.let { proc ->
+                if (proc.isAlive) {
+                    try {
+                        proc.destroyForcibly()
+                    } catch (_: Exception) {}
+                }
+            }
+            activeProcess = null
+        }
+    }
+
     fun findV2WScanExecutable(customPath: String? = null): File? {
         if (!customPath.isNullOrBlank()) {
             val f = File(customPath)
@@ -132,25 +148,38 @@ object V2WCoreScanner {
             cmd.add("-first")
         }
 
-        val process = ProcessBuilder(cmd)
-            .redirectErrorStream(false)
-            .start()
-
+        stop() // Гарантированно глушим предыдущий процесс сканера перед новым запуском
         var stoppedEarly = false
         var successCount = 0
         var failCount = 0
 
-        try {
-            // 1. Запись ссылок в stdin процесса в отдельном потоке
-            OutputStreamWriter(process.outputStream, Charsets.UTF_8).use { writer ->
-                for (link in linksList) {
-                    writer.write(link)
-                    writer.write("\n")
-                }
-                writer.flush()
-            }
+        val process = ProcessBuilder(cmd)
+            .redirectErrorStream(false)
+            .start()
 
-            // 2. Чтение потоковых результатов в реальном времени
+        synchronized(processLock) {
+            activeProcess = process
+        }
+
+        // Запись ссылок в stdin процесса в отдельном потоке (исключает взаимоблокировку буферов pipe)
+        val stdinWriter = Thread({
+            try {
+                OutputStreamWriter(process.outputStream, Charsets.UTF_8).use { writer ->
+                    for (link in linksList) {
+                        if (!process.isAlive) break
+                        writer.write(link)
+                        writer.write("\n")
+                    }
+                    writer.flush()
+                }
+            } catch (_: Exception) {}
+        }, "v2w-scan-stdin-feeder").apply {
+            isDaemon = true
+            start()
+        }
+
+        try {
+            // Чтение потоковых результатов в реальном времени
             BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8)).use { reader ->
                 var line: String? = null
                 while (isActive && reader.readLine().also { line = it } != null) {
@@ -187,12 +216,16 @@ object V2WCoreScanner {
                 }
             }
         } finally {
-            if (process.isAlive) {
-                process.destroy()
-                val exited = process.waitFor(500, TimeUnit.MILLISECONDS)
-                if (!exited && process.isAlive) {
-                    process.destroyForcibly()
+            stdinWriter.interrupt()
+            synchronized(processLock) {
+                if (activeProcess == process) {
+                    activeProcess = null
                 }
+            }
+            if (process.isAlive) {
+                try {
+                    process.destroyForcibly()
+                } catch (_: Exception) {}
             }
         }
 

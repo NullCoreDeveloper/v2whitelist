@@ -1150,6 +1150,8 @@ class DesktopAppState(
 
     fun startSmartConnect() {
         smartConnectJob?.cancel()
+        smartConnectManager.stop()
+        V2WCoreScanner.stop()
         _smartConnectStatus.value = "Инициализация автопоиска…"
         xrayRunner.markStarting()
         smartConnectJob = scope.launch {
@@ -1173,6 +1175,9 @@ class DesktopAppState(
                 GeekModeLogger.log("AppState", "Ошибка автопоиска: ${e.message}")
                 xrayRunner.setError(e.message ?: "Сбой автопоиска")
                 _smartConnectStatus.value = null
+            } finally {
+                smartConnectManager.stop()
+                V2WCoreScanner.stop()
             }
         }
     }
@@ -1259,6 +1264,8 @@ class DesktopAppState(
     fun stopCore() {
         smartConnectJob?.cancel()
         smartConnectJob = null
+        smartConnectManager.stop()
+        V2WCoreScanner.stop()
         isSwitchingServer.value = false
         stopFailoverWatchdog()
         _smartConnectStatus.value = null
