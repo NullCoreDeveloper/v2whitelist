@@ -115,16 +115,7 @@ class BackupActivity : HelperBaseActivity() {
     }
 
     private fun restoreConfiguration(zipFile: File): Boolean {
-        val backupDir = this.cacheDir.absolutePath + "/${System.currentTimeMillis()}"
-
-        if (!ZipUtil.unzipToFolder(zipFile, backupDir)) {
-            return false
-        }
-
-        val count = MMKV.restoreAllFromDirectory(backupDir)
-        SettingsChangeManager.makeSetupGroupTab()
-        SettingsChangeManager.makeRestartService()
-        return count > 0
+        return com.kiktor.v2whitelist.helper.BackupManager.restoreFromFile(this, zipFile)
     }
 
     private fun showFileChooser() {

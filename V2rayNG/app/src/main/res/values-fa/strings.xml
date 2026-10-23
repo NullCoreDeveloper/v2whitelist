@@ -444,10 +444,12 @@
     <string name="tv_server_name">سرور: %s</string>
     <string name="title_pref_domain_split_tunneling">تونل‌سازی تفکیک دامنه</string>
     <string name="summary_pref_domain_split_tunneling">پیکربندی مسیریابی دامنه‌ها (دسترسی مستقیم یا از طریق VPN). به‌طور پیش‌فرض خاموش است.</string>
+    <string name="title_pref_domain_whitelist_mode">فقط دامنه‌های مشخص‌شده از طریق VPN</string>
+    <string name="summary_pref_domain_whitelist_mode">حالت لیست سفید: فقط دامنه‌های موجود در لیست زیر از طریق VPN هدایت می‌شوند و تمام ترافیک دیگر مستقیم است</string>
+    <string name="title_pref_proxy_domain_list_settings">دامنه‌ها از طریق VPN</string>
+    <string name="summary_pref_proxy_domain_list_settings">افزودن دامنه‌هایی که باید از طریق VPN هدایت شوند (مانند instagram.com، geosite:youtube)</string>
     <string name="title_pref_domain_split_tunneling_settings">مدیریت دامنه‌های مستقیم (دور زدن VPN)</string>
     <string name="summary_pref_domain_split_tunneling_settings">افزودن دامنه‌هایی که باید VPN را دور بزنند</string>
-    <string name="title_pref_proxy_domain_list_settings">دامنه‌های پروکسی (اجباری از طریق VPN)</string>
-    <string name="summary_pref_proxy_domain_list_settings">افزودن دامنه‌هایی که باید حتما از طریق VPN هدایت شوند</string>
     <string name="title_pref_domain_geo_files">فایل‌های Geo</string>
     <string name="summary_pref_domain_geo_files">دانلود geosite.dat / geoip.dat از طریق لینک یا گیت‌هاب برای قوانین پیشرفته</string>
     <string name="title_network_check_settings">بررسی وضعیت شبکه</string>

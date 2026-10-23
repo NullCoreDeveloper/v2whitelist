@@ -211,6 +211,7 @@ class DesktopAppState(
 
     // Сплит-туннелинг и раздельная маршрутизация
     val domainSplitTunnelingEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_domain_split_tunneling", true))
+    val domainWhitelistMode = MutableStateFlow(settingsRepo.getBoolean("pref_domain_whitelist_mode", false))
     val bypassRussianServices = MutableStateFlow(settingsRepo.getBoolean("pref_bypass_russian_services", true))
     val customDirectDomains = MutableStateFlow(settingsRepo.getString("custom_direct_domains", ""))
     val customProxyDomains = MutableStateFlow(settingsRepo.getString("custom_proxy_domains", ""))
@@ -1365,6 +1366,7 @@ class DesktopAppState(
                 listenAddress = listenAddr,
                 customDirectDomains = directDomains,
                 customProxyDomains = proxyDomains,
+                domainWhitelistMode = if (domainSplitTunnelingEnabled.value) domainWhitelistMode.value else false,
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
@@ -1784,6 +1786,7 @@ class DesktopAppState(
         fragmentPackVal: String = fragmentPackets.value,
         yandexUpdateVal: Boolean = yandexTranslateUpdateEnabled.value,
         domainSplitVal: Boolean = domainSplitTunnelingEnabled.value,
+        domainWhitelistVal: Boolean = domainWhitelistMode.value,
         vipLimit: Int = vipCacheLimit.value
     ) {
         subscriptionUrl.value = subUrl
@@ -1928,6 +1931,8 @@ class DesktopAppState(
         settingsRepo.setString("pref_fragment_packets", fragmentPackVal)
         settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
         settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
+        domainWhitelistMode.value = domainWhitelistVal
+        settingsRepo.setBoolean("pref_domain_whitelist_mode", domainWhitelistVal)
         vipCacheLimit.value = vipLimit
         settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
 

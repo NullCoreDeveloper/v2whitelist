@@ -76,6 +76,7 @@ fun SettingsScreen(
 
     // Сплит-туннелинг
     var domainSplit by remember { mutableStateOf(state.domainSplitTunnelingEnabled.value) }
+    var domainWhitelist by remember { mutableStateOf(state.domainWhitelistMode.value) }
     var customDirect by remember { mutableStateOf(state.customDirectDomains.value) }
     var customProxy by remember { mutableStateOf(state.customProxyDomains.value) }
 
@@ -202,6 +203,7 @@ fun SettingsScreen(
             fragmentPackVal = fragmentPack,
             yandexUpdateVal = yandexUpdate,
             domainSplitVal = domainSplit,
+            domainWhitelistVal = domainWhitelist,
             vipLimit = vipCacheLimitInput.toIntOrNull() ?: 5
         )
         state.setMinimizeToTray(minimizeToTray)
@@ -239,6 +241,7 @@ fun SettingsScreen(
         subThreads = state.subscriptionThreads.value.toString()
         yandexUpdate = state.yandexTranslateUpdateEnabled.value
         domainSplit = state.domainSplitTunnelingEnabled.value
+        domainWhitelist = state.domainWhitelistMode.value
         customDirect = state.customDirectDomains.value
         customProxy = state.customProxyDomains.value
         bypassRu = state.bypassRussianServices.value
@@ -309,6 +312,7 @@ fun SettingsScreen(
         subThreads != state.subscriptionThreads.value.toString() ||
         yandexUpdate != state.yandexTranslateUpdateEnabled.value ||
         domainSplit != state.domainSplitTunnelingEnabled.value ||
+        domainWhitelist != state.domainWhitelistMode.value ||
         customDirect != state.customDirectDomains.value ||
         customProxy != state.customProxyDomains.value ||
         bypassRu != state.bypassRussianServices.value ||
@@ -676,21 +680,28 @@ fun SettingsScreen(
         AccordionSection(title = "Сплит-туннелинг", icon = Icons.Default.AltRoute) {
             SettingSwitchRow(
                 title = "Сплит-туннелинг по доменам",
-                desc = "Исключить отдельные домены из туннеля VPN (прямой доступ). Включено по умолчанию.",
+                desc = "Раздельная маршрутизация доменов (в обход или через VPN). Включено по умолчанию.",
                 checked = domainSplit,
                 onCheckedChange = { domainSplit = it }
             )
-            OutlinedTextField(
-                value = customDirect,
-                onValueChange = { customDirect = it },
-                label = { Text("Управление исключениями (прямой доступ в обход VPN, через запятую)") },
-                modifier = Modifier.fillMaxWidth()
+            SettingSwitchRow(
+                title = "Только указанные домены через VPN",
+                desc = "Режим белого списка: через VPN направляются только домены из списка «Домены через VPN», весь остальной трафик идет напрямую в обход VPN",
+                checked = domainWhitelist,
+                onCheckedChange = { domainWhitelist = it }
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = customProxy,
                 onValueChange = { customProxy = it },
-                label = { Text("Домены, принудительно направляемые в VPN (через запятую)") },
+                label = { Text("Домены через VPN (направляются в VPN, через запятую или перенос строки)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = customDirect,
+                onValueChange = { customDirect = it },
+                label = { Text("Домены в обход VPN (прямой доступ в обход VPN, через запятую или перенос строки)") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))

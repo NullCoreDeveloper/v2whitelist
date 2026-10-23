@@ -19,6 +19,7 @@ data class XrayGeneratorOptions(
     val customDirectDomains: List<String> = emptyList(),
     val customDirectIps: List<String> = emptyList(),
     val customProxyDomains: List<String> = emptyList(),
+    val domainWhitelistMode: Boolean = false,
     val upstreamProxyHost: String? = null,
     val upstreamProxyPort: Int? = null,
     val upstreamProxyType: String? = null,
@@ -264,25 +265,35 @@ object XrayConfigGenerator {
             )
         }
 
-        // Custom direct domains / IPs (раздельное туннелирование)
-        if (options.customDirectDomains.isNotEmpty()) {
-            val formattedDirect = options.customDirectDomains.map {
-                if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+        if (options.domainWhitelistMode) {
+            // Режим белого списка: через прокси идут только customProxyDomains, остальной трафик — напрямую
+            rules.add(
+                XrayRule(
+                    outboundTag = "direct",
+                    network = "tcp,udp"
+                )
+            )
+        } else {
+            // Custom direct domains / IPs (раздельное туннелирование)
+            if (options.customDirectDomains.isNotEmpty()) {
+                val formattedDirect = options.customDirectDomains.map {
+                    if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+                }
+                rules.add(
+                    XrayRule(
+                        outboundTag = "direct",
+                        domain = formattedDirect
+                    )
+                )
             }
-            rules.add(
-                XrayRule(
-                    outboundTag = "direct",
-                    domain = formattedDirect
+            if (options.customDirectIps.isNotEmpty()) {
+                rules.add(
+                    XrayRule(
+                        outboundTag = "direct",
+                        ip = options.customDirectIps
+                    )
                 )
-            )
-        }
-        if (options.customDirectIps.isNotEmpty()) {
-            rules.add(
-                XrayRule(
-                    outboundTag = "direct",
-                    ip = options.customDirectIps
-                )
-            )
+            }
         }
 
         // Пресеты маршрутизации сценариев

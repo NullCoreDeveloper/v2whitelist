@@ -156,6 +156,7 @@ object AppConfig {
     const val PREF_DIRECT_DOMAIN_LIST = "pref_direct_domain_list"
     const val PREF_PROXY_DOMAIN_LIST = "pref_proxy_domain_list"
     const val PREF_DOMAIN_SPLIT_TUNNELING_ENABLED = "pref_domain_split_tunneling_enabled"
+    const val PREF_DOMAIN_WHITELIST_MODE = "pref_domain_whitelist_mode"
 
     /** Custom subscriptions */
     const val PREF_USE_BUILTIN_SUB = "pref_use_builtin_sub"

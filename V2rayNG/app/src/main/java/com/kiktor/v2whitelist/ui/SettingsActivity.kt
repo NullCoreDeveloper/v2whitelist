@@ -77,6 +77,7 @@ class SettingsActivity : BaseActivity() {
                 val success = BackupManager.importData(requireContext(), uri)
                 if (success) {
                     requireContext().toast(getString(R.string.msg_import_success))
+                    activity?.recreate()
                 } else {
                     requireContext().toast(getString(R.string.msg_import_fail))
                 }
@@ -220,6 +221,7 @@ class SettingsActivity : BaseActivity() {
                     .setPositiveButton(android.R.string.ok) { _, _ ->
                         val value = editText.text.toString().trim()
                         MmkvManager.encodeSettings(AppConfig.PREF_DIRECT_DOMAIN_LIST, value)
+                        updateDomainSummaries()
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
@@ -229,7 +231,7 @@ class SettingsActivity : BaseActivity() {
                 val currentDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST) ?: ""
                 val editText = android.widget.EditText(requireContext()).apply {
                     setText(currentDomains)
-                    hint = "domain.com, sub.example.com, geosite:category-media-ru-blocked"
+                    hint = "domain.com, sub.example.com, geosite:youtube"
                     minLines = 4
                     gravity = android.view.Gravity.TOP
                     inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -242,6 +244,7 @@ class SettingsActivity : BaseActivity() {
                     .setPositiveButton(android.R.string.ok) { _, _ ->
                         val value = editText.text.toString().trim()
                         MmkvManager.encodeSettings(AppConfig.PREF_PROXY_DOMAIN_LIST, value)
+                        updateDomainSummaries()
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()
@@ -368,7 +371,7 @@ class SettingsActivity : BaseActivity() {
                 true
             }
             findPreference<androidx.preference.Preference>("pref_import_data")?.setOnPreferenceClickListener {
-                importDataLauncher.launch(arrayOf("application/json", "*/*"))
+                importDataLauncher.launch(arrayOf("application/json", "application/zip", "application/octet-stream", "*/*"))
                 true
             }
         }
@@ -430,6 +433,25 @@ class SettingsActivity : BaseActivity() {
             // Initialize Yandex update preferences state
             val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
             updateYandexUpdatePreferences(onlyViaVpn)
+
+            // Update domain split tunneling summaries
+            updateDomainSummaries()
+        }
+
+        private fun updateDomainSummaries() {
+            val proxyDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST).orEmpty()
+            val directDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST).orEmpty()
+
+            val proxyCount = proxyDomains.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }.size
+            val directCount = directDomains.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }.size
+
+            findPreference<androidx.preference.Preference>("pref_proxy_domain_list_settings")?.summary =
+                if (proxyCount > 0) "Настроено доменов: $proxyCount"
+                else getString(R.string.summary_pref_proxy_domain_list_settings)
+
+            findPreference<androidx.preference.Preference>("pref_domain_split_tunneling_settings")?.summary =
+                if (directCount > 0) "Настроено доменов: $directCount"
+                else getString(R.string.summary_pref_domain_split_tunneling_settings)
         }
 
         private fun updateYandexUpdatePreferences(onlyViaVpn: Boolean) {

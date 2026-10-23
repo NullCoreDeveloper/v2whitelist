@@ -436,10 +436,12 @@
     <string name="tv_server_name">节点: %s</string>
     <string name="title_pref_domain_split_tunneling">域名分流</string>
     <string name="summary_pref_domain_split_tunneling">配置域名路由规则（直连或强制走 VPN）。默认关闭。</string>
+    <string name="title_pref_domain_whitelist_mode">仅指定域名走 VPN</string>
+    <string name="summary_pref_domain_whitelist_mode">白名单模式：仅下方列表中的域名通过 VPN，其他所有流量直接连接</string>
+    <string name="title_pref_proxy_domain_list_settings">通过 VPN 的域名</string>
+    <string name="summary_pref_proxy_domain_list_settings">添加必须通过 VPN 代理的域名（如 instagram.com、geosite:youtube）</string>
     <string name="title_pref_domain_split_tunneling_settings">直连域名（绕过 VPN）</string>
     <string name="summary_pref_domain_split_tunneling_settings">添加需要绕过 VPN 的域名</string>
-    <string name="title_pref_proxy_domain_list_settings">代理域名（强制走 VPN）</string>
-    <string name="summary_pref_proxy_domain_list_settings">添加必须通过 VPN 代理的域名</string>
     <string name="title_pref_domain_geo_files">Geo 数据文件</string>
     <string name="summary_pref_domain_geo_files">从 URL 或 GitHub 下载 geosite.dat / geoip.dat 以支持高级规则</string>
     <string name="title_network_check_settings">网络连通性检查</string>

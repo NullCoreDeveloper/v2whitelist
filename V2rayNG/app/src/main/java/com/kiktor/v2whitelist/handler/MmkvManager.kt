@@ -670,6 +670,10 @@ object MmkvManager {
         return settingsStorage.containsKey(key)
     }
 
+    fun removeSettings(key: String) {
+        settingsStorage.remove(key)
+    }
+
     /**
      * Encodes the settings.
      *
@@ -843,6 +847,7 @@ object MmkvManager {
         AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED,
         AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED,
         AppConfig.PREF_DOMAIN_SPLIT_TUNNELING_ENABLED,
+        AppConfig.PREF_DOMAIN_WHITELIST_MODE,
         AppConfig.PREF_USE_BUILTIN_SUB,
         AppConfig.PREF_IS_PAUSED,
         AppConfig.PREF_V2W_CORE_ENABLED,
@@ -854,10 +859,48 @@ object MmkvManager {
         KEY_BATTERY_ASKED
     )
 
+    private val INT_SETTINGS_KEYS: Set<String> = setOf(
+        AppConfig.PREF_WARP_COOLDOWN_STEP,
+        AppConfig.PREF_WARP_AWG_JC,
+        AppConfig.PREF_WARP_AWG_JMIN,
+        AppConfig.PREF_WARP_AWG_JMAX,
+        AppConfig.PREF_WARP_COOLDOWN_MINUTES,
+        AppConfig.PREF_WARP_MAX_ATTEMPTS,
+        AppConfig.PREF_WARP_SPEED_CHECK_TIMEOUT_MS,
+        AppConfig.PREF_WARP_SPEED_CHECK_BYTES,
+        AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES,
+        AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT,
+        AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT
+    )
+
+    private val LONG_SETTINGS_KEYS: Set<String> = setOf(
+        AppConfig.PREF_WARP_COOLDOWN_UNTIL,
+        AppConfig.PREF_LAST_CONNECT_TIME
+    )
+
+    private val FLOAT_SETTINGS_KEYS: Set<String> = setOf(
+        AppConfig.PREF_PROFILE_MIN_SPEED_MBPS,
+        AppConfig.PREF_WARP_MIN_SPEED_MBPS
+    )
+
     private val STRING_SET_SETTINGS_KEYS: Set<String> = setOf(
         AppConfig.PREF_PER_APP_PROXY_SET,
         AppConfig.PREF_LOCATION_FILTER_SET
     )
+
+    /**
+     * Сбрасывает in-memory кэш всех MMKV хранилищ для повторного чтения с диска
+     * после восстановления бэкапа из внешних файлов.
+     */
+    fun reloadAll() {
+        mainStorage.clearMemoryCache()
+        profileFullStorage.clearMemoryCache()
+        serverRawStorage.clearMemoryCache()
+        serverAffStorage.clearMemoryCache()
+        subStorage.clearMemoryCache()
+        assetStorage.clearMemoryCache()
+        settingsStorage.clearMemoryCache()
+    }
 
     /**
      * Gets all settings as a map.
@@ -875,12 +918,27 @@ object MmkvManager {
                 BOOLEAN_SETTINGS_KEYS.contains(key) -> {
                     result[key] = settingsStorage.decodeBool(key)
                 }
+                INT_SETTINGS_KEYS.contains(key) -> {
+                    result[key] = settingsStorage.decodeInt(key)
+                }
+                LONG_SETTINGS_KEYS.contains(key) -> {
+                    result[key] = settingsStorage.decodeLong(key)
+                }
+                FLOAT_SETTINGS_KEYS.contains(key) -> {
+                    result[key] = settingsStorage.decodeFloat(key)
+                }
                 else -> {
                     val str = settingsStorage.decodeString(key)
                     if (str != null) {
                         result[key] = str
                     } else {
-                        result[key] = settingsStorage.decodeBool(key)
+                        // Попытка извлечь число или fallback на boolean
+                        val intVal = settingsStorage.decodeInt(key, Int.MIN_VALUE)
+                        if (intVal != Int.MIN_VALUE) {
+                            result[key] = intVal
+                        } else {
+                            result[key] = settingsStorage.decodeBool(key)
+                        }
                     }
                 }
             }
@@ -893,17 +951,67 @@ object MmkvManager {
      */
     fun importSettings(settings: Map<String, *>) {
         for ((key, value) in settings) {
-            when (value) {
-                is String -> encodeSettings(key, value)
-                is Boolean -> encodeSettings(key, value)
-                is Int -> encodeSettings(key, value)
-                is Long -> encodeSettings(key, value)
-                is Float -> encodeSettings(key, value)
-                is Double -> encodeSettings(key, value.toFloat()) // GSON sometimes parses numbers as Double
-                is Number -> encodeSettings(key, value.toDouble().toLong()) // Try fallback for generic Numbers
-                is Collection<*> -> {
-                    val set = value.mapNotNull { it?.toString() }.toMutableSet()
-                    encodeSettings(key, set)
+            if (value == null) continue
+            when {
+                BOOLEAN_SETTINGS_KEYS.contains(key) -> {
+                    val boolVal = when (value) {
+                        is Boolean -> value
+                        is String -> value.toBoolean()
+                        is Number -> value.toInt() != 0
+                        else -> false
+                    }
+                    encodeSettings(key, boolVal)
+                }
+                INT_SETTINGS_KEYS.contains(key) -> {
+                    val intVal = when (value) {
+                        is Number -> value.toInt()
+                        is String -> value.toIntOrNull() ?: 0
+                        else -> 0
+                    }
+                    encodeSettings(key, intVal)
+                }
+                LONG_SETTINGS_KEYS.contains(key) -> {
+                    val longVal = when (value) {
+                        is Number -> value.toLong()
+                        is String -> value.toLongOrNull() ?: 0L
+                        else -> 0L
+                    }
+                    encodeSettings(key, longVal)
+                }
+                FLOAT_SETTINGS_KEYS.contains(key) -> {
+                    val floatVal = when (value) {
+                        is Number -> value.toFloat()
+                        is String -> value.toFloatOrNull() ?: 0f
+                        else -> 0f
+                    }
+                    encodeSettings(key, floatVal)
+                }
+                STRING_SET_SETTINGS_KEYS.contains(key) -> {
+                    if (value is Collection<*>) {
+                        val set = value.mapNotNull { it?.toString() }.toMutableSet()
+                        encodeSettings(key, set)
+                    }
+                }
+                else -> {
+                    when (value) {
+                        is String -> encodeSettings(key, value)
+                        is Boolean -> encodeSettings(key, value)
+                        is Int -> encodeSettings(key, value)
+                        is Long -> encodeSettings(key, value)
+                        is Float -> encodeSettings(key, value)
+                        is Double -> {
+                            if (value % 1.0 == 0.0 && value <= Int.MAX_VALUE && value >= Int.MIN_VALUE) {
+                                encodeSettings(key, value.toInt())
+                            } else {
+                                encodeSettings(key, value.toFloat())
+                            }
+                        }
+                        is Number -> encodeSettings(key, value.toLong())
+                        is Collection<*> -> {
+                            val set = value.mapNotNull { it?.toString() }.toMutableSet()
+                            encodeSettings(key, set)
+                        }
+                    }
                 }
             }
         }

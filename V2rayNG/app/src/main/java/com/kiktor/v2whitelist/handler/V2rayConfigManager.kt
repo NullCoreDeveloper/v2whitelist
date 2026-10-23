@@ -545,37 +545,59 @@ object V2rayConfigManager {
             // Domain split tunneling — применяется только если явно включен пользователем
             val domainSplitEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_DOMAIN_SPLIT_TUNNELING_ENABLED, false)
             if (domainSplitEnabled == true) {
-                val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
-                if (!directDomainsStr.isNullOrBlank()) {
-                    val domains = directDomainsStr.split(",", "\n")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
-
-                    if (domains.isNotEmpty()) {
-                        v2rayConfig.routing.rules.add(
-                            0,
-                            RulesBean(
-                                outboundTag = AppConfig.TAG_DIRECT,
-                                domain = ArrayList(domains)
-                            )
-                        )
-                    }
-                }
+                val whitelistMode = MmkvManager.decodeSettingsBool(AppConfig.PREF_DOMAIN_WHITELIST_MODE, false)
 
                 val proxyDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST)
-                if (!proxyDomainsStr.isNullOrBlank()) {
-                    val domains = proxyDomainsStr.split(",", "\n")
+                val proxyDomains = if (!proxyDomainsStr.isNullOrBlank()) {
+                    proxyDomainsStr.split(",", "\n")
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
                         .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
+                } else emptyList()
 
-                    if (domains.isNotEmpty()) {
+                val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
+                val directDomains = if (!directDomainsStr.isNullOrBlank()) {
+                    directDomainsStr.split(",", "\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
+                } else emptyList()
+
+                if (whitelistMode) {
+                    // Режим белого списка: через VPN направляются ТОЛЬКО указанные прокси-домены
+                    if (proxyDomains.isNotEmpty()) {
                         v2rayConfig.routing.rules.add(
                             0,
                             RulesBean(
                                 outboundTag = AppConfig.TAG_PROXY,
-                                domain = ArrayList(domains)
+                                domain = ArrayList(proxyDomains)
+                            )
+                        )
+                    }
+                    // Весь остальной трафик направляется напрямую в обход VPN
+                    v2rayConfig.routing.rules.add(
+                        RulesBean(
+                            outboundTag = AppConfig.TAG_DIRECT,
+                            network = "tcp,udp"
+                        )
+                    )
+                } else {
+                    // Стандартный режим (черный список / исключения):
+                    if (directDomains.isNotEmpty()) {
+                        v2rayConfig.routing.rules.add(
+                            0,
+                            RulesBean(
+                                outboundTag = AppConfig.TAG_DIRECT,
+                                domain = ArrayList(directDomains)
+                            )
+                        )
+                    }
+                    if (proxyDomains.isNotEmpty()) {
+                        v2rayConfig.routing.rules.add(
+                            0,
+                            RulesBean(
+                                outboundTag = AppConfig.TAG_PROXY,
+                                domain = ArrayList(proxyDomains)
                             )
                         )
                     }
@@ -639,6 +661,33 @@ object V2rayConfigManager {
                     ) {
                         domain.add(it)
                     }
+                }
+            }
+        }
+
+        val domainSplitEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_DOMAIN_SPLIT_TUNNELING_ENABLED, false)
+        if (domainSplitEnabled == true) {
+            if (tag == AppConfig.TAG_PROXY) {
+                val proxyDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST)
+                if (!proxyDomainsStr.isNullOrBlank()) {
+                    proxyDomainsStr.split(",", "\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .forEach {
+                            val d = if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+                            domain.add(d)
+                        }
+                }
+            } else if (tag == AppConfig.TAG_DIRECT) {
+                val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
+                if (!directDomainsStr.isNullOrBlank()) {
+                    directDomainsStr.split(",", "\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .forEach {
+                            val d = if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+                            domain.add(d)
+                        }
                 }
             }
         }
