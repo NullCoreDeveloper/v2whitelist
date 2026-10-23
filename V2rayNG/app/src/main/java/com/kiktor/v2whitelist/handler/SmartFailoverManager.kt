@@ -255,6 +255,15 @@ object SmartFailoverManager {
             val googleDef = async { checkDirectUrl(net, url1, "GET", 1500) }
             yaOk = yaDef.await()
             googleOk = googleDef.await()
+
+            // Если ya.ru через системный стек не прошел (например, Private DNS / DoT заблокирован оператором на белых списках),
+            // запускаем гибридный fallback: прямой UDP DNS к DNS оператора + проверенные IP Яндекса (AS13238)
+            if (!yaOk) {
+                yaOk = WhitelistDnsFallbackHelper.checkPhysicalNetworkWhitelistFallback(context, net, url2, 1500)
+                if (yaOk) {
+                    GeekModeLogger.log("Failover", "Physical network: $url2 accessible via Whitelist DNS/IP fallback (bypassed DoT/Private DNS)")
+                }
+            }
         }
 
         return when {

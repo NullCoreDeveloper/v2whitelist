@@ -54,9 +54,21 @@ object NetworkManager {
         if (url1.isBlank()) url1 = "google.com"
         if (url2.isBlank()) url2 = "ya.ru"
 
-        return kotlinx.coroutines.runBlocking {
+        val status = kotlinx.coroutines.runBlocking {
             com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker.checkTcpInternetStatus(url1, url2, 800L)
         }
+        if (status == 2) {
+            // Если быстрый TCP-пинг показал NO_INTERNET из-за заблокированного DoT/DNS на белых списках,
+            // запускаем резервную проверку белого списка (UDP DNS оператора + hardcoded IP Яндекса)
+            val host2 = WhitelistDnsFallbackHelper.extractHost(url2)
+            if (host2.equals("ya.ru", ignoreCase = true) || host2.equals("yandex.ru", ignoreCase = true)) {
+                if (WhitelistDnsFallbackHelper.checkWhitelistHttpFallback(url2, 1500)) {
+                    GeekModeLogger.log("Network", "checkInternetStatus: ya.ru accessible via Whitelist fallback -> STATUS_WHITELIST_ONLY")
+                    return 1 // JAMMED (STATUS_WHITELIST_ONLY)
+                }
+            }
+        }
+        return status
     }
 
     /**
@@ -76,7 +88,12 @@ object NetworkManager {
             val responseCode = conn.responseCode
             responseCode in 200..399
         } catch (_: Exception) {
-            false
+            val host = WhitelistDnsFallbackHelper.extractHost(urlString)
+            if (host.equals("ya.ru", ignoreCase = true) || host.equals("yandex.ru", ignoreCase = true)) {
+                WhitelistDnsFallbackHelper.checkWhitelistHttpFallback(urlString, timeoutMs)
+            } else {
+                false
+            }
         } finally {
             try { conn?.disconnect() } catch (_: Exception) {}
         }

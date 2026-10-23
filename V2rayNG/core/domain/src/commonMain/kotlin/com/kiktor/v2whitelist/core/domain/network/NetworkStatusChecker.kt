@@ -55,7 +55,18 @@ object NetworkStatusChecker {
             header(HttpHeaders.UserAgent, userAgent)
         }
         response.status.isSuccess() || response.status.value in 300..399
-    }.getOrDefault(false)
+    }.getOrElse {
+        // Резервная проверка для ya.ru при заблокированном DNS/DoT/DoH
+        if (urlString.contains("ya.ru", ignoreCase = true) || urlString.contains("yandex.ru", ignoreCase = true)) {
+            val verifiedIps = listOf("77.88.55.242", "77.88.44.242", "5.255.255.242")
+            for (ip in verifiedIps) {
+                if (com.kiktor.v2whitelist.core.domain.ping.rawTcpPing(ip, 443, 1200L) >= 0) {
+                    return@getOrElse true
+                }
+            }
+        }
+        false
+    }
 
     /**
      * Быстрая параллельная проверка состояния интернета через TCP-пинг порта 443:
