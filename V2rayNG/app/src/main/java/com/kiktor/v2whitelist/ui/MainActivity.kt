@@ -452,6 +452,10 @@ class MainActivity : HelperBaseActivity() {
                 isShowingError = false
                 updateUIState(true)
             } else {
+                if (activeJob == null && !SmartConnectManager.isScanning.get()) {
+                    cancelWatchdog()
+                    isTaskRunning = false
+                }
                 // Не сбрасываем UI пока идёт поиск ИЛИ пока сканирует ИЛИ пока показываем ошибку
                 if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
                     updateUIState(false)
@@ -505,8 +509,13 @@ class MainActivity : HelperBaseActivity() {
             cancelActiveTask()
             return
         }
-        if (mainViewModel.isRunning.value == true) {
+        if (mainViewModel.isRunning.value == true || V2RayServiceManager.isRunning()) {
+            cancelWatchdog()
+            isTaskRunning = false
+            isShowingError = false
             V2RayServiceManager.stopVService(this)
+            mainViewModel.isRunning.value = false
+            updateUIState(false)
         } else {
             if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {
                 Log.w(AppConfig.TAG, "handleConnectAction: Cleaning up lingering zombie TUN interface before connect")
@@ -559,10 +568,14 @@ class MainActivity : HelperBaseActivity() {
                             // Предохранитель 30 секунд на случай тихого падения
                             cancelWatchdog()
                             watchdogJob = lifecycleScope.launch {
-                                delay(30000)
+                                var waited = 0
+                                while (waited < 7000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
+                                    delay(250)
+                                    waited += 250
+                                }
                                 if (isTaskRunning && activeJob == null && !SmartConnectManager.isScanning.get()) {
                                     isTaskRunning = false
-                                    updateUIState(mainViewModel.isRunning.value == true)
+                                    updateUIState(V2RayServiceManager.isRunning())
                                 }
                             }
                         }
@@ -604,10 +617,14 @@ class MainActivity : HelperBaseActivity() {
                         } else {
                             cancelWatchdog()
                             watchdogJob = lifecycleScope.launch {
-                                delay(30000)
+                                var waited = 0
+                                while (waited < 7000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
+                                    delay(250)
+                                    waited += 250
+                                }
                                 if (isTaskRunning && activeJob == null && !SmartConnectManager.isScanning.get()) {
                                     isTaskRunning = false
-                                    updateUIState(mainViewModel.isRunning.value == true)
+                                    updateUIState(V2RayServiceManager.isRunning())
                                 }
                             }
                         }
@@ -901,10 +918,27 @@ class MainActivity : HelperBaseActivity() {
             }
         }
 
-        if (mainViewModel.isRunning.value != true && !V2RayServiceManager.isRunning()) {
+        val isReallyRunning = V2RayServiceManager.isRunning()
+        if (!isReallyRunning) {
+            if (mainViewModel.isRunning.value == true || MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SERVICE_RUNNING, false)) {
+                Log.w(AppConfig.TAG, "onResume: Desync detected! UI/MMKV thought VPN was running, but OS reports it is dead. Self-healing...")
+                MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+                mainViewModel.isRunning.value = false
+                NotificationManager.cancelNotification()
+                if (!isTaskRunning && !SmartConnectManager.isScanning.get()) {
+                    updateUIState(false)
+                }
+            }
             if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {
                 Log.w(AppConfig.TAG, "onResume: Detected lingering zombie TUN interface! Cleaning up to restore internet...")
                 V2RayServiceManager.forceCleanupZombieVpn(this)
+            }
+        } else {
+            if (mainViewModel.isRunning.value != true) {
+                mainViewModel.isRunning.value = true
+                if (!isTaskRunning && !SmartConnectManager.isScanning.get()) {
+                    updateUIState(true)
+                }
             }
         }
     }

@@ -71,6 +71,10 @@ object V2RayServiceManager {
      * Stops the V2Ray service.
      * @param context The context from which the service is stopped.
      */
+    /**
+     * Stops the V2Ray service.
+     * @param context The context from which the service is stopped.
+     */
     fun stopVService(context: Context) {
         Log.i(AppConfig.TAG, "stopVService called")
         MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
@@ -84,14 +88,21 @@ object V2RayServiceManager {
             Log.e(AppConfig.TAG, "stopVService fallback stopService failed", e)
         }
 
-        // Сторожевой таймер: если через 800 мс интерфейс tun всё еще висит в системе,
+        // Немедленно синхронизируем состояние в MMKV, скрываем уведомления и оповещаем UI,
+        // чтобы кнопка "Стоп" гарантированно сработала даже если сервис в фоне уже был убит ОС
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+        MmkvManager.encodeRunningServerConfig(null)
+        NotificationManager.cancelNotification()
+        MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+
+        // Сторожевой таймер: если через 500 мс интерфейс tun всё еще висит в системе,
         // принудительно подчищаем зависший подпроцесс демона
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (!isRunning() && NetworkManager.hasTunInterface()) {
+            if (NetworkManager.hasTunInterface()) {
                 Log.w(AppConfig.TAG, "stopVService watchdog: detected lingering TUN interface after stop, killing daemon process")
                 killDaemonProcess(context)
             }
-        }, 800L)
+        }, 500L)
     }
 
     /**
@@ -127,7 +138,7 @@ object V2RayServiceManager {
 
     /**
      * Checks if the V2Ray service is running.
-     * Supports both daemon process and main/UI process via MMKV and process/VPN check.
+     * Supports both daemon process and main/UI process via MMKV and OS/VPN checks.
      * @return True if the service is running, false otherwise.
      */
     fun isRunning(): Boolean {
@@ -135,24 +146,40 @@ object V2RayServiceManager {
         if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SERVICE_RUNNING, false)) {
             return false
         }
-        return isDaemonProcessAlive()
+        val isAlive = isRealServiceAlive()
+        if (!isAlive) {
+            Log.w(AppConfig.TAG, "isRunning: PREF_IS_SERVICE_RUNNING is true, but real service is dead. Self-healing...")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            NotificationManager.cancelNotification()
+        }
+        return isAlive
     }
 
-    private fun isDaemonProcessAlive(): Boolean {
+    private fun isRealServiceAlive(): Boolean {
         return try {
             val app = com.kiktor.v2whitelist.AngApplication.application
             val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
             val daemonProcName = "${app.packageName}:RunSoLibV2RayDaemon"
-            val procRunning = am?.runningAppProcesses?.any { it.processName == daemonProcName }
-            if (procRunning != null) {
-                procRunning
-            } else {
+            val isProcAlive = am?.runningAppProcesses?.any { it.processName == daemonProcName } == true
+            if (!isProcAlive) {
+                return false
+            }
+
+            if (SettingsManager.isVpnMode()) {
+                if (NetworkManager.hasTunInterface()) {
+                    return true
+                }
                 val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-                val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
-                caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+                val isVpnActive = cm?.allNetworks?.any { net ->
+                    cm.getNetworkCapabilities(net)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+                } == true
+                isVpnActive
+            } else {
+                val socksPort = SettingsManager.getSocksPort()
+                SmartConnectManager.isProxyRunning(socksPort)
             }
         } catch (_: Exception) {
-            MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            false
         }
     }
 
@@ -241,20 +268,31 @@ object V2RayServiceManager {
 
         val service = getService() ?: run {
             Log.e(AppConfig.TAG, "startCoreLoop: service is null, aborting")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            NotificationManager.cancelNotification()
             return false
         }
         val guid = MmkvManager.getSelectServer() ?: run {
             Log.e(AppConfig.TAG, "startCoreLoop: no selected server, aborting")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
+            NotificationManager.cancelNotification()
             return false
         }
         val config = MmkvManager.decodeServerConfig(guid) ?: run {
             Log.e(AppConfig.TAG, "startCoreLoop: failed to decode config for guid=$guid")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
+            NotificationManager.cancelNotification()
             return false
         }
         Log.d(AppConfig.TAG, "startCoreLoop: building config for '${config.remarks}' (guid=$guid)")
         val result = V2rayConfigManager.getV2rayConfig(service, guid)
         if (!result.status) {
             Log.e(AppConfig.TAG, "startCoreLoop: V2rayConfigManager returned invalid config for guid=$guid")
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
+            NotificationManager.cancelNotification()
             return false
         }
 

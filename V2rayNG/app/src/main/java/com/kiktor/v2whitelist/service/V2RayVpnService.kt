@@ -29,6 +29,7 @@ import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
+import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.util.MyContextWrapper
 import com.kiktor.v2whitelist.util.Utils
 import java.lang.ref.SoftReference
@@ -137,8 +138,9 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
         serviceScope.launch {
             if (!setupVpnService()) {
-                Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, service will stop")
-                stopSelf()
+                Log.e(AppConfig.TAG, "onStartCommand: setupVpnService failed, stopping service")
+                MessageUtil.sendMsg2UI(this@V2RayVpnService, AppConfig.MSG_STATE_START_FAILURE, "")
+                stopAllService(true)
                 return@launch
             }
 
@@ -146,7 +148,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 startService()
             } catch (t: Throwable) {
                 Log.e(AppConfig.TAG, "onStartCommand: startService() threw exception", t)
-                stopAllService()
+                MessageUtil.sendMsg2UI(this@V2RayVpnService, AppConfig.MSG_STATE_START_FAILURE, "")
+                stopAllService(true)
             }
         }
         return START_NOT_STICKY
@@ -221,14 +224,12 @@ class V2RayVpnService : VpnService(), ServiceControl {
         val prepare = prepare(this)
         if (prepare != null) {
             Log.e(AppConfig.TAG, "setupVpnService: VPN prepare() returned non-null (permission not granted), stopping")
-            stopSelf()
             return false
         }
         Log.i(AppConfig.TAG, "setupVpnService: VPN permission OK, configuring interface...")
 
         if (configureVpnService() != true) {
             Log.e(AppConfig.TAG, "setupVpnService: configureVpnService failed, stopping")
-            stopSelf()
             return false
         }
         Log.i(AppConfig.TAG, "setupVpnService: VPN interface configured, mInterface=${mInterface?.fd}")
