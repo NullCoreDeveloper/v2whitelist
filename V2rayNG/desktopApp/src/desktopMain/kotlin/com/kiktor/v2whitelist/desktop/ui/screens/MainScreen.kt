@@ -160,7 +160,19 @@ fun MainScreen(
                         fontWeight = FontWeight.Bold,
                         color = statusColor
                     )
-                    if (subStatus.timeText.isNotBlank()) {
+                    val failedNames = remember(subscriptions) {
+                        subscriptions.filter { it.enabled && it.lastUpdateFailed }.map { it.name.ifBlank { "Без названия" } }
+                    }
+                    if (failedNames.isNotEmpty()) {
+                        Text(
+                            text = "Сбой: ${failedNames.joinToString(", ")}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = AccentRed,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (subStatus.timeText.isNotBlank()) {
                         Text(
                             text = subStatus.timeText,
                             fontSize = 11.sp,

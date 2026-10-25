@@ -313,6 +313,11 @@ class DesktopAppState(
         smartConnectManager.onStageChanged = { _, text ->
             _smartConnectStatus.value = text
         }
+        smartConnectManager.onNodeVerified = { guid, latencyMs ->
+            if (latencyMs > 0) {
+                _pingMap.value = _pingMap.value + (guid to latencyMs)
+            }
+        }
         smartConnectManager.onServerConnected = { guid, _ ->
             _selectedGuid.value = guid
             isManualSelection.value = false
@@ -1679,10 +1684,14 @@ class DesktopAppState(
         scope.launch {
             _isPinging.value = true
             try {
+                val vips = serverRepo.getVipServerGuids().toSet()
                 val results = NodePingTester.testBatchTcp(currentServers)
                 val newMap = _pingMap.value.toMutableMap()
                 for ((g, _, delay) in results) {
-                    newMap[g] = delay
+                    // Не затираем реальный e2e замер VIP-узлов сырым TCP рукопожатием к Anycast/прокси
+                    if (!vips.contains(g) || !newMap.containsKey(g) || (newMap[g] ?: -1L) <= 0) {
+                        newMap[g] = delay
+                    }
                 }
                 for ((g, _) in currentServers) {
                     if (!newMap.containsKey(g)) {

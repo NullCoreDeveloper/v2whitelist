@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -131,7 +133,51 @@ fun SubscriptionsScreen(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // Баннер сбойных подписок (как на Android)
+        val failedSubs = remember(subscriptions) { subscriptions.filter { it.enabled && it.lastUpdateFailed } }
+        if (failedSubs.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = AccentRed.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Предупреждение",
+                        tint = AccentRed,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Не удалось обновить подписки (${failedSubs.size}):",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = AccentRed
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = failedSubs.joinToString(", ") { it.name.ifBlank { "Без названия" } },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    TextButton(
+                        onClick = { state.updateAllActiveSubscriptions() },
+                        enabled = !isUpdatingSub
+                    ) {
+                        Text("Повторить", fontSize = 12.sp, color = AccentRed, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
 
         // Список подписок
         if (subscriptions.isEmpty()) {
@@ -177,12 +223,18 @@ private fun SubscriptionCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val isFailed = sub.enabled && sub.lastUpdateFailed
+
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
         border = BorderStroke(
-            1.dp,
-            if (sub.enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
+            if (isFailed) 1.5.dp else 1.dp,
+            when {
+                isFailed -> AccentRed
+                sub.enabled -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                else -> MaterialTheme.colorScheme.outline
+            }
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -208,14 +260,32 @@ private fun SubscriptionCard(
                 Spacer(Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = sub.name.ifBlank { "Без названия" },
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (sub.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = sub.name.ifBlank { "Без названия" },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isFailed) AccentRed else if (sub.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isFailed) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = AccentRed.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = "Ошибка обновления",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentRed,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(Modifier.height(4.dp))
 
@@ -349,9 +419,14 @@ private fun SubscriptionEditDialog(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier
                 .width(520.dp)
-                .padding(16.dp)
+                .fillMaxHeight(0.9f)
+                .padding(vertical = 12.dp)
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp)
+            ) {
                 Text(
                     text = if (isNew) "Добавить подписку" else "Редактирование подписки",
                     fontSize = 18.sp,
@@ -359,91 +434,99 @@ private fun SubscriptionEditDialog(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Spacer(Modifier.height(16.dp))
-
-                // Название
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Название подписки") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                // Ссылки на зеркала через |
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text("Ссылки на подписку (зеркала через | )") },
-                    maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                // Фильтр Regex
-                OutlinedTextField(
-                    value = filter,
-                    onValueChange = { filter = it },
-                    label = { Text("Фильтр Regex (исключать узлы до появления)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                // Regex для групп
-                OutlinedTextField(
-                    value = groupRegex,
-                    onValueChange = { groupRegex = it },
-                    label = { Text("Regex для групп") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                // Процент доли серверов
-                OutlinedTextField(
-                    value = sharePercentStr,
-                    onValueChange = { sharePercentStr = it },
-                    label = { Text("Процент доли серверов (%)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
                 Spacer(Modifier.height(14.dp))
 
-                // Категории авто-режима (галочки)
-                Text(
-                    text = "Категории авто-режима:",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Скроллируемая область полей ввода
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // Название
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Название подписки") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(10.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isWhitelist, onCheckedChange = { isWhitelist = it })
-                    Text("Белые списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    // Ссылки на зеркала через |
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text("Ссылки на подписку (зеркала через | )") },
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Фильтр Regex
+                    OutlinedTextField(
+                        value = filter,
+                        onValueChange = { filter = it },
+                        label = { Text("Фильтр Regex (исключать узлы до появления)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Regex для групп
+                    OutlinedTextField(
+                        value = groupRegex,
+                        onValueChange = { groupRegex = it },
+                        label = { Text("Regex для групп") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Процент доли серверов
+                    OutlinedTextField(
+                        value = sharePercentStr,
+                        onValueChange = { sharePercentStr = it },
+                        label = { Text("Процент доли серверов (%)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    // Категории авто-режима (галочки)
+                    Text(
+                        text = "Категории авто-режима:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = isWhitelist, onCheckedChange = { isWhitelist = it })
+                        Text("Белые списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = isBlacklist, onCheckedChange = { isBlacklist = it })
+                        Text("Чёрные списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = isYoutube, onCheckedChange = { isYoutube = it })
+                        Text("YouTube и музыка", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isBlacklist, onCheckedChange = { isBlacklist = it })
-                    Text("Чёрные списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
+                Spacer(Modifier.height(16.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isYoutube, onCheckedChange = { isYoutube = it })
-                    Text("YouTube и музыка", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // Кнопки отмена / сохранить
+                // Кнопки отмена / сохранить (всегда зафиксированы внизу)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,

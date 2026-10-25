@@ -45,6 +45,7 @@ class DesktopSmartConnectManager(
     var onStageChanged: ((SmartConnectStage, String) -> Unit)? = null
     var onServerConnected: ((guid: String, profile: ProfileItem) -> Unit)? = null
     var connectAction: ((guid: String, profile: ProfileItem) -> Unit)? = null
+    var onNodeVerified: ((guid: String, latencyMs: Long) -> Unit)? = null
 
     private val vipFailCounters = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
@@ -167,6 +168,9 @@ class DesktopSmartConnectManager(
                     )
                     if (res.success) {
                         vipFailCounters[guid] = 0
+                        if (res.latencyMs > 0) {
+                            onNodeVerified?.invoke(guid, res.latencyMs)
+                        }
                         GeekModeLogger.log("SmartConnect", "VIP сервер подтвержден: ${profile.remarks} (${res.latencyMs}ms, ${res.speedMbps ?: "—"} Мбит/с)")
                         onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
                         delay(350)
@@ -235,6 +239,9 @@ class DesktopSmartConnectManager(
 
                     if (verifyRes.success) {
                         winner = candidate.first to candidate.second
+                        if (verifyRes.latencyMs > 0) {
+                            onNodeVerified?.invoke(candidate.first, verifyRes.latencyMs)
+                        }
                         GeekModeLogger.log("SmartConnect", "Победитель найден и верифицирован: $serverName!")
 
                         // Добавляем победителя в VIP
@@ -296,6 +303,9 @@ class DesktopSmartConnectManager(
                     )
                     if (res.success) {
                         val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
+                        if (res.latencyMs > 0) {
+                            onNodeVerified?.invoke(guid, res.latencyMs)
+                        }
                         GeekModeLogger.log("SmartConnect", "Классический фоллбек нашел узел: $serverName")
                         serverRepo.addVipServer(guid, limit)
                         onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
@@ -430,6 +440,9 @@ class DesktopSmartConnectManager(
                 if (res.success) {
                     val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
                     serverRepo.addVipServer(guid, limit)
+                    if (res.latencyMs > 0) {
+                        onNodeVerified?.invoke(guid, res.latencyMs)
+                    }
                     GeekModeLogger.log("SmartConnect", "Новый узел подтвержден при смене: $serverName")
                     onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключаемся к $serverName…")
                     delay(350)
@@ -476,6 +489,9 @@ class DesktopSmartConnectManager(
                 )
                 if (res.success) {
                     serverRepo.addVipServer(guid, limit)
+                    if (res.latencyMs > 0) {
+                        onNodeVerified?.invoke(guid, res.latencyMs)
+                    }
                     added++
                     GeekModeLogger.log("SmartConnect", "Узел ${profile.remarks} добавлен в VIP кэш.")
                     if (added >= needed) break
