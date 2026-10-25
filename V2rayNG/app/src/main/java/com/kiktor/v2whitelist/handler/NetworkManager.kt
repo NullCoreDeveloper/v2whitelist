@@ -155,22 +155,36 @@ object NetworkManager {
     }
 
     /**
-     * Проверяет, активно ли любое VPN-соединение:
-     * 1. Внутренний сервис V2RayServiceManager
-     * 2. Наличие поднятого TUN-интерфейса в ОС (tun0, tun1...)
-     * 3. Системный транспорт TRANSPORT_VPN в ConnectivityManager
-     * 4. Локальный SOCKS5-прокси в ядре
+     * Проверяет, активен ли системный транспорт TRANSPORT_VPN (через ConnectivityManager).
+     */
+    fun isSystemVpnTransport(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+            val activeCaps = cm.getNetworkCapabilities(cm.activeNetwork)
+            if (activeCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true) {
+                return true
+            }
+            cm.allNetworks.any { net ->
+                cm.getNetworkCapabilities(net)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Проверяет, активно ли любое реальное VPN-соединение:
+     * 1. Внутренний сервис V2RayServiceManager (ядро живо и работает)
+     * 2. Системный транспорт TRANSPORT_VPN в ConnectivityManager (активное соединение в ОС)
+     * 3. Локальный SOCKS5-прокси в ядре
+     *
+     * Примечание: hasTunInterface() намеренно не используется здесь вслепую,
+     * так как висящий в ОС tun-интерфейс без работающего сервиса/процесса
+     * является "зомби" и приводит к ложным срабатываниям и утечкам IP.
      */
     fun isVpnActive(context: Context): Boolean {
         if (V2RayServiceManager.isRunning()) return true
-        if (hasTunInterface()) return true
-        try {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
-            if (caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true) {
-                return true
-            }
-        } catch (_: Exception) {}
+        if (isSystemVpnTransport(context)) return true
         if (SmartConnectManager.isProxyRunning(SettingsManager.getSocksPort())) return true
         return false
     }

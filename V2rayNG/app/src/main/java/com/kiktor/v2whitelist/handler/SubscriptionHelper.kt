@@ -642,13 +642,25 @@ object SubscriptionHelper {
             vpnStarted = true
         }
         
-        val isVpnActive = NetworkManager.isVpnActive(context)
-        Log.i(AppConfig.TAG, "updateSubscription: isVpnActive=$isVpnActive, VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential")
+        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
 
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)) {
-            val hasTun = NetworkManager.hasTunInterface()
-            if (!hasTun) {
-                Log.w(AppConfig.TAG, "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled and no TUN interface found")
+        // Если обнаружен висящий tun-интерфейс, но сервис не работает и системного VPN нет — это зомби!
+        if (NetworkManager.hasTunInterface() && !V2RayServiceManager.isRunning() && !NetworkManager.isSystemVpnTransport(context)) {
+            Log.w(AppConfig.TAG, "updateSubscription: Detected lingering zombie TUN interface before update, cleaning up...")
+            V2RayServiceManager.forceCleanupZombieVpn(context)
+        }
+
+        val isVpnActive = NetworkManager.isVpnActive(context)
+        Log.i(AppConfig.TAG, "updateSubscription: isVpnActive=$isVpnActive, VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential, onlyViaVpn=$onlyViaVpn")
+
+        if (onlyViaVpn) {
+            val hasSystemVpn = NetworkManager.isSystemVpnTransport(context)
+            val hasActiveProxy = socksPort > 0 && SmartConnectManager.isProxyRunning(socksPort)
+            val isVpnRunning = V2RayServiceManager.isRunning()
+
+            // Для обновления только через VPN обязательно требуется реально активный VPN и рабочий прокси/транспорт
+            if (!isVpnActive || (!hasActiveProxy && !hasSystemVpn && !isVpnRunning)) {
+                Log.w(AppConfig.TAG, "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled but no active VPN connection or working proxy found (isVpnActive=$isVpnActive, socksPort=$socksPort, hasSystemVpn=$hasSystemVpn)")
                 if (!sequential) {
                     withContext(kotlinx.coroutines.Dispatchers.Main) {
                         android.widget.Toast.makeText(context, "Обновление прервано: требуется активное VPN-соединение", android.widget.Toast.LENGTH_LONG).show()
@@ -658,7 +670,6 @@ object SubscriptionHelper {
             }
         }
 
-        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
         val updateViaYandexOnBs = !onlyViaVpn && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
         val isBs = NetworkManager.checkInternetStatus() == 1
 

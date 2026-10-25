@@ -508,6 +508,7 @@ object AngConfigManager {
             val userAgent = it.subscription.userAgent
             val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
             var configText = ""
+            val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
 
             if (sequential) {
                 // ── Последовательный режим (фоновый воркер) ──────────────────────────────
@@ -529,8 +530,8 @@ object AngConfigManager {
                             if (result.isEmpty() && httpPort > 0) {
                                 try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
                             }
-                            // 3. Direct
-                            if (result.isEmpty()) {
+                            // 3. Direct (только если не включено обновление исключительно через VPN)
+                            if (result.isEmpty() && !onlyViaVpn) {
                                 try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000) } catch (_: Exception) {}
                             }
                             if (result.isNotEmpty()) {
@@ -561,8 +562,6 @@ object AngConfigManager {
                                 if (!Utils.isValidUrl(urlFixed)) {
                                     if (!it.subscription.allowInsecureUrl && !Utils.isValidSubUrl(urlFixed)) return@launch
                                 }
-                                
-                                val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
 
                                 // Если VPN активен (socksPort > 0), сразу опрашиваем через локальный прокси
                                 if (socksPort > 0) {
