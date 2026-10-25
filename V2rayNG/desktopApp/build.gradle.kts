@@ -54,17 +54,30 @@ compose.desktop {
         )
 
         nativeDistributions {
-            targetFormats(
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
-                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Pkg
-            )
-            val targetPackageVersion = (project.findProperty("packageVersion") as? String)?.removePrefix("v") ?: "2.0.0"
+            val currentOs = org.gradle.internal.os.OperatingSystem.current()
+            when {
+                currentOs.isLinux -> targetFormats(
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb
+                )
+                currentOs.isWindows -> targetFormats(
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe
+                )
+                currentOs.isMacOsX -> targetFormats(
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.Pkg
+                )
+                else -> targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage)
+            }
+
+            val rawVersion = (project.findProperty("packageVersion") as? String)?.removePrefix("v") ?: "2.0.0"
+            val targetPackageVersion = Regex("""\d+(\.\d+)*""").find(rawVersion)?.value ?: "2.0.0"
+            val macMajor = targetPackageVersion.substringBefore('.').toIntOrNull() ?: 0
+            val effectiveVersion = if (currentOs.isMacOsX && macMajor < 1) "1.0.0" else targetPackageVersion
+
             packageName = "v2whitelist"
-            packageVersion = targetPackageVersion
+            packageVersion = effectiveVersion
             description = "ПроБел — v2whitelist Desktop"
             vendor = "NullCore"
             copyright = "© 2026 NullCore"
@@ -89,7 +102,11 @@ compose.desktop {
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
                 bundleID = "com.kiktor.v2whitelist"
                 dockName = "ПроБел"
-                packageBuildVersion = targetPackageVersion
+                val macVersion = if (macMajor < 1) "1.0.0" else targetPackageVersion
+                packageVersion = macVersion
+                packageBuildVersion = macVersion
+                dmgPackageVersion = macVersion
+                pkgPackageVersion = macVersion
             }
         }
     }
@@ -99,8 +116,12 @@ tasks.matching {
     it.name in listOf("createDistributable", "packageAppImage", "packageReleaseAppImage", "packageDistributionForCurrentOS")
 }.configureEach {
     doLast {
+        val os = org.gradle.internal.os.OperatingSystem.current()
         val appDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist").get().asFile
-        if (appDir.exists() && org.gradle.internal.os.OperatingSystem.current().isLinux) {
+        val binDir = project.file("bin")
+        val assetsDir = project.file("assets")
+
+        if (appDir.exists() && os.isLinux) {
             val runtimeBinDir = file("$appDir/lib/runtime/bin")
             runtimeBinDir.mkdirs()
             val javaDest = file("$runtimeBinDir/java")
@@ -139,6 +160,23 @@ tasks.matching {
             """.trimIndent()
             binFile.writeText(launcherScript)
             binFile.setExecutable(true)
+        }
+
+        if (os.isWindows && appDir.exists()) {
+            val destBin = File(appDir, "bin").apply { mkdirs() }
+            val destAssets = File(appDir, "assets").apply { mkdirs() }
+            if (binDir.exists()) binDir.copyRecursively(destBin, overwrite = true)
+            if (assetsDir.exists()) assetsDir.copyRecursively(destAssets, overwrite = true)
+        }
+
+        val macAppDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist.app").get().asFile
+        if (os.isMacOsX && macAppDir.exists()) {
+            val resDir = File(macAppDir, "Contents/Resources").apply { mkdirs() }
+            val destBin = File(resDir, "bin").apply { mkdirs() }
+            val destAssets = File(resDir, "assets").apply { mkdirs() }
+            if (binDir.exists()) binDir.copyRecursively(destBin, overwrite = true)
+            if (assetsDir.exists()) assetsDir.copyRecursively(destAssets, overwrite = true)
+            destBin.listFiles()?.forEach { it.setExecutable(true) }
         }
     }
 }
