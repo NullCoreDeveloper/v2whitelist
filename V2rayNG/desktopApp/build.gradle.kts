@@ -62,8 +62,9 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Pkg
             )
+            val targetPackageVersion = (project.findProperty("packageVersion") as? String)?.removePrefix("v") ?: "2.0.0"
             packageName = "v2whitelist"
-            packageVersion = "2.0.0"
+            packageVersion = targetPackageVersion
             description = "ПроБел — v2whitelist Desktop"
             vendor = "NullCore"
             copyright = "© 2026 NullCore"
@@ -88,7 +89,7 @@ compose.desktop {
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
                 bundleID = "com.kiktor.v2whitelist"
                 dockName = "ПроБел"
-                packageBuildVersion = "2.0.0"
+                packageBuildVersion = targetPackageVersion
             }
         }
     }
