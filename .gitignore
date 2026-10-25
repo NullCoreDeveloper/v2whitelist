@@ -55,6 +55,8 @@ V2rayNG/app/google-services.json
 *.o
 *.pyc
 *.pyo
+v2w-scan
+v2w-scan.exe
 
 # Ignore files from other IDEs
 .vscode/

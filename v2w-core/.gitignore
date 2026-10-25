@@ -30,6 +30,8 @@
 # Go build binaries
 xray
 xray_softfloat
+v2w-scan
+v2w-scan.exe
 mockgen
 vprotogen
 !infra/vprotogen/
