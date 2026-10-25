@@ -255,6 +255,8 @@ jobs:
           cat << 'EOF' > "$BUILD_DIR/AppRun"
           #!/bin/sh
           HERE="$(dirname "$(readlink -f "${0}")")"
+          export APPDIR="${APPDIR:-$HERE}"
+          export PATH="$HERE/bin:$PATH"
           exec "$HERE/bin/v2whitelist" "$@"
           EOF
           chmod +x "$BUILD_DIR/AppRun"
@@ -300,9 +302,12 @@ jobs:
           if [ "${{ matrix.platform }}" == "windows" ]; then
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
             if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app" ]; then
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
               pushd V2rayNG/desktopApp/build/compose/binaries/main/app
-              cp -a ../../../bin/* v2whitelist/bin/ 2>/dev/null || true
-              zip -r ../../../../../../release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip .
+              zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
               popd
             fi
           fi

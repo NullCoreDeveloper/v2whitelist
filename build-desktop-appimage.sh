@@ -59,6 +59,8 @@ cp -a "$APP_DIR"/* "$APPIMAGE_BUILD_DIR"/
 cat << 'EOF' > "$APPIMAGE_BUILD_DIR/AppRun"
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "${0}")")"
+export APPDIR="${APPDIR:-$HERE}"
+export PATH="$HERE/bin:$PATH"
 exec "$HERE/bin/v2whitelist" "$@"
 EOF
 chmod +x "$APPIMAGE_BUILD_DIR/AppRun"

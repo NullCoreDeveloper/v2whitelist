@@ -42,50 +42,7 @@ object V2WCoreScanner {
     }
 
     fun findV2WScanExecutable(customPath: String? = null): File? {
-        if (!customPath.isNullOrBlank()) {
-            val f = File(customPath)
-            if (f.exists() && f.canExecute()) return f
-        }
-
-        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-        val isMac = System.getProperty("os.name").lowercase().contains("mac")
-        val execName = if (isWindows) "v2w-scan.exe" else "v2w-scan"
-
-        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
-        val appDataBin = when {
-            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
-            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
-            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
-        }
-
-        val candidates = listOfNotNull(
-            appResDir?.let { File(it, execName) },
-            appResDir?.let { File(it, "bin/$execName") },
-            appDataBin?.let { File(it, execName) },
-            File("v2w-core", execName),
-            File("../v2w-core", execName),
-            File("../../v2w-core", execName),
-            File("bin", execName),
-            File("V2rayNG/desktopApp/bin", execName),
-            File(execName)
-        )
-
-        for (cand in candidates) {
-            if (cand.exists() && cand.canExecute()) {
-                return cand.canonicalFile
-            }
-        }
-
-        // Проверка системного PATH
-        val pathEnv = System.getenv("PATH") ?: ""
-        for (dir in pathEnv.split(File.pathSeparator)) {
-            val cand = File(dir, execName)
-            if (cand.exists() && cand.canExecute()) {
-                return cand.canonicalFile
-            }
-        }
-
-        return null
+        return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.v2wBinaryNames, customPath)
     }
 
     /**

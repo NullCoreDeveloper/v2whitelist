@@ -132,6 +132,23 @@ tasks.matching {
                     javaDest.setExecutable(true)
                 }
             }
+
+            // Копирование bin и assets в корень приложения и в ресурсы
+            val destBin = File(appDir, "bin").apply { mkdirs() }
+            val destAssets = File(appDir, "assets").apply { mkdirs() }
+            val resBin = File(appDir, "lib/app/resources/bin").apply { mkdirs() }
+            val resAssets = File(appDir, "lib/app/resources/assets").apply { mkdirs() }
+            if (binDir.exists()) {
+                binDir.copyRecursively(destBin, overwrite = true)
+                binDir.copyRecursively(resBin, overwrite = true)
+                destBin.listFiles()?.forEach { it.setExecutable(true) }
+                resBin.listFiles()?.forEach { it.setExecutable(true) }
+            }
+            if (assetsDir.exists()) {
+                assetsDir.copyRecursively(destAssets, overwrite = true)
+                assetsDir.copyRecursively(resAssets, overwrite = true)
+            }
+
             val binFile = file("$appDir/bin/v2whitelist")
             val launcherScript = """
                 #!/bin/sh
@@ -150,6 +167,7 @@ tasks.matching {
                 exec "${'$'}JAVA_EXEC" \
                     -Djdk.gtk.version=3 \
                     -Djdk.lang.Process.launchMechanism=vfork \
+                    -Dapp.dir="${'$'}APPDIR" \
                     -Dskiko.library.path="${'$'}APPDIR/lib/app" \
                     -Dcompose.application.resources.dir="${'$'}APPDIR/lib/app/resources" \
                     -Dcompose.application.configure.swing.globals=true \
@@ -165,8 +183,16 @@ tasks.matching {
         if (os.isWindows && appDir.exists()) {
             val destBin = File(appDir, "bin").apply { mkdirs() }
             val destAssets = File(appDir, "assets").apply { mkdirs() }
-            if (binDir.exists()) binDir.copyRecursively(destBin, overwrite = true)
-            if (assetsDir.exists()) assetsDir.copyRecursively(destAssets, overwrite = true)
+            val resBin = File(appDir, "app/resources/bin").apply { mkdirs() }
+            val resAssets = File(appDir, "app/resources/assets").apply { mkdirs() }
+            if (binDir.exists()) {
+                binDir.copyRecursively(destBin, overwrite = true)
+                binDir.copyRecursively(resBin, overwrite = true)
+            }
+            if (assetsDir.exists()) {
+                assetsDir.copyRecursively(destAssets, overwrite = true)
+                assetsDir.copyRecursively(resAssets, overwrite = true)
+            }
         }
 
         val macAppDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist.app").get().asFile

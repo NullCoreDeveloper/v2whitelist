@@ -55,95 +55,18 @@ class XrayDesktopRunner(
         private set
 
     /**
-     * Поиск исполняемого файла Xray:
-     * 1. В переданном кастомном пути
-     * 2. В рабочей директории (./xray или ./xray.exe)
-     * 3. В папке bin
-     * 4. В системном PATH
+     * Поиск исполняемого файла Xray через кроссплатформенный резолвер.
      */
     fun findXrayExecutable(customPath: String? = null): File? {
-        if (!customPath.isNullOrBlank()) {
-            val f = File(customPath)
-            return if (f.exists() && f.canExecute()) f else null
-        }
-
-        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-        val isMac = System.getProperty("os.name").lowercase().contains("mac")
-        val execName = if (isWindows) "xray.exe" else "xray"
-
-        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
-        val appDataBin = when {
-            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
-            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
-            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
-        }
-
-        val candidates = listOfNotNull(
-            appResDir?.let { File(it, execName) },
-            appResDir?.let { File(it, "bin/$execName") },
-            appDataBin?.let { File(it, execName) },
-            File(execName),
-            File("bin", execName),
-            File("../bin", execName),
-            File("V2rayNG/desktopApp/bin", execName)
-        )
-
-        for (candidate in candidates) {
-            if (candidate.exists() && candidate.canExecute()) {
-                return candidate.canonicalFile
-            }
-        }
-
-        // Системный PATH
-        val pathEnv = System.getenv("PATH") ?: ""
-        val paths = pathEnv.split(File.pathSeparator)
-        for (dir in paths) {
-            val candidate = File(dir, execName)
-            if (candidate.exists() && candidate.canExecute()) {
-                return candidate.canonicalFile
-            }
-        }
-
-        return null
+        return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.xrayBinaryNames, customPath)
     }
 
     /**
-     * Поиск каталога гео-баз (geosite.dat / geoip.dat):
-     * 1. В compose.application.resources.dir
-     * 2. В системном профиле пользователя (~/.config, %LOCALAPPDATA%, Library)
-     * 3. В ./assets и ./bin
-     * 4. В системных путях Linux: /usr/share/xray, /usr/share/v2ray, /usr/local/share/xray
+     * Поиск каталога гео-баз (geosite.dat / geoip.dat) через кроссплатформенный резолвер.
      */
-    fun findAssetLocation(): File? {
-        val userHome = System.getProperty("user.home") ?: "."
-        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-        val isMac = System.getProperty("os.name").lowercase().contains("mac")
-        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
-
-        val appDataAssets = when {
-            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/assets") }
-            isMac -> File(userHome, "Library/Application Support/v2whitelist/assets")
-            else -> File(userHome, ".config/v2whitelist/assets")
-        }
-
-        val candidates = listOfNotNull(
-            appResDir?.let { File(it, "assets") },
-            appResDir,
-            appDataAssets,
-            File(userHome, ".config/v2whitelist/assets"),
-            File("assets"),
-            File("bin"),
-            File("/usr/share/xray"),
-            File("/usr/share/v2ray"),
-            File("/usr/local/share/xray"),
-            File("/usr/local/share/v2ray")
-        )
-        for (dir in candidates) {
-            if (dir.exists() && (File(dir, "geosite.dat").exists() || File(dir, "geoip.dat").exists())) {
-                return dir
-            }
-        }
-        return null
+    fun findAssetLocation(xrayBinary: File? = null): File? {
+        val bin = xrayBinary ?: findXrayExecutable()
+        return DesktopBinaryResolver.findAssetDirectory(xrayBinary = bin)
     }
 
     /**
@@ -259,9 +182,10 @@ class XrayDesktopRunner(
             }
 
             // Настройка расположения геофайлов geosite.dat и geoip.dat
-            val assetDir = findAssetLocation()
+            val assetDir = findAssetLocation(binary)
             if (assetDir != null) {
                 pb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                pb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
                 GeekModeLogger.log("DesktopRunner", "Каталог геофайлов XRAY_LOCATION_ASSET: ${assetDir.absolutePath}")
             }
 

@@ -126,6 +126,26 @@ class DesktopAppTest {
     }
 
     @Test
+    fun testDesktopBinaryResolverMountPathDetection() {
+        assertTrue(com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver.isTemporaryMountPath("/tmp/.mount_v2whit12345/bin/xray"))
+        assertTrue(com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver.isTemporaryMountPath("C:\\tmp\\.mount_v2whit\\xray.exe"))
+        assertFalse(com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver.isTemporaryMountPath("/usr/local/bin/xray"))
+        assertFalse(com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver.isTemporaryMountPath("C:\\Program Files\\v2whitelist\\bin\\xray.exe"))
+    }
+
+    @Test
+    fun testXrayAndAssetDiscovery() {
+        val runner = com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner()
+        val xrayBin = runner.findXrayExecutable()
+        assertNotNull(xrayBin, "Xray бинарник должен быть обнаружен")
+        assertTrue(xrayBin.exists())
+
+        val assetDir = runner.findAssetLocation(xrayBin)
+        assertNotNull(assetDir, "Каталог геофайлов должен быть обнаружен")
+        assertTrue(assetDir.exists())
+    }
+
+    @Test
     fun testDesktopSmartConnectManagerVipAndFlow() = runTest {
         val serverRepo = InMemoryServerRepository()
         val settingsRepo = InMemorySettingsRepository()

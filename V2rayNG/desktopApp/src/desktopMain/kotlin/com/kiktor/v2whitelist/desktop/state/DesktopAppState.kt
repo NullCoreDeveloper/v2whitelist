@@ -21,6 +21,7 @@ import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
+import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
@@ -330,23 +331,36 @@ class DesktopAppState(
             connectCurrent()
         }
 
-        // Автопоиск Xray бинарника, если не задан
-        if (xrayBinaryPath.value.isBlank()) {
-            val detected = xrayRunner.findXrayExecutable()
-            if (detected != null) {
-                xrayBinaryPath.value = detected.absolutePath
-                settingsRepo.setString("xray_path", detected.absolutePath)
-                GeekModeLogger.log("DesktopApp", "Обнаружен исполняемый файл Xray: ${detected.absolutePath}")
-            }
+        // Автопоиск Xray бинарника
+        val savedXray = settingsRepo.getString("xray_path")
+        val isSavedXrayInvalid = savedXray.isNotBlank() && (!java.io.File(savedXray).exists() || DesktopBinaryResolver.isTemporaryMountPath(savedXray))
+        if (isSavedXrayInvalid) {
+            settingsRepo.setString("xray_path", "")
         }
-        // Автопоиск v2w-scan бинарника, если не задан
-        if (v2wScanPath.value.isBlank()) {
-            val detectedScanner = V2WCoreScanner.findV2WScanExecutable()
-            if (detectedScanner != null) {
-                v2wScanPath.value = detectedScanner.absolutePath
-                settingsRepo.setString("v2w_scan_path", detectedScanner.absolutePath)
-                GeekModeLogger.log("DesktopApp", "Обнаружено ядро v2w-core сканера: ${detectedScanner.absolutePath}")
+        val effectiveXray = if (isSavedXrayInvalid) null else savedXray.ifBlank { null }
+        val detectedXray = xrayRunner.findXrayExecutable(effectiveXray)
+        if (detectedXray != null) {
+            xrayBinaryPath.value = detectedXray.absolutePath
+            if (!DesktopBinaryResolver.isTemporaryMountPath(detectedXray.absolutePath) && savedXray.isBlank()) {
+                settingsRepo.setString("xray_path", detectedXray.absolutePath)
             }
+            GeekModeLogger.log("DesktopApp", "Обнаружен исполняемый файл Xray: ${detectedXray.absolutePath}")
+        }
+
+        // Автопоиск v2w-scan / v2w-core бинарника
+        val savedV2w = settingsRepo.getString("v2w_scan_path")
+        val isSavedV2wInvalid = savedV2w.isNotBlank() && (!java.io.File(savedV2w).exists() || DesktopBinaryResolver.isTemporaryMountPath(savedV2w))
+        if (isSavedV2wInvalid) {
+            settingsRepo.setString("v2w_scan_path", "")
+        }
+        val effectiveV2w = if (isSavedV2wInvalid) null else savedV2w.ifBlank { null }
+        val detectedScanner = V2WCoreScanner.findV2WScanExecutable(effectiveV2w)
+        if (detectedScanner != null) {
+            v2wScanPath.value = detectedScanner.absolutePath
+            if (!DesktopBinaryResolver.isTemporaryMountPath(detectedScanner.absolutePath) && savedV2w.isBlank()) {
+                settingsRepo.setString("v2w_scan_path", detectedScanner.absolutePath)
+            }
+            GeekModeLogger.log("DesktopApp", "Обнаружено ядро сканера: ${detectedScanner.absolutePath}")
         }
 
         // Загрузка и инициализация подписок
@@ -1364,7 +1378,7 @@ class DesktopAppState(
             val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
-                xrayBinaryPath = xrayBinaryPath.value.ifBlank { null },
+                xrayBinaryPath = xrayBinaryPath.value.takeIf { it.isNotBlank() && java.io.File(it).exists() },
                 httpPort = currentHttpPort,
                 socksPort = currentSocksPort,
                 listenAddress = listenAddr,
@@ -1601,7 +1615,7 @@ class DesktopAppState(
         scope.launch {
             isPingingVip.value = true
             GeekModeLogger.log("GeekMode", "HTTP 204 верификация ${vips.size} VIP узлов через Xray...")
-            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
             for (guid in vips) {
                 val profile = serverRepo.getServerConfig(guid) ?: continue
                 val res = DesktopProfileVerifier.verifyProfile(
@@ -1625,8 +1639,8 @@ class DesktopAppState(
             isFindingVip.value = true
             val limit = vipCacheLimit.value
             GeekModeLogger.log("GeekMode", "Поиск новых VIP узлов (v2w-core + Xray HTTP 204 + скорость, лимит $limit)...")
-            val v2wPath = settingsRepo.getString("v2w_scan_path").ifBlank { null }
-            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+            val v2wPath = settingsRepo.getString("v2w_scan_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
+            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
 
             V2WCoreScanner.runStreamingScan(
                 servers = all,
@@ -1869,8 +1883,10 @@ class DesktopAppState(
         domainSplitTunnelingEnabled.value = domainSplitVal
 
         settingsRepo.setString("subscription_url", subUrl)
-        settingsRepo.setString("xray_path", xrayPath)
-        settingsRepo.setString("v2w_scan_path", v2wPath)
+        val persistXrayPath = if (DesktopBinaryResolver.isTemporaryMountPath(xrayPath)) "" else xrayPath
+        val persistV2wPath = if (DesktopBinaryResolver.isTemporaryMountPath(v2wPath)) "" else v2wPath
+        settingsRepo.setString("xray_path", persistXrayPath)
+        settingsRepo.setString("v2w_scan_path", persistV2wPath)
         settingsRepo.setHttpPort(effectiveHttp)
         settingsRepo.setSocksPort(effectiveSocks)
         settingsRepo.setInt("pref_local_proxy_port", effectiveSocks)

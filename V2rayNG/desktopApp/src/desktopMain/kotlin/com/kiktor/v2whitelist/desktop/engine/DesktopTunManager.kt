@@ -61,50 +61,7 @@ object DesktopTunManager {
      * 4. Переменная окружения PATH
      */
     fun findTun2SocksExecutable(customPath: String? = null): File? {
-        if (!customPath.isNullOrBlank()) {
-            val f = File(customPath)
-            return if (f.exists() && f.canExecute()) f else null
-        }
-
-        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-        val isMac = System.getProperty("os.name").lowercase().contains("mac")
-        val execName = if (isWindows) "tun2socks.exe" else "tun2socks"
-
-        val appResDir = System.getProperty("compose.application.resources.dir")?.let { File(it) }
-        val appDataBin = when {
-            isWindows -> System.getenv("LOCALAPPDATA")?.let { File(it, "v2whitelist/bin") }
-            isMac -> File(System.getProperty("user.home"), "Library/Application Support/v2whitelist/bin")
-            else -> File(System.getProperty("user.home"), ".config/v2whitelist/bin")
-        }
-
-        val candidates = listOfNotNull(
-            appResDir?.let { File(it, execName) },
-            appResDir?.let { File(it, "bin/$execName") },
-            appDataBin?.let { File(it, execName) },
-            File("bin", execName),
-            File("../bin", execName),
-            File("../../bin", execName),
-            File("V2rayNG/desktopApp/bin", execName),
-            File(execName),
-            File("/usr/local/bin", execName),
-            File("/usr/bin", execName)
-        )
-
-        for (cand in candidates) {
-            if (cand.exists() && cand.canExecute()) {
-                return cand.canonicalFile
-            }
-        }
-
-        val pathEnv = System.getenv("PATH") ?: ""
-        for (dir in pathEnv.split(File.pathSeparator)) {
-            val cand = File(dir, execName)
-            if (cand.exists() && cand.canExecute()) {
-                return cand.canonicalFile
-            }
-        }
-
-        return null
+        return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.tun2socksBinaryNames, customPath)
     }
 
     /**
@@ -178,6 +135,7 @@ object DesktopTunManager {
 
         try {
             val pb = ProcessBuilder(tunArgs).redirectErrorStream(true)
+            binary.parentFile?.let { if (it.exists()) pb.directory(it) }
             val proc = pb.start()
             tunProcess = proc
 
