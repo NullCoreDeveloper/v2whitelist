@@ -1,6 +1,6 @@
 module github.com/kiktor/v2w-core
 
-go 1.27
+go 1.26.0
 
 require (
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e
@@ -12,7 +12,7 @@ require (
 	github.com/pires/go-proxyproto v0.15.0
 	github.com/refraction-networking/utls v1.8.3-0.20260301010127-aa6edf4b11af
 	github.com/vishvananda/netlink v1.3.1
-	github.com/xtls/reality v0.0.0-20261014101318-83f621788ca8
+	github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
 	golang.org/x/crypto v0.57.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261020153306-9f2b28d4331a
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842

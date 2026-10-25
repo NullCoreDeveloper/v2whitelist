@@ -59,7 +59,7 @@ jobs:
         if: steps.cache-v2ray.outputs.cache-hit != 'true'
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.24.x'
 
       - name: Build Unified libv2ray (Original Core + Scanner Core)
         if: steps.cache-v2ray.outputs.cache-hit != 'true'
@@ -69,7 +69,7 @@ jobs:
           go install golang.org/x/mobile/cmd/gobind@latest || (sleep 5 && go install golang.org/x/mobile/cmd/gobind@latest)
           gomobile init
           
-          # Patch anet to fix Go 1.26 incompatibility
+          # Patch anet to fix Go compatibility
           pushd AndroidLibXrayLite
           go mod download
           popd
@@ -96,7 +96,8 @@ jobs:
           go mod edit -require github.com/kiktor/v2w-core@v0.0.0
           go mod edit -replace "github.com/kiktor/v2w-core=$V2W_ABS"
           GOWORK=off go mod tidy
-          GOWORK=off gomobile bind -v -androidapi 21 -target=android \
+          GOWORK=off gomobile bind -v -target=android -androidapi 24 -trimpath \
+            -ldflags='-s -w -buildid= -checklinkname=0' \
             -o ../V2rayNG/app/libs/libv2ray.aar \
             .
           popd
