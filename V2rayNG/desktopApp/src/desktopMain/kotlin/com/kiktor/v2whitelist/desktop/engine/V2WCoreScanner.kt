@@ -153,9 +153,16 @@ object V2WCoreScanner {
         var successCount = 0
         var failCount = 0
 
-        val process = ProcessBuilder(cmd)
-            .redirectErrorStream(false)
-            .start()
+        val process: Process
+        try {
+            process = ProcessBuilder(cmd)
+                .redirectErrorStream(false)
+                .start()
+        } catch (e: Exception) {
+            val errMsg = "Ошибка запуска ядра сканирования (${binary.name}): ${e.message}"
+            GeekModeLogger.log("v2w-core", errMsg)
+            return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
+        }
 
         synchronized(processLock) {
             activeProcess = process

@@ -507,8 +507,10 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
     )
 }
 
-fun main() = application {
-    val state = remember { DesktopAppState() }
+fun main() {
+    System.setProperty("jdk.lang.Process.launchMechanism", "vfork")
+    application {
+        val state = remember { DesktopAppState() }
     var isWindowVisible by remember { mutableStateOf(true) }
     val coreState by state.coreState.collectAsState()
     val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
@@ -601,3 +603,5 @@ fun main() = application {
         App(state = state)
     }
 }
+}
+

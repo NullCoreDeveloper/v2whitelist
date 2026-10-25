@@ -48,7 +48,10 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.kiktor.v2whitelist.desktop.MainKt"
-        jvmArgs += listOf("-Djdk.gtk.version=3")
+        jvmArgs += listOf(
+            "-Djdk.gtk.version=3",
+            "-Djdk.lang.Process.launchMechanism=vfork"
+        )
 
         nativeDistributions {
             targetFormats(
@@ -124,6 +127,7 @@ tasks.matching {
                 fi
                 exec "${'$'}JAVA_EXEC" \
                     -Djdk.gtk.version=3 \
+                    -Djdk.lang.Process.launchMechanism=vfork \
                     -Dskiko.library.path="${'$'}APPDIR/lib/app" \
                     -Dcompose.application.resources.dir="${'$'}APPDIR/lib/app/resources" \
                     -Dcompose.application.configure.swing.globals=true \
