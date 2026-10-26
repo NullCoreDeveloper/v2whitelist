@@ -35,13 +35,13 @@ jobs:
 
       - name: Install NDK
         run: |
-          PREINSTALLED_NDK=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | sort -V | tail -n 1)
+          PREINSTALLED_NDK=$(ls -d $ANDROID_HOME/ndk/27.* $ANDROID_HOME/ndk/26.* $ANDROID_HOME/ndk/28.* 2>/dev/null | sort -V | tail -n 1)
           if [ -n "$PREINSTALLED_NDK" ] && [ -d "$PREINSTALLED_NDK" ]; then
-            echo "Используется предустановленный NDK: $PREINSTALLED_NDK"
+            echo "Используется стабильный предустановленный NDK: $PREINSTALLED_NDK"
             echo "ANDROID_NDK_HOME=$PREINSTALLED_NDK" >> $GITHUB_ENV
             echo "NDK_HOME=$PREINSTALLED_NDK" >> $GITHUB_ENV
           else
-            echo "Предустановленный NDK не найден, установка NDK через sdkmanager..."
+            echo "Стабильный NDK не найден, установка NDK 27.2.12479018 через sdkmanager..."
             NDK_VER="27.2.12479018"
             for i in 1 2 3; do
               echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;$NDK_VER" && break || sleep 10

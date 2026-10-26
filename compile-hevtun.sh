@@ -23,6 +23,7 @@ pushd "$TMPDIR"
 echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
 
 ln -s "$__dir/hev-socks5-tunnel" jni/hev-socks5-tunnel
+sed -i 's/#define LWIP_ERRNO_INCLUDE <errno.h>/#define LWIP_ERRNO_STDINCLUDE 1\n#define LWIP_ERRNO_INCLUDE <errno.h>/' "$__dir/hev-socks5-tunnel/third-part/lwip/src/ports/unix/include/cc.h" 2>/dev/null || true
 
 "$NDK_HOME/ndk-build" \
     NDK_PROJECT_PATH=. \
@@ -31,7 +32,7 @@ ln -s "$__dir/hev-socks5-tunnel" jni/hev-socks5-tunnel
     APP_PLATFORM=android-24 \
     NDK_LIBS_OUT="$TMPDIR/libs" \
     NDK_OUT="$TMPDIR/obj" \
-    "APP_CFLAGS=-O3 -DPKGNAME=com/v2ray/ang/service" \
+    "APP_CFLAGS=-O3 -DPKGNAME=com/v2ray/ang/service -DLWIP_ERRNO_STDINCLUDE=1" \
     "APP_LDFLAGS=-Wl,--build-id=none -Wl,--hash-style=gnu" \
 
 mkdir -p "$__dir/libs"
