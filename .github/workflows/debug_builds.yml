@@ -308,7 +308,13 @@ jobs:
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
             pushd V2rayNG/desktopApp/build/compose/binaries/main/app
-            zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
+            if command -v 7z >/dev/null 2>&1; then
+              7z a -tzip "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
+            elif command -v zip >/dev/null 2>&1; then
+              zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
+            else
+              python3 -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist || python -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
+            fi
             popd
           fi
           

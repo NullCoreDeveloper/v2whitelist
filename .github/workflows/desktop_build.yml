@@ -134,7 +134,13 @@ jobs:
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
             if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app" ]; then
               pushd V2rayNG/desktopApp/build/compose/binaries/main/app
-              zip -r ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+              if command -v 7z >/dev/null 2>&1; then
+                7z a -tzip ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+              elif command -v zip >/dev/null 2>&1; then
+                zip -r ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+              else
+                python3 -m zipfile -c ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip . || python -m zipfile -c ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+              fi
               popd
             fi
           fi
