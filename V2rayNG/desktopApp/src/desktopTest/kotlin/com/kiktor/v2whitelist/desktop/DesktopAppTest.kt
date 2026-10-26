@@ -146,6 +146,13 @@ class DesktopAppTest {
     }
 
     @Test
+    fun testStorageManagerBaseDir() {
+        val baseDir = com.kiktor.v2whitelist.desktop.data.DesktopStorageManager.baseDir
+        assertNotNull(baseDir)
+        assertTrue(baseDir.exists())
+    }
+
+    @Test
     fun testDesktopSmartConnectManagerVipAndFlow() = runTest {
         val serverRepo = InMemoryServerRepository()
         val settingsRepo = InMemorySettingsRepository()
@@ -220,6 +227,25 @@ class DesktopAppTest {
         assertEquals(false, settingsRepo.getBoolean("subscription_update_on_startup"))
         assertEquals(true, settingsRepo.getBoolean("subscription_update_only_via_proxy"))
         assertEquals(5, settingsRepo.getInt("subscription_threads"))
+    }
+
+    @Test
+    fun testDefaultSubscriptionsAllEnabledInAutoMode() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val runner = XrayDesktopRunner()
+
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = runner,
+            autoCheckNetworkOnStart = false
+        )
+
+        val subs = state.subscriptions.value
+        assertTrue(subs.isNotEmpty(), "Subscriptions must not be empty")
+        assertTrue(subs.size >= 20, "Should have all prepopulated subscriptions")
+        assertTrue(subs.all { it.enabled }, "All default subscriptions must be enabled in Auto mode like on Android")
     }
 }
 

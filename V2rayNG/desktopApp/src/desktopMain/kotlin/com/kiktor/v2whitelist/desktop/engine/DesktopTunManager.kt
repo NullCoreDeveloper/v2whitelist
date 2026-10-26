@@ -92,6 +92,13 @@ object DesktopTunManager {
 
         GeekModeLogger.log("TUN", "Используется tun2socks: ${binary.absolutePath}")
 
+        if (isWindows && !isWindowsAdmin()) {
+            GeekModeLogger.log(
+                "TUN",
+                "Предупреждение: для создания интерфейса Wintun и настройки сетевых маршрутов на Windows требуются права Администратора («Запуск от имени администратора»)."
+            )
+        }
+
         // 1. Определение шлюза и сетевого интерфейса по умолчанию
         val (gateway, physicalDev) = detectDefaultGateway()
         if (gateway == null || physicalDev == null) {
@@ -217,10 +224,17 @@ object DesktopTunManager {
                         if (routeRes.first == 0) {
                             configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
                             GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к серверу: $serverIp -> $gateway")
+                        } else {
+                            GeekModeLogger.log("TUN", "Windows: Предупреждение при добавлении маршрута к серверу: ${routeRes.second}")
                         }
                     }
-                    runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1")
-                    runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1")
+                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1")
+                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1")
+                    if (r1.first != 0 || r2.first != 0) {
+                        GeekModeLogger.log("TUN", "Windows: Сбой установки маршрутов TUN (требуются права Администратора): ${r1.second} / ${r2.second}")
+                        stopSync(null)
+                        return false
+                    }
                 }
 
                 isMac -> {
@@ -423,6 +437,20 @@ object DesktopTunManager {
             }
         } catch (e: Exception) {
             -1 to (e.message ?: "Execution error")
+        }
+    }
+
+    /**
+     * Проверяет, запущено ли приложение с правами Администратора на Windows.
+     * Быстрая и надежная проверка через команду net session (код возврата 0 при повышенных правах).
+     */
+    fun isWindowsAdmin(): Boolean {
+        if (!isWindows) return false
+        return try {
+            val (code, _) = runCommand("cmd", "/c", "net session")
+            code == 0
+        } catch (_: Exception) {
+            true // При сомнениях не блокируем заранее
         }
     }
 }

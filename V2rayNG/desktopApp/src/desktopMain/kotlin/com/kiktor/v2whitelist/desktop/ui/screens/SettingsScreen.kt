@@ -475,6 +475,15 @@ fun SettingsScreen(
                 value = xrayPathInput,
                 onValueChange = { xrayPathInput = it },
                 label = { Text("Путь к исполняемому файлу Xray") },
+                placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                supportingText = {
+                    val activePath = state.xrayBinaryPath.value
+                    if (activePath.isNotBlank()) {
+                        Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Text("Оставьте пустым для встроенного ядра (автопоиск)")
+                    }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -482,7 +491,16 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = v2wPathInput,
                 onValueChange = { v2wPathInput = it },
-                label = { Text("Путь к бинарнику v2w-scan") },
+                label = { Text("Путь к ядру сканера (v2w-scan / v2w-core)") },
+                placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                supportingText = {
+                    val activePath = state.v2wScanPath.value
+                    if (activePath.isNotBlank()) {
+                        Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Text("Оставьте пустым для встроенного ядра (автопоиск)")
+                    }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

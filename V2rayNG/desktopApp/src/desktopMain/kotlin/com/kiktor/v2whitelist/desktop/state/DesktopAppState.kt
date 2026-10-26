@@ -422,10 +422,14 @@ class DesktopAppState(
             emptyList()
         }
 
+        val autoSubsSynced = settingsRepo.getBoolean("pref_auto_subs_synced_v3", false)
+        val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+
         // Если список пуст, наполняем встроенными (за исключением тех, что пользователь явно удалял)
         val initialSubs = if (loadedList.isEmpty()) {
             val defaults = DefaultSubscriptions.PREPOPULATED_SUBS.filter { !removedSet.contains(it.id) }
             saveSubscriptionsToStorage(defaults)
+            settingsRepo.setBoolean("pref_auto_subs_synced_v3", true)
             defaults
         } else {
             // Добавляем новые предустановленные, если появились
@@ -433,13 +437,22 @@ class DesktopAppState(
             val missingDefaults = DefaultSubscriptions.PREPOPULATED_SUBS.filter {
                 !existingIds.contains(it.id) && !removedSet.contains(it.id)
             }
-            if (missingDefaults.isNotEmpty()) {
-                val merged = loadedList + missingDefaults
-                saveSubscriptionsToStorage(merged)
-                merged
-            } else {
-                loadedList
+            var merged = loadedList + missingDefaults
+
+            // Миграция: в авто-режиме (как на Android) все готовые подписки должны быть активны
+            if (!autoSubsSynced) {
+                merged = merged.map { sub ->
+                    if (defaultIds.contains(sub.id) && !removedSet.contains(sub.id)) {
+                        sub.copy(enabled = true)
+                    } else {
+                        sub
+                    }
+                }
+                settingsRepo.setBoolean("pref_auto_subs_synced_v3", true)
             }
+
+            saveSubscriptionsToStorage(merged)
+            merged
         }
 
         _subscriptions.value = initialSubs
@@ -1432,7 +1445,17 @@ class DesktopAppState(
                             isSystemProxyActive.value = false
                         }
                     } else {
-                        GeekModeLogger.log("TUN", "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав). Включен системный прокси как резерв.")
+                        val reason = if (DesktopTunManager.isWindows) {
+                            "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
+                        } else {
+                            "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав sudo)."
+                        }
+                        GeekModeLogger.log("TUN", "$reason Включен системный прокси как резерв.")
+                        clipboardNotice.value = if (DesktopTunManager.isWindows) {
+                            "Для режима TUN запустите приложение от имени администратора. Включен системный прокси."
+                        } else {
+                            "Для режима TUN требуются root права. Включен системный прокси."
+                        }
                         if (autoEnableSystemProxy.value) {
                             DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                             isSystemProxyActive.value = true

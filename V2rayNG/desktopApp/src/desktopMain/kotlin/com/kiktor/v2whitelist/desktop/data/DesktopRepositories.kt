@@ -42,11 +42,77 @@ internal object DesktopStorageManager {
         ignoreUnknownKeys = true
     }
 
-    private val baseDir: File by lazy {
+    private val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
+    private val isMac = System.getProperty("os.name")?.lowercase()?.contains("mac") == true
+
+    private fun getAppCandidateDirs(): List<File> {
+        val list = mutableListOf<File>()
+        System.getProperty("app.dir")?.let { list.add(File(it)) }
+        System.getProperty("compose.application.resources.dir")?.let { res ->
+            val resDir = File(res)
+            resDir.parentFile?.parentFile?.let { list.add(it) }
+        }
+        System.getProperty("java.home")?.let { jh ->
+            val jHome = File(jh)
+            jHome.parentFile?.let { list.add(it) }
+            jHome.parentFile?.parentFile?.let { list.add(it) }
+        }
+        runCatching {
+            DesktopStorageManager::class.java.protectionDomain?.codeSource?.location?.toURI()?.let { uri ->
+                val f = File(uri)
+                val jarDir = if (f.isDirectory) f else f.parentFile
+                jarDir?.parentFile?.let { list.add(it) }
+            }
+        }
+        list.add(File("."))
+        return list.filter { it.exists() }
+    }
+
+    /**
+     * Определяет, активно ли портативное хранилище:
+     * если в каталоге приложения есть папка `data` или маркер `.portable` / `portable`
+     * или системное свойство `v2w.portable=true`.
+     */
+    val isPortableMode: Boolean by lazy {
+        if (System.getProperty("v2w.portable") == "true") return@lazy true
+        val candidateDirs = getAppCandidateDirs()
+        candidateDirs.any { dir ->
+            File(dir, "data").isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists()
+        }
+    }
+
+    val baseDir: File by lazy {
+        val appDirs = getAppCandidateDirs()
+        for (dir in appDirs) {
+            val dataDir = File(dir, "data")
+            if (dataDir.isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists() || System.getProperty("v2w.portable") == "true") {
+                if (!dataDir.exists()) dataDir.mkdirs()
+                return@lazy dataDir
+            }
+        }
+
         val userHome = System.getProperty("user.home") ?: "."
-        val dir = File(userHome, ".config/v2whitelist")
-        if (!dir.exists()) dir.mkdirs()
-        dir
+        val standardDir = when {
+            isWindows -> {
+                val localAppData = System.getenv("LOCALAPPDATA")
+                val legacyConfig = File(userHome, ".config/v2whitelist")
+                if (localAppData != null) {
+                    val appDataDir = File(localAppData, "v2whitelist")
+                    if (!appDataDir.exists() && legacyConfig.exists()) {
+                        legacyConfig
+                    } else {
+                        appDataDir
+                    }
+                } else {
+                    File(userHome, "AppData/Local/v2whitelist")
+                }
+            }
+            isMac -> File(userHome, "Library/Application Support/v2whitelist")
+            else -> File(userHome, ".config/v2whitelist")
+        }
+
+        if (!standardDir.exists()) standardDir.mkdirs()
+        standardDir
     }
 
     val serversFile: File get() = File(baseDir, "servers.json")

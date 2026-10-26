@@ -33,7 +33,7 @@ object DefaultSubscriptions {
                 "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt"
             ).joinToString("|"),
             groupRegex = "\\[(BL)\\]",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
@@ -42,7 +42,7 @@ object DefaultSubscriptions {
             name = "RKP (Анти-РосКомПозор: Белые списки)",
             url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl",
             groupRegex = "(Неизвестно)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -50,14 +50,14 @@ object DefaultSubscriptions {
             name = "RKP (Анти-РосКомПозор: Черные списки)",
             url = "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl",
             groupRegex = "(Неизвестно)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
             id = "def_aetris",
             name = "AetrisVPN (Сборник: Резервные + YouTube)",
             url = "https://raw.githubusercontent.com/flaafix/AetrisVPN/main/AetrisVPN.txt",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -65,7 +65,7 @@ object DefaultSubscriptions {
             name = "VLESS-PO-GRIBI (Альтернативные маршруты / Обход)",
             url = "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
             groupRegex = "(@[A-Za-z0-9_]+|SERDNS\\s*VIP|t\\.me/[A-Za-z0-9_]+)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -77,7 +77,7 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -90,7 +90,7 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt"
             ).joinToString("|"),
             groupRegex = "\\[(🏳️LTE|LTE)\\]",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -103,7 +103,7 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt"
             ).joinToString("|"),
             groupRegex = "\\[(🏴BL|BL)\\]",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -113,7 +113,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-001.txt",
                 "https://warp-gen.cyb-portal.org/CP-001"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -123,7 +123,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-002.txt",
                 "https://warp-gen.cyb-portal.org/CP-002"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -134,7 +134,7 @@ object DefaultSubscriptions {
                 "https://warp-gen.cyb-portal.org/CP-035"
             ).joinToString("|"),
             groupRegex = "(?i)(White\\s*List)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -144,7 +144,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-006.txt",
                 "https://warp-gen.cyb-portal.org/CP-006"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -154,7 +154,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-008.txt",
                 "https://warp-gen.cyb-portal.org/CP-008"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -165,7 +165,7 @@ object DefaultSubscriptions {
                 "https://warp-gen.cyb-portal.org/CP-042"
             ).joinToString("|"),
             groupRegex = "(?i)(White\\s*Keys)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -181,7 +181,7 @@ object DefaultSubscriptions {
                 "https://xn--e1apcp8cq.xn--p1ai/whitelist"
             ).joinToString("|"),
             groupRegex = "(CIDR-[A-Za-z0-9_-]+|SNI-[A-Za-z0-9_-]+)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -197,7 +197,7 @@ object DefaultSubscriptions {
                 "https://xn--e1apcp8cq.xn--p1ai/other"
             ).joinToString("|"),
             groupRegex = "(☁️\\s*Cloudflare|Cloudflare|VLESS|HYSTERIA2|VMESS|TROJAN|SS)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -212,7 +212,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/gemini",
                 "https://xn--e1apcp8cq.xn--p1ai/gemini"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -227,7 +227,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/youtube",
                 "https://xn--e1apcp8cq.xn--p1ai/youtube"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -242,7 +242,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/ytm",
                 "https://xn--e1apcp8cq.xn--p1ai/ytm"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
         ),
         CustomSubData(
@@ -255,7 +255,7 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
             ).joinToString("|"),
             groupRegex = "(CF中转|☁️\\s*Cloudflare|Cloudflare|\\[BL\\]|BL)",
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
         CustomSubData(
@@ -267,7 +267,7 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list",
                 "https://cdn.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list"
             ).joinToString("|"),
-            enabled = false,
+            enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         )
     )
