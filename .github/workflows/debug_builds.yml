@@ -301,16 +301,15 @@ jobs:
           # Windows: MSI и Portable ZIP
           if [ "${{ matrix.platform }}" == "windows" ]; then
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/data
-              touch V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/.portable
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
-              pushd V2rayNG/desktopApp/build/compose/binaries/main/app
-              zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
-              popd
-            fi
+            mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
+            mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
+            mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/data
+            touch V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/.portable
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
+            pushd V2rayNG/desktopApp/build/compose/binaries/main/app
+            zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist
+            popd
           fi
           
           # macOS: DMG и PKG
@@ -321,7 +320,11 @@ jobs:
 
           cd release-desktop
           ls -la
-          sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          fi
 
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4
