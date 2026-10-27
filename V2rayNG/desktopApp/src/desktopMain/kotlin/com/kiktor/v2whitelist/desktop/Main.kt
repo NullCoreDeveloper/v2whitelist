@@ -27,6 +27,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import dev.nucleusframework.composenativetray.tray.api.Tray
+import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.state.DesktopTab
@@ -509,6 +510,10 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
 
 fun main() {
     System.setProperty("jdk.lang.Process.launchMechanism", "vfork")
+    if (!DesktopStorageManager.acquireSingleInstanceLock()) {
+        System.err.println("Экземпляр приложения ПроБел (v2whitelist) уже запущен.")
+        return
+    }
     application {
         val state = remember { DesktopAppState() }
     var isWindowVisible by remember { mutableStateOf(true) }

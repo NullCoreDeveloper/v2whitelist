@@ -99,10 +99,12 @@ internal object DesktopStorageManager {
                 if (localAppData != null) {
                     val appDataDir = File(localAppData, "v2whitelist")
                     if (!appDataDir.exists() && legacyConfig.exists()) {
-                        legacyConfig
-                    } else {
-                        appDataDir
+                        try {
+                            legacyConfig.copyRecursively(appDataDir, overwrite = true)
+                            legacyConfig.deleteRecursively()
+                        } catch (_: Exception) {}
                     }
+                    appDataDir
                 } else {
                     File(userHome, "AppData/Local/v2whitelist")
                 }
@@ -113,6 +115,42 @@ internal object DesktopStorageManager {
 
         if (!standardDir.exists()) standardDir.mkdirs()
         standardDir
+    }
+
+    private var lockFileChannel: java.nio.channels.FileChannel? = null
+    private var instanceLock: java.nio.channels.FileLock? = null
+
+    /**
+     * Захватывает межпроцессную блокировку единственного экземпляра приложения.
+     * Предотвращает запуск второй копии (конфликты портов 10808/10809 и перезапись настроек).
+     */
+    fun acquireSingleInstanceLock(): Boolean {
+        return try {
+            val lockFile = File(baseDir, ".app_instance.lock")
+            if (!lockFile.parentFile.exists()) {
+                lockFile.parentFile.mkdirs()
+            }
+            val raf = java.io.RandomAccessFile(lockFile, "rw")
+            val channel = raf.channel
+            val lock = channel.tryLock()
+            if (lock != null) {
+                lockFileChannel = channel
+                instanceLock = lock
+                Runtime.getRuntime().addShutdownHook(Thread {
+                    runCatching {
+                        instanceLock?.release()
+                        lockFileChannel?.close()
+                        lockFile.delete()
+                    }
+                })
+                true
+            } else {
+                raf.close()
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     val serversFile: File get() = File(baseDir, "servers.json")

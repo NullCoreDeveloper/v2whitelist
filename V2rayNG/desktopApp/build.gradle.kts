@@ -81,6 +81,7 @@ compose.desktop {
             description = "ПроБел — v2whitelist Desktop"
             vendor = "NullCore"
             copyright = "© 2026 NullCore"
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("package-resources"))
 
             linux {
                 iconFile.set(project.file("src/desktopMain/resources/icon.png"))
@@ -112,8 +113,32 @@ compose.desktop {
     }
 }
 
+tasks.matching { it.name == "prepareAppResources" }.configureEach {
+    doFirst {
+        val resDir = file("package-resources")
+        val binDir = project.file("bin")
+        val assetsDir = project.file("assets")
+        val destBin = File(resDir, "bin").apply { mkdirs() }
+        val destAssets = File(resDir, "assets").apply { mkdirs() }
+        if (binDir.exists()) {
+            binDir.copyRecursively(destBin, overwrite = true)
+            destBin.listFiles()?.forEach { it.setExecutable(true) }
+        }
+        if (assetsDir.exists()) {
+            assetsDir.copyRecursively(destAssets, overwrite = true)
+        }
+    }
+}
+
 tasks.matching {
-    it.name in listOf("createDistributable", "packageAppImage", "packageReleaseAppImage", "packageDistributionForCurrentOS")
+    it.name in listOf(
+        "createDistributable",
+        "createReleaseDistributable",
+        "packageAppImage",
+        "packageReleaseAppImage",
+        "packageDistributionForCurrentOS",
+        "packageReleaseDistributionForCurrentOS"
+    )
 }.configureEach {
     doLast {
         val os = org.gradle.internal.os.OperatingSystem.current()
@@ -193,6 +218,9 @@ tasks.matching {
                 assetsDir.copyRecursively(destAssets, overwrite = true)
                 assetsDir.copyRecursively(resAssets, overwrite = true)
             }
+            // Поддержка портативного режима из коробки
+            File(appDir, "data").mkdirs()
+            File(appDir, ".portable").createNewFile()
         }
 
         val macAppDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist.app").get().asFile

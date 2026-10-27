@@ -240,7 +240,7 @@ jobs:
         shell: bash
         run: |
           cd V2rayNG
-          ./gradlew :desktopApp:packageDistributionForCurrentOS -PpackageVersion=0.0.1 --no-daemon --stacktrace
+          ./gradlew :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS -PpackageVersion=0.0.1 --no-daemon --stacktrace
 
       - name: Package Linux AppImage
         if: matrix.platform == 'linux'
@@ -312,9 +312,13 @@ jobs:
             mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
             mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
             mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/data
+            mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin
+            mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets
             touch V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/.portable
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin/ || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets/ || true
             pushd V2rayNG/desktopApp/build/compose/binaries/main/app
             if command -v 7z >/dev/null 2>&1; then
               7z a -tzip "$GITHUB_WORKSPACE/release-desktop/v2whitelist-v0.0.1-windows-x64-portable.zip" v2whitelist

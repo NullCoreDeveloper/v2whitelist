@@ -70,6 +70,31 @@ object DesktopBinaryResolver {
         val userHome = System.getProperty("user.home") ?: "."
         val dirs = LinkedHashSet<File>()
 
+        // 0. Нативный лаунчер jpackage (MSI инсталлятор Windows, DEB, AppImage, DMG)
+        listOfNotNull(
+            System.getProperty("jdk.jpackage.app-path"),
+            System.getProperty("jpackage.app-path")
+        ).forEach { appPath ->
+            val exeFile = File(appPath)
+            val exeDir = if (exeFile.isDirectory) exeFile else exeFile.parentFile
+            if (exeDir != null && exeDir.exists()) {
+                dirs.add(File(exeDir, "bin"))
+                dirs.add(File(exeDir, "app/resources/bin"))
+                dirs.add(File(exeDir, "lib/app/resources/bin"))
+                dirs.add(File(exeDir, "app/resources"))
+                dirs.add(File(exeDir, "lib/app/resources"))
+                dirs.add(exeDir)
+                exeDir.parentFile?.let { installRoot ->
+                    dirs.add(File(installRoot, "bin"))
+                    dirs.add(File(installRoot, "app/resources/bin"))
+                    dirs.add(File(installRoot, "lib/app/resources/bin"))
+                    dirs.add(File(installRoot, "app/resources"))
+                    dirs.add(File(installRoot, "lib/app/resources"))
+                    dirs.add(installRoot)
+                }
+            }
+        }
+
         // 1. AppImage монтирование (Linux)
         System.getenv("APPDIR")?.let { appdir ->
             val f = File(appdir)
@@ -245,6 +270,30 @@ object DesktopBinaryResolver {
 
         val userHome = System.getProperty("user.home") ?: "."
         val dirs = LinkedHashSet<File>()
+
+        // Нативный лаунчер jpackage
+        listOfNotNull(
+            System.getProperty("jdk.jpackage.app-path"),
+            System.getProperty("jpackage.app-path")
+        ).forEach { appPath ->
+            val exeFile = File(appPath)
+            val exeDir = if (exeFile.isDirectory) exeFile else exeFile.parentFile
+            if (exeDir != null && exeDir.exists()) {
+                dirs.add(File(exeDir, "assets"))
+                dirs.add(File(exeDir, "app/resources/assets"))
+                dirs.add(File(exeDir, "lib/app/resources/assets"))
+                dirs.add(File(exeDir, "app/resources"))
+                dirs.add(File(exeDir, "lib/app/resources"))
+                dirs.add(exeDir)
+                exeDir.parentFile?.let { installRoot ->
+                    dirs.add(File(installRoot, "assets"))
+                    dirs.add(File(installRoot, "app/resources/assets"))
+                    dirs.add(File(installRoot, "lib/app/resources/assets"))
+                    dirs.add(File(installRoot, "app/resources"))
+                    dirs.add(File(installRoot, "lib/app/resources"))
+                }
+            }
+        }
 
         // Каталог рядом с найденным бинарником Xray
         xrayBinary?.parentFile?.let { xrayDir ->

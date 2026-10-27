@@ -116,7 +116,7 @@ jobs:
         shell: bash
         run: |
           cd V2rayNG
-          ./gradlew :desktopApp:packageDistributionForCurrentOS --no-daemon --stacktrace
+          ./gradlew :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS --no-daemon --stacktrace
 
       - name: Prepare Release Artifacts
         shell: bash
@@ -132,14 +132,24 @@ jobs:
           # Windows: MSI и Portable ZIP
           if [ "${{ matrix.platform }}" == "windows" ]; then
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
-            if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app" ]; then
+            if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist" ]; then
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/data
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin
+              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets
+              touch V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/.portable
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin/ || true
+              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets/ || true
               pushd V2rayNG/desktopApp/build/compose/binaries/main/app
               if command -v 7z >/dev/null 2>&1; then
-                7z a -tzip ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+                7z a -tzip "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
               elif command -v zip >/dev/null 2>&1; then
-                zip -r ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+                zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
               else
-                python3 -m zipfile -c ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip . || python -m zipfile -c ../../../../../../release-desktop/v2whitelist-windows-x64-portable.zip .
+                python3 -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist || python -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
               fi
               popd
             fi
