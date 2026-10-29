@@ -191,7 +191,7 @@ jobs:
           mkdir -p V2rayNG/desktopApp/bin
           pushd v2w-core
           CGO_ENABLED=0 GOOS=${{ matrix.platform }} GOARCH=${{ matrix.arch }} \
-            go build -trimpath -ldflags="-s -w" -o ../V2rayNG/desktopApp/bin/v2w-scan${{ matrix.binary_ext }} ./cmd/v2w-scan
+            go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o ../V2rayNG/desktopApp/bin/v2w-scan${{ matrix.binary_ext }} ./cmd/v2w-scan
           popd
           chmod +x V2rayNG/desktopApp/bin/* || true
 

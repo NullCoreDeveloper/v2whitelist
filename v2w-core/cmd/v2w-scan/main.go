@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kiktor/v2w-core/common/log"
 	"github.com/kiktor/v2w-core/common/net"
 	"github.com/kiktor/v2w-core/common/protocol"
 	"github.com/kiktor/v2w-core/common/session"
@@ -577,7 +578,12 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 	return config, streamSettings, dest, nil
 }
 
+var stdoutMu sync.Mutex
+
 func main() {
+	// Изолируем логи Xray в stderr, гарантируя чистый stdout для протокола сканирования
+	log.RegisterHandler(log.NewLogger(log.CreateStderrLogWriter()))
+
 	subUrl := flag.String("sub", "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt", "URL to fetch VLESS subscription from or local file path")
 	fromStdin := flag.Bool("stdin", false, "Read configuration links directly from stdin")
 	streamMode := flag.Bool("stream", false, "Stream successful nodes line-by-line as they respond")
@@ -720,8 +726,10 @@ func main() {
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
 				if *streamMode || *firstOnly {
+					stdoutMu.Lock()
 					fmt.Printf("SUCCESS\t%d\t%s\n", delayMs, linkStr)
 					_ = os.Stdout.Sync()
+					stdoutMu.Unlock()
 					if *firstOnly {
 						os.Exit(0)
 					}
@@ -732,7 +740,7 @@ func main() {
 			} else {
 				atomic.AddInt32(&failCount, 1)
 				if !*streamMode {
-					fmt.Printf("[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
+					fmt.Fprintf(os.Stderr, "[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
 				}
 			}
 		}(l)
@@ -740,8 +748,10 @@ func main() {
 
 	wg.Wait()
 	if *streamMode {
+		stdoutMu.Lock()
 		fmt.Printf("COMPLETE\t%d\t%d\n", successCount, failCount)
 		_ = os.Stdout.Sync()
+		stdoutMu.Unlock()
 	} else {
 		fmt.Printf("\n--- Scan Complete ---\nSuccess: %d\nFailed/Timeout/Unsupported: %d\n", successCount, failCount)
 		if len(successfulLinks) > 0 {

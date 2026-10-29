@@ -61,15 +61,18 @@ object V2WCoreScanner {
         timeoutSec: Int = 10,
         onNodeSuccess: suspend (guid: String, profile: ProfileItem, delayMs: Long) -> Boolean
     ): V2WScanSummary = withContext(Dispatchers.IO) {
-        val binary = findV2WScanExecutable(customBinaryPath)
+        val validCustom = customBinaryPath?.takeIf { File(it).exists() }
+        val binary = (validCustom?.let { findV2WScanExecutable(it) }) ?: findV2WScanExecutable(null)
         if (binary == null) {
-            val err = "Бинарник v2w-scan не найден. Скомпилируйте v2w-core или укажите путь в настройках."
+            val checkedDirs = DesktopBinaryResolver.getCandidateDirectories().map { it.absolutePath }
+            val err = "Бинарник v2w-scan не найден ни по указанному пути, ни в каталогах приложения: $checkedDirs"
             GeekModeLogger.log("v2w-core", err)
             return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
         }
 
         // Подготовка URL-ссылок и карты для обратного сопоставления
         val urlToNode = mutableMapOf<String, Pair<String, ProfileItem>>()
+        val endpointToNode = mutableMapOf<String, Pair<String, ProfileItem>>()
         val linksList = mutableListOf<String>()
 
         for (server in servers) {
@@ -83,6 +86,11 @@ object V2WCoreScanner {
                 if (hashIdx != -1) {
                     val baseUri = cleanUri.substring(0, hashIdx)
                     urlToNode[baseUri] = server
+                }
+                val host = server.second.server.orEmpty().trim().lowercase()
+                val port = server.second.serverPort.orEmpty().trim()
+                if (host.isNotEmpty() && port.isNotEmpty()) {
+                    endpointToNode["$host:$port"] = server
                 }
             }
         }
@@ -110,11 +118,16 @@ object V2WCoreScanner {
         var successCount = 0
         var failCount = 0
 
+        val pb = ProcessBuilder(cmd).redirectErrorStream(false)
+        binary.parentFile?.let { pDir ->
+            if (pDir.exists()) {
+                pb.directory(pDir)
+            }
+        }
+
         val process: Process
         try {
-            process = ProcessBuilder(cmd)
-                .redirectErrorStream(false)
-                .start()
+            process = pb.start()
         } catch (e: Exception) {
             val errMsg = "Ошибка запуска ядра сканирования (${binary.name}): ${e.message}"
             GeekModeLogger.log("v2w-core", errMsg)
@@ -142,21 +155,48 @@ object V2WCoreScanner {
             start()
         }
 
+        // Асинхронное вычитывание stderr в фоне во избежание deadlock из-за переполнения OS pipe буфера
+        val stderrReader = Thread({
+            try {
+                BufferedReader(InputStreamReader(process.errorStream, Charsets.UTF_8)).use { errReader ->
+                    var errLine: String? = null
+                    while (process.isAlive && errReader.readLine().also { errLine = it } != null) {
+                        val el = errLine?.trim().orEmpty()
+                        if (el.isNotEmpty()) {
+                            GeekModeLogger.log("v2w-core-err", el)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }, "v2w-scan-stderr-drainer").apply {
+            isDaemon = true
+            start()
+        }
+
         try {
             // Чтение потоковых результатов в реальном времени
             BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8)).use { reader ->
                 var line: String? = null
                 while (isActive && reader.readLine().also { line = it } != null) {
                     val l = line?.trim().orEmpty()
-                    if (l.startsWith("SUCCESS\t")) {
+                    val successIdx = l.indexOf("SUCCESS\t")
+                    val completeIdx = l.indexOf("COMPLETE\t")
+                    if (successIdx != -1) {
                         successCount++
-                        val parts = l.split("\t")
+                        val parts = l.substring(successIdx).split("\t")
                         if (parts.size >= 3) {
                             val delayMs = parts[1].toLongOrNull() ?: 0L
                             val configUrl = parts[2].trim()
 
                             val matched = urlToNode[configUrl]
                                 ?: urlToNode[configUrl.substringBefore('#')]
+                                ?: run {
+                                    runCatching {
+                                        val u = java.net.URI(configUrl)
+                                        val hp = "${u.host?.lowercase()}:${u.port}"
+                                        endpointToNode[hp]
+                                    }.getOrNull()
+                                }
 
                             if (matched != null) {
                                 GeekModeLogger.log("v2w-core", "Node responded: ${matched.second.remarks} (${delayMs}ms)")
@@ -168,19 +208,22 @@ object V2WCoreScanner {
                                 }
                             }
                         }
-                    } else if (l.startsWith("COMPLETE\t")) {
-                        val parts = l.split("\t")
+                    } else if (completeIdx != -1) {
+                        val parts = l.substring(completeIdx).split("\t")
                         if (parts.size >= 3) {
                             val totalSuccess = parts[1].toIntOrNull() ?: successCount
                             val totalFailed = parts[2].toIntOrNull() ?: 0
                             successCount = totalSuccess
                             failCount = totalFailed
                         }
+                    } else if (l.isNotEmpty()) {
+                        GeekModeLogger.log("v2w-core-out", l)
                     }
                 }
             }
         } finally {
             stdinWriter.interrupt()
+            stderrReader.interrupt()
             synchronized(processLock) {
                 if (activeProcess == process) {
                     activeProcess = null

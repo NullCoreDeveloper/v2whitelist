@@ -64,35 +64,48 @@ object DesktopBinaryResolver {
     }
 
     /**
-     * Формирует список кандидатов директорий поиска файлов.
+     * Формирует список кандидатов директорий поиска исполняемых файлов.
      */
     fun getCandidateDirectories(): List<File> {
         val userHome = System.getProperty("user.home") ?: "."
         val dirs = LinkedHashSet<File>()
+
+        fun addHierarchy(base: File?) {
+            if (base == null || !base.exists()) return
+            val target = if (base.isDirectory) base else base.parentFile ?: return
+            dirs.add(File(target, "bin"))
+            dirs.add(File(target, "app/resources/bin"))
+            dirs.add(File(target, "lib/app/resources/bin"))
+            dirs.add(File(target, "app/bin"))
+            dirs.add(File(target, "lib/app/bin"))
+            dirs.add(File(target, "resources/bin"))
+            dirs.add(File(target, "app/resources"))
+            dirs.add(File(target, "lib/app/resources"))
+            dirs.add(File(target, "app"))
+            dirs.add(File(target, "lib/app"))
+            dirs.add(target)
+
+            target.parentFile?.let { parent ->
+                dirs.add(File(parent, "bin"))
+                dirs.add(File(parent, "app/resources/bin"))
+                dirs.add(File(parent, "lib/app/resources/bin"))
+                dirs.add(File(parent, "app/bin"))
+                dirs.add(File(parent, "lib/app/bin"))
+                dirs.add(File(parent, "resources/bin"))
+                dirs.add(File(parent, "app/resources"))
+                dirs.add(File(parent, "lib/app/resources"))
+                dirs.add(File(parent, "app"))
+                dirs.add(File(parent, "lib/app"))
+                dirs.add(parent)
+            }
+        }
 
         // 0. Нативный лаунчер jpackage (MSI инсталлятор Windows, DEB, AppImage, DMG)
         listOfNotNull(
             System.getProperty("jdk.jpackage.app-path"),
             System.getProperty("jpackage.app-path")
         ).forEach { appPath ->
-            val exeFile = File(appPath)
-            val exeDir = if (exeFile.isDirectory) exeFile else exeFile.parentFile
-            if (exeDir != null && exeDir.exists()) {
-                dirs.add(File(exeDir, "bin"))
-                dirs.add(File(exeDir, "app/resources/bin"))
-                dirs.add(File(exeDir, "lib/app/resources/bin"))
-                dirs.add(File(exeDir, "app/resources"))
-                dirs.add(File(exeDir, "lib/app/resources"))
-                dirs.add(exeDir)
-                exeDir.parentFile?.let { installRoot ->
-                    dirs.add(File(installRoot, "bin"))
-                    dirs.add(File(installRoot, "app/resources/bin"))
-                    dirs.add(File(installRoot, "lib/app/resources/bin"))
-                    dirs.add(File(installRoot, "app/resources"))
-                    dirs.add(File(installRoot, "lib/app/resources"))
-                    dirs.add(installRoot)
-                }
-            }
+            addHierarchy(File(appPath))
         }
 
         // 1. AppImage монтирование (Linux)
@@ -109,12 +122,7 @@ object DesktopBinaryResolver {
 
         // 2. Системное свойство app.dir (передается нашим лаунчером)
         System.getProperty("app.dir")?.let { ad ->
-            val f = File(ad)
-            if (f.exists()) {
-                dirs.add(File(f, "bin"))
-                dirs.add(File(f, "lib/app/resources/bin"))
-                dirs.add(f)
-            }
+            addHierarchy(File(ad))
         }
 
         // 3. compose.application.resources.dir
@@ -123,11 +131,7 @@ object DesktopBinaryResolver {
             if (resDir.exists()) {
                 dirs.add(File(resDir, "bin"))
                 dirs.add(resDir)
-                // Поднимаемся к корню установки приложения (app/resources -> app -> root)
-                resDir.parentFile?.parentFile?.let { installRoot ->
-                    dirs.add(File(installRoot, "bin"))
-                    dirs.add(installRoot)
-                }
+                resDir.parentFile?.let { addHierarchy(it) }
             }
         }
 
@@ -136,14 +140,10 @@ object DesktopBinaryResolver {
             val jHome = File(jh)
             if (jHome.exists()) {
                 // Windows jpackage: <root>/runtime -> root
+                // Linux jpackage: <root>/lib/runtime -> lib -> root
                 jHome.parentFile?.let { root ->
-                    dirs.add(File(root, "bin"))
-                    dirs.add(root)
-                    // Linux jpackage: <root>/lib/runtime -> lib -> root
-                    root.parentFile?.let { linuxRoot ->
-                        dirs.add(File(linuxRoot, "bin"))
-                        dirs.add(linuxRoot)
-                    }
+                    addHierarchy(root)
+                    root.parentFile?.let { addHierarchy(it) }
                 }
                 // macOS bundle: <bundle>/Contents/runtime/Contents/Home -> <bundle>/Contents
                 jHome.parentFile?.parentFile?.parentFile?.parentFile?.let { macContents ->
@@ -156,16 +156,7 @@ object DesktopBinaryResolver {
         // 5. Относительно запущенного JAR
         runCatching {
             DesktopBinaryResolver::class.java.protectionDomain?.codeSource?.location?.toURI()?.let { uri ->
-                val jarFile = File(uri)
-                val jarDir = if (jarFile.isDirectory) jarFile else jarFile.parentFile
-                if (jarDir != null && jarDir.exists()) {
-                    dirs.add(File(jarDir, "bin"))
-                    dirs.add(jarDir)
-                    jarDir.parentFile?.let { parent ->
-                        dirs.add(File(parent, "bin"))
-                        dirs.add(parent)
-                    }
-                }
+                addHierarchy(File(uri))
             }
         }
 
@@ -174,15 +165,27 @@ object DesktopBinaryResolver {
             isWindows -> {
                 System.getenv("LOCALAPPDATA")?.let { localAppData ->
                     dirs.add(File(localAppData, "v2whitelist/bin"))
+                    dirs.add(File(localAppData, "v2whitelist/app/resources/bin"))
+                    dirs.add(File(localAppData, "v2whitelist/app/bin"))
                     dirs.add(File(localAppData, "v2rayNG/bin"))
                     dirs.add(File(localAppData, "Programs/v2whitelist/bin"))
+                    dirs.add(File(localAppData, "Programs/v2whitelist/app/resources/bin"))
+                    dirs.add(File(localAppData, "Programs/v2whitelist/app/bin"))
                     dirs.add(File(localAppData, "Programs/v2whitelist"))
+                    dirs.add(File(localAppData, "v2whitelist"))
                 }
                 System.getenv("APPDATA")?.let { appData ->
                     dirs.add(File(appData, "v2whitelist/bin"))
+                    dirs.add(File(appData, "v2whitelist/app/resources/bin"))
                 }
                 dirs.add(File("C:\\Program Files\\v2whitelist\\bin"))
+                dirs.add(File("C:\\Program Files\\v2whitelist\\app\\resources\\bin"))
+                dirs.add(File("C:\\Program Files\\v2whitelist\\app\\bin"))
+                dirs.add(File("C:\\Program Files\\v2whitelist\\resources\\bin"))
                 dirs.add(File("C:\\Program Files\\v2whitelist"))
+                dirs.add(File("C:\\Program Files (x86)\\v2whitelist\\bin"))
+                dirs.add(File("C:\\Program Files (x86)\\v2whitelist\\app\\resources\\bin"))
+                dirs.add(File("C:\\Program Files (x86)\\v2whitelist"))
             }
             isMac -> {
                 dirs.add(File(userHome, "Library/Application Support/v2whitelist/bin"))
@@ -200,6 +203,7 @@ object DesktopBinaryResolver {
                 dirs.add(File(userHome, ".local/share/v2rayNG/bin"))
                 dirs.add(File(userHome, ".local/bin"))
                 dirs.add(File("/opt/v2whitelist/bin"))
+                dirs.add(File("/opt/v2whitelist/lib/app/resources/bin"))
                 dirs.add(File("/opt/v2rayng/bin"))
                 dirs.add(File("/opt/xray"))
                 dirs.add(File("/usr/local/bin"))
@@ -212,6 +216,8 @@ object DesktopBinaryResolver {
         dirs.add(File("../bin"))
         dirs.add(File("../../bin"))
         dirs.add(File("V2rayNG/desktopApp/bin"))
+        dirs.add(File("package-resources/bin"))
+        dirs.add(File("../package-resources/bin"))
         dirs.add(File("v2w-core"))
         dirs.add(File("../v2w-core"))
         dirs.add(File("../../v2w-core"))
@@ -226,14 +232,14 @@ object DesktopBinaryResolver {
     fun findBinary(names: List<String>, customPath: String? = null): File? {
         if (!customPath.isNullOrBlank()) {
             val cf = File(customPath)
-            return if (cf.exists() && cf.canExecute()) cf.canonicalFile else null
+            return if (isExecutable(cf)) cf.canonicalFile else null
         }
 
         val dirs = getCandidateDirectories()
         for (dir in dirs) {
             for (name in names) {
                 val candidate = File(dir, name)
-                if (candidate.exists() && candidate.canExecute()) {
+                if (isExecutable(candidate)) {
                     return candidate.canonicalFile
                 }
             }
@@ -247,7 +253,7 @@ object DesktopBinaryResolver {
             if (dir.exists()) {
                 for (name in names) {
                     val candidate = File(dir, name)
-                    if (candidate.exists() && candidate.canExecute()) {
+                    if (isExecutable(candidate)) {
                         return candidate.canonicalFile
                     }
                 }
@@ -258,48 +264,70 @@ object DesktopBinaryResolver {
     }
 
     /**
+     * Надежная кроссплатформенная проверка исполняемости файла.
+     * На Windows проверяет расширение .exe, на Unix гарантирует выставление бита +x.
+     */
+    fun isExecutable(file: File): Boolean {
+        if (!file.exists() || file.isDirectory) return false
+        if (isWindows) {
+            val lower = file.name.lowercase()
+            return lower.endsWith(".exe") || file.canExecute()
+        }
+        if (!file.canExecute()) {
+            try {
+                file.setExecutable(true, false)
+            } catch (_: Exception) {}
+        }
+        return file.canExecute()
+    }
+
+    /**
      * Поиск директории с базами геоданных (geosite.dat и geoip.dat).
      */
     fun findAssetDirectory(customPath: String? = null, xrayBinary: File? = null): File? {
         if (!customPath.isNullOrBlank()) {
             val cf = File(customPath)
-            if (cf.exists() && hasGeoData(cf)) {
-                return cf.canonicalFile
-            }
+            return if (cf.exists() && hasGeoData(cf)) cf.canonicalFile else null
         }
 
         val userHome = System.getProperty("user.home") ?: "."
         val dirs = LinkedHashSet<File>()
+
+        fun addAssetHierarchy(base: File?) {
+            if (base == null || !base.exists()) return
+            val target = if (base.isDirectory) base else base.parentFile ?: return
+            dirs.add(File(target, "assets"))
+            dirs.add(File(target, "app/resources/assets"))
+            dirs.add(File(target, "lib/app/resources/assets"))
+            dirs.add(File(target, "resources/assets"))
+            dirs.add(File(target, "app/resources"))
+            dirs.add(File(target, "lib/app/resources"))
+            dirs.add(File(target, "bin"))
+            dirs.add(target)
+
+            target.parentFile?.let { parent ->
+                dirs.add(File(parent, "assets"))
+                dirs.add(File(parent, "app/resources/assets"))
+                dirs.add(File(parent, "lib/app/resources/assets"))
+                dirs.add(File(parent, "resources/assets"))
+                dirs.add(File(parent, "app/resources"))
+                dirs.add(File(parent, "lib/app/resources"))
+                dirs.add(File(parent, "bin"))
+                dirs.add(parent)
+            }
+        }
 
         // Нативный лаунчер jpackage
         listOfNotNull(
             System.getProperty("jdk.jpackage.app-path"),
             System.getProperty("jpackage.app-path")
         ).forEach { appPath ->
-            val exeFile = File(appPath)
-            val exeDir = if (exeFile.isDirectory) exeFile else exeFile.parentFile
-            if (exeDir != null && exeDir.exists()) {
-                dirs.add(File(exeDir, "assets"))
-                dirs.add(File(exeDir, "app/resources/assets"))
-                dirs.add(File(exeDir, "lib/app/resources/assets"))
-                dirs.add(File(exeDir, "app/resources"))
-                dirs.add(File(exeDir, "lib/app/resources"))
-                dirs.add(exeDir)
-                exeDir.parentFile?.let { installRoot ->
-                    dirs.add(File(installRoot, "assets"))
-                    dirs.add(File(installRoot, "app/resources/assets"))
-                    dirs.add(File(installRoot, "lib/app/resources/assets"))
-                    dirs.add(File(installRoot, "app/resources"))
-                    dirs.add(File(installRoot, "lib/app/resources"))
-                }
-            }
+            addAssetHierarchy(File(appPath))
         }
 
         // Каталог рядом с найденным бинарником Xray
         xrayBinary?.parentFile?.let { xrayDir ->
-            dirs.add(xrayDir)
-            dirs.add(File(xrayDir, "assets"))
-            xrayDir.parentFile?.let { dirs.add(File(it, "assets")) }
+            addAssetHierarchy(xrayDir)
         }
 
         // AppImage (Linux)
@@ -320,10 +348,7 @@ object DesktopBinaryResolver {
             if (resDir.exists()) {
                 dirs.add(File(resDir, "assets"))
                 dirs.add(resDir)
-                resDir.parentFile?.parentFile?.let { installRoot ->
-                    dirs.add(File(installRoot, "assets"))
-                    dirs.add(File(installRoot, "bin"))
-                }
+                resDir.parentFile?.let { addAssetHierarchy(it) }
             }
         }
 
@@ -331,20 +356,31 @@ object DesktopBinaryResolver {
         System.getProperty("java.home")?.let { jh ->
             val jHome = File(jh)
             jHome.parentFile?.let { root ->
-                dirs.add(File(root, "assets"))
-                dirs.add(File(root, "bin"))
-                root.parentFile?.let { linuxRoot ->
-                    dirs.add(File(linuxRoot, "assets"))
-                    dirs.add(File(linuxRoot, "lib/app/resources/assets"))
-                }
+                addAssetHierarchy(root)
+                root.parentFile?.let { addAssetHierarchy(it) }
+            }
+        }
+
+        // Запущенный JAR
+        runCatching {
+            DesktopBinaryResolver::class.java.protectionDomain?.codeSource?.location?.toURI()?.let { uri ->
+                addAssetHierarchy(File(uri))
             }
         }
 
         // Системные директории профиля пользователя
         when {
             isWindows -> {
-                System.getenv("LOCALAPPDATA")?.let { dirs.add(File(it, "v2whitelist/assets")) }
+                System.getenv("LOCALAPPDATA")?.let { localAppData ->
+                    dirs.add(File(localAppData, "v2whitelist/assets"))
+                    dirs.add(File(localAppData, "v2whitelist/app/resources/assets"))
+                    dirs.add(File(localAppData, "Programs/v2whitelist/assets"))
+                    dirs.add(File(localAppData, "Programs/v2whitelist/app/resources/assets"))
+                }
                 dirs.add(File("C:\\Program Files\\v2whitelist\\assets"))
+                dirs.add(File("C:\\Program Files\\v2whitelist\\app\\resources\\assets"))
+                dirs.add(File("C:\\Program Files (x86)\\v2whitelist\\assets"))
+                dirs.add(File("C:\\Program Files (x86)\\v2whitelist\\app\\resources\\assets"))
             }
             isMac -> {
                 dirs.add(File(userHome, "Library/Application Support/v2whitelist/assets"))
@@ -358,6 +394,7 @@ object DesktopBinaryResolver {
                 dirs.add(File("/usr/share/v2ray"))
                 dirs.add(File("/usr/local/share/xray"))
                 dirs.add(File("/usr/local/share/v2ray"))
+                dirs.add(File("/opt/v2whitelist/assets"))
                 dirs.add(File("/opt/xray"))
             }
         }
@@ -365,6 +402,8 @@ object DesktopBinaryResolver {
         // Локальные папки
         dirs.add(File("assets"))
         dirs.add(File("bin"))
+        dirs.add(File("package-resources/assets"))
+        dirs.add(File("../package-resources/assets"))
         dirs.add(File("V2rayNG/desktopApp/assets"))
         dirs.add(File("V2rayNG/app/src/main/assets"))
         dirs.add(File("."))

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -118,8 +119,8 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 	uConn := &UConn{
 		Config: config,
 	}
-	if config.Show || dest.Address.String() == "194.55.239.164" || dest.Address.String() == "176.108.245.3" {
-		fmt.Printf("REALITY UClient dialing %s: SNI=%s, FP=%s, PubKey=%x, ShortId=%x\n", dest.Address.String(), config.ServerName, config.Fingerprint, config.PublicKey, config.ShortId)
+	if config.Show {
+		fmt.Fprintf(os.Stderr, "REALITY UClient dialing %s: SNI=%s, FP=%s, PubKey=%x, ShortId=%x\n", dest.Address.String(), config.ServerName, config.Fingerprint, config.PublicKey, config.ShortId)
 	}
 	utlsConfig := &utls.Config{
 		VerifyPeerCertificate:  uConn.VerifyPeerCertificate,

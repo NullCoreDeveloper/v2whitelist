@@ -16,7 +16,7 @@ mkdir -p "$BIN_DIR" "$ASSETS_DIR"
 if [ -d "$ROOT_DIR/v2w-core" ]; then
     echo "Сборка v2w-scan..."
     pushd "$ROOT_DIR/v2w-core" >/dev/null
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$BIN_DIR/v2w-scan" ./cmd/v2w-scan
+    CGO_ENABLED=0 go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o "$BIN_DIR/v2w-scan" ./cmd/v2w-scan
     popd >/dev/null
 fi
 

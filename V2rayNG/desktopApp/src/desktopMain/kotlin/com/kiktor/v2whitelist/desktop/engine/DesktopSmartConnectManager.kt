@@ -135,8 +135,8 @@ class DesktopSmartConnectManager(
                 return@withContext false
             }
 
-            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
-            val v2wPath = settingsRepo.getString("v2w_scan_path").ifBlank { null }
+            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
+            val v2wPath = settingsRepo.getString("v2w_scan_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
             val customEndpointUrl = if (settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)) {
                 settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
             } else null
@@ -380,7 +380,7 @@ class DesktopSmartConnectManager(
             val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
             if (candidates.isEmpty()) return@withContext false
 
-            val xrayPath = settingsRepo.getString("xray_path").ifBlank { null }
+            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
             val customEndpointUrl = if (settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)) {
                 settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
             } else null
