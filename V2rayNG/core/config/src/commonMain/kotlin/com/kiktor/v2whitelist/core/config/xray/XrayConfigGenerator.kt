@@ -321,7 +321,9 @@ object XrayConfigGenerator {
                         domain = listOf(
                             "geosite:category-gov-ru",
                             "geosite:category-ru",
-                            "geosite:tld-ru",
+                            "domain:ru",
+                            "domain:su",
+                            "domain:рф",
                             "domain:gov.ru",
                             "domain:gosuslugi.ru",
                             "domain:ya.ru",
@@ -344,7 +346,6 @@ object XrayConfigGenerator {
                     XrayRule(
                         outboundTag = "proxy",
                         domain = listOf(
-                            "geosite:category-media-ru-blocked",
                             "domain:instagram.com",
                             "domain:cdninstagram.com",
                             "domain:facebook.com",
@@ -353,7 +354,10 @@ object XrayConfigGenerator {
                             "domain:x.com",
                             "domain:t.co",
                             "domain:notion.so",
-                            "domain:rutracker.org"
+                            "domain:rutracker.org",
+                            "domain:discord.com",
+                            "domain:discordapp.com",
+                            "domain:discord.gg"
                         )
                     )
                 )
@@ -426,6 +430,16 @@ object XrayConfigGenerator {
 
         return when (profile.configType) {
             EConfigType.VLESS -> {
+                val effectiveEncryption = when {
+                    profile.method.isNullOrBlank() ||
+                    profile.method.equals("none", ignoreCase = true) ||
+                    profile.method.equals("auto", ignoreCase = true) ||
+                    profile.method.equals("null", ignoreCase = true) -> "none"
+                    else -> profile.method!!
+                }
+                val effectiveFlow = profile.flow?.takeIf {
+                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true)
+                }
                 XrayOutbound(
                     tag = "proxy",
                     protocol = "vless",
@@ -437,8 +451,8 @@ object XrayConfigGenerator {
                                 users = listOf(
                                     VnextUser(
                                         id = profile.password.orEmpty(),
-                                        encryption = profile.method ?: "none",
-                                        flow = profile.flow
+                                        encryption = effectiveEncryption,
+                                        flow = effectiveFlow
                                     )
                                 )
                             )
@@ -474,6 +488,9 @@ object XrayConfigGenerator {
             }
 
             EConfigType.TROJAN -> {
+                val effectiveFlow = profile.flow?.takeIf {
+                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true)
+                }
                 XrayOutbound(
                     tag = "proxy",
                     protocol = "trojan",
@@ -483,7 +500,7 @@ object XrayConfigGenerator {
                                 address = serverAddr,
                                 port = port,
                                 password = profile.password.orEmpty(),
-                                flow = profile.flow
+                                flow = effectiveFlow
                             )
                         )
                     ),
@@ -581,7 +598,12 @@ object XrayConfigGenerator {
 
     private fun buildStreamSettings(profile: ProfileItem, options: XrayGeneratorOptions): XrayStreamSettings {
         val network = profile.network?.lowercase() ?: "tcp"
-        val security = profile.security?.lowercase()
+        val sec = profile.security?.lowercase()?.trim()
+        val security = when {
+            sec.isNullOrBlank() || sec == "none" || sec == "null" -> null
+            sec == "tls" || sec == "reality" -> sec
+            else -> sec
+        }
         val sni = if (!profile.sni.isNullOrBlank()) profile.sni else profile.server
 
         val tlsSettings = if (security == "tls") {

@@ -113,7 +113,11 @@ compose.desktop {
     }
 }
 
-tasks.matching { it.name == "prepareAppResources" }.configureEach {
+tasks.matching {
+    it.name.contains("Distributable", ignoreCase = true) ||
+    it.name.contains("package", ignoreCase = true) ||
+    it.name.contains("appResources", ignoreCase = true)
+}.configureEach {
     doFirst {
         val resDir = file("package-resources")
         val binDir = project.file("bin")

@@ -27,6 +27,10 @@ if [ -f "$ROOT_DIR/V2rayNG/app/src/main/assets/geosite.dat" ]; then
     cp -u "$ROOT_DIR/V2rayNG/app/src/main/assets/geosite.dat" "$ASSETS_DIR/"
 fi
 
+mkdir -p "$DESKTOP_DIR/package-resources/bin" "$DESKTOP_DIR/package-resources/assets"
+cp -a "$BIN_DIR"/* "$DESKTOP_DIR/package-resources/bin/" 2>/dev/null || true
+cp -a "$ASSETS_DIR"/* "$DESKTOP_DIR/package-resources/assets/" 2>/dev/null || true
+
 chmod +x "$BIN_DIR"/* || true
 
 echo "=== 2. Сборка Compose Desktop (packageAppImage) ==="

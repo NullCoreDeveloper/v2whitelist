@@ -80,9 +80,11 @@ jobs:
           
           # Копируем бинарник xray
           cp xray_tmp/xray${{ matrix.binary_ext }} V2rayNG/desktopApp/bin/
-          # Копируем гео-базы в assets
+          # Копируем гео-базы в assets и в bin (для прямого поиска ядром Xray)
           cp xray_tmp/geoip.dat V2rayNG/desktopApp/assets/
           cp xray_tmp/geosite.dat V2rayNG/desktopApp/assets/
+          cp xray_tmp/geoip.dat V2rayNG/desktopApp/bin/
+          cp xray_tmp/geosite.dat V2rayNG/desktopApp/bin/
           
           rm -rf xray.zip xray_tmp
           chmod +x V2rayNG/desktopApp/bin/* || true
@@ -107,6 +109,14 @@ jobs:
           fi
 
           chmod +x V2rayNG/desktopApp/bin/* || true
+
+      - name: Prepare Package Resources
+        shell: bash
+        run: |
+          mkdir -p V2rayNG/desktopApp/package-resources/bin
+          mkdir -p V2rayNG/desktopApp/package-resources/assets
+          cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/bin/ || true
+          cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/assets/ || true
 
       - name: Grant execute permission for gradlew
         shell: bash

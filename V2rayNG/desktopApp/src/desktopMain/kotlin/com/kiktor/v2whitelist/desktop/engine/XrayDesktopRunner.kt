@@ -180,10 +180,11 @@ class XrayDesktopRunner(
                 GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
                 ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
             }
+            pb.directory(binary.parentFile)
 
             // Настройка расположения геофайлов geosite.dat и geoip.dat
-            val assetDir = findAssetLocation(binary)
-            if (assetDir != null) {
+            val assetDir = findAssetLocation(binary) ?: binary.parentFile
+            if (assetDir != null && assetDir.exists()) {
                 pb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
                 pb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
                 GeekModeLogger.log("DesktopRunner", "Каталог геофайлов XRAY_LOCATION_ASSET: ${assetDir.absolutePath}")
@@ -201,13 +202,19 @@ class XrayDesktopRunner(
                 } catch (_: Exception) {}
             }
 
+            val startupLogBuffer = java.util.concurrent.CopyOnWriteArrayList<String>()
+
             // Мониторинг логов
-            logJob = scope.launch {
+            logJob = scope.launch(Dispatchers.IO) {
                 try {
                     BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                         var line: String? = null
                         while (isActive && reader.readLine().also { line = it } != null) {
-                            line?.let { GeekModeLogger.log("XrayCore", it) }
+                            val l = line ?: continue
+                            GeekModeLogger.log("XrayCore", l)
+                            if (startupLogBuffer.size < 30) {
+                                startupLogBuffer.add(l)
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -219,14 +226,33 @@ class XrayDesktopRunner(
 
             // Быстрая проверка, что процесс не завершился с ошибкой мгновенно
             try {
-                proc.waitFor(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+                proc.waitFor(250, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (_: Exception) {}
             if (!proc.isAlive) {
                 val exitCode = proc.exitValue()
-                val err = if (useSudo) {
-                    "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале."
+                try {
+                    Thread.sleep(100)
+                } catch (_: Exception) {}
+                val relevantErrors = startupLogBuffer.filter { l ->
+                    l.contains("fail", ignoreCase = true) ||
+                    l.contains("error", ignoreCase = true) ||
+                    l.contains("not found", ignoreCase = true) ||
+                    l.contains("panic", ignoreCase = true) ||
+                    l.contains("fatal", ignoreCase = true) ||
+                    l.contains("exception", ignoreCase = true)
+                }
+                val detail = if (relevantErrors.isNotEmpty()) {
+                    relevantErrors.takeLast(2).joinToString(" | ")
+                } else if (startupLogBuffer.isNotEmpty()) {
+                    startupLogBuffer.takeLast(2).joinToString(" | ")
                 } else {
-                    "Процесс Xray завершился сразу с кодом: $exitCode"
+                    ""
+                }
+
+                val err = when {
+                    useSudo -> "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале."
+                    detail.isNotBlank() -> "Сбой Xray (код $exitCode): $detail"
+                    else -> "Процесс Xray завершился сразу с кодом: $exitCode"
                 }
                 GeekModeLogger.log("DesktopRunner", err)
                 _lastError.value = err
