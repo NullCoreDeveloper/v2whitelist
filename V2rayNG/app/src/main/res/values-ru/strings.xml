@@ -548,6 +548,20 @@
 
     <string name="title_pref_profile_check">Проверка профиля перед подключением</string>
     <string name="summary_pref_profile_check">Обеспечивает 100% стабильность. Без нее вы можете попасть на "мертвый" сервер.</string>
+    <string name="title_pref_service_check">Проверять доступность сервисов</string>
+    <string name="summary_pref_service_check">Вместо стандартного 204 проверять доступность Google, YouTube, Telegram, Gemini, Claude, ChatGPT, Discord и добавленных сервисов (игнорируется при активном конечном узле)</string>
+    <string name="title_pref_service_check_config">Список проверяемых сервисов</string>
+    <string name="summary_pref_service_check_config">Настройка списка сервисов и добавление своих ресурсов</string>
+    <string name="title_service_check_activity">Проверка сервисов</string>
+    <string name="service_check_add_btn">+ Добавить сервис</string>
+    <string name="service_check_reset_btn">Сброс к умолчанию</string>
+    <string name="service_check_dialog_title">Новый сервис</string>
+    <string name="service_check_name_hint">Название сервиса (например, Twitter / X)</string>
+    <string name="service_check_url_hint">URL (например, https://x.com)</string>
+    <string name="geek_mode_btn_check_services">Проверить сервисы</string>
+    <string name="geek_mode_services_checking">Проверка доступности сервисов…</string>
+    <string name="geek_mode_services_all_ok">Все сервисы доступны ✔</string>
+    <string name="geek_mode_services_partial">Некоторые сервисы недоступны ⚠</string>
     <string name="title_pref_profile_min_speed_mbps">Минимальный порог скорости (Мбит/с)</string>
     <string name="summary_pref_profile_min_speed_mbps">Серверы со скоростью ниже этого порога будут отбраковываться при проверке профиля. По умолчанию: 1.0 Мбит/с (0 — отключить)</string>
     <string name="status_profile_speed_too_low">Низкая скорость (%1$s Мбит/с &lt; %2$s Мбит/с), ищем следующий…</string>

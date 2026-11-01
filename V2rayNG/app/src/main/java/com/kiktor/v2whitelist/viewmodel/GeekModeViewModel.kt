@@ -14,6 +14,8 @@ import com.kiktor.v2whitelist.handler.SpeedtestManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2rayConfigManager
+import libv2ray.CoreCallbackHandler
+import libv2ray.CoreController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +39,89 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
 
     private val _vipServersFlow = MutableStateFlow<List<VipServerItem>>(emptyList())
     val vipServersFlow: StateFlow<List<VipServerItem>> = _vipServersFlow.asStateFlow()
+
+    data class ServiceCheckState(
+        val isChecking: Boolean = false,
+        val results: List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckResult> = emptyList()
+    )
+
+    private val _serviceCheckState = MutableStateFlow(ServiceCheckState())
+    val serviceCheckState: StateFlow<ServiceCheckState> = _serviceCheckState.asStateFlow()
+
+    fun checkServicesAvailability() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val enabledServices = com.kiktor.v2whitelist.handler.ServiceCheckManager.loadServices().filter { it.enabled }
+            if (enabledServices.isEmpty()) {
+                GeekModeLogger.log("GeekMode", "Нет активных сервисов для проверки.")
+                return@launch
+            }
+
+            _serviceCheckState.value = ServiceCheckState(isChecking = true)
+            GeekModeLogger.log("GeekMode", "Проверка доступности сервисов (${enabledServices.size} шт.)...")
+
+            val socksPort = if (V2RayServiceManager.isRunning() == true) {
+                SettingsManager.getSocksPort()
+            } else {
+                null
+            }
+
+            val results = if (socksPort != null && socksPort > 0) {
+                com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                    services = enabledServices,
+                    socksPort = socksPort,
+                    timeoutMs = 6000L
+                )
+            } else {
+                val serverGuid = MmkvManager.getSelectServer()
+                if (!serverGuid.isNullOrEmpty()) {
+                    var ephemeralPort = -1
+                    var coreController: CoreController? = null
+                    try {
+                        ephemeralPort = java.net.ServerSocket(0).use { it.localPort }
+                        val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(
+                            getApplication(),
+                            serverGuid,
+                            ephemeralPort,
+                            ignoreCustomEndpoint = true
+                        )
+                        if (speedtestConfig.status) {
+                            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                                override fun startup(): Long = 0
+                                override fun shutdown(): Long = 0
+                                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+                            })
+                            coreController.startLoop(speedtestConfig.content, 0)
+                            kotlinx.coroutines.delay(500L)
+                        }
+                    } catch (_: Exception) {}
+
+                    val portToUse = if (ephemeralPort > 0 && coreController != null) ephemeralPort else null
+                    try {
+                        com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                            services = enabledServices,
+                            socksPort = portToUse,
+                            timeoutMs = 6000L
+                        )
+                    } finally {
+                        try { coreController?.stopLoop() } catch (_: Exception) {}
+                    }
+                } else {
+                    com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                        services = enabledServices,
+                        socksPort = null,
+                        timeoutMs = 6000L
+                    )
+                }
+            }
+
+            _serviceCheckState.value = ServiceCheckState(isChecking = false, results = results)
+            val successfulCount = results.count { it.success }
+            GeekModeLogger.log("GeekMode", "Результат проверки сервисов: доступно $successfulCount из ${results.size}")
+            results.forEach {
+                GeekModeLogger.log("GeekMode", "Сервис [${it.service.name}]: ${if (it.success) "Доступен (${it.latencyMs}ms)" else "Недоступен (${it.errorMessage ?: "Timeout"})"}")
+            }
+        }
+    }
 
     fun loadVipServers() {
         viewModelScope.launch(Dispatchers.IO) {

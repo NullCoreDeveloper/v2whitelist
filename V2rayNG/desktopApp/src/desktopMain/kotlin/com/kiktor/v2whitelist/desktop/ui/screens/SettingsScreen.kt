@@ -48,6 +48,7 @@ fun SettingsScreen(
     // Проверка профилей
     var removeInsecure by remember { mutableStateOf(state.removeInsecureProfiles.value) }
     var testBeforeConnect by remember { mutableStateOf(state.testProfileBeforeConnect.value) }
+    var serviceCheckEnabled by remember { mutableStateOf(state.serviceCheckEnabled.value) }
     var speedTestOnCheck by remember { mutableStateOf(state.speedTestOnCheck.value) }
     var speedTestBytes by remember { mutableStateOf(state.speedTestDownloadBytes.value.toString()) }
     var speedTestTimeout by remember { mutableStateOf(state.speedTestTimeoutMs.value.toString()) }
@@ -164,6 +165,7 @@ fun SettingsScreen(
             v2wSockets = v2wSockets.toIntOrNull() ?: 35,
             removeInsecure = removeInsecure,
             testBeforeConnect = testBeforeConnect,
+            serviceCheck = serviceCheckEnabled,
             speedTestCheck = speedTestOnCheck,
             speedTestBytes = speedTestBytes.toIntOrNull() ?: 2000000,
             speedTestTimeout = speedTestTimeout.toIntOrNull() ?: 3000,
@@ -221,6 +223,7 @@ fun SettingsScreen(
         v2wPathInput = state.v2wScanPath.value
         removeInsecure = state.removeInsecureProfiles.value
         testBeforeConnect = state.testProfileBeforeConnect.value
+        serviceCheckEnabled = state.serviceCheckEnabled.value
         speedTestOnCheck = state.speedTestOnCheck.value
         speedTestBytes = state.speedTestDownloadBytes.value.toString()
         speedTestTimeout = state.speedTestTimeoutMs.value.toString()
@@ -292,6 +295,7 @@ fun SettingsScreen(
         v2wPathInput != state.v2wScanPath.value ||
         removeInsecure != state.removeInsecureProfiles.value ||
         testBeforeConnect != state.testProfileBeforeConnect.value ||
+        serviceCheckEnabled != state.serviceCheckEnabled.value ||
         speedTestOnCheck != state.speedTestOnCheck.value ||
         speedTestBytes != state.speedTestDownloadBytes.value.toString() ||
         speedTestTimeout != state.speedTestTimeoutMs.value.toString() ||
@@ -528,6 +532,23 @@ fun SettingsScreen(
                 checked = endpointE2eCheck,
                 onCheckedChange = { endpointE2eCheck = it }
             )
+            SettingSwitchRow(
+                title = "Проверять доступность сервисов",
+                desc = "Проверять доступность выбранных сервисов (Google, YouTube, Telegram, AI и др.) вместо теста 204. Игнорируется при использовании конечного узла.",
+                checked = serviceCheckEnabled,
+                onCheckedChange = { serviceCheckEnabled = it }
+            )
+            val currentServices by state.servicesList.collectAsState()
+            val enabledServicesCount = currentServices.count { it.enabled }
+            OutlinedButton(
+                onClick = { state.promptServiceCheckDialog() },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Список проверяемых сервисов ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
+            }
             SettingSwitchRow(
                 title = "Тест скорости при проверке профиля",
                 desc = "Загружает небольшой объем данных через сервер для проверки реальной пропускной способности.",
@@ -1089,6 +1110,8 @@ fun SettingsScreen(
                 }
             )
         }
+
+        com.kiktor.v2whitelist.desktop.ui.components.ServiceAvailabilityDialog(state = state)
 
         Spacer(Modifier.height(40.dp))
     }

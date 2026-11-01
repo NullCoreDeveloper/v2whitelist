@@ -565,6 +565,20 @@
     <!-- Profile Check (Beta) -->
     <string name="title_pref_profile_check">Profile check before connection</string>
     <string name="summary_pref_profile_check">Ensures safe and successful connection</string>
+    <string name="title_pref_service_check">Check service availability</string>
+    <string name="summary_pref_service_check">Check reachability of Google, YouTube, Telegram, Gemini, Claude, ChatGPT, Discord and custom services instead of 204 check (ignored when custom endpoint is active)</string>
+    <string name="title_pref_service_check_config">Service list configuration</string>
+    <string name="summary_pref_service_check_config">Configure services to verify and add custom endpoints</string>
+    <string name="title_service_check_activity">Service Availability Check</string>
+    <string name="service_check_add_btn">+ Add service</string>
+    <string name="service_check_reset_btn">Reset to defaults</string>
+    <string name="service_check_dialog_title">New Service</string>
+    <string name="service_check_name_hint">Service name (e.g., Twitter / X)</string>
+    <string name="service_check_url_hint">URL (e.g., https://x.com)</string>
+    <string name="geek_mode_btn_check_services">Check Services</string>
+    <string name="geek_mode_services_checking">Checking service availability…</string>
+    <string name="geek_mode_services_all_ok">All services available ✔</string>
+    <string name="geek_mode_services_partial">Some services unreachable ⚠</string>
     <string name="title_pref_bypass_ru_apps">Banks, Gosuslugi, Marketplaces outside VPN</string>
     <string name="summary_pref_bypass_ru_apps">Sberbank, Tinkoff, Ozon, WB, Avito and other RU services will work directly. Enabled by default.</string>
 

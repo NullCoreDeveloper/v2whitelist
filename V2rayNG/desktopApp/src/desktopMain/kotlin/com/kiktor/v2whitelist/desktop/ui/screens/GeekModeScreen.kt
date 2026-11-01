@@ -56,6 +56,9 @@ fun GeekModeScreen(
     val isForcePinging by state.isForcePinging.collectAsState()
     val isPingingVip by state.isPingingVip.collectAsState()
     val isFindingVip by state.isFindingVip.collectAsState()
+    val isCheckingServices by state.isCheckingServices.collectAsState()
+    val serviceCheckResults by state.serviceCheckResults.collectAsState()
+    val servicesList by state.servicesList.collectAsState()
 
     var sniInput by remember(currentSni) { mutableStateOf(currentSni) }
     var cfIpInput by remember(currentCfIp) { mutableStateOf(currentCfIp) }
@@ -295,6 +298,107 @@ fun GeekModeScreen(
                 }
                 Spacer(Modifier.width(6.dp))
                 Text("Пинг VIP (${vipGuids.size})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // 2.5 Кнопка проверки доступности сервисов
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { state.checkServicesAvailability() },
+                enabled = !isCheckingServices,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(38.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                if (isCheckingServices) {
+                    CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Параллельная проверка сервисов…", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                } else {
+                    Icon(Icons.Default.Language, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    val enabledCount = servicesList.count { it.enabled }
+                    Text("Проверить сервисы ($enabledCount)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            IconButton(
+                onClick = { state.promptServiceCheckDialog() },
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(Icons.Default.Tune, contentDescription = "Настройка сервисов", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
+        }
+
+        // Результаты проверки доступности сервисов
+        serviceCheckResults?.let { results ->
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Доступность сервисов:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val okCount = results.count { it.success }
+                        Text(
+                            text = "$okCount из ${results.size} доступны",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (okCount == results.size) AccentMint else AccentRed
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        results.forEach { res ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (res.success) AccentMint.copy(alpha = 0.12f) else AccentRed.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, if (res.success) AccentMint.copy(alpha = 0.4f) else AccentRed.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (res.success) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                        contentDescription = null,
+                                        tint = if (res.success) AccentMint else AccentRed,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "${res.service.name}: " + if (res.success) "${res.latencyMs}ms" else "Нет",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -558,5 +662,7 @@ fun GeekModeScreen(
                 }
             }
         }
+
+        com.kiktor.v2whitelist.desktop.ui.components.ServiceAvailabilityDialog(state = state)
     }
 }

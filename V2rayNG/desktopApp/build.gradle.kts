@@ -138,6 +138,10 @@ tasks.matching {
     it.name in listOf(
         "createDistributable",
         "createReleaseDistributable",
+        "packageMsi",
+        "packageReleaseMsi",
+        "packageExe",
+        "packageReleaseExe",
         "packageAppImage",
         "packageReleaseAppImage",
         "packageDistributionForCurrentOS",
@@ -222,9 +226,6 @@ tasks.matching {
                 assetsDir.copyRecursively(destAssets, overwrite = true)
                 assetsDir.copyRecursively(resAssets, overwrite = true)
             }
-            // Поддержка портативного режима из коробки
-            File(appDir, "data").mkdirs()
-            File(appDir, ".portable").createNewFile()
         }
 
         val macAppDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist.app").get().asFile

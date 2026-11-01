@@ -43,6 +43,10 @@ class GeekModeActivity : BaseActivity() {
             viewModel.pingVipServers()
         }
 
+        binding.btnCheckServices.setOnClickListener {
+            viewModel.checkServicesAvailability()
+        }
+
         updateNodeInfo()
 
         binding.etGlobalSni.setText(MmkvManager.decodeSettingsString(AppConfig.PREF_GLOBAL_SNI, ""))
@@ -98,6 +102,44 @@ class GeekModeActivity : BaseActivity() {
                         // Скроллим к низу только внутренний NestedScrollView с логами
                         val nsv = binding.logsScrollView
                         nsv.post { nsv.fullScroll(android.view.View.FOCUS_DOWN) }
+                    }
+                }
+
+                launch {
+                    viewModel.serviceCheckState.collect { state ->
+                        if (state.isChecking) {
+                            binding.btnCheckServices.isEnabled = false
+                            binding.btnCheckServices.text = getString(R.string.geek_mode_services_checking)
+                            binding.cardServiceResults.visibility = android.view.View.VISIBLE
+                            binding.tvServiceResultsStatus.text = getString(R.string.geek_mode_services_checking)
+                            binding.containerServiceChips.removeAllViews()
+                        } else {
+                            binding.btnCheckServices.isEnabled = true
+                            binding.btnCheckServices.text = getString(R.string.geek_mode_btn_check_services)
+                            if (state.results.isNotEmpty()) {
+                                binding.cardServiceResults.visibility = android.view.View.VISIBLE
+                                val allOk = state.results.all { it.success }
+                                val okCount = state.results.count { it.success }
+                                val total = state.results.size
+                                binding.tvServiceResultsStatus.text = if (allOk) {
+                                    getString(R.string.geek_mode_services_all_ok) + " ($okCount/$total)"
+                                } else {
+                                    getString(R.string.geek_mode_services_partial) + " ($okCount/$total)"
+                                }
+                                binding.containerServiceChips.removeAllViews()
+                                for (res in state.results) {
+                                    val row = android.widget.TextView(this@GeekModeActivity).apply {
+                                        val statusText = if (res.success) "✔ ${res.latencyMs}ms" else "✖ ${res.errorMessage ?: "Timeout"}"
+                                        val color = if (res.success) android.graphics.Color.parseColor("#4CAF50") else android.graphics.Color.parseColor("#F44336")
+                                        text = "${res.service.name}: $statusText"
+                                        setTextColor(color)
+                                        textSize = 13f
+                                        setPadding(0, 4, 0, 4)
+                                    }
+                                    binding.containerServiceChips.addView(row)
+                                }
+                            }
+                        }
                     }
                 }
 

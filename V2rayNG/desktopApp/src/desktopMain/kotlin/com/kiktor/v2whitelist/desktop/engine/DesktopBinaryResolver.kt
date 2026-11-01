@@ -84,6 +84,9 @@ object DesktopBinaryResolver {
             dirs.add(File(target, "app"))
             dirs.add(File(target, "lib/app"))
             dirs.add(target)
+            try {
+                target.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
+            } catch (_: Exception) {}
 
             target.parentFile?.let { parent ->
                 dirs.add(File(parent, "bin"))
@@ -97,6 +100,9 @@ object DesktopBinaryResolver {
                 dirs.add(File(parent, "app"))
                 dirs.add(File(parent, "lib/app"))
                 dirs.add(parent)
+                try {
+                    parent.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
+                } catch (_: Exception) {}
             }
         }
 
@@ -304,6 +310,9 @@ object DesktopBinaryResolver {
             dirs.add(File(target, "lib/app/resources"))
             dirs.add(File(target, "bin"))
             dirs.add(target)
+            try {
+                target.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
+            } catch (_: Exception) {}
 
             target.parentFile?.let { parent ->
                 dirs.add(File(parent, "assets"))
@@ -314,6 +323,9 @@ object DesktopBinaryResolver {
                 dirs.add(File(parent, "lib/app/resources"))
                 dirs.add(File(parent, "bin"))
                 dirs.add(parent)
+                try {
+                    parent.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
+                } catch (_: Exception) {}
             }
         }
 
@@ -419,6 +431,6 @@ object DesktopBinaryResolver {
 
     private fun hasGeoData(dir: File): Boolean {
         if (!dir.isDirectory) return false
-        return File(dir, "geosite.dat").exists() || File(dir, "geoip.dat").exists()
+        return File(dir, "geosite.dat").exists() && File(dir, "geoip.dat").exists()
     }
 }

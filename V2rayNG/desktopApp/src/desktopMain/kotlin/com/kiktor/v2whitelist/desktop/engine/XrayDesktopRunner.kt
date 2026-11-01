@@ -226,19 +226,29 @@ class XrayDesktopRunner(
 
             // Быстрая проверка, что процесс не завершился с ошибкой мгновенно
             try {
-                proc.waitFor(250, java.util.concurrent.TimeUnit.MILLISECONDS)
+                proc.waitFor(350, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (_: Exception) {}
             if (!proc.isAlive) {
                 val exitCode = proc.exitValue()
                 try {
-                    Thread.sleep(100)
+                    Thread.sleep(150)
+                } catch (_: Exception) {}
+                try {
+                    proc.inputStream.bufferedReader().useLines { lines ->
+                        lines.take(20).forEach { line ->
+                            startupLogBuffer.add(line)
+                            GeekModeLogger.log("XrayCore", line)
+                        }
+                    }
                 } catch (_: Exception) {}
                 val relevantErrors = startupLogBuffer.filter { l ->
                     l.contains("fail", ignoreCase = true) ||
                     l.contains("error", ignoreCase = true) ||
                     l.contains("not found", ignoreCase = true) ||
+                    l.contains("prohibited", ignoreCase = true) ||
                     l.contains("panic", ignoreCase = true) ||
                     l.contains("fatal", ignoreCase = true) ||
+                    l.contains("invalid", ignoreCase = true) ||
                     l.contains("exception", ignoreCase = true)
                 }
                 val detail = if (relevantErrors.isNotEmpty()) {

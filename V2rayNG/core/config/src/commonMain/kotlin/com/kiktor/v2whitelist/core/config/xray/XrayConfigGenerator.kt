@@ -437,8 +437,9 @@ object XrayConfigGenerator {
                     profile.method.equals("null", ignoreCase = true) -> "none"
                     else -> profile.method!!
                 }
+                val network = profile.network?.lowercase() ?: "tcp"
                 val effectiveFlow = profile.flow?.takeIf {
-                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true)
+                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true) && (network == "tcp" || network.isBlank())
                 }
                 XrayOutbound(
                     tag = "proxy",
@@ -488,8 +489,9 @@ object XrayConfigGenerator {
             }
 
             EConfigType.TROJAN -> {
+                val network = profile.network?.lowercase() ?: "tcp"
                 val effectiveFlow = profile.flow?.takeIf {
-                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true)
+                    it.isNotBlank() && !it.equals("none", ignoreCase = true) && !it.equals("null", ignoreCase = true) && (network == "tcp" || network.isBlank())
                 }
                 XrayOutbound(
                     tag = "proxy",
@@ -596,15 +598,36 @@ object XrayConfigGenerator {
         }
     }
 
+    private fun isPrivateAddress(addr: String?): Boolean {
+        if (addr.isNullOrBlank()) return true
+        if (addr.equals("localhost", ignoreCase = true) || addr == "127.0.0.1" || addr == "::1") return true
+        if (addr.startsWith("10.") || addr.startsWith("192.168.") || addr.startsWith("172.16.") || addr.startsWith("172.17.") ||
+            addr.startsWith("172.18.") || addr.startsWith("172.19.") || addr.startsWith("172.2") || addr.startsWith("172.30.") || addr.startsWith("172.31.")) {
+            return true
+        }
+        return false
+    }
+
     private fun buildStreamSettings(profile: ProfileItem, options: XrayGeneratorOptions): XrayStreamSettings {
         val network = profile.network?.lowercase() ?: "tcp"
         val sec = profile.security?.lowercase()?.trim()
+        val sni = profile.sni?.takeIf { it.isNotBlank() }
+            ?: profile.host?.takeIf { it.isNotBlank() }
+            ?: profile.server
+
         val security = when {
-            sec.isNullOrBlank() || sec == "none" || sec == "null" -> null
             sec == "tls" || sec == "reality" -> sec
+            sec.isNullOrBlank() || sec == "none" || sec == "null" -> {
+                when {
+                    !profile.publicKey.isNullOrBlank() -> "reality"
+                    profile.serverPort == "443" || !profile.sni.isNullOrBlank() || !profile.fingerPrint.isNullOrBlank() || !profile.alpn.isNullOrBlank() -> "tls"
+                    profile.configType == EConfigType.VLESS && !isPrivateAddress(profile.server) -> "tls"
+                    profile.configType == EConfigType.TROJAN && !isPrivateAddress(profile.server) -> "tls"
+                    else -> null
+                }
+            }
             else -> sec
         }
-        val sni = if (!profile.sni.isNullOrBlank()) profile.sni else profile.server
 
         val tlsSettings = if (security == "tls") {
             TlsSettings(

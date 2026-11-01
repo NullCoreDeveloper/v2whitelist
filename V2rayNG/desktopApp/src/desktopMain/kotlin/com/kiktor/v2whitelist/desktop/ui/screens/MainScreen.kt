@@ -878,6 +878,9 @@ fun MainScreen(
 
         // Диалог фильтра локаций серверов (1-в-1 как в Android версии)
         LocationFilterDialog(state = state)
+
+        // Диалог проверки доступности сервисов
+        com.kiktor.v2whitelist.desktop.ui.components.ServiceAvailabilityDialog(state = state)
     }
 }
 

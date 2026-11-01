@@ -84,6 +84,19 @@
             android:summary="@string/summary_pref_profile_check"
             android:title="@string/title_pref_profile_check" />
 
+        <!-- Проверять доступность сервисов -->
+        <CheckBoxPreference
+            android:key="pref_service_check_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_service_check"
+            android:title="@string/title_pref_service_check" />
+
+        <!-- Настройка списка сервисов -->
+        <Preference
+            android:key="pref_service_check_config"
+            android:summary="@string/summary_pref_service_check_config"
+            android:title="@string/title_pref_service_check_config" />
+
         <!-- e2e проверка конечного узла перед замером скорости -->
         <CheckBoxPreference
             android:key="pref_endpoint_e2e_check_enabled"

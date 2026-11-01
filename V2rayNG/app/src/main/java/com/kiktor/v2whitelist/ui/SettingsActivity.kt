@@ -163,6 +163,10 @@ class SettingsActivity : BaseActivity() {
                 updateYandexUpdatePreferences(onlyViaVpn)
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_service_check_config")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(activity, ServiceCheckActivity::class.java))
+                true
+            }
             findPreference<androidx.preference.Preference>("pref_add_qs_tile")?.setOnPreferenceClickListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val sbm = requireContext().getSystemService(android.app.StatusBarManager::class.java)

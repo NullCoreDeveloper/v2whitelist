@@ -141,6 +141,10 @@ class DesktopSmartConnectManager(
                 settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
             } else null
             val endpointE2eCheck = settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true)
+            val serviceCheckEnabled = settingsRepo.getBoolean("pref_service_check_enabled", false)
+            val servicesList = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.parseList(
+                settingsRepo.getString("pref_service_check_items", "")
+            )
 
             // ══════════════════════════════════════════════════════════════════════════════
             // ЭТАП 1: Проверка VIP-серверов (Fast Path)
@@ -162,6 +166,8 @@ class DesktopSmartConnectManager(
                         minSpeedMbps = minSpeedMbps,
                         customEndpointUrl = customEndpointUrl,
                         endpointE2eCheckEnabled = endpointE2eCheck,
+                        serviceCheckEnabled = serviceCheckEnabled,
+                        servicesToCheck = servicesList,
                         onStatusUpdate = { text ->
                             onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                         }
@@ -232,6 +238,8 @@ class DesktopSmartConnectManager(
                         minSpeedMbps = minSpeedMbps,
                         customEndpointUrl = customEndpointUrl,
                         endpointE2eCheckEnabled = endpointE2eCheck,
+                        serviceCheckEnabled = serviceCheckEnabled,
+                        servicesToCheck = servicesList,
                         onStatusUpdate = { text ->
                             onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                         }
@@ -262,7 +270,7 @@ class DesktopSmartConnectManager(
 
                         // Фоновая допроверка хвоста в VIP
                         if (leftovers.isNotEmpty()) {
-                            warmupLeftoversInVip(leftovers, xrayPath, minSpeedMbps)
+                            warmupLeftoversInVip(leftovers, xrayPath, minSpeedMbps, serviceCheckEnabled, servicesList)
                         }
 
                         onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Нашли отличный сервер! Подключаемся к $serverName…")
@@ -297,6 +305,8 @@ class DesktopSmartConnectManager(
                         minSpeedMbps = minSpeedMbps,
                         customEndpointUrl = customEndpointUrl,
                         endpointE2eCheckEnabled = endpointE2eCheck,
+                        serviceCheckEnabled = serviceCheckEnabled,
+                        servicesToCheck = servicesList,
                         onStatusUpdate = { text ->
                             onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                         }
@@ -385,6 +395,10 @@ class DesktopSmartConnectManager(
                 settingsRepo.getString("pref_custom_endpoint_url").ifBlank { null }
             } else null
             val endpointE2eCheck = settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true)
+            val serviceCheckEnabled = settingsRepo.getBoolean("pref_service_check_enabled", false)
+            val servicesList = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.parseList(
+                settingsRepo.getString("pref_service_check_items", "")
+            )
             val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
 
             // 1. Быстрый путь: VIP Cache (как на Android)
@@ -404,6 +418,8 @@ class DesktopSmartConnectManager(
                         minSpeedMbps = 0.5,
                         customEndpointUrl = customEndpointUrl,
                         endpointE2eCheckEnabled = endpointE2eCheck,
+                        serviceCheckEnabled = serviceCheckEnabled,
+                        servicesToCheck = servicesList,
                         onStatusUpdate = { text ->
                             onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                         }
@@ -468,7 +484,9 @@ class DesktopSmartConnectManager(
     private fun warmupLeftoversInVip(
         leftovers: List<Triple<String, ProfileItem, Long>>,
         xrayPath: String?,
-        minSpeedMbps: Double
+        minSpeedMbps: Double,
+        serviceCheckEnabled: Boolean = false,
+        servicesList: List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem> = emptyList()
     ) {
         scope.launch(Dispatchers.IO) {
             val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
@@ -485,7 +503,9 @@ class DesktopSmartConnectManager(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
                     speedCheckEnabled = true,
-                    minSpeedMbps = minSpeedMbps
+                    minSpeedMbps = minSpeedMbps,
+                    serviceCheckEnabled = serviceCheckEnabled,
+                    servicesToCheck = servicesList
                 )
                 if (res.success) {
                     serverRepo.addVipServer(guid, limit)

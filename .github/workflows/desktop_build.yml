@@ -142,27 +142,34 @@ jobs:
           # Windows: MSI и Portable ZIP
           if [ "${{ matrix.platform }}" == "windows" ]; then
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.msi" -exec cp {} release-desktop/ \;
-            if [ -d "V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist" ]; then
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/data
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin
-              mkdir -p V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets
-              touch V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/.portable
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/bin/ || true
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/assets/ || true
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/bin/ || true
-              cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist/app/resources/assets/ || true
-              pushd V2rayNG/desktopApp/build/compose/binaries/main/app
-              if command -v 7z >/dev/null 2>&1; then
-                7z a -tzip "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
-              elif command -v zip >/dev/null 2>&1; then
-                zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
-              else
-                python3 -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist || python -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" v2whitelist
+            APP_DIR="V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist"
+            if [ ! -d "$APP_DIR" ]; then
+              FOUND_DIR=$(find V2rayNG/desktopApp/build/compose/binaries/main/app -mindepth 1 -maxdepth 1 -type d | head -n 1)
+              if [ -n "$FOUND_DIR" ]; then
+                APP_DIR="$FOUND_DIR"
               fi
-              popd
             fi
+            echo "Используется APP_DIR для портативной сборки: $APP_DIR"
+            mkdir -p "$APP_DIR/bin"
+            mkdir -p "$APP_DIR/assets"
+            mkdir -p "$APP_DIR/data"
+            mkdir -p "$APP_DIR/app/resources/bin"
+            mkdir -p "$APP_DIR/app/resources/assets"
+            touch "$APP_DIR/.portable"
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* "$APP_DIR/bin/" || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* "$APP_DIR/assets/" || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* "$APP_DIR/app/resources/bin/" || true
+            cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* "$APP_DIR/app/resources/assets/" || true
+            pushd "$(dirname "$APP_DIR")"
+            TARGET_FOLDER="$(basename "$APP_DIR")"
+            if command -v 7z >/dev/null 2>&1; then
+              7z a -tzip "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" "$TARGET_FOLDER"
+            elif command -v zip >/dev/null 2>&1; then
+              zip -r "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" "$TARGET_FOLDER"
+            else
+              python3 -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" "$TARGET_FOLDER" || python -m zipfile -c "$GITHUB_WORKSPACE/release-desktop/v2whitelist-windows-x64-portable.zip" "$TARGET_FOLDER"
+            fi
+            popd
           fi
           
           # macOS: DMG и PKG

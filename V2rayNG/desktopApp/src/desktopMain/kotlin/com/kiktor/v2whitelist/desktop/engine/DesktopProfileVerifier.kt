@@ -56,6 +56,8 @@ object DesktopProfileVerifier {
         bytesToDownload: Long = 500_000L,
         customEndpointUrl: String? = null,
         endpointE2eCheckEnabled: Boolean = true,
+        serviceCheckEnabled: Boolean = false,
+        servicesToCheck: List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem> = emptyList(),
         onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
         if (!isActive) throw CancellationException("Верификация отменена")
@@ -73,7 +75,9 @@ object DesktopProfileVerifier {
             socksPort = testPort,
             httpPort = 0,
             enableHttpInbound = false,
-            logLevel = "none"
+            logLevel = "none",
+            bypassRussianServices = false,
+            bypassPrivateIps = false
         )
 
         var tempConfig: File? = null
@@ -90,6 +94,12 @@ object DesktopProfileVerifier {
 
             val pb = ProcessBuilder(binary.absolutePath, "run", "-c", tempConfig.absolutePath)
                 .redirectErrorStream(true)
+            pb.directory(binary.parentFile)
+            val assetDir = runner.findAssetLocation(binary) ?: binary.parentFile
+            if (assetDir != null && assetDir.exists()) {
+                pb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                pb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
+            }
             process = pb.start()
             activeProcesses.add(process)
 
@@ -105,20 +115,45 @@ object DesktopProfileVerifier {
                 )
             }
 
-            // ── Шаг 1: e2e HTTP 204 проверка через SOCKS ──
+            // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 через SOCKS ──
             val serverTitle = profile.remarks.ifBlank { profile.server }
-            onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
-            val latency = measureE2ELatency(testPort, timeoutMs)
-            if (latency <= 0) {
-                GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
-                onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
-                return@withContext VerifyResult(
-                    success = false,
-                    errorMessage = "e2e проверка не прошла"
-                )
-            }
+            val enabledServices = servicesToCheck.filter { it.enabled }
+            val useServicesCheck = serviceCheckEnabled && customEndpointUrl.isNullOrBlank() && enabledServices.isNotEmpty()
 
-            GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
+            val latency: Long
+            if (useServicesCheck) {
+                onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
+                val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                    services = enabledServices,
+                    socksPort = testPort,
+                    timeoutMs = timeoutMs
+                )
+                val failed = results.filter { !it.success }
+                if (failed.isNotEmpty()) {
+                    val failedNames = failed.joinToString(", ") { it.service.name }
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: сервисы недоступны [$failedNames]")
+                    onStatusUpdate?.invoke("Сервисы недоступны ($failedNames), пробуем другой…")
+                    return@withContext VerifyResult(
+                        success = false,
+                        errorMessage = "Сервисы недоступны: $failedNames"
+                    )
+                }
+                latency = results.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 } ?: 100L
+                GeekModeLogger.log("Verifier", "${profile.remarks}: все ${enabledServices.size} сервисов доступны (ср. ${latency}ms)")
+            } else {
+                onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
+                val l = measureE2ELatency(testPort, timeoutMs)
+                if (l <= 0) {
+                    GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
+                    onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
+                    return@withContext VerifyResult(
+                        success = false,
+                        errorMessage = "e2e проверка не прошла"
+                    )
+                }
+                latency = l
+                GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
+            }
 
             // ── Шаг 1.5 (предпоследний этап перед проверкой скорости): e2e HTTP 204 через конечный узел ──
             var testPortForSpeed = testPort

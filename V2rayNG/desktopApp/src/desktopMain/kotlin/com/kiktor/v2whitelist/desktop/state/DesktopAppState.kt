@@ -245,6 +245,16 @@ class DesktopAppState(
 
     val removeInsecureProfiles = MutableStateFlow(settingsRepo.getBoolean("pref_remove_insecure_profiles", true))
     val testProfileBeforeConnect = MutableStateFlow(settingsRepo.getBoolean("pref_test_before_connect", true))
+    val serviceCheckEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_service_check_enabled", false))
+    val servicesList = MutableStateFlow(
+        com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.parseList(
+            settingsRepo.getString("pref_service_check_items", "")
+        )
+    )
+    val showServiceCheckDialog = MutableStateFlow(false)
+    val isCheckingServices = MutableStateFlow(false)
+    val serviceCheckResults = MutableStateFlow<List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckResult>?>(null)
+
     val speedTestOnCheck = MutableStateFlow(settingsRepo.getBoolean("pref_speed_test_on_check", true))
     val speedTestDownloadBytes = MutableStateFlow(settingsRepo.getInt("pref_speed_test_bytes", 2000000))
     val speedTestTimeoutMs = MutableStateFlow(settingsRepo.getInt("pref_speed_test_timeout_ms", 3000))
@@ -1288,6 +1298,104 @@ class DesktopAppState(
         smartConnectManager.cleanVipCacheForFilter()
     }
 
+    fun promptServiceCheckDialog() {
+        showServiceCheckDialog.value = true
+    }
+
+    fun dismissServiceCheckDialog() {
+        showServiceCheckDialog.value = false
+    }
+
+    fun setServiceCheckEnabled(enabled: Boolean) {
+        serviceCheckEnabled.value = enabled
+        settingsRepo.setBoolean("pref_service_check_enabled", enabled)
+    }
+
+    fun toggleService(id: String, enabled: Boolean) {
+        val updated = servicesList.value.map {
+            if (it.id == id) it.copy(enabled = enabled) else it
+        }
+        servicesList.value = updated
+        settingsRepo.setString(
+            "pref_service_check_items",
+            com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.serializeList(updated)
+        )
+    }
+
+    fun addCustomService(name: String, url: String) {
+        val cleanUrl = when {
+            url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true) -> url
+            else -> "https://$url"
+        }
+        val newItem = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem(
+            id = "custom_" + System.currentTimeMillis(),
+            name = name.trim(),
+            url = cleanUrl.trim(),
+            enabled = true,
+            isCustom = true
+        )
+        val updated = servicesList.value + newItem
+        servicesList.value = updated
+        settingsRepo.setString(
+            "pref_service_check_items",
+            com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.serializeList(updated)
+        )
+    }
+
+    fun removeCustomService(id: String) {
+        val updated = servicesList.value.filter { it.id != id }
+        servicesList.value = updated
+        settingsRepo.setString(
+            "pref_service_check_items",
+            com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.serializeList(updated)
+        )
+    }
+
+    fun resetServicesToDefault() {
+        val defaults = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.DEFAULT_SERVICES
+        servicesList.value = defaults
+        settingsRepo.setString(
+            "pref_service_check_items",
+            com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.serializeList(defaults)
+        )
+    }
+
+    fun checkServicesAvailability() {
+        if (isCheckingServices.value) return
+        scope.launch {
+            isCheckingServices.value = true
+            try {
+                GeekModeLogger.log("GeekMode", "Запуск параллельной проверки доступности сервисов...")
+                val enabled = servicesList.value.filter { it.enabled }
+                if (enabled.isEmpty()) {
+                    GeekModeLogger.log("GeekMode", "Нет включенных сервисов для проверки.")
+                    serviceCheckResults.value = emptyList()
+                    return@launch
+                }
+                val activeSocksPort = if (coreState.value == DesktopCoreState.RUNNING) socksPort.value else null
+                if (activeSocksPort != null) {
+                    GeekModeLogger.log("GeekMode", "Проверка сервисов через прокси (порт $activeSocksPort)...")
+                } else {
+                    GeekModeLogger.log("GeekMode", "Ядро не запущено — проверка прямого подключения к сервисам...")
+                }
+                val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                    services = enabled,
+                    socksPort = activeSocksPort,
+                    timeoutMs = 4000L
+                )
+                serviceCheckResults.value = results
+                for (res in results) {
+                    val statusStr = if (res.success) "Доступен (${res.latencyMs}ms)" else "Недоступен (${res.errorMessage ?: "code ${res.httpCode}"})"
+                    GeekModeLogger.log("GeekMode", "Сервис ${res.service.name}: $statusStr")
+                }
+            } catch (e: Exception) {
+                GeekModeLogger.log("GeekMode", "Ошибка проверки сервисов: ${e.message}")
+            } finally {
+                isCheckingServices.value = false
+            }
+        }
+    }
+
     fun clearAllLocations() {
         val empty = emptySet<String>()
         locationFilterSet.value = empty
@@ -1645,7 +1753,9 @@ class DesktopAppState(
                     profile = profile,
                     xrayBinaryPath = xrayPath,
                     timeoutMs = 3500L,
-                    speedCheckEnabled = false
+                    speedCheckEnabled = false,
+                    serviceCheckEnabled = serviceCheckEnabled.value,
+                    servicesToCheck = servicesList.value
                 )
                 val latency = if (res.success && res.latencyMs > 0) res.latencyMs else -1L
                 _pingMap.value = _pingMap.value + (guid to latency)
@@ -1679,7 +1789,9 @@ class DesktopAppState(
                                 timeoutMs = 4000L,
                                 speedCheckEnabled = speedTestOnCheck.value,
                                 minSpeedMbps = minSpeedThresholdMbps.value,
-                                bytesToDownload = speedTestDownloadBytes.value.toLong()
+                                bytesToDownload = speedTestDownloadBytes.value.toLong(),
+                                serviceCheckEnabled = serviceCheckEnabled.value,
+                                servicesToCheck = servicesList.value
                             )
                         }
                         if (verifyRes.success) {
@@ -1789,6 +1901,7 @@ class DesktopAppState(
         v2wSockets: Int = v2wCoreSockets.value,
         removeInsecure: Boolean = removeInsecureProfiles.value,
         testBeforeConnect: Boolean = testProfileBeforeConnect.value,
+        serviceCheck: Boolean = serviceCheckEnabled.value,
         speedTestCheck: Boolean = speedTestOnCheck.value,
         speedTestBytes: Int = speedTestDownloadBytes.value,
         speedTestTimeout: Int = speedTestTimeoutMs.value,
@@ -1860,6 +1973,7 @@ class DesktopAppState(
         v2wCoreSockets.value = v2wSockets
         removeInsecureProfiles.value = removeInsecure
         testProfileBeforeConnect.value = testBeforeConnect
+        serviceCheckEnabled.value = serviceCheck
         speedTestOnCheck.value = speedTestCheck
         speedTestDownloadBytes.value = speedTestBytes
         speedTestTimeoutMs.value = speedTestTimeout
@@ -1937,6 +2051,7 @@ class DesktopAppState(
         settingsRepo.setInt("pref_v2w_core_sockets", v2wSockets)
         settingsRepo.setBoolean("pref_remove_insecure_profiles", removeInsecure)
         settingsRepo.setBoolean("pref_test_before_connect", testBeforeConnect)
+        settingsRepo.setBoolean("pref_service_check_enabled", serviceCheck)
         settingsRepo.setBoolean("pref_speed_test_on_check", speedTestCheck)
         settingsRepo.setInt("pref_speed_test_bytes", speedTestBytes)
         settingsRepo.setInt("pref_speed_test_timeout_ms", speedTestTimeout)
@@ -2010,6 +2125,7 @@ class DesktopAppState(
         allowLan.value = false
         routingMode.value = "PROXY"
         minSpeedThresholdMbps.value = 1.0
+        serviceCheckEnabled.value = false
         speedTestOnCheck.value = true
         smartConnectBatchSize.value = 20
         smartFailover.value = true

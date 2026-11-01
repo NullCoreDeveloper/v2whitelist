@@ -216,21 +216,41 @@ object NodeTesterManager {
                                ?.toIntOrNull()?.takeIf { it > 0 } ?: 3_000)
             val timeout = if (isHysteria) maxOf(baseTimeout, 4000) else baseTimeout
 
-            // Реальная проверка: HTTP-запрос через SOCKS прокси → VPN сервер → интернет
-            val (elapsed, _) = SpeedtestManager.testConnection(context, port, timeout)
+            val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            val hasCustomEndpoint = customEndpointEnabled && !endpointUrl.isNullOrBlank()
+
+            val serviceCheckEnabled = ServiceCheckManager.isServiceCheckEnabled()
+            val services = ServiceCheckManager.loadServices().filter { it.enabled }
+
+            // Реальная проверка: проверка доступности сервисов либо HTTP 204
+            val (elapsed, isSuccess) = if (serviceCheckEnabled && !hasCustomEndpoint && services.isNotEmpty()) {
+                if (showStatus) {
+                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Проверяем сервисы (${services.size})…")
+                }
+                val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                    services = services,
+                    socksPort = port,
+                    timeoutMs = timeout.toLong()
+                )
+                val allOk = results.all { it.success }
+                val avgLatency = if (allOk && results.isNotEmpty()) results.map { it.latencyMs }.average().toLong() else -1L
+                avgLatency to allOk
+            } else {
+                val (t, success) = SpeedtestManager.testConnection(context, port, timeout)
+                t to (t > 0 && success)
+            }
             
             if (!currentCoroutineContext().isActive) return false
 
-            if (elapsed <= 0) {
-                GeekModeLogger.log("NodeTester", "verifyProfile: traffic did not pass through server for $guid")
+            if (!isSuccess || elapsed <= 0) {
+                GeekModeLogger.log("NodeTester", "verifyProfile: check failed for $guid (elapsed=$elapsed, success=$isSuccess)")
                 false
             } else {
                 GeekModeLogger.log("NodeTester", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
 
                 // --- Предпоследний этап: e2e проверка HTTP 204 через полноценный туннель к конечному узлу ---
-                val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-                val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
                 val endpointE2eCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
                 var testPortForSpeed = port
 

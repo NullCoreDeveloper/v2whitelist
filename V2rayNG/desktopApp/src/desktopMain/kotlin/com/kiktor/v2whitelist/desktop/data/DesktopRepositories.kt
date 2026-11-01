@@ -69,28 +69,12 @@ internal object DesktopStorageManager {
     }
 
     /**
-     * Определяет, активно ли портативное хранилище:
-     * если в каталоге приложения есть папка `data` или маркер `.portable` / `portable`
-     * или системное свойство `v2w.portable=true`.
+     * Стандартная директория настроек операционной системы:
+     * - Windows: %LOCALAPPDATA%\v2whitelist (C:\Users\<user>\AppData\Local\v2whitelist)
+     * - Linux: ~/.config/v2whitelist
+     * - macOS: ~/Library/Application Support/v2whitelist
      */
-    val isPortableMode: Boolean by lazy {
-        if (System.getProperty("v2w.portable") == "true") return@lazy true
-        val candidateDirs = getAppCandidateDirs()
-        candidateDirs.any { dir ->
-            File(dir, "data").isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists()
-        }
-    }
-
-    val baseDir: File by lazy {
-        val appDirs = getAppCandidateDirs()
-        for (dir in appDirs) {
-            val dataDir = File(dir, "data")
-            if (dataDir.isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists() || System.getProperty("v2w.portable") == "true") {
-                if (!dataDir.exists()) dataDir.mkdirs()
-                return@lazy dataDir
-            }
-        }
-
+    val standardConfigDir: File by lazy {
         val userHome = System.getProperty("user.home") ?: "."
         val standardDir = when {
             isWindows -> {
@@ -112,9 +96,40 @@ internal object DesktopStorageManager {
             isMac -> File(userHome, "Library/Application Support/v2whitelist")
             else -> File(userHome, ".config/v2whitelist")
         }
-
         if (!standardDir.exists()) standardDir.mkdirs()
         standardDir
+    }
+
+    /**
+     * Определяет, активно ли портативное хранилище:
+     * если в каталоге приложения есть маркер `.portable` / `portable` или папка `data`,
+     * приложение не установлено в системную Program Files и директория доступна на запись.
+     */
+    val isPortableMode: Boolean by lazy {
+        if (System.getProperty("v2w.portable") == "true") return@lazy true
+        val candidateDirs = getAppCandidateDirs()
+        candidateDirs.any { dir ->
+            val isProgramFiles = isWindows && dir.absolutePath.contains("Program Files", ignoreCase = true)
+            !isProgramFiles && dir.canWrite() && (File(dir, "data").isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists())
+        }
+    }
+
+    val baseDir: File by lazy {
+        val appDirs = getAppCandidateDirs()
+        for (dir in appDirs) {
+            val isProgramFiles = isWindows && dir.absolutePath.contains("Program Files", ignoreCase = true)
+            if (isProgramFiles) continue
+            val dataDir = File(dir, "data")
+            if (dataDir.isDirectory || File(dir, ".portable").exists() || File(dir, "portable").exists() || System.getProperty("v2w.portable") == "true") {
+                if (!dataDir.exists()) {
+                    try { dataDir.mkdirs() } catch (_: Exception) {}
+                }
+                if (dataDir.isDirectory && dataDir.canWrite()) {
+                    return@lazy dataDir
+                }
+            }
+        }
+        standardConfigDir
     }
 
     private var lockFileChannel: java.nio.channels.FileChannel? = null
@@ -126,10 +141,9 @@ internal object DesktopStorageManager {
      */
     fun acquireSingleInstanceLock(): Boolean {
         return try {
-            val lockFile = File(baseDir, ".app_instance.lock")
-            if (!lockFile.parentFile.exists()) {
-                lockFile.parentFile.mkdirs()
-            }
+            val lockDir = if (isPortableMode && baseDir.canWrite()) baseDir else standardConfigDir
+            if (!lockDir.exists()) lockDir.mkdirs()
+            val lockFile = File(lockDir, ".app_instance.lock")
             val raf = java.io.RandomAccessFile(lockFile, "rw")
             val channel = raf.channel
             val lock = channel.tryLock()
@@ -149,7 +163,7 @@ internal object DesktopStorageManager {
                 false
             }
         } catch (_: Exception) {
-            false
+            true
         }
     }
 
