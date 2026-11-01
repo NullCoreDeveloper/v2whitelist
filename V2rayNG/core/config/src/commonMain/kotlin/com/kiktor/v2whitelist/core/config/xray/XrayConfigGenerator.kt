@@ -131,6 +131,18 @@ object XrayConfigGenerator {
                 rawProxyOutbound.copy(tag = "proxy1")
             }
 
+            // В цепочке proxy1 выступает промежуточным транспортом (dialerProxy).
+            // xtls-rprx-vision внутри dialerProxy перехватывает вложенный TLS конечного узла и сбрасывает соединение (Connection reset).
+            // Очищаем flow для промежуточного узла.
+            val sanitizedSmartOutbound = if (baseSmartOutbound.protocol == "vless") {
+                val cleanVnext = baseSmartOutbound.settings?.vnext?.map { v ->
+                    v.copy(users = v.users.map { u -> u.copy(flow = "") })
+                }
+                baseSmartOutbound.copy(settings = baseSmartOutbound.settings?.copy(vnext = cleanVnext))
+            } else {
+                baseSmartOutbound
+            }
+
             val baseEndpointOutbound = buildProxyOutbound(endpointProfile, options)
             val currentStream = baseEndpointOutbound.streamSettings ?: XrayStreamSettings()
             val chainedStream = currentStream.copy(
@@ -141,7 +153,7 @@ object XrayConfigGenerator {
                 streamSettings = chainedStream
             )
             outbounds.add(endpointOutbound)
-            outbounds.add(baseSmartOutbound)
+            outbounds.add(sanitizedSmartOutbound)
             if (hasUpstream) {
                 val upProto = if (options.upstreamProxyType?.equals("http", ignoreCase = true) == true) "http" else "socks"
                 outbounds.add(

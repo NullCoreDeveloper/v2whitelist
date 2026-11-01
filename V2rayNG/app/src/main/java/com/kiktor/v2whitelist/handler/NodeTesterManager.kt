@@ -224,7 +224,7 @@ object NodeTesterManager {
             val services = ServiceCheckManager.loadServices().filter { it.enabled }
 
             // Реальная проверка: проверка доступности сервисов либо HTTP 204
-            val (elapsed, isSuccess) = if (serviceCheckEnabled && !hasCustomEndpoint && services.isNotEmpty()) {
+            val (elapsed, isSuccess) = if (serviceCheckEnabled && services.isNotEmpty()) {
                 if (showStatus) {
                     MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Проверяем сервисы (${services.size})…")
                 }

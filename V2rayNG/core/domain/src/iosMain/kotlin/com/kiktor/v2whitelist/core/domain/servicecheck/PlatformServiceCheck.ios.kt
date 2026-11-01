@@ -6,6 +6,7 @@ import com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckResult
 actual suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int?,
+    httpPort: Int?,
     timeoutMs: Long
 ): ServiceCheckResult {
     return ServiceCheckResult(

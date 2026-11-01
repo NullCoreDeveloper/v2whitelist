@@ -13,21 +13,26 @@ import java.net.URI
 actual suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int?,
+    httpPort: Int?,
     timeoutMs: Long
 ): ServiceCheckResult = withContext(Dispatchers.IO) {
     val start = currentTimeMillis()
     try {
-        val proxy = if (socksPort != null && socksPort > 0) {
-            Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-        } else {
-            Proxy.NO_PROXY
+        val proxy = when {
+            httpPort != null && httpPort > 0 -> {
+                Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+            }
+            socksPort != null && socksPort > 0 -> {
+                Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            }
+            else -> Proxy.NO_PROXY
         }
 
         val url = URI.create(service.url).toURL()
         val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
             connectTimeout = timeoutMs.toInt()
             readTimeout = timeoutMs.toInt()
-            instanceFollowRedirects = true
+            instanceFollowRedirects = false
             requestMethod = "GET"
             setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             setRequestProperty("Accept", "*/*")

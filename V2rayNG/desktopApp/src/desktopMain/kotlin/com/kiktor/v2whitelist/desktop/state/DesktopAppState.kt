@@ -1373,15 +1373,17 @@ class DesktopAppState(
                     return@launch
                 }
                 val activeSocksPort = if (coreState.value == DesktopCoreState.RUNNING) socksPort.value else null
-                if (activeSocksPort != null) {
-                    GeekModeLogger.log("GeekMode", "Проверка сервисов через прокси (порт $activeSocksPort)...")
+                val activeHttpPort = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else null
+                if (activeHttpPort != null || activeSocksPort != null) {
+                    GeekModeLogger.log("GeekMode", "Проверка сервисов через прокси (HTTP: $activeHttpPort, SOCKS: $activeSocksPort)...")
                 } else {
                     GeekModeLogger.log("GeekMode", "Ядро не запущено — проверка прямого подключения к сервисам...")
                 }
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = enabled,
                     socksPort = activeSocksPort,
-                    timeoutMs = 4000L
+                    httpPort = activeHttpPort,
+                    timeoutMs = 8000L
                 )
                 serviceCheckResults.value = results
                 for (res in results) {

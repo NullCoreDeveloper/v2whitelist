@@ -154,7 +154,7 @@ class DesktopSmartConnectManager(
                 onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Быстрое подключение через топ серверов…")
                 GeekModeLogger.log("SmartConnect", "VIP Cache: проверка ${vipGuids.size} узлов...")
 
-                val vipCandidates = candidates.filter { vipGuids.contains(it.first) }
+                val vipCandidates = vipGuids.mapNotNull { guid -> candidates.find { it.first == guid } }
                 for ((guid, profile) in vipCandidates) {
                     if (!isActive) return@withContext false
                     val serverName = profile.remarks.ifBlank { profile.server }
@@ -406,7 +406,7 @@ class DesktopSmartConnectManager(
             if (vipGuids.isNotEmpty()) {
                 onStageChanged?.invoke(SmartConnectStage.CHECKING_VIP, "Быстрое подключение через топ серверов…")
                 GeekModeLogger.log("SmartConnect", "Смена сервера: проверка ${vipGuids.size} узлов из VIP кэша...")
-                val vipCandidates = candidates.filter { vipGuids.contains(it.first) }
+                val vipCandidates = vipGuids.mapNotNull { guid -> candidates.find { it.first == guid } }
                 for ((guid, profile) in vipCandidates) {
                     if (!isActive) return@withContext false
                     val serverName = profile.remarks.ifBlank { profile.server }

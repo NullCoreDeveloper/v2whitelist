@@ -12,7 +12,8 @@ import kotlinx.coroutines.coroutineScope
 expect suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int? = null,
-    timeoutMs: Long = 4000L
+    httpPort: Int? = null,
+    timeoutMs: Long = 6000L
 ): ServiceCheckResult
 
 /**
@@ -23,9 +24,10 @@ object ServiceAvailabilityChecker {
     suspend fun checkSingle(
         service: ServiceCheckItem,
         socksPort: Int? = null,
-        timeoutMs: Long = 4000L
+        httpPort: Int? = null,
+        timeoutMs: Long = 6000L
     ): ServiceCheckResult {
-        return rawServiceHttpCheck(service, socksPort, timeoutMs)
+        return rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs)
     }
 
     /**
@@ -35,14 +37,15 @@ object ServiceAvailabilityChecker {
     suspend fun checkServicesParallel(
         services: List<ServiceCheckItem>,
         socksPort: Int? = null,
-        timeoutMs: Long = 4000L
+        httpPort: Int? = null,
+        timeoutMs: Long = 6000L
     ): List<ServiceCheckResult> = coroutineScope {
         val enabled = services.filter { it.enabled }
         if (enabled.isEmpty()) return@coroutineScope emptyList()
 
         enabled.map { service ->
             async {
-                rawServiceHttpCheck(service, socksPort, timeoutMs)
+                rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs)
             }
         }.awaitAll()
     }
@@ -54,9 +57,15 @@ object ServiceAvailabilityChecker {
     suspend fun areAllServicesAvailable(
         services: List<ServiceCheckItem>,
         socksPort: Int? = null,
+        httpPort: Int? = null,
         timeoutMs: Long = 4000L
     ): Boolean {
-        val results = checkServicesParallel(services, socksPort, timeoutMs)
+        val results = checkServicesParallel(
+            services = services,
+            socksPort = socksPort,
+            httpPort = httpPort,
+            timeoutMs = timeoutMs
+        )
         return results.isNotEmpty() && results.all { it.success }
     }
 }

@@ -71,10 +71,11 @@ object DesktopProfileVerifier {
         }
 
         val testPort = findFreePort()
+        val testHttpPort = findFreePort()
         val options = XrayGeneratorOptions(
             socksPort = testPort,
-            httpPort = 0,
-            enableHttpInbound = false,
+            httpPort = testHttpPort,
+            enableHttpInbound = true,
             logLevel = "none",
             bypassRussianServices = false,
             bypassPrivateIps = false
@@ -115,17 +116,18 @@ object DesktopProfileVerifier {
                 )
             }
 
-            // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 через SOCKS ──
+            // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 через SOCKS / HTTP ──
             val serverTitle = profile.remarks.ifBlank { profile.server }
             val enabledServices = servicesToCheck.filter { it.enabled }
-            val useServicesCheck = serviceCheckEnabled && customEndpointUrl.isNullOrBlank() && enabledServices.isNotEmpty()
+            val useServicesCheck = serviceCheckEnabled && enabledServices.isNotEmpty()
 
             val latency: Long
-            if (useServicesCheck) {
+            if (useServicesCheck && customEndpointUrl.isNullOrBlank()) {
                 onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = enabledServices,
                     socksPort = testPort,
+                    httpPort = testHttpPort,
                     timeoutMs = timeoutMs
                 )
                 val failed = results.filter { !it.success }
@@ -142,7 +144,7 @@ object DesktopProfileVerifier {
                 GeekModeLogger.log("Verifier", "${profile.remarks}: все ${enabledServices.size} сервисов доступны (ср. ${latency}ms)")
             } else {
                 onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
-                val l = measureE2ELatency(testPort, timeoutMs)
+                val l = measureE2ELatency(testPort, testHttpPort, timeoutMs)
                 if (l <= 0) {
                     GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
                     onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
@@ -155,13 +157,16 @@ object DesktopProfileVerifier {
                 GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
             }
 
-            // ── Шаг 1.5 (предпоследний этап перед проверкой скорости): e2e HTTP 204 через конечный узел ──
+            // ── Шаг 1.5: e2e HTTP 204 либо проверка сервисов через конечный узел ──
             var testPortForSpeed = testPort
             if (!customEndpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
-                onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
+                onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
                 val chainedPort = findFreePort()
+                val chainedHttpPort = findFreePort()
                 val chainedOptions = options.copy(
                     socksPort = chainedPort,
+                    httpPort = chainedHttpPort,
+                    enableHttpInbound = true,
                     customEndpointUrl = customEndpointUrl
                 )
                 try {
@@ -172,6 +177,11 @@ object DesktopProfileVerifier {
                     }
                     val chainedPb = ProcessBuilder(binary.absolutePath, "run", "-c", chainedTempConfig.absolutePath)
                         .redirectErrorStream(true)
+                    chainedPb.directory(binary.parentFile)
+                    if (assetDir != null && assetDir.exists()) {
+                        chainedPb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                        chainedPb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
+                    }
                     chainedProcess = chainedPb.start()
                     activeProcesses.add(chainedProcess)
                     delay(400)
@@ -186,15 +196,38 @@ object DesktopProfileVerifier {
                     }
 
                     if (!isActive) throw CancellationException("Верификация отменена")
-                    val chainedLatency = measureE2ELatency(chainedPort, timeoutMs)
-                    if (chainedLatency <= 0) {
-                        GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
-                        return@withContext VerifyResult(
-                            success = false,
-                            errorMessage = "Конечный узел не отвечает через данный сервер"
+
+                    if (useServicesCheck) {
+                        onStatusUpdate?.invoke("Проверка сервисов (${enabledServices.size}) через конечный узел…")
+                        val chainResults = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                            services = enabledServices,
+                            socksPort = chainedPort,
+                            httpPort = chainedHttpPort,
+                            timeoutMs = maxOf(timeoutMs, 6000L)
                         )
+                        val chainFailed = chainResults.filter { !it.success }
+                        if (chainFailed.isNotEmpty()) {
+                            val failedNames = chainFailed.joinToString(", ") { it.service.name }
+                            GeekModeLogger.log("Verifier", "${profile.remarks} + конечный узел: сервисы недоступны [$failedNames]")
+                            onStatusUpdate?.invoke("Сервисы недоступны через конечный узел ($failedNames), пробуем другой…")
+                            return@withContext VerifyResult(
+                                success = false,
+                                errorMessage = "Сервисы недоступны через конечный узел: $failedNames"
+                            )
+                        }
+                        val avgLatency = chainResults.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 } ?: 100L
+                        GeekModeLogger.log("Verifier", "${profile.remarks} + конечный узел: все ${enabledServices.size} сервисов доступны (ср. ${avgLatency}ms)")
+                    } else {
+                        val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, timeoutMs)
+                        if (chainedLatency <= 0) {
+                            GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                            return@withContext VerifyResult(
+                                success = false,
+                                errorMessage = "Конечный узел не отвечает через данный сервер"
+                            )
+                        }
+                        GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                     }
-                    GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                     testPortForSpeed = chainedPort
                 } catch (e: CancellationException) {
                     throw e
@@ -269,14 +302,18 @@ object DesktopProfileVerifier {
         }
     }
 
-    private fun measureE2ELatency(socksPort: Int, timeoutMs: Long): Long {
+    private fun measureE2ELatency(socksPort: Int, httpPort: Int? = null, timeoutMs: Long = 4000L): Long {
         val testUrls = listOf(
             "https://www.google.com/generate_204",
             "https://cp.cloudflare.com/generate_204",
             "https://connectivitycheck.gstatic.com/generate_204"
         )
-        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-        val perUrlTimeout = minOf(timeoutMs.toInt(), 4000)
+        val proxy = when {
+            httpPort != null && httpPort > 0 -> Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+            socksPort > 0 -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            else -> Proxy.NO_PROXY
+        }
+        val perUrlTimeout = minOf(timeoutMs.toInt(), 5000)
 
         for (urlStr in testUrls) {
             try {
