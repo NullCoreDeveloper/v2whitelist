@@ -197,7 +197,6 @@ data class XhttpSettings(
 @Serializable
 data class TlsSettings(
     val serverName: String? = null,
-    val allowInsecure: Boolean = false,
     val alpn: List<String>? = null,
     val fingerprint: String? = null,
     val pinnedPeerCertSha256: String? = null
@@ -213,8 +212,10 @@ data class RealitySettings(
     val spiderX: String? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class HysteriaSettings(
+    @EncodeDefault
     val version: Int = 2,
     val auth: String? = null,
     val udphop: HysteriaUdpHop? = null

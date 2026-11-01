@@ -103,42 +103,75 @@ private fun checkClaudeSmart(
     proxy: Proxy,
     timeoutMs: Long
 ): ServiceCheckResult {
-    val probe = executeProbe("https://claude.ai/cdn-cgi/trace", proxy, timeoutMs, maxBodyBytes = 4096)
-    if (probe.statusCode !in 200..399) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = probe.statusCode,
-            errorMessage = probe.errorMessage ?: "HTTP ${probe.statusCode}"
-        )
-    }
-    val locMatch = Regex("""(?m)^loc=([A-Za-z]{2})$""").find(probe.body)
-        ?: Regex("""loc=([A-Za-z]{2})""").find(probe.body)
+    // 1. Cloudflare trace (публичный CDN эндпоинт Cloudflare без капчи и Turnstile-челленджей)
+    val cfTrace = executeProbe("https://www.cloudflare.com/cdn-cgi/trace", proxy, timeoutMs, maxBodyBytes = 4096)
+    val locMatch = Regex("""(?m)^loc=([A-Za-z]{2})$""").find(cfTrace.body)
+        ?: Regex("""loc=([A-Za-z]{2})""").find(cfTrace.body)
     val loc = locMatch?.groupValues?.get(1)?.uppercase()
-    if (loc == null) {
+
+    if (loc != null && loc in CLAUDE_BLOCKED_REGIONS) {
         return ServiceCheckResult(
             service = service,
             success = false,
             latencyMs = -1L,
-            httpCode = probe.statusCode,
-            errorMessage = "Не удалось определить регион"
-        )
-    }
-    if (loc in CLAUDE_BLOCKED_REGIONS) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = probe.statusCode,
+            httpCode = 403,
             errorMessage = "Регион $loc не поддерживается"
         )
     }
+
+    // 2. API Anthropic: возвращает 401 Unauthorized (x-api-key required) если IP разрешен,
+    // либо 403 / permission_error если IP заблокирован/не поддерживается.
+    val apiProbe = executeProbe("https://api.anthropic.com/v1/models", proxy, timeoutMs, maxBodyBytes = 1024)
+    val apiBody = apiProbe.body.lowercase()
+    if (apiBody.contains("not available in your region") || apiBody.contains("permission_error")) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = apiProbe.statusCode,
+            errorMessage = "Anthropic: регион не поддерживается"
+        )
+    }
+
+    // Если API Anthropic ответил 401 или 200..399 — сервис доступен
+    if (apiProbe.statusCode == 401 || apiProbe.statusCode in 200..399) {
+        return ServiceCheckResult(
+            service = service,
+            success = true,
+            latencyMs = apiProbe.latencyMs,
+            httpCode = apiProbe.statusCode
+        )
+    }
+
+    // Если сетевая ошибка на api.anthropic.com и на cfTrace
+    if (apiProbe.statusCode <= 0 && cfTrace.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = apiProbe.errorMessage ?: cfTrace.errorMessage ?: "Read timed out"
+        )
+    }
+
+    // 3. Fallback: веб-проверка claude.ai
+    val webProbe = executeProbe("https://claude.ai", proxy, timeoutMs, maxBodyBytes = 512)
+    val isWebResponding = webProbe.statusCode in 200..399 || (webProbe.statusCode == 403 && loc != null && loc !in CLAUDE_BLOCKED_REGIONS)
+    if (isWebResponding) {
+        return ServiceCheckResult(
+            service = service,
+            success = true,
+            latencyMs = if (webProbe.latencyMs > 0) webProbe.latencyMs else apiProbe.latencyMs,
+            httpCode = webProbe.statusCode
+        )
+    }
+
     return ServiceCheckResult(
         service = service,
-        success = true,
-        latencyMs = probe.latencyMs,
-        httpCode = probe.statusCode
+        success = false,
+        latencyMs = -1L,
+        httpCode = if (apiProbe.statusCode > 0) apiProbe.statusCode else webProbe.statusCode,
+        errorMessage = apiProbe.errorMessage ?: webProbe.errorMessage ?: "Недоступен"
     )
 }
 
@@ -147,22 +180,34 @@ private fun checkChatGptSmart(
     proxy: Proxy,
     timeoutMs: Long
 ): ServiceCheckResult {
-    val traceProbe = executeProbe("https://chatgpt.com/cdn-cgi/trace", proxy, timeoutMs, maxBodyBytes = 4096)
-    val locMatch = Regex("""(?m)^loc=([A-Za-z]{2})$""").find(traceProbe.body)
-        ?: Regex("""loc=([A-Za-z]{2})""").find(traceProbe.body)
+    // 1. Cloudflare trace для точного определения региона выхода без бот-челленджей
+    val cfTrace = executeProbe("https://www.cloudflare.com/cdn-cgi/trace", proxy, timeoutMs, maxBodyBytes = 4096)
+    val locMatch = Regex("""(?m)^loc=([A-Za-z]{2})$""").find(cfTrace.body)
+        ?: Regex("""loc=([A-Za-z]{2})""").find(cfTrace.body)
     val loc = locMatch?.groupValues?.get(1)?.uppercase()
+
     if (loc != null && loc in CHATGPT_BLOCKED_REGIONS) {
         return ServiceCheckResult(
             service = service,
             success = false,
             latencyMs = -1L,
-            httpCode = traceProbe.statusCode,
+            httpCode = 403,
             errorMessage = "Регион $loc не поддерживается"
         )
     }
 
-    // iOS API endpoint для детекта блокировки ISP/IP
-    val iosProbe = executeProbe("https://ios.chat.openai.com/", proxy, timeoutMs, maxBodyBytes = 4096)
+    // 2. iOS API endpoint для детекта блокировки ISP/IP (как в FlClash)
+    val iosProbe = executeProbe("https://ios.chat.openai.com/", proxy, timeoutMs, maxBodyBytes = 2048)
+    if (iosProbe.statusCode <= 0 && cfTrace.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = iosProbe.errorMessage ?: cfTrace.errorMessage ?: "Read timed out"
+        )
+    }
+
     val iosBody = iosProbe.body.lowercase()
     when {
         iosBody.contains("disallowed isp") -> {
@@ -185,31 +230,27 @@ private fun checkChatGptSmart(
         }
     }
 
-    // Compliance endpoint на unsupported_country
-    val complianceProbe = executeProbe("https://api.openai.com/compliance/cookie_requirements", proxy, timeoutMs, maxBodyBytes = 4096)
-    if (complianceProbe.body.lowercase().contains("unsupported_country")) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = complianceProbe.statusCode,
-            errorMessage = "Страна не поддерживается OpenAI"
-        )
+    // 3. Compliance endpoint на unsupported_country
+    if (iosProbe.statusCode > 0) {
+        val complianceProbe = executeProbe("https://api.openai.com/compliance/cookie_requirements", proxy, timeoutMs, maxBodyBytes = 2048)
+        if (complianceProbe.body.lowercase().contains("unsupported_country")) {
+            return ServiceCheckResult(
+                service = service,
+                success = false,
+                latencyMs = -1L,
+                httpCode = complianceProbe.statusCode,
+                errorMessage = "Страна не поддерживается OpenAI"
+            )
+        }
     }
 
-    val isTraceOk = traceProbe.statusCode in 200..399 && loc != null
     val isIosOk = iosProbe.statusCode in 200..399 || iosBody.contains("request is not allowed")
-    if (isTraceOk || isIosOk) {
-        val latency = when {
-            traceProbe.latencyMs > 0 && iosProbe.latencyMs > 0 -> minOf(traceProbe.latencyMs, iosProbe.latencyMs)
-            traceProbe.latencyMs > 0 -> traceProbe.latencyMs
-            else -> iosProbe.latencyMs.coerceAtLeast(1L)
-        }
+    if (isIosOk) {
         return ServiceCheckResult(
             service = service,
             success = true,
-            latencyMs = latency,
-            httpCode = if (traceProbe.statusCode > 0) traceProbe.statusCode else iosProbe.statusCode
+            latencyMs = if (iosProbe.latencyMs > 0) iosProbe.latencyMs else cfTrace.latencyMs,
+            httpCode = if (iosProbe.statusCode > 0) iosProbe.statusCode else cfTrace.statusCode
         )
     }
 
@@ -217,8 +258,8 @@ private fun checkChatGptSmart(
         service = service,
         success = false,
         latencyMs = -1L,
-        httpCode = traceProbe.statusCode,
-        errorMessage = traceProbe.errorMessage ?: iosProbe.errorMessage ?: "Недоступен"
+        httpCode = iosProbe.statusCode,
+        errorMessage = iosProbe.errorMessage ?: "Недоступен"
     )
 }
 
@@ -245,8 +286,8 @@ private fun checkGeminiSmart(
         var code = conn.responseCode
         val loc = conn.getHeaderField("Location")
 
-        // Проверяем заглушку Google Captcha / Sorry
-        if (loc?.contains("/sorry/") == true) {
+        // Проверяем заглушку Google Captcha / Sorry / Rate Limit
+        if (loc?.contains("/sorry/") == true || code == 429) {
             return ServiceCheckResult(
                 service = service,
                 success = false,
@@ -272,7 +313,7 @@ private fun checkGeminiSmart(
             conn.connect()
             code = conn.responseCode
             val newLoc = conn.getHeaderField("Location")
-            if (newLoc?.contains("/sorry/") == true) {
+            if (newLoc?.contains("/sorry/") == true || code == 429) {
                 return ServiceCheckResult(
                     service = service,
                     success = false,
@@ -289,31 +330,35 @@ private fun checkGeminiSmart(
             var unsupportedText = false
 
             if (stream != null) {
-                val marker = ",2,1,200,\""
-                val buf = ByteArray(8192)
-                val sb = StringBuilder()
-                var readTotal = 0
-                val maxScan = 1_500_000 // до 1.5 МБ
-                while (readTotal < maxScan) {
-                    val r = stream.read(buf)
-                    if (r <= 0) break
-                    val chunk = String(buf, 0, r, Charsets.UTF_8)
-                    sb.append(chunk)
-                    val idx = sb.indexOf(marker)
-                    if (idx != -1 && sb.length >= idx + marker.length + 3) {
-                        foundRegion = sb.substring(idx + marker.length, idx + marker.length + 3).uppercase()
-                        break
+                try {
+                    val marker = ",2,1,200,\""
+                    val buf = ByteArray(8192)
+                    val sb = StringBuilder()
+                    var readTotal = 0
+                    val maxScan = 1_000_000 // до 1 МБ
+                    while (readTotal < maxScan) {
+                        val r = stream.read(buf)
+                        if (r <= 0) break
+                        val chunk = String(buf, 0, r, Charsets.UTF_8)
+                        sb.append(chunk)
+                        val idx = sb.indexOf(marker)
+                        if (idx != -1 && sb.length >= idx + marker.length + 3) {
+                            foundRegion = sb.substring(idx + marker.length, idx + marker.length + 3).uppercase()
+                            break
+                        }
+                        val lowerChunk = chunk.lowercase()
+                        if (lowerChunk.contains("not supported in your country") ||
+                            lowerChunk.contains("is not available in your country")) {
+                            unsupportedText = true
+                            break
+                        }
+                        if (sb.length > 32768) {
+                            sb.delete(0, 16384)
+                        }
+                        readTotal += r
                     }
-                    val lowerChunk = chunk.lowercase()
-                    if (lowerChunk.contains("not supported in your country") ||
-                        lowerChunk.contains("is not available in your country")) {
-                        unsupportedText = true
-                        break
-                    }
-                    if (sb.length > 32768) {
-                        sb.delete(0, 16384)
-                    }
-                    readTotal += r
+                } catch (_: Exception) {
+                    // Таймаут дочитывания длинного тела на медленном узле — не отменяет факт ответа сервера
                 }
             }
 
@@ -383,6 +428,16 @@ private fun checkDiscordSmart(
             httpCode = probe.statusCode
         )
     }
+    // Если ошибка сетевая/таймаут — не тратим время на повторный таймаут
+    if (probe.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = probe.errorMessage ?: "Read timed out"
+        )
+    }
     val fallback = executeProbe(service.url, proxy, timeoutMs)
     val success = (fallback.statusCode in 200..399) || (fallback.statusCode in listOf(401, 403, 404, 429))
     return ServiceCheckResult(
@@ -406,6 +461,16 @@ private fun checkTelegramSmart(
             success = true,
             latencyMs = probe.latencyMs,
             httpCode = probe.statusCode
+        )
+    }
+    // Если соединение оборвалось или упало по таймауту — возвращаем ошибку сразу
+    if (probe.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = probe.errorMessage ?: "Read timed out"
         )
     }
     val fallback = executeProbe("https://telegram.org", proxy, timeoutMs)

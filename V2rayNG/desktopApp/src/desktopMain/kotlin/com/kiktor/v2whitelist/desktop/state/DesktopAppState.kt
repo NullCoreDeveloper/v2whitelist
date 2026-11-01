@@ -1383,7 +1383,7 @@ class DesktopAppState(
                     services = enabled,
                     socksPort = activeSocksPort,
                     httpPort = activeHttpPort,
-                    timeoutMs = 4000L
+                    timeoutMs = 6000L
                 )
                 serviceCheckResults.value = results
                 for (res in results) {

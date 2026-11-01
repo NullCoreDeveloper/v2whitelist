@@ -449,11 +449,13 @@ class DesktopSmartConnectManager(
                     minSpeedMbps = 0.5,
                     customEndpointUrl = customEndpointUrl,
                     endpointE2eCheckEnabled = endpointE2eCheck,
+                    serviceCheckEnabled = serviceCheckEnabled,
+                    servicesToCheck = servicesList,
                     onStatusUpdate = { text ->
                         onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text)
                     }
                 )
-                if (res.success) {
+                if (res.success && (res.latencyMs <= 0 || res.latencyMs < 3000L)) {
                     val limit = settingsRepo.getInt("pref_vip_cache_limit", 5)
                     serverRepo.addVipServer(guid, limit)
                     if (res.latencyMs > 0) {

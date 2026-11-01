@@ -644,7 +644,6 @@ object XrayConfigGenerator {
         val tlsSettings = if (security == "tls") {
             TlsSettings(
                 serverName = sni,
-                allowInsecure = profile.insecure ?: options.allowInsecureDefault,
                 alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() },
                 fingerprint = profile.fingerPrint,
                 pinnedPeerCertSha256 = profile.pinnedCA256
