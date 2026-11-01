@@ -549,7 +549,7 @@ object V2rayConfigManager {
 
                 val proxyDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST)
                 val proxyDomains = if (!proxyDomainsStr.isNullOrBlank()) {
-                    proxyDomainsStr.split(",", "\n")
+                    proxyDomainsStr.split(Regex("[,\\r\\n]+"))
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
                         .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }
@@ -557,7 +557,7 @@ object V2rayConfigManager {
 
                 val directDomainsStr = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST)
                 val directDomains = if (!directDomainsStr.isNullOrBlank()) {
-                    directDomainsStr.split(",", "\n")
+                    directDomainsStr.split(Regex("[,\\r\\n]+"))
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
                         .map { if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it" }

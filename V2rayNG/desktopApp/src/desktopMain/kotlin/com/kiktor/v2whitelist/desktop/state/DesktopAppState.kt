@@ -2216,7 +2216,7 @@ class DesktopAppState(
     }
 
     companion object {
-        const val APP_VERSION = "2.0.0"
+        val APP_VERSION: String get() = com.kiktor.v2whitelist.desktop.DesktopBuildConfig.VERSION_NAME
         const val GITHUB_REPO_API = "https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases"
         const val GITHUB_RELEASES_WEB = "https://github.com/NullCoreDeveloper/v2whitelist/releases"
     }

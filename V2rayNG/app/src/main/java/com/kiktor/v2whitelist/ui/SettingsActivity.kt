@@ -212,16 +212,29 @@ class SettingsActivity : BaseActivity() {
                 val currentDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST) ?: ""
                 val editText = android.widget.EditText(requireContext()).apply {
                     setText(currentDomains)
-                    hint = "domain.com, sub.example.com, geosite:category-ru"
+                    hint = getString(R.string.hint_pref_domain_split_tunneling_settings)
                     minLines = 4
                     gravity = android.view.Gravity.TOP
                     inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 }
                 val padding = (16 * resources.displayMetrics.density).toInt()
+                val editorHeight = (resources.displayMetrics.heightPixels / resources.displayMetrics.density * 0.42f)
+                    .toInt()
+                    .coerceAtMost((320 * resources.displayMetrics.density).toInt())
+                val editorScrollView = android.widget.ScrollView(requireContext()).apply {
+                    isFillViewport = true
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        editorHeight
+                    )
+                    addView(editText.also {
+                        it.setPadding(padding, padding / 2, padding, padding / 2)
+                    })
+                }
                 android.app.AlertDialog.Builder(requireContext())
                     .setTitle(getString(R.string.title_pref_domain_split_tunneling_settings))
                     .setMessage(getString(R.string.summary_pref_domain_split_tunneling_settings))
-                    .setView(editText.also { it.setPadding(padding, padding / 2, padding, padding / 2) })
+                    .setView(editorScrollView)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
                         val value = editText.text.toString().trim()
                         MmkvManager.encodeSettings(AppConfig.PREF_DIRECT_DOMAIN_LIST, value)
@@ -235,16 +248,29 @@ class SettingsActivity : BaseActivity() {
                 val currentDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST) ?: ""
                 val editText = android.widget.EditText(requireContext()).apply {
                     setText(currentDomains)
-                    hint = "domain.com, sub.example.com, geosite:youtube"
+                    hint = getString(R.string.hint_pref_proxy_domain_list_settings)
                     minLines = 4
                     gravity = android.view.Gravity.TOP
                     inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 }
                 val padding = (16 * resources.displayMetrics.density).toInt()
+                val editorHeight = (resources.displayMetrics.heightPixels / resources.displayMetrics.density * 0.42f)
+                    .toInt()
+                    .coerceAtMost((320 * resources.displayMetrics.density).toInt())
+                val editorScrollView = android.widget.ScrollView(requireContext()).apply {
+                    isFillViewport = true
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        editorHeight
+                    )
+                    addView(editText.also {
+                        it.setPadding(padding, padding / 2, padding, padding / 2)
+                    })
+                }
                 android.app.AlertDialog.Builder(requireContext())
                     .setTitle(getString(R.string.title_pref_proxy_domain_list_settings))
                     .setMessage(getString(R.string.summary_pref_proxy_domain_list_settings))
-                    .setView(editText.also { it.setPadding(padding, padding / 2, padding, padding / 2) })
+                    .setView(editorScrollView)
                     .setPositiveButton(android.R.string.ok) { _, _ ->
                         val value = editText.text.toString().trim()
                         MmkvManager.encodeSettings(AppConfig.PREF_PROXY_DOMAIN_LIST, value)
@@ -446,8 +472,8 @@ class SettingsActivity : BaseActivity() {
             val proxyDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_PROXY_DOMAIN_LIST).orEmpty()
             val directDomains = MmkvManager.decodeSettingsString(AppConfig.PREF_DIRECT_DOMAIN_LIST).orEmpty()
 
-            val proxyCount = proxyDomains.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }.size
-            val directCount = directDomains.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }.size
+            val proxyCount = proxyDomains.split(Regex("[,\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }.size
+            val directCount = directDomains.split(Regex("[,\\r\\n]+")).map { it.trim() }.filter { it.isNotEmpty() }.size
 
             findPreference<androidx.preference.Preference>("pref_proxy_domain_list_settings")?.summary =
                 if (proxyCount > 0) "Настроено доменов: $proxyCount"

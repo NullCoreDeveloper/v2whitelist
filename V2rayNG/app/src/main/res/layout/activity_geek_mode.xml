@@ -193,6 +193,7 @@
                 android:textColor="#00FF00"
                 android:textSize="10sp"
                 android:fontFamily="monospace"
+                android:textIsSelectable="true"
                 tools:text="[14:00:01] Started node testing...\n[14:00:02] Ping = 45ms" />
         </androidx.core.widget.NestedScrollView>
     </LinearLayout>

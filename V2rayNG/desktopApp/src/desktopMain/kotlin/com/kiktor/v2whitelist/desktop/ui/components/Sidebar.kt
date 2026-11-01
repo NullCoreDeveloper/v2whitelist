@@ -70,13 +70,24 @@ fun Sidebar(
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "ПроБел desktop",
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    letterSpacing = (-0.3).sp
-                )
+                Column(
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "ПроБел desktop",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        letterSpacing = (-0.3).sp
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "v${com.kiktor.v2whitelist.desktop.state.DesktopAppState.APP_VERSION}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 16.dp))

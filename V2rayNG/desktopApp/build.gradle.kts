@@ -5,6 +5,42 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun getVersionName(project: Project): String {
+    val override = (project.findProperty("VERSION_NAME") as? String)?.removePrefix("v")
+        ?: (project.findProperty("versionName") as? String)?.removePrefix("v")
+        ?: (project.findProperty("packageVersion") as? String)?.removePrefix("v")
+    if (!override.isNullOrEmpty()) return override
+    return try {
+        val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0", "--match", "v*").start()
+        val version = process.inputStream.bufferedReader().readText().trim().removePrefix("v")
+        if (version.isEmpty()) "1.2.7" else version
+    } catch (e: Exception) {
+        "1.2.7"
+    }
+}
+
+val desktopVersion = getVersionName(project)
+val generatedSrcDir = layout.buildDirectory.dir("generated/sources/buildConfig/desktopMain")
+
+val generateDesktopBuildConfig by tasks.registering {
+    inputs.property("versionName", desktopVersion)
+    outputs.dir(generatedSrcDir)
+    doLast {
+        val outputFile = generatedSrcDir.get().file("com/kiktor/v2whitelist/desktop/DesktopBuildConfig.kt").asFile
+        outputFile.parentFile.mkdirs()
+        outputFile.writeText(
+            """
+            package com.kiktor.v2whitelist.desktop
+
+            object DesktopBuildConfig {
+                const val VERSION_NAME: String = "$desktopVersion"
+                const val APP_NAME: String = "ПроБел desktop"
+            }
+            """.trimIndent()
+        )
+    }
+}
+
 kotlin {
     jvm("desktop") {
         compilerOptions {
@@ -14,6 +50,7 @@ kotlin {
 
     sourceSets {
         val desktopMain by getting {
+            kotlin.srcDir(generatedSrcDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(compose.material3)
@@ -72,8 +109,8 @@ compose.desktop {
                 else -> targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage)
             }
 
-            val rawVersion = (project.findProperty("packageVersion") as? String)?.removePrefix("v") ?: "2.0.0"
-            val targetPackageVersion = Regex("""\d+(\.\d+)*""").find(rawVersion)?.value ?: "2.0.0"
+            val rawVersion = desktopVersion
+            val targetPackageVersion = Regex("""\d+(\.\d+)*""").find(rawVersion)?.value ?: "1.2.7"
             val macMajor = targetPackageVersion.substringBefore('.').toIntOrNull() ?: 0
             val effectiveVersion = if (currentOs.isMacOsX && macMajor < 1) "1.0.0" else targetPackageVersion
 
@@ -205,7 +242,7 @@ tasks.matching {
                     -Dskiko.library.path="${'$'}APPDIR/lib/app" \
                     -Dcompose.application.resources.dir="${'$'}APPDIR/lib/app/resources" \
                     -Dcompose.application.configure.swing.globals=true \
-                    -Djpackage.app-version=2.0.0 \
+                    -Djpackage.app-version=$desktopVersion \
                     -cp "${'$'}APPDIR/lib/app/*" \
                     com.kiktor.v2whitelist.desktop.MainKt \
                     "${'$'}@"
@@ -240,3 +277,8 @@ tasks.matching {
         }
     }
 }
+
+tasks.matching { it.name.startsWith("compileKotlinDesktop") }.configureEach {
+    dependsOn(generateDesktopBuildConfig)
+}
+
