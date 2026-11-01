@@ -116,7 +116,7 @@ jobs:
 
       - name: Build Unsigned Debug APKs (v0.0.1.debug)
         run: |
-          ./gradlew assembleFdroidDebug -PVERSION_NAME=0.0.1.debug -PversionName=0.0.1.debug --no-daemon --stacktrace
+          ./gradlew assembleFdroidDebug -PVERSION_NAME=0.0.1.debug -PversionName=0.0.1.debug -PENABLE_R8=true --no-daemon --stacktrace
         working-directory: V2rayNG
 
       - name: Collect Android Artifacts

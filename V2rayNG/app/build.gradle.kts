@@ -66,9 +66,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val enableR8 = (project.findProperty("ENABLE_R8") as? String)?.toBoolean()
+        ?: (project.findProperty("enableR8") as? String)?.toBoolean()
+        ?: false
+
     buildTypes {
+        debug {
+            isMinifyEnabled = enableR8
+            if (enableR8) {
+                proguardFiles(
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro"
+                )
+            }
+        }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
