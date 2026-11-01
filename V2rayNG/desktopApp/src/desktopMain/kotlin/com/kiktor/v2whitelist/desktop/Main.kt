@@ -514,6 +514,11 @@ fun main() {
         System.err.println("Экземпляр приложения ПроБел (v2whitelist) уже запущен.")
         return
     }
+    Runtime.getRuntime().addShutdownHook(Thread {
+        try {
+            ProcessBuilder("pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_").start().waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {}
+    })
     application {
         val state = remember { DesktopAppState() }
     var isWindowVisible by remember { mutableStateOf(true) }
@@ -540,19 +545,15 @@ fun main() {
             DesktopCoreState.STOPPED -> "Отключено"
         }}",
         primaryAction = {
-            isWindowVisible = !isWindowVisible
-            if (isWindowVisible) {
-                windowState.isMinimized = false
-            }
+            isWindowVisible = true
+            windowState.isMinimized = false
         }
     ) {
         Item(
-            label = if (isWindowVisible) "Свернуть в трей" else "Открыть ПроБел",
+            label = "Открыть ПроБел",
             onClick = {
-                isWindowVisible = !isWindowVisible
-                if (isWindowVisible) {
-                    windowState.isMinimized = false
-                }
+                isWindowVisible = true
+                windowState.isMinimized = false
             }
         )
         Divider()

@@ -70,21 +70,13 @@ fun Sidebar(
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "ПроБел",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 19.sp,
-                        letterSpacing = (-0.5).sp
-                    )
-                    Text(
-                        text = "v2whitelist Desktop",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = "ПроБел desktop",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    letterSpacing = (-0.3).sp
+                )
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 16.dp))

@@ -128,23 +128,12 @@ fun MainScreen(
                 .padding(horizontal = 32.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ================= 1. ШАПКА В СТИЛЕ ANDROID ПРОБЕЛ =================
+            // ================= 1. ШАПКА =================
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Слева: жирный логотип "ПроБел"
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "ПроБел",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-
                 // Справа: статус актуальности подписки и время
                 Column(horizontalAlignment = Alignment.End) {
                     val statusColor = when {

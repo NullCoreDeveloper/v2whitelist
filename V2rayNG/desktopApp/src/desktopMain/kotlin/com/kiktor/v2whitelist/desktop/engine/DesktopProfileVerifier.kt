@@ -197,37 +197,16 @@ object DesktopProfileVerifier {
 
                     if (!isActive) throw CancellationException("Верификация отменена")
 
-                    if (useServicesCheck) {
-                        onStatusUpdate?.invoke("Проверка сервисов (${enabledServices.size}) через конечный узел…")
-                        val chainResults = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
-                            services = enabledServices,
-                            socksPort = chainedPort,
-                            httpPort = chainedHttpPort,
-                            timeoutMs = maxOf(timeoutMs, 6000L)
+                    onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
+                    val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
+                    if (chainedLatency <= 0) {
+                        GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                        return@withContext VerifyResult(
+                            success = false,
+                            errorMessage = "Конечный узел не отвечает через данный сервер"
                         )
-                        val chainFailed = chainResults.filter { !it.success }
-                        if (chainFailed.isNotEmpty()) {
-                            val failedNames = chainFailed.joinToString(", ") { it.service.name }
-                            GeekModeLogger.log("Verifier", "${profile.remarks} + конечный узел: сервисы недоступны [$failedNames]")
-                            onStatusUpdate?.invoke("Сервисы недоступны через конечный узел ($failedNames), пробуем другой…")
-                            return@withContext VerifyResult(
-                                success = false,
-                                errorMessage = "Сервисы недоступны через конечный узел: $failedNames"
-                            )
-                        }
-                        val avgLatency = chainResults.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 } ?: 100L
-                        GeekModeLogger.log("Verifier", "${profile.remarks} + конечный узел: все ${enabledServices.size} сервисов доступны (ср. ${avgLatency}ms)")
-                    } else {
-                        val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, timeoutMs)
-                        if (chainedLatency <= 0) {
-                            GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
-                            return@withContext VerifyResult(
-                                success = false,
-                                errorMessage = "Конечный узел не отвечает через данный сервер"
-                            )
-                        }
-                        GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                     }
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                     testPortForSpeed = chainedPort
                 } catch (e: CancellationException) {
                     throw e

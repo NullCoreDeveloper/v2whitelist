@@ -110,6 +110,8 @@ class XrayDesktopRunner(
             stop()
         }
 
+        killExistingZombieProcesses(sudoPassword)
+
         _coreState.value = DesktopCoreState.STARTING
         _lastError.value = null
 
@@ -294,29 +296,39 @@ class XrayDesktopRunner(
         logJob?.cancel()
         logJob = null
 
-        if (isLaunchedWithSudo && currentSudoPassword != null) {
-            try {
-                val killPb = ProcessBuilder("sudo", "-S", "pkill", "-f", "xray.*run.*v2w_xray_config_")
-                val killProc = killPb.start()
-                killProc.outputStream.bufferedWriter().use { writer ->
-                    writer.write("${currentSudoPassword}\n")
-                    writer.flush()
-                }
-                killProc.waitFor(1, TimeUnit.SECONDS)
-            } catch (_: Exception) {}
-        }
-
         process?.let { proc ->
             if (proc.isAlive) {
                 proc.destroy()
-                val exited = proc.waitFor(1500, TimeUnit.MILLISECONDS)
+                val exited = proc.waitFor(1000, TimeUnit.MILLISECONDS)
                 if (!exited && proc.isAlive) {
                     proc.destroyForcibly()
                 }
             }
         }
+
+        killExistingZombieProcesses(if (isLaunchedWithSudo) currentSudoPassword else null)
+
         cleanup()
         GeekModeLogger.log("DesktopRunner", "Ядро Xray остановлено.")
+    }
+
+    private fun killExistingZombieProcesses(sudoPassword: String? = null) {
+        try {
+            val pb = ProcessBuilder("pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_")
+            pb.start().waitFor(500, TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {}
+
+        if (!sudoPassword.isNullOrBlank()) {
+            try {
+                val killPb = ProcessBuilder("sudo", "-S", "pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_")
+                val killProc = killPb.start()
+                killProc.outputStream.bufferedWriter().use { writer ->
+                    writer.write("$sudoPassword\n")
+                    writer.flush()
+                }
+                killProc.waitFor(500, TimeUnit.MILLISECONDS)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun cleanup() {
