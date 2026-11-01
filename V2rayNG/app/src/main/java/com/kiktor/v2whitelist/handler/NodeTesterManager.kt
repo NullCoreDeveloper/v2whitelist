@@ -237,8 +237,8 @@ object NodeTesterManager {
                 val avgLatency = if (allOk && results.isNotEmpty()) results.map { it.latencyMs }.average().toLong() else -1L
                 avgLatency to allOk
             } else {
-                val (t, success) = SpeedtestManager.testConnection(context, port, timeout)
-                t to (t > 0 && success)
+                val (t, _) = SpeedtestManager.testConnection(context, port, timeout)
+                t to (t > 0)
             }
             
             if (!currentCoroutineContext().isActive) return false
