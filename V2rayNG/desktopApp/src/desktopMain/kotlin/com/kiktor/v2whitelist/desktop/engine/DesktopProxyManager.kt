@@ -59,6 +59,7 @@ object DesktopProxyManager {
             val finished = proc.waitFor(3, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()
+                try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
                 -1 to "Таймаут выполнения команды"
             } else {
                 proc.exitValue() to output.trim()

@@ -314,7 +314,10 @@ object DesktopTunManager {
                 val exited = proc.waitFor(1, TimeUnit.SECONDS)
                 if (!exited && proc.isAlive) {
                     proc.destroyForcibly()
+                    try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
                 }
+            } else {
+                try { proc.waitFor() } catch (_: Exception) {}
             }
         }
         tunProcess = null
@@ -402,6 +405,7 @@ object DesktopTunManager {
             val finished = proc.waitFor(3, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()
+                try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
                 -1 to "Timeout"
             } else {
                 proc.exitValue() to output.trim()
@@ -431,6 +435,7 @@ object DesktopTunManager {
             val finished = proc.waitFor(3, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()
+                try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
                 -1 to "Timeout"
             } else {
                 proc.exitValue() to output.trim()

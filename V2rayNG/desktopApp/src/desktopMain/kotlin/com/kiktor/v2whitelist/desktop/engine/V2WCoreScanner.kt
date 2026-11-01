@@ -31,11 +31,14 @@ object V2WCoreScanner {
     fun stop() {
         synchronized(processLock) {
             activeProcess?.let { proc ->
-                if (proc.isAlive) {
-                    try {
+                try {
+                    if (proc.isAlive) {
                         proc.destroyForcibly()
-                    } catch (_: Exception) {}
-                }
+                        proc.waitFor(1, TimeUnit.SECONDS)
+                    } else {
+                        proc.waitFor()
+                    }
+                } catch (_: Exception) {}
             }
             activeProcess = null
         }
@@ -229,11 +232,14 @@ object V2WCoreScanner {
                     activeProcess = null
                 }
             }
-            if (process.isAlive) {
-                try {
+            try {
+                if (process.isAlive) {
                     process.destroyForcibly()
-                } catch (_: Exception) {}
-            }
+                    process.waitFor(1, TimeUnit.SECONDS)
+                } else {
+                    process.waitFor()
+                }
+            } catch (_: Exception) {}
         }
 
         GeekModeLogger.log("v2w-core", "Сканирование завершено. Успешно: $successCount, Ошибок: $failCount, Прервано: $stoppedEarly")

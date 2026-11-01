@@ -38,6 +38,9 @@ object DesktopProfileVerifier {
             try {
                 if (proc.isAlive) {
                     proc.destroyForcibly()
+                    proc.waitFor(500, TimeUnit.MILLISECONDS)
+                } else {
+                    proc.waitFor()
                 }
             } catch (_: Exception) {}
         }
@@ -262,15 +265,25 @@ object DesktopProfileVerifier {
         } finally {
             process?.let { proc ->
                 activeProcesses.remove(proc)
-                if (proc.isAlive) {
-                    try { proc.destroyForcibly() } catch (_: Exception) {}
-                }
+                try {
+                    if (proc.isAlive) {
+                        proc.destroyForcibly()
+                        proc.waitFor(1, TimeUnit.SECONDS)
+                    } else {
+                        proc.waitFor()
+                    }
+                } catch (_: Exception) {}
             }
             chainedProcess?.let { proc ->
                 activeProcesses.remove(proc)
-                if (proc.isAlive) {
-                    try { proc.destroyForcibly() } catch (_: Exception) {}
-                }
+                try {
+                    if (proc.isAlive) {
+                        proc.destroyForcibly()
+                        proc.waitFor(1, TimeUnit.SECONDS)
+                    } else {
+                        proc.waitFor()
+                    }
+                } catch (_: Exception) {}
             }
             try {
                 tempConfig?.delete()

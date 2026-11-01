@@ -717,6 +717,7 @@ class DesktopAppState(
             val exited = proc.waitFor(4, java.util.concurrent.TimeUnit.SECONDS)
             if (!exited) {
                 proc.destroyForcibly()
+                try { proc.waitFor(1, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
                 return false to "Таймаут проверки sudo (процесс не ответил вовремя)."
             }
             val exitCode = proc.exitValue()

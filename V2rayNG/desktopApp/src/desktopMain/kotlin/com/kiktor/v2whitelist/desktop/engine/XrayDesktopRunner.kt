@@ -302,7 +302,10 @@ class XrayDesktopRunner(
                 val exited = proc.waitFor(1000, TimeUnit.MILLISECONDS)
                 if (!exited && proc.isAlive) {
                     proc.destroyForcibly()
+                    try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
                 }
+            } else {
+                try { proc.waitFor() } catch (_: Exception) {}
             }
         }
 
