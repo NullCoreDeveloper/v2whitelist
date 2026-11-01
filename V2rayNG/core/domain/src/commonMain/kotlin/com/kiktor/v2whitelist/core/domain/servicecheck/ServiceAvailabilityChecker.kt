@@ -13,7 +13,7 @@ expect suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int? = null,
     httpPort: Int? = null,
-    timeoutMs: Long = 6000L
+    timeoutMs: Long = 4000L
 ): ServiceCheckResult
 
 /**
@@ -25,7 +25,7 @@ object ServiceAvailabilityChecker {
         service: ServiceCheckItem,
         socksPort: Int? = null,
         httpPort: Int? = null,
-        timeoutMs: Long = 6000L
+        timeoutMs: Long = 4000L
     ): ServiceCheckResult {
         return rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs)
     }
@@ -38,7 +38,7 @@ object ServiceAvailabilityChecker {
         services: List<ServiceCheckItem>,
         socksPort: Int? = null,
         httpPort: Int? = null,
-        timeoutMs: Long = 6000L
+        timeoutMs: Long = 4000L
     ): List<ServiceCheckResult> = coroutineScope {
         val enabled = services.filter { it.enabled }
         if (enabled.isEmpty()) return@coroutineScope emptyList()

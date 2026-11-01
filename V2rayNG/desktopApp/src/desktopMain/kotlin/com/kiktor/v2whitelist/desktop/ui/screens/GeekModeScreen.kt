@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -90,11 +92,14 @@ fun GeekModeScreen(
         }
     }
 
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
             .padding(20.dp)
+            .verticalScroll(scrollState)
     ) {
         // Шапка Geek Mode
         Row(
@@ -638,7 +643,7 @@ fun GeekModeScreen(
             shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            modifier = Modifier.fillMaxWidth().weight(1f)
+            modifier = Modifier.fillMaxWidth().height(280.dp)
         ) {
             LazyColumn(
                 state = listState,
