@@ -3,18 +3,15 @@ package com.kiktor.v2whitelist.core.domain.servicecheck
 import com.kiktor.v2whitelist.core.model.currentTimeMillis
 import com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem
 import com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckResult
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.ProxyBuilder
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.http
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.get
+import io.ktor.client.request.header
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.IOException
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.ProxySelector
-import java.net.SocketAddress
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 
 actual suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
@@ -23,38 +20,35 @@ actual suspend fun rawServiceHttpCheck(
     timeoutMs: Long
 ): ServiceCheckResult = withContext(Dispatchers.IO) {
     val start = currentTimeMillis()
-    try {
-        val proxySelector = when {
-            httpPort != null && httpPort > 0 -> {
-                ProxySelector.of(InetSocketAddress("127.0.0.1", httpPort))
-            }
-            socksPort != null && socksPort > 0 -> {
-                object : ProxySelector() {
-                    override fun select(uri: URI?): List<Proxy> =
-                        listOf(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort)))
-
-                    override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {}
+    val client = HttpClient(CIO) {
+        engine {
+            when {
+                httpPort != null && httpPort > 0 -> {
+                    proxy = ProxyBuilder.http("http://127.0.0.1:$httpPort")
+                }
+                socksPort != null && socksPort > 0 -> {
+                    proxy = ProxyBuilder.socks("127.0.0.1", socksPort)
+                }
+                else -> {
+                    proxy = null
                 }
             }
-            else -> HttpClient.Builder.NO_PROXY
         }
+        install(HttpTimeout) {
+            requestTimeoutMillis = timeoutMs
+            connectTimeoutMillis = timeoutMs
+            socketTimeoutMillis = timeoutMs
+        }
+        followRedirects = false
+    }
 
-        val client = HttpClient.newBuilder()
-            .proxy(proxySelector)
-            .connectTimeout(Duration.ofMillis(timeoutMs))
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build()
-
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(service.url))
-            .timeout(Duration.ofMillis(timeoutMs))
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .header("Accept", "*/*")
-            .GET()
-            .build()
-
-        val response = client.send(request, HttpResponse.BodyHandlers.discarding())
-        val code = response.statusCode()
+    try {
+        val response = client.get(service.url) {
+            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            header("Accept", "*/*")
+            header("Connection", "close")
+        }
+        val code = response.status.value
         val elapsed = currentTimeMillis() - start
         // Сервис считается доступным, если он вернул ответ на прикладном уровне (2xx, 3xx или клиенсткие 401/403/404/429)
         // Исключаем 451 (Unavailable For Legal Reasons / цензурные заглушки) и 5xx
@@ -75,5 +69,7 @@ actual suspend fun rawServiceHttpCheck(
             httpCode = -1,
             errorMessage = e.message ?: e::class.simpleName
         )
+    } finally {
+        client.close()
     }
 }

@@ -94,6 +94,8 @@ if [ -f "$RUNTIME_FILE" ]; then
     RUNTIME_ARG="--runtime-file $RUNTIME_FILE"
 fi
 
+rm -f "$BUILD_BINARIES_DIR/v2whitelist-linux-x86_64.AppImage"
+
 ARCH=x86_64 "$APPIMAGETOOL_BIN" --no-appstream $RUNTIME_ARG "$APPIMAGE_BUILD_DIR" "$BUILD_BINARIES_DIR/v2whitelist-linux-x86_64.AppImage"
 
 echo "=== Готово! Файлы сборки: ==="

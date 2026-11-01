@@ -54,6 +54,7 @@ compose.desktop {
         )
 
         nativeDistributions {
+            modules("java.base", "java.desktop", "java.logging", "java.net.http", "java.sql", "jdk.unsupported")
             val currentOs = org.gradle.internal.os.OperatingSystem.current()
             when {
                 currentOs.isLinux -> targetFormats(
