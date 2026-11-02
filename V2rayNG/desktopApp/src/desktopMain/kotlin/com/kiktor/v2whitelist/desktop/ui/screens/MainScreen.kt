@@ -37,6 +37,7 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.state.SubStatusType
 import com.kiktor.v2whitelist.desktop.ui.components.LocationFilterDialog
 import com.kiktor.v2whitelist.desktop.ui.components.PulseConnectingView
 import com.kiktor.v2whitelist.desktop.ui.components.QrCodeDialog
@@ -110,7 +111,7 @@ fun MainScreen(
             profile = qrProfile!!,
             subscriptionName = qrSubName,
             onCopy = { text ->
-                state.copyToClipboard(text, qrProfile?.remarks ?: "Ссылка узла")
+                state.copyToClipboard(text, qrProfile?.remarks ?: strings.qrCopyLink)
             },
             onDismiss = { qrProfile = null }
         )
@@ -138,25 +139,33 @@ fun MainScreen(
             ) {
                 // Справа: статус актуальности подписки и время
                 Column(horizontalAlignment = Alignment.End) {
-                    val statusColor = when {
-                        subStatus.failedCount > 0 -> AccentRed
-                        subStatus.isActual -> AccentMint
-                        subStatus.statusText == "Нет подписок" -> MaterialTheme.colorScheme.onSurfaceVariant
-                        else -> AccentAmber
+                    val statusColor = when (subStatus.type) {
+                        SubStatusType.FAILED -> AccentRed
+                        SubStatusType.ACTUAL -> AccentMint
+                        SubStatusType.NO_SUBS -> MaterialTheme.colorScheme.onSurfaceVariant
+                        SubStatusType.UPDATING, SubStatusType.OUTDATED -> AccentAmber
+                    }
+
+                    val statusTitle = when (subStatus.type) {
+                        SubStatusType.UPDATING -> strings.subUpdatingBtn
+                        SubStatusType.FAILED -> "${strings.subStatusFailed} (${subStatus.failedCount})"
+                        SubStatusType.NO_SUBS -> strings.noSubsText
+                        SubStatusType.ACTUAL -> strings.subStatusActual
+                        SubStatusType.OUTDATED -> strings.subStatusOutdated
                     }
 
                     Text(
-                        text = subStatus.statusText,
+                        text = statusTitle,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = statusColor
                     )
                     val failedNames = remember(subscriptions) {
-                        subscriptions.filter { it.enabled && it.lastUpdateFailed }.map { it.name.ifBlank { "Без названия" } }
+                        subscriptions.filter { it.enabled && it.lastUpdateFailed }.map { it.name.ifBlank { strings.unknown } }
                     }
                     if (failedNames.isNotEmpty()) {
                         Text(
-                            text = "Сбой: ${failedNames.joinToString(", ")}",
+                            text = "${strings.subFailureBanner}${failedNames.joinToString(", ")}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = AccentRed,
@@ -205,13 +214,13 @@ fun MainScreen(
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Доступна новая версия ПроБел: v${availableUpdate?.latestVersion ?: ""}",
+                                    text = "${strings.updateAvailableTitle}${availableUpdate?.latestVersion ?: ""}",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                                 Text(
-                                    text = "Нажмите «Обновить» для просмотра изменений или скачивания",
+                                    text = strings.updateAvailableSubtitle,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                 )
@@ -231,7 +240,7 @@ fun MainScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(strings.btnUpdate, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             IconButton(
                                 onClick = { state.dismissUpdateBanner() },
@@ -239,7 +248,7 @@ fun MainScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Скрыть",
+                                    contentDescription = strings.btnDismiss,
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -289,10 +298,10 @@ fun MainScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = when (coreState) {
-                                DesktopCoreState.RUNNING -> "Подключено"
-                                DesktopCoreState.STARTING -> "Тестирование соединения…"
-                                DesktopCoreState.ERROR -> "Ошибка соединения"
-                                DesktopCoreState.STOPPED -> "Не подключено"
+                                DesktopCoreState.RUNNING -> strings.statusConnected
+                                DesktopCoreState.STARTING -> strings.statusTesting
+                                DesktopCoreState.ERROR -> strings.statusError
+                                DesktopCoreState.STOPPED -> strings.statusDisconnected
                             },
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
@@ -306,18 +315,18 @@ fun MainScreen(
 
                         val detailText = when {
                             coreState == DesktopCoreState.STARTING -> {
-                                smartConnectStatus?.ifBlank { null } ?: "Тестирование серверов…"
+                                smartConnectStatus?.ifBlank { null } ?: strings.statusTestingServers
                             }
                             coreState == DesktopCoreState.RUNNING -> {
-                                val modePrefix = if (isManualSelection) "Ручной выбор: " else ""
+                                val modePrefix = if (isManualSelection) strings.manualSelectionPrefix else ""
                                 val name = activeProfile?.remarks.orEmpty().ifBlank { activeProfile?.server.orEmpty() }
                                 val subName = activeProfile?.subscriptionId?.let { subNamesMap[it] }?.takeIf { it.isNotBlank() }
                                 val subSuffix = if (!subName.isNullOrBlank()) " • $subName" else ""
-                                if (name.isNotBlank()) "Соединение через $modePrefix$name активно$subSuffix" else "Защищённый туннель активен"
+                                if (name.isNotBlank()) "$modePrefix$name$subSuffix" else strings.tunnelActive
                             }
-                            isManualSelection && activeProfile != null -> "Выбран вручную: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
-                            activeProfile != null -> "Сценарий: ${scenario.name} (готов к автопоиску)"
-                            else -> "Нажмите Старт для безопасного подключения"
+                            isManualSelection && activeProfile != null -> "${strings.scenarioManual}: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
+                            activeProfile != null -> "${strings.scenarioAuto}: ${scenario.name}"
+                            else -> strings.pressStartToConnect
                         }
                         Text(
                             text = detailText,
@@ -416,7 +425,7 @@ fun MainScreen(
                             )
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                text = "Отмена",
+                                text = strings.btnCancel,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
                                 color = Color.Black
@@ -431,9 +440,9 @@ fun MainScreen(
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 text = when (coreState) {
-                                    DesktopCoreState.RUNNING -> "Стоп"
-                                    DesktopCoreState.ERROR -> "Повтор"
-                                    else -> "Старт"
+                                    DesktopCoreState.RUNNING -> strings.btnStop
+                                    DesktopCoreState.ERROR -> strings.btnRetry
+                                    else -> strings.btnStart
                                 },
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 20.sp,
@@ -470,7 +479,7 @@ fun MainScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = smartConnectStatus?.ifBlank { null } ?: "Тестирование серверов…",
+                            text = smartConnectStatus?.ifBlank { null } ?: strings.statusTestingServers,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = AccentAmber,
@@ -503,11 +512,11 @@ fun MainScreen(
                         if (isSwitchingServer) {
                             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Смена сервера…", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            Text(strings.btnSwitchingServer, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         } else {
                             Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Сменить сервер", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            Text(strings.btnSwitchServer, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         }
                     }
                 }
@@ -536,13 +545,13 @@ fun MainScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Режим работы: ${if (routingMode == "TUN") "TUN (Виртуальный адаптер)" else "Прокси (SOCKS5 / HTTP)"}",
+                                text = "${strings.routingModeTitle}${if (routingMode == "TUN") strings.routingModeTun else strings.routingModeProxy}",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (routingMode == "TUN") "Весь сетевой трафик системы идет через TUN туннель" else "Системный прокси на 127.0.0.1:10808 / 10809",
+                                text = if (routingMode == "TUN") strings.routingModeTunDesc else strings.routingModeProxyDesc,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -557,7 +566,7 @@ fun MainScreen(
                             ),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Text(if (routingMode == "TUN") "Включен TUN" else "Включен Прокси", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(if (routingMode == "TUN") strings.tunEnabled else strings.proxyEnabled, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -569,7 +578,7 @@ fun MainScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isManualSelection) "Сценарий: Ручной выбор узла" else "Сценарий: Автопоиск",
+                        text = if (isManualSelection) strings.scenarioManual else strings.scenarioAuto,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isManualSelection) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -582,7 +591,7 @@ fun MainScreen(
                     ) {
                         Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Фильтр стран", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(strings.locationsFilter, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -591,29 +600,29 @@ fun MainScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ScenarioChip(
-                        title = "Авто",
-                        subtitle = "Баланс БС и ЧС",
+                        title = strings.scenarioAutoTitle,
+                        subtitle = strings.scenarioAutoSubtitle,
                         selected = !isManualSelection && scenario == AppScenario.AUTO,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.AUTO) }
                     )
                     ScenarioChip(
-                        title = "Белый список",
-                        subtitle = "БС (Только РФ)",
+                        title = strings.scenarioWhitelistTitle,
+                        subtitle = strings.scenarioWhitelistSubtitle,
                         selected = !isManualSelection && scenario == AppScenario.WHITELIST,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.WHITELIST) }
                     )
                     ScenarioChip(
-                        title = "Чёрный список",
-                        subtitle = "ЧС (Обход блоков)",
+                        title = strings.scenarioBlacklistTitle,
+                        subtitle = strings.scenarioBlacklistSubtitle,
                         selected = !isManualSelection && scenario == AppScenario.VPN_BLACKLIST,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.VPN_BLACKLIST) }
                     )
                     ScenarioChip(
-                        title = "YouTube",
-                        subtitle = "YouTube и Музыка",
+                        title = strings.scenarioYoutubeTitle,
+                        subtitle = strings.scenarioYoutubeSubtitle,
                         selected = !isManualSelection && scenario == AppScenario.YOUTUBE,
                         modifier = Modifier.weight(1f),
                         onClick = { state.setScenario(AppScenario.YOUTUBE) }
@@ -652,7 +661,7 @@ fun MainScreen(
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                text = if (isServerListExpanded) "Скрыть список серверов" else "Показать список серверов (${displayServers.size})",
+                                text = if (isServerListExpanded) strings.hideServerList else "${strings.showServerList} (${displayServers.size})",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -734,7 +743,7 @@ fun MainScreen(
                                         ) {
                                             Icon(
                                                 Icons.Default.Close,
-                                                contentDescription = "Очистить",
+                                                contentDescription = strings.clear,
                                                 modifier = Modifier.size(14.dp),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -798,7 +807,7 @@ fun MainScreen(
                                 FilterChip(
                                     selected = sortByPing,
                                     onClick = { sortByPing = !sortByPing },
-                                    label = { Text("⚡ Пинг ▲", fontSize = 11.sp) }
+                                    label = { Text(strings.pingAsc, fontSize = 11.sp) }
                                 )
                             }
                         }
@@ -808,7 +817,7 @@ fun MainScreen(
                         // Сами карточки серверов
                         if (displayServers.isEmpty()) {
                             Text(
-                                text = "Нет серверов по выбранным критериям",
+                                text = strings.noServersFoundCriteria,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 12.dp)
@@ -824,7 +833,7 @@ fun MainScreen(
                                     val isSelected = guid == selectedGuid
                                     val isVip = guid in vipGuids
                                     val ping = pingMap[guid]
-                                    val subName = subNamesMap[profile.subscriptionId] ?: profile.subscriptionId.ifBlank { "Подписка" }
+                                    val subName = subNamesMap[profile.subscriptionId] ?: profile.subscriptionId.ifBlank { strings.subscriptions }
 
                                     ServerCardItem(
                                         profile = profile,
@@ -855,7 +864,7 @@ fun MainScreen(
                 if (current != null) {
                     qrProfile = current
                 } else {
-                    state.copyToClipboard("", "Нет активного сервера")
+                    state.copyToClipboard("", strings.noActiveServer)
                 }
             },
             shape = RoundedCornerShape(16.dp),
@@ -866,7 +875,7 @@ fun MainScreen(
                 .padding(24.dp)
                 .size(54.dp)
         ) {
-            Icon(Icons.Default.QrCode2, contentDescription = "Показать QR код узла", modifier = Modifier.size(26.dp))
+            Icon(Icons.Default.QrCode2, contentDescription = strings.qrShowCode, modifier = Modifier.size(26.dp))
         }
 
         // Диалог фильтра локаций серверов (1-в-1 как в Android версии)
@@ -932,6 +941,7 @@ private fun ServerCardItem(
     onQr: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface,
@@ -982,7 +992,7 @@ private fun ServerCardItem(
                     // Бейдж подписки, откуда загружен сервер
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Источник: $subscriptionName",
+                            text = "${strings.source}$subscriptionName",
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -1012,7 +1022,7 @@ private fun ServerCardItem(
                         else -> AccentRed
                     }
                     Text(
-                        text = if (ping > 0) "${ping}ms" else "Сбой",
+                        text = if (ping > 0) "${ping}ms" else "—",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = pingColor,
@@ -1023,22 +1033,22 @@ private fun ServerCardItem(
                 IconButton(onClick = onToggleVip, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = if (isVip) "Удалить из VIP" else "Добавить в VIP",
+                        contentDescription = if (isVip) strings.geekRemoveVip else strings.findVip,
                         tint = if (isVip) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
 
                 IconButton(onClick = onPing, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Проверить пинг", modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = strings.ping, modifier = Modifier.size(15.dp))
                 }
 
                 IconButton(onClick = onQr, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.QrCode, contentDescription = "QR код", modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.QrCode, contentDescription = "QR", modifier = Modifier.size(15.dp))
                 }
 
                 IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = "Удалить", tint = AccentRed, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.DeleteOutline, contentDescription = strings.delete, tint = AccentRed, modifier = Modifier.size(15.dp))
                 }
             }
         }

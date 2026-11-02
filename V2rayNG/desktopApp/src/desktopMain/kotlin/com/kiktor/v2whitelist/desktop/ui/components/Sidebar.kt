@@ -74,7 +74,7 @@ fun Sidebar(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "ПроБел desktop",
+                        text = strings.appTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -154,10 +154,10 @@ fun Sidebar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val (color, text) = when (coreState) {
-                    DesktopCoreState.RUNNING -> AccentMint to "Подключено"
-                    DesktopCoreState.STARTING -> AccentAmber to "Подключение..."
-                    DesktopCoreState.ERROR -> AccentRed to "Ошибка"
-                    DesktopCoreState.STOPPED -> MaterialTheme.colorScheme.onSurfaceVariant to "Отключено"
+                    DesktopCoreState.RUNNING -> AccentMint to strings.statusConnected
+                    DesktopCoreState.STARTING -> AccentAmber to strings.statusConnecting
+                    DesktopCoreState.ERROR -> AccentRed to strings.statusError
+                    DesktopCoreState.STOPPED -> MaterialTheme.colorScheme.onSurfaceVariant to strings.statusDisconnected
                 }
 
                 Box(

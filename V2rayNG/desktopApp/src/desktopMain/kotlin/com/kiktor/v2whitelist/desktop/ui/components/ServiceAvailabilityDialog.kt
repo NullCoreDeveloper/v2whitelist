@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.AccentRed
 import com.kiktor.v2whitelist.desktop.ui.theme.AccentMint
 
@@ -24,6 +25,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
     val show by state.showServiceCheckDialog.collectAsState()
     if (!show) return
 
+    val strings = LocalAppStrings.current
     val services by state.servicesList.collectAsState()
     val isEndpointActive = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value.isNotBlank()
 
@@ -44,7 +46,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
         },
         title = {
             Text(
-                text = "Проверка доступности сервисов",
+                text = strings.servCheckTitle,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -55,7 +57,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Выберите сервисы, доступность которых будет проверяться вместо стандартного теста 204. Если хотя бы один выбранный сервис недоступен, сервер отклоняется.",
+                    text = strings.servCheckDesc,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -73,7 +75,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = AccentRed, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Внимание: при включенном конечном узле проверка сервисов игнорируется в пользу сквозного теста цепочки.",
+                                text = strings.servCheckEndpointWarning,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -112,7 +114,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                                                 color = MaterialTheme.colorScheme.primaryContainer
                                             ) {
                                                 Text(
-                                                    text = "Кастомный",
+                                                    text = strings.servCustomBadge,
                                                     fontSize = 9.sp,
                                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -134,7 +136,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                                         onClick = { state.removeCustomService(service.id) },
                                         modifier = Modifier.size(28.dp)
                                     ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = AccentRed, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Delete, contentDescription = strings.delete, tint = AccentRed, modifier = Modifier.size(16.dp))
                                     }
                                     Spacer(Modifier.width(4.dp))
                                 }
@@ -167,14 +169,14 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("+ Добавить сервис", fontSize = 12.sp)
+                        Text(strings.servAddBtn, fontSize = 12.sp)
                     }
 
                     TextButton(
                         onClick = { state.resetServicesToDefault() },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        Text("По умолчанию", fontSize = 11.sp)
+                        Text(strings.servDefaultBtn, fontSize = 11.sp)
                     }
                 }
             }
@@ -184,7 +186,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                 onClick = { state.dismissServiceCheckDialog() },
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Готово")
+                Text(strings.done)
             }
         }
     )
@@ -192,20 +194,20 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("Добавить сервис для проверки", fontSize = 15.sp, fontWeight = FontWeight.Bold) },
+            title = { Text(strings.servAddDialogTitle, fontSize = 15.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = newServiceName,
                         onValueChange = { newServiceName = it },
-                        label = { Text("Название (напр. GitHub)") },
+                        label = { Text(strings.servAddNameLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newServiceUrl,
                         onValueChange = { newServiceUrl = it },
-                        label = { Text("URL (напр. https://github.com)") },
+                        label = { Text(strings.servAddUrlLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -220,7 +222,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                         val name = newServiceName.trim()
                         val url = newServiceUrl.trim()
                         if (name.isBlank() || url.isBlank()) {
-                            addError = "Заполните все поля"
+                            addError = strings.servAddErrorEmpty
                             return@Button
                         }
                         state.addCustomService(name, url)
@@ -228,15 +230,14 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                     },
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Добавить")
+                    Text(strings.subAddBtn)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
-                    Text("Отмена")
+                    Text(strings.cancel)
                 }
             }
         )
     }
 }
-

@@ -821,4 +821,14 @@
     <string name="title_pref_clear_yandex_cookies">Reset Yandex session (captcha)</string>
     <string name="summary_pref_clear_yandex_cookies">Clear saved cookies and SmartCaptcha pass session</string>
     <string name="toast_yandex_cookies_cleared">Yandex session cleared</string>
+
+    <!-- Settings Security and Proxy Auth Strings -->
+    <string name="title_pref_filter_insecure_profiles">Remove insecure profiles</string>
+    <string name="summary_pref_filter_insecure_profiles">Skip in balancer and remove profiles without encryption (no TLS/Reality or allowInsecure enabled)</string>
+    <string name="title_pref_socks_user">Local proxy username (SOCKS5/HTTP)</string>
+    <string name="summary_pref_socks_user">Leave empty for autogeneration (recommended)</string>
+    <string name="title_pref_socks_pass">Local proxy password (SOCKS5/HTTP)</string>
+    <string name="summary_pref_socks_pass">Leave empty for autogeneration (recommended)</string>
+    <string name="summary_pref_appearance_settings">Theme, Material You, AMOLED black, language</string>
+    <string name="summary_pref_theme_palette">Choose the primary interface accent color</string>
 </resources>

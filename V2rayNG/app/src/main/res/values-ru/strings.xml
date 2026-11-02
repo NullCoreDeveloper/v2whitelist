@@ -766,6 +766,7 @@
     <string name="status_warp_failed_fallback">WARP деградировал, переключаемся на серверы...</string>
     <string name="status_warp_ready_switching">WARP профиль готов, переключение на WARP...</string>
     <string name="title_pref_warp_regenerate">Сгенерировать профиль WARP заново</string>
+    <string name="summary_pref_warp_regenerate">Создать свежий профиль WARP через активное VPN-подключение</string>
     <string name="warp_vpn_required_to_generate">Для регистрации WARP необходимо активное VPN-подключение, так как API Cloudflare блокируется напрямую.</string>
 
     <!-- Appearance / Theme Settings -->
@@ -813,4 +814,14 @@
     <string name="title_pref_clear_yandex_cookies">Сброс сессии Яндекс (капча)</string>
     <string name="summary_pref_clear_yandex_cookies">Очистить сохранённые cookies и сессию прохождения SmartCaptcha</string>
     <string name="toast_yandex_cookies_cleared">Сессия Яндекс успешно очищена</string>
+
+    <!-- Settings Security and Proxy Auth Strings -->
+    <string name="title_pref_filter_insecure_profiles">Удалять небезопасные профили</string>
+    <string name="summary_pref_filter_insecure_profiles">Не пропускать в балансировщике и удалить профили без шифрования (без TLS/Reality или с allowInsecure)</string>
+    <string name="title_pref_socks_user">Логин локального прокси (SOCKS5/HTTP)</string>
+    <string name="summary_pref_socks_user">Оставьте пустым для автогенерации (рекомендуется)</string>
+    <string name="title_pref_socks_pass">Пароль локального прокси (SOCKS5/HTTP)</string>
+    <string name="summary_pref_socks_pass">Оставьте пустым для автогенерации (рекомендуется)</string>
+    <string name="summary_pref_appearance_settings">Тема, Material You, AMOLED черный, язык</string>
+    <string name="summary_pref_theme_palette">Выберите основной акцентный цвет интерфейса</string>
 </resources>

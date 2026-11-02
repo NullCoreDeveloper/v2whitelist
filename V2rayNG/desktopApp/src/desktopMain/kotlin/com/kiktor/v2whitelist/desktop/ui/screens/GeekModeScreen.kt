@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 private val USER_AGENTS = listOf(
@@ -42,6 +43,7 @@ fun GeekModeScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val logs by state.logs.collectAsState()
     val servers by state.servers.collectAsState()
     val selectedGuid by state.selectedGuid.collectAsState()
@@ -116,7 +118,7 @@ fun GeekModeScreen(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Geek Mode — Инженерная консоль",
+                    text = strings.geekConsoleTitle,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
@@ -127,7 +129,7 @@ fun GeekModeScreen(
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(
-                        text = "${logs.size} событий",
+                        text = "${logs.size} ${strings.geekEvents}",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -139,14 +141,14 @@ fun GeekModeScreen(
                 OutlinedButton(
                     onClick = {
                         val allLogsText = logs.joinToString("\n")
-                        state.copyToClipboard(allLogsText, "Все логи GeekMode")
+                        state.copyToClipboard(allLogsText, "All GeekMode Logs")
                     },
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Копировать", fontSize = 12.sp)
+                    Text(strings.geekCopyLogs, fontSize = 12.sp)
                 }
 
                 OutlinedButton(
@@ -156,7 +158,7 @@ fun GeekModeScreen(
                 ) {
                     Icon(Icons.Default.ClearAll, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Очистить", fontSize = 12.sp)
+                    Text(strings.geekClearLogs, fontSize = 12.sp)
                 }
             }
         }
@@ -188,7 +190,7 @@ fun GeekModeScreen(
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = activeProfile?.remarks ?: "Сервер не выбран",
+                            text = activeProfile?.remarks ?: strings.geekNoServerSelected,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -200,19 +202,19 @@ fun GeekModeScreen(
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
                             Text(
-                                text = "Протокол: ${activeProfile?.configType?.name ?: "—"}",
+                                text = "${strings.geekProtocolLabel}${activeProfile?.configType?.name ?: "—"}",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "•  Адрес: ${activeProfile?.server ?: "—"}:${activeProfile?.serverPort ?: "—"}",
+                                text = "•  ${strings.geekAddressLabel}${activeProfile?.server ?: "—"}:${activeProfile?.serverPort ?: "—"}",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (activePing != null && activePing > 0) {
                                 Text(
-                                    text = "•  Пинг: ${activePing}ms",
+                                    text = "•  ${strings.geekPingLabel}${activePing}ms",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = AccentMint
@@ -226,12 +228,12 @@ fun GeekModeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "Exit IP:",
+                            text = strings.geekExitIpLabel,
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = exitIp ?: "Не определен",
+                            text = exitIp ?: strings.geekExitIpUndefined,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (exitIp != null) AccentMint else MaterialTheme.colorScheme.onSurfaceVariant
@@ -241,7 +243,7 @@ fun GeekModeScreen(
                         onClick = { state.fetchExitIp() },
                         modifier = Modifier.size(32.dp).padding(start = 4.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Обновить Exit IP", modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Refresh, contentDescription = strings.geekExitIpLabel, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -268,7 +270,7 @@ fun GeekModeScreen(
                     Icon(Icons.Default.Bolt, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Пинг-тест", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(strings.geekPingTestBtn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
 
             Button(
@@ -285,7 +287,7 @@ fun GeekModeScreen(
                     Icon(Icons.Default.Star, null, modifier = Modifier.size(14.dp), tint = AccentAmber)
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Найти VIP", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(strings.geekFindVipBtn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
 
             Button(
@@ -302,7 +304,7 @@ fun GeekModeScreen(
                     Icon(Icons.Default.Speed, null, modifier = Modifier.size(14.dp), tint = AccentMint)
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Пинг VIP (${vipGuids.size})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("${strings.geekPingVipBtn} (${vipGuids.size})", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -325,12 +327,12 @@ fun GeekModeScreen(
                 if (isCheckingServices) {
                     CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text("Параллельная проверка сервисов…", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(strings.geekCheckingServicesBtn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 } else {
                     Icon(Icons.Default.Language, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(6.dp))
                     val enabledCount = servicesList.count { it.enabled }
-                    Text("Проверить сервисы ($enabledCount)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${strings.geekCheckServicesBtn} ($enabledCount)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -338,7 +340,7 @@ fun GeekModeScreen(
                 onClick = { state.promptServiceCheckDialog() },
                 modifier = Modifier.size(38.dp)
             ) {
-                Icon(Icons.Default.Tune, contentDescription = "Настройка сервисов", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Tune, contentDescription = strings.geekTuneServicesDesc, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
         }
 
@@ -358,14 +360,14 @@ fun GeekModeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Доступность сервисов:",
+                            text = strings.geekServicesAvailabilityTitle,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         val okCount = results.count { it.success }
                         Text(
-                            text = "$okCount из ${results.size} доступны",
+                            text = "$okCount / ${results.size} ${strings.geekServicesAvailableCount}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (okCount == results.size) AccentMint else AccentRed
@@ -394,7 +396,7 @@ fun GeekModeScreen(
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
-                                        text = "${res.service.name}: " + if (res.success) "${res.latencyMs}ms" else "Нет",
+                                        text = "${res.service.name}: " + if (res.success) "${res.latencyMs}ms" else "—",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -423,7 +425,7 @@ fun GeekModeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "VIP-кэш быстрых узлов (${vipGuids.size}):",
+                            text = "${strings.geekVipCacheTitle} (${vipGuids.size}):",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = AccentAmber
@@ -434,7 +436,7 @@ fun GeekModeScreen(
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                 modifier = Modifier.height(26.dp)
                             ) {
-                                Text("⏹ Остановить VIP", fontSize = 11.sp, color = AccentRed, fontWeight = FontWeight.Bold)
+                                Text(strings.geekStopVipBtn, fontSize = 11.sp, color = AccentRed, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -482,14 +484,14 @@ fun GeekModeScreen(
                                     ) {
                                         Icon(
                                             imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                            contentDescription = if (isRunning) "Остановить" else "Подключить",
+                                            contentDescription = if (isRunning) strings.btnStop else strings.btnStart,
                                             tint = if (isRunning) AccentMint else if (isSelected) AccentAmber else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(Modifier.width(4.dp))
                                         val displayName = prof?.remarks?.takeIf { it.isNotBlank() }
                                             ?: prof?.server?.takeIf { it.isNotBlank() }
-                                            ?: "Узел (${guid.take(6)})"
+                                            ?: "Node (${guid.take(6)})"
                                         Text(
                                             text = displayName.take(22),
                                             fontSize = 11.sp,
@@ -512,7 +514,7 @@ fun GeekModeScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.Close,
-                                            contentDescription = "Удалить из VIP",
+                                            contentDescription = strings.geekRemoveVip,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(13.dp)
                                         )
@@ -536,7 +538,7 @@ fun GeekModeScreen(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "DPI Bypass (Подмена параметров для обхода блокировок):",
+                    text = strings.geekDpiBypassTitle,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -554,7 +556,7 @@ fun GeekModeScreen(
                             sniInput = it
                             state.setGlobalSni(it)
                         },
-                        label = { Text("Global SNI", fontSize = 11.sp) },
+                        label = { Text(strings.geekGlobalSniLabel, fontSize = 11.sp) },
                         placeholder = { Text("ya.ru, vk.com...", fontSize = 11.sp) },
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         singleLine = true,
@@ -569,7 +571,7 @@ fun GeekModeScreen(
                             cfIpInput = it
                             state.setCloudflareIp(it)
                         },
-                        label = { Text("Cloudflare Clean IP", fontSize = 11.sp) },
+                        label = { Text(strings.geekCloudflareIpLabel, fontSize = 11.sp) },
                         placeholder = { Text("104.16.x.x...", fontSize = 11.sp) },
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         singleLine = true,
@@ -582,7 +584,7 @@ fun GeekModeScreen(
                         OutlinedTextField(
                             value = currentUa,
                             onValueChange = { state.setCustomUserAgent(it) },
-                            label = { Text("Кастомный User-Agent", fontSize = 11.sp) },
+                            label = { Text(strings.geekCustomUaLabel, fontSize = 11.sp) },
                             textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             singleLine = true,
                             trailingIcon = {
@@ -622,7 +624,7 @@ fun GeekModeScreen(
             OutlinedTextField(
                 value = logFilter,
                 onValueChange = { logFilter = it },
-                placeholder = { Text("Фильтр логов ядра (поиск по ключевым словам)...", fontSize = 11.sp) },
+                placeholder = { Text(strings.geekLogFilterPlaceholder, fontSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Default.FilterList, null, modifier = Modifier.size(15.dp)) },
                 trailingIcon = {
                     if (logFilter.isNotEmpty()) {
@@ -653,7 +655,7 @@ fun GeekModeScreen(
                     val color = when {
                         line.contains("[ERROR]") || line.contains("error", ignoreCase = true) -> AccentRed
                         line.contains("[WARN]") || line.contains("warning", ignoreCase = true) -> AccentAmber
-                        line.contains("[SUCCESS]") || line.contains("Успешно") -> AccentMint
+                        line.contains("[SUCCESS]") || line.contains("Успешно") || line.contains("Success") -> AccentMint
                         line.contains("[DEBUG]") -> MaterialTheme.colorScheme.onSurfaceVariant
                         else -> MaterialTheme.colorScheme.onSurface
                     }

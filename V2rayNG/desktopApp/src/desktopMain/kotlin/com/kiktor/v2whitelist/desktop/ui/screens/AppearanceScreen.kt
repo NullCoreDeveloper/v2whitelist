@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -27,6 +28,7 @@ fun AppearanceScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val themeMode by state.themeMode.collectAsState()
     val themePalette by state.themePalette.collectAsState()
     val isAmoled by state.pureBlackAmoled.collectAsState()
@@ -48,14 +50,14 @@ fun AppearanceScreen(
             Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(10.dp))
             Text(
-                text = "Оформление",
+                text = strings.appearanceTitle,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
         Text(
-            text = "Настройка визуального стиля, темы, палитры цветов и градиентных фонов",
+            text = strings.appearanceSubtitle,
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp)
@@ -64,26 +66,26 @@ fun AppearanceScreen(
         Spacer(Modifier.height(20.dp))
 
         // 1. Тема интерфейса: Как в системе (авто), светлая, темная
-        AppearanceCard(title = "Тема интерфейса", meshEnabled = meshEnabled) {
+        AppearanceCard(title = strings.themeCardTitle, meshEnabled = meshEnabled) {
             Text(
-                text = "Выберите режим отображения интерфейса:",
+                text = strings.themeCardDesc,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OptionChip(
-                    label = "Как в системе (авто)",
+                    label = strings.themeSystem,
                     selected = themeMode.equals("SYSTEM", ignoreCase = true),
                     onClick = { state.setThemeMode("SYSTEM") }
                 )
                 OptionChip(
-                    label = "Светлая",
+                    label = strings.themeLight,
                     selected = themeMode.equals("LIGHT", ignoreCase = true),
                     onClick = { state.setThemeMode("LIGHT") }
                 )
                 OptionChip(
-                    label = "Тёмная",
+                    label = strings.themeDark,
                     selected = themeMode.equals("DARK", ignoreCase = true),
                     onClick = { state.setThemeMode("DARK") }
                 )
@@ -93,9 +95,9 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 2. Цветовая палитра: настраиваемый акцент вместо Material You
-        AppearanceCard(title = "Цветовая палитра", meshEnabled = meshEnabled) {
+        AppearanceCard(title = strings.paletteCardTitle, meshEnabled = meshEnabled) {
             Text(
-                text = "Настройка акцентного цвета элементов интерфейса и кнопок:",
+                text = strings.paletteCardDesc,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -116,7 +118,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 3. Чистый черный (AMOLED)
-        AppearanceCard(title = "Чистый чёрный (AMOLED)", meshEnabled = meshEnabled) {
+        AppearanceCard(title = strings.amoledCardTitle, meshEnabled = meshEnabled) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -124,13 +126,13 @@ fun AppearanceScreen(
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
-                        text = "Включить истинный чёрный фон #000000",
+                        text = strings.amoledSwitchTitle,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Истинный глубокий черный фон #000000 в темной теме для OLED экранов",
+                        text = strings.amoledSwitchDesc,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp)
@@ -146,15 +148,15 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 4. Язык
-        AppearanceCard(title = "Язык приложения", meshEnabled = meshEnabled) {
+        AppearanceCard(title = strings.languageCardTitle, meshEnabled = meshEnabled) {
             Text(
-                text = "Выберите язык интерфейса:",
+                text = strings.languageCardDesc,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OptionChip(label = "Язык системы", selected = appLanguage == "SYSTEM", onClick = { state.setAppLanguage("SYSTEM") })
+                OptionChip(label = strings.langSystem, selected = appLanguage == "SYSTEM", onClick = { state.setAppLanguage("SYSTEM") })
                 OptionChip(label = "Русский", selected = appLanguage == "RU", onClick = { state.setAppLanguage("RU") })
                 OptionChip(label = "English", selected = appLanguage == "EN", onClick = { state.setAppLanguage("EN") })
                 OptionChip(label = "فارسی (Farsi)", selected = appLanguage == "FA", onClick = { state.setAppLanguage("FA") })
@@ -165,7 +167,7 @@ fun AppearanceScreen(
         Spacer(Modifier.height(16.dp))
 
         // 5. Градиентные фоны (Mesh)
-        AppearanceCard(title = "Градиентные фоны (Mesh)", meshEnabled = meshEnabled) {
+        AppearanceCard(title = strings.meshCardTitle, meshEnabled = meshEnabled) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -173,13 +175,13 @@ fun AppearanceScreen(
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                     Text(
-                        text = "Медленно переливающийся цветной фон",
+                        text = strings.meshSwitchTitle,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "По умолчанию выключено. Добавляет кинематографический анимированный фон.",
+                        text = strings.meshSwitchDesc,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp)
@@ -196,7 +198,7 @@ fun AppearanceScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Режим анимации Mesh Gradient:",
+                    text = strings.meshModeLabel,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -204,17 +206,17 @@ fun AppearanceScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OptionChip(
-                        label = "Статичный",
+                        label = strings.meshModeStatic,
                         selected = meshMode.equals("STATIC", ignoreCase = true),
                         onClick = { state.setMeshGradientMode("STATIC") }
                     )
                     OptionChip(
-                        label = "Дыхание (плавное перетекание)",
+                        label = strings.meshModeBreathing,
                         selected = meshMode.equals("BREATHING", ignoreCase = true),
                         onClick = { state.setMeshGradientMode("BREATHING") }
                     )
                     OptionChip(
-                        label = "Реактивный (стягивание при старте)",
+                        label = strings.meshModeReactive,
                         selected = meshMode.equals("REACTIVE", ignoreCase = true),
                         onClick = { state.setMeshGradientMode("REACTIVE") }
                     )
@@ -257,18 +259,19 @@ private fun OptionChip(
 ) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+        ),
+        modifier = Modifier.clickable { onClick() }
     ) {
         Text(
             text = label,
             fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
 }
@@ -280,31 +283,38 @@ private fun ColorPaletteOption(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, if (selected) color else MaterialTheme.colorScheme.outline),
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .clickable { onClick() }
+            .padding(4.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(color)
+                .then(
+                    if (selected) Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.2f))
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = name,
-                fontSize = 11.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) color else MaterialTheme.colorScheme.onSurface
-            )
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                )
+            }
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = name,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.util.CountryNames
 
 @Composable
@@ -23,9 +24,11 @@ fun LocationFilterDialog(state: DesktopAppState) {
     val show by state.showLocationFilterDialog.collectAsState()
     if (!show) return
 
+    val strings = LocalAppStrings.current
     val currentMode by state.locationFilterMode.collectAsState()
     val activeSet by state.locationFilterSet.collectAsState()
     val availableLocations by state.availableLocations.collectAsState()
+    val appLanguage by state.appLanguage.collectAsState()
 
     AlertDialog(
         onDismissRequest = { state.dismissLocationFilterDialog() },
@@ -39,7 +42,7 @@ fun LocationFilterDialog(state: DesktopAppState) {
         },
         title = {
             Text(
-                text = "Фильтр локаций серверов",
+                text = strings.locFilterTitle,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -50,7 +53,7 @@ fun LocationFilterDialog(state: DesktopAppState) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Используется при интеллектуальном подборе серверов (SmartConnect) и в авто-режиме.",
+                    text = strings.locFilterDesc,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -75,8 +78,8 @@ fun LocationFilterDialog(state: DesktopAppState) {
                             )
                             Spacer(Modifier.width(6.dp))
                             Column {
-                                Text("Исключать выбранные", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Чёрный список стран (серверы этих стран будут пропущены)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(strings.locExcludeRadio, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.locExcludeDesc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
 
@@ -93,8 +96,8 @@ fun LocationFilterDialog(state: DesktopAppState) {
                             )
                             Spacer(Modifier.width(6.dp))
                             Column {
-                                Text("Только выбранные", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Белый список стран (подключение только к отмеченным странам)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(strings.locWhitelistRadio, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.locWhitelistDesc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
 
@@ -111,87 +114,69 @@ fun LocationFilterDialog(state: DesktopAppState) {
                             )
                             Spacer(Modifier.width(6.dp))
                             Column {
-                                Text("Отключить фильтр", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Учитывать серверы любых стран без ограничений", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(strings.locDisabledRadio, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.locDisabledDesc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                 }
 
-                // Кнопки быстрого выбора
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedButton(
-                        onClick = { state.resetLocationFilterToDefault() },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("Дефолт (искл. РФ)", fontSize = 11.sp)
-                    }
-                    OutlinedButton(
-                        onClick = { state.clearAllLocations() },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("Снять все", fontSize = 11.sp)
-                    }
-                }
-
-                // Список стран с чекбоксами
-                if (availableLocations.isEmpty()) {
+                // Список стран
+                if (currentMode != LocationFilterMode.DISABLED) {
                     Text(
-                        text = "В активных подписках нет серверов с распознанными локациями",
+                        text = "${strings.locationsFilter} (${availableLocations.size}):",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
-                } else {
+
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 240.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        modifier = Modifier.heightIn(max = 240.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(availableLocations, key = { it.key }) { entry ->
                             val tag = entry.key
                             val count = entry.value
                             val isChecked = activeSet.contains(tag)
-                            val displayName = CountryNames.getDisplayName(tag)
-
+                            val displayName = CountryNames.getDisplayName(tag, appLanguage)
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { state.toggleLocationFilter(tag) }
-                                    .padding(vertical = 4.dp, horizontal = 4.dp)
+                                    .padding(vertical = 2.dp)
                             ) {
                                 Checkbox(
                                     checked = isChecked,
                                     onCheckedChange = { state.toggleLocationFilter(tag) }
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Text(
-                                    text = displayName,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "$count",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "$displayName ($count)",
+                                    fontSize = 13.sp
                                 )
                             }
+                        }
+                    }
+
+                    // Кнопка сброса выбора
+                    if (activeSet.isNotEmpty()) {
+                        TextButton(
+                            onClick = { state.clearAllLocations() },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text(strings.locResetAll, fontSize = 12.sp)
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { state.dismissLocationFilterDialog() }) {
-                Text("Готово")
+            Button(
+                onClick = { state.dismissLocationFilterDialog() },
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(strings.done)
             }
         }
     )

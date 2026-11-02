@@ -162,6 +162,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
     val showDialog by state.showSudoDialog.collectAsState()
     val errorText by state.sudoError.collectAsState()
     val isVerifying by state.isVerifyingSudo.collectAsState()
+    val strings = LocalAppStrings.current
 
     if (!showDialog) return
 
@@ -184,7 +185,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
         },
         title = {
             Text(
-                text = "Активация режима TUN",
+                text = strings.sudoTitle,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -195,7 +196,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Для работы режима TUN (полная переадресация системного трафика) на Linux требуются привилегии суперпользователя (sudo).\n\nПароль вводится один раз и сохраняется только в оперативной памяти до закрытия приложения.",
+                    text = strings.sudoDesc,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -203,8 +204,8 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 OutlinedTextField(
                     value = passwordInput,
                     onValueChange = { passwordInput = it },
-                    label = { Text("Пароль sudo", fontSize = 12.sp) },
-                    placeholder = { Text("Введите пароль суперпользователя...", fontSize = 12.sp) },
+                    label = { Text(strings.sudoPasswordLabel, fontSize = 12.sp) },
+                    placeholder = { Text(strings.sudoPasswordPlaceholder, fontSize = 12.sp) },
                     singleLine = true,
                     enabled = !isVerifying,
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -216,7 +217,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
                                 if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "Скрыть пароль" else "Показать пароль"
+                                contentDescription = if (passwordVisible) strings.sudoHidePassword else strings.sudoShowPassword
                             )
                         }
                     },
@@ -224,8 +225,13 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 )
 
                 if (!errorText.isNullOrBlank()) {
+                    val displayError = when (errorText) {
+                        "EMPTY_PASSWORD" -> strings.sudoEmptyError
+                        "INVALID_PASSWORD" -> strings.sudoInvalidError
+                        else -> errorText!!
+                    }
                     Text(
-                        text = errorText!!,
+                        text = displayError,
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -242,7 +248,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "Проверка прав доступа sudo...",
+                            text = strings.sudoVerifying,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -259,7 +265,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 },
                 enabled = passwordInput.isNotBlank() && !isVerifying
             ) {
-                Text("Подтвердить")
+                Text(strings.sudoConfirm)
             }
         },
         dismissButton = {
@@ -267,7 +273,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
                 onClick = { state.dismissSudoDialog() },
                 enabled = !isVerifying
             ) {
-                Text("Отмена")
+                Text(strings.sudoCancel)
             }
         }
     )
@@ -276,6 +282,7 @@ fun SudoPasswordDialog(state: DesktopAppState) {
 @Composable
 fun UnsavedSettingsDialog(state: DesktopAppState) {
     val showDialog by state.showUnsavedSettingsDialog.collectAsState()
+    val strings = LocalAppStrings.current
     if (!showDialog) return
 
     AlertDialog(
@@ -292,14 +299,14 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
         },
         title = {
             Text(
-                text = "Несохранённые изменения",
+                text = strings.unsavedTitle,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Text(
-                text = "В настройках есть несохранённые изменения. Сохранить их перед переходом в другой раздел?",
+                text = strings.unsavedDesc,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -313,7 +320,7 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
                     contentColor = androidx.compose.ui.graphics.Color.Black
                 )
             ) {
-                Text("Сохранить", fontWeight = FontWeight.Bold)
+                Text(strings.unsavedSave, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -322,7 +329,7 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
                     onClick = { state.cancelUnsavedDialog() },
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Отмена")
+                    Text(strings.unsavedCancel)
                 }
                 OutlinedButton(
                     onClick = { state.confirmDiscardAndNavigate() },
@@ -332,7 +339,7 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
                     ),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
                 ) {
-                    Text("Не сохранять")
+                    Text(strings.unsavedDiscard)
                 }
             }
         },
@@ -343,6 +350,7 @@ fun UnsavedSettingsDialog(state: DesktopAppState) {
 
 @Composable
 fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
+    val strings = LocalAppStrings.current
     AlertDialog(
         onDismissRequest = {
             state.showAppUpdateDialog.value = false
@@ -361,7 +369,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Доступно обновление",
+                    text = strings.updateDialogTitle,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -398,7 +406,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                     ) {
                         Column {
                             Text(
-                                text = "Текущая версия",
+                                text = strings.updateCurrentVersion,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -411,7 +419,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                         Text("➔", fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Новая версия",
+                                text = strings.updateNewVersion,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -427,7 +435,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
 
                 if (!update.releaseNotes.isNullOrBlank()) {
                     Text(
-                        text = "Что нового:",
+                        text = strings.updateChangelog,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -457,7 +465,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
 
                 if (!update.fileName.isNullOrBlank()) {
                     Text(
-                        text = "Файл: ${update.fileName}",
+                        text = "${strings.updateFile}: ${update.fileName}",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -478,7 +486,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = if (update.downloadUrl != null) "Скачать обновление" else "Перейти к релизу",
+                    text = if (update.downloadUrl != null) strings.updateDownload else strings.updateViewRelease,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -491,7 +499,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                     },
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Все релизы")
+                    Text(strings.updateAllReleases)
                 }
                 TextButton(
                     onClick = {
@@ -499,7 +507,7 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
                     },
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Позже")
+                    Text(strings.updateLater)
                 }
             }
         },
@@ -521,93 +529,95 @@ fun main() {
     })
     application {
         val state = remember { DesktopAppState() }
-    var isWindowVisible by remember { mutableStateOf(true) }
-    val coreState by state.coreState.collectAsState()
-    val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
-    val routingMode by state.routingMode.collectAsState()
-    val minimizeToTray by state.minimizeToTray.collectAsState()
+        var isWindowVisible by remember { mutableStateOf(true) }
+        val coreState by state.coreState.collectAsState()
+        val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
+        val routingMode by state.routingMode.collectAsState()
+        val minimizeToTray by state.minimizeToTray.collectAsState()
+        val appLanguage by state.appLanguage.collectAsState()
+        val strings = remember(appLanguage) { I18n.get(appLanguage) }
 
-    val trayIcon = remember(coreState) {
-        loadAppIcon(connected = coreState == DesktopCoreState.RUNNING)
-    }
-
-    val windowState = rememberWindowState(
-        width = 1100.dp,
-        height = 760.dp
-    )
-
-    Tray(
-        icon = trayIcon,
-        tooltip = "ПроБел — ${when (coreState) {
-            DesktopCoreState.RUNNING -> "Подключено"
-            DesktopCoreState.STARTING -> "Подключение..."
-            DesktopCoreState.ERROR -> "Ошибка"
-            DesktopCoreState.STOPPED -> "Отключено"
-        }}",
-        primaryAction = {
-            isWindowVisible = true
-            windowState.isMinimized = false
+        val trayIcon = remember(coreState) {
+            loadAppIcon(connected = coreState == DesktopCoreState.RUNNING)
         }
-    ) {
-        Item(
-            label = "Открыть ПроБел",
-            onClick = {
+
+        val windowState = rememberWindowState(
+            width = 1100.dp,
+            height = 760.dp
+        )
+
+        Tray(
+            icon = trayIcon,
+            tooltip = "${strings.appName} — ${when (coreState) {
+                DesktopCoreState.RUNNING -> strings.statusConnected
+                DesktopCoreState.STARTING -> strings.statusConnecting
+                DesktopCoreState.ERROR -> strings.statusError
+                DesktopCoreState.STOPPED -> strings.statusDisconnected
+            }}",
+            primaryAction = {
                 isWindowVisible = true
                 windowState.isMinimized = false
             }
-        )
-        Divider()
-        Item(
-            label = when (coreState) {
-                DesktopCoreState.RUNNING -> "⏹ Отключить VPN"
-                DesktopCoreState.STARTING -> "⏳ Подключение..."
-                DesktopCoreState.ERROR -> "🔄 Повторить подключение"
-                DesktopCoreState.STOPPED -> "▶ Подключить VPN"
-            },
-            isEnabled = coreState != DesktopCoreState.STARTING,
-            onClick = { state.toggleConnect() }
-        )
-        Item(
-            label = if (routingMode == "TUN") "Режим: TUN → переключить на Прокси" else "Режим: Прокси → переключить на TUN",
-            onClick = { state.toggleRoutingMode() }
-        )
-        Item(
-            label = if (isSystemProxyActive) "✔ Системный прокси ОС: ВКЛ (нажать — выкл)" else "Системный прокси ОС: ВЫКЛ (нажать — вкл)",
-            onClick = { state.toggleSystemProxy() }
-        )
-        Divider()
-        Item(
-            label = "Выход",
-            onClick = {
-                state.stopCore()
-                exitApplication()
-            }
-        )
-    }
-
-    Window(
-        onCloseRequest = {
-            if (minimizeToTray) {
-                isWindowVisible = false
-            } else {
-                state.stopCore()
-                exitApplication()
-            }
-        },
-        state = windowState,
-        visible = isWindowVisible,
-        title = "ПроБел — v2whitelist",
-        icon = trayIcon
-    ) {
-        LaunchedEffect(isWindowVisible) {
-            if (isWindowVisible) {
-                windowState.isMinimized = false
-                window.toFront()
-                window.requestFocus()
-            }
+        ) {
+            Item(
+                label = strings.trayOpen,
+                onClick = {
+                    isWindowVisible = true
+                    windowState.isMinimized = false
+                }
+            )
+            Divider()
+            Item(
+                label = when (coreState) {
+                    DesktopCoreState.RUNNING -> strings.trayDisconnect
+                    DesktopCoreState.STARTING -> strings.trayConnecting
+                    DesktopCoreState.ERROR -> strings.trayRetry
+                    DesktopCoreState.STOPPED -> strings.trayConnect
+                },
+                isEnabled = coreState != DesktopCoreState.STARTING,
+                onClick = { state.toggleConnect() }
+            )
+            Item(
+                label = if (routingMode == "TUN") strings.traySwitchToProxy else strings.traySwitchToTun,
+                onClick = { state.toggleRoutingMode() }
+            )
+            Item(
+                label = if (isSystemProxyActive) strings.traySystemProxyOn else strings.traySystemProxyOff,
+                onClick = { state.toggleSystemProxy() }
+            )
+            Divider()
+            Item(
+                label = strings.trayExit,
+                onClick = {
+                    state.stopCore()
+                    exitApplication()
+                }
+            )
         }
-        App(state = state)
+
+        Window(
+            onCloseRequest = {
+                if (minimizeToTray) {
+                    isWindowVisible = false
+                } else {
+                    state.stopCore()
+                    exitApplication()
+                }
+            },
+            state = windowState,
+            visible = isWindowVisible,
+            title = strings.appTitle,
+            icon = trayIcon
+        ) {
+            LaunchedEffect(isWindowVisible) {
+                if (isWindowVisible) {
+                    windowState.isMinimized = false
+                    window.toFront()
+                    window.requestFocus()
+                }
+            }
+            App(state = state)
+        }
     }
-}
 }
 

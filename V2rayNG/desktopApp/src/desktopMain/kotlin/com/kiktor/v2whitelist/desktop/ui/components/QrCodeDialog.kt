@@ -26,6 +26,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 import java.awt.image.BufferedImage
 
@@ -54,6 +55,7 @@ fun QrCodeDialog(
     onCopy: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val uri = remember(profile) {
         UniversalConfigParser.toUri(profile) ?: ""
     }
@@ -80,7 +82,7 @@ fun QrCodeDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = profile.remarks.ifBlank { "Конфигурация" },
+                            text = profile.remarks.ifBlank { strings.unknown },
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
@@ -95,7 +97,7 @@ fun QrCodeDialog(
                         )
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                        Icon(Icons.Default.Close, contentDescription = strings.close, tint = TextSecondary)
                     }
                 }
 
@@ -113,11 +115,11 @@ fun QrCodeDialog(
                     if (qrBitmap != null) {
                         Image(
                             bitmap = qrBitmap,
-                            contentDescription = "QR Code",
+                            contentDescription = strings.qrDialogTitle,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        Text("Не удалось сгенерировать QR", color = Color.Black, fontSize = 12.sp)
+                        Text(strings.qrFailGenerate, color = Color.Black, fontSize = 12.sp)
                     }
                 }
 
@@ -139,7 +141,7 @@ fun QrCodeDialog(
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Скопировать ссылку", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(strings.qrCopyLink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
         }

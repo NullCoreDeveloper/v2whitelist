@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -31,6 +32,7 @@ fun SubscriptionsScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val subscriptions by state.subscriptions.collectAsState()
     val servers by state.servers.collectAsState()
     val isUpdatingSub by state.isUpdatingSub.collectAsState()
@@ -82,13 +84,13 @@ fun SubscriptionsScreen(
         ) {
             Column {
                 Text(
-                    text = "Управление подписками",
+                    text = strings.subManageTitle,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Единая система подписок, зеркал и категорий маршрутизации",
+                    text = strings.subManageSubtitle,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -107,7 +109,7 @@ fun SubscriptionsScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Добавить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(strings.subAddBtn, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Обновить все подписки
@@ -123,11 +125,11 @@ fun SubscriptionsScreen(
                     if (isUpdatingSub) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black, strokeWidth = 2.dp)
                         Spacer(Modifier.width(6.dp))
-                        Text("Обновление…", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(strings.subUpdatingBtn, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Обновить все", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(strings.subUpdateAllBtn, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -150,21 +152,21 @@ fun SubscriptionsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Warning,
-                        contentDescription = "Предупреждение",
+                        contentDescription = null,
                         tint = AccentRed,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Не удалось обновить подписки (${failedSubs.size}):",
+                            text = "${strings.subFailBannerTitle} (${failedSubs.size}):",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = AccentRed
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = failedSubs.joinToString(", ") { it.name.ifBlank { "Без названия" } },
+                            text = failedSubs.joinToString(", ") { it.name.ifBlank { strings.unknown } },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -173,7 +175,7 @@ fun SubscriptionsScreen(
                         onClick = { state.updateAllActiveSubscriptions() },
                         enabled = !isUpdatingSub
                     ) {
-                        Text("Повторить", fontSize = 12.sp, color = AccentRed, fontWeight = FontWeight.Bold)
+                        Text(strings.subRetryBtn, fontSize = 12.sp, color = AccentRed, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -186,7 +188,7 @@ fun SubscriptionsScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Нет добавленных подписок. Нажмите «Добавить», чтобы подключить источник.",
+                    text = strings.subEmptyText,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
@@ -198,13 +200,10 @@ fun SubscriptionsScreen(
             ) {
                 items(subscriptions, key = { it.id }) { sub ->
                     val serverCount = serverCountBySubId[sub.id] ?: serverCountBySubId[sub.name] ?: 0
-                    val mirrorCount = sub.url.split("|").filter { it.isNotBlank() }.size
-
                     SubscriptionCard(
                         sub = sub,
                         serverCount = serverCount,
-                        mirrorCount = mirrorCount,
-                        onToggleEnabled = { state.toggleSubscriptionEnabled(sub.id) },
+                        onToggle = { state.toggleSubscriptionEnabled(sub.id) },
                         onEdit = { editingSub = sub },
                         onDelete = { state.deleteSubscription(sub.id) }
                     )
@@ -218,88 +217,91 @@ fun SubscriptionsScreen(
 private fun SubscriptionCard(
     sub: CustomSubData,
     serverCount: Int,
-    mirrorCount: Int,
-    onToggleEnabled: () -> Unit,
+    onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val isFailed = sub.enabled && sub.lastUpdateFailed
-
+    val strings = LocalAppStrings.current
     Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(
-            if (isFailed) 1.5.dp else 1.dp,
-            when {
-                isFailed -> AccentRed
-                sub.enabled -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                else -> MaterialTheme.colorScheme.outline
-            }
+            1.dp,
+            if (sub.lastUpdateFailed) AccentRed.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.outline
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onEdit)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onEdit() }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Чекбокс включения
-                Checkbox(
-                    checked = sub.enabled,
-                    onCheckedChange = { onToggleEnabled() },
-                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                )
+            // Чекбокс включения/отключения подписки
+            Switch(
+                checked = sub.enabled,
+                onCheckedChange = { onToggle() },
+                modifier = Modifier.padding(end = 14.dp)
+            )
 
-                Spacer(Modifier.width(10.dp))
+            // Основная информация о подписке
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = sub.name.ifBlank { strings.unknown },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = sub.name.ifBlank { "Без названия" },
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isFailed) AccentRed else if (sub.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (isFailed) {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = AccentRed.copy(alpha = 0.15f),
-                                border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.5f))
-                            ) {
-                                Text(
-                                    text = "Ошибка обновления",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AccentRed,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
+                    if (sub.lastUpdateFailed) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AccentRed.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.35f))
+                        ) {
+                            Text(
+                                text = strings.error,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentRed,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
                         }
                     }
+                }
 
-                    Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(4.dp))
 
-                    // Количество зеркал и серверов
+                // Зеркала и URL
+                Text(
+                    text = sub.url.ifBlank { "—" },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Бейджи: количество зеркал, количество серверов, доля, категории
+                Column {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val mirrorCount = if (sub.url.isBlank()) 0 else sub.url.split("|").filter { it.isNotBlank() }.size
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.surface
                         ) {
                             Text(
-                                text = "Зеркал: $mirrorCount",
+                                text = "${strings.subMirrorsCount}$mirrorCount",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -311,7 +313,7 @@ private fun SubscriptionCard(
                             color = MaterialTheme.colorScheme.surface
                         ) {
                             Text(
-                                text = "Серверов: $serverCount",
+                                text = "${strings.subServersCount}$serverCount",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (serverCount > 0) AccentMint else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -325,7 +327,7 @@ private fun SubscriptionCard(
                                 color = MaterialTheme.colorScheme.surface
                             ) {
                                 Text(
-                                    text = "Доля: ${sub.sharePercent}%",
+                                    text = "${strings.subSharePercent}${sub.sharePercent}%",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -339,13 +341,13 @@ private fun SubscriptionCard(
                     // Режимы (категории): БС, ЧС, YouTube
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (sub.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) {
-                            CategoryBadge(label = "Белый список", color = AccentMint)
+                            CategoryBadge(label = strings.scenarioWhitelistTitle, color = AccentMint)
                         }
                         if (sub.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) {
-                            CategoryBadge(label = "Чёрный список", color = AccentAmber)
+                            CategoryBadge(label = strings.scenarioBlacklistTitle, color = AccentAmber)
                         }
                         if (sub.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE)) {
-                            CategoryBadge(label = "YouTube / Музыка", color = AccentRose)
+                            CategoryBadge(label = strings.scenarioYoutubeSubtitle, color = AccentRose)
                         }
                     }
                 }
@@ -353,14 +355,14 @@ private fun SubscriptionCard(
 
             Spacer(Modifier.width(16.dp))
 
-            // Иконка корзины справа (удалять можно и свои, и дефолтные)
+            // Иконка корзины справа
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "Удалить подписку",
+                    contentDescription = strings.delete,
                     tint = AccentRed,
                     modifier = Modifier.size(20.dp)
                 )
@@ -386,15 +388,6 @@ private fun CategoryBadge(label: String, color: Color) {
     }
 }
 
-/**
- * Диалог редактирования / создания подписки (в точности поля из Android ПроБел):
- * 1. Название подписки
- * 2. Ссылки на подписку (через | как разделитель)
- * 3. Фильтр Regex (убирать сервера еще до их появления из списка)
- * 4. Regex для групп (сортировка по группам)
- * 5. Процент доли серверов
- * 6. Категории авто-режима (чекбоксы: Белые списки, Черные списки, YouTube и музыка)
- */
 @Composable
 private fun SubscriptionEditDialog(
     initialData: CustomSubData,
@@ -402,6 +395,7 @@ private fun SubscriptionEditDialog(
     onDismiss: () -> Unit,
     onSave: (CustomSubData) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var name by remember { mutableStateOf(initialData.name) }
     var url by remember { mutableStateOf(initialData.url) }
     var filter by remember { mutableStateOf(initialData.filter) }
@@ -428,7 +422,7 @@ private fun SubscriptionEditDialog(
                     .padding(20.dp)
             ) {
                 Text(
-                    text = if (isNew) "Добавить подписку" else "Редактирование подписки",
+                    text = if (isNew) strings.subDialogAddTitle else strings.subDialogEditTitle,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -447,7 +441,7 @@ private fun SubscriptionEditDialog(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Название подписки") },
+                        label = { Text(strings.subNameLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -458,7 +452,7 @@ private fun SubscriptionEditDialog(
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
-                        label = { Text("Ссылки на подписку (зеркала через | )") },
+                        label = { Text(strings.subUrlLabel) },
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -469,7 +463,7 @@ private fun SubscriptionEditDialog(
                     OutlinedTextField(
                         value = filter,
                         onValueChange = { filter = it },
-                        label = { Text("Фильтр Regex (исключать узлы до появления)") },
+                        label = { Text(strings.subFilterLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -480,7 +474,7 @@ private fun SubscriptionEditDialog(
                     OutlinedTextField(
                         value = groupRegex,
                         onValueChange = { groupRegex = it },
-                        label = { Text("Regex для групп") },
+                        label = { Text(strings.subGroupRegexLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -491,7 +485,7 @@ private fun SubscriptionEditDialog(
                     OutlinedTextField(
                         value = sharePercentStr,
                         onValueChange = { sharePercentStr = it },
-                        label = { Text("Процент доли серверов (%)") },
+                        label = { Text(strings.subSharePercentLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -500,7 +494,7 @@ private fun SubscriptionEditDialog(
 
                     // Категории авто-режима (галочки)
                     Text(
-                        text = "Категории авто-режима:",
+                        text = strings.subScenariosLabel,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -510,17 +504,17 @@ private fun SubscriptionEditDialog(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = isWhitelist, onCheckedChange = { isWhitelist = it })
-                        Text("Белые списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(strings.subCatWhitelist, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = isBlacklist, onCheckedChange = { isBlacklist = it })
-                        Text("Чёрные списки", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(strings.subCatBlacklist, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = isYoutube, onCheckedChange = { isYoutube = it })
-                        Text("YouTube и музыка", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(strings.subCatYoutube, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
@@ -533,7 +527,7 @@ private fun SubscriptionEditDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(strings.cancel, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(Modifier.width(10.dp))
                     Button(
@@ -557,7 +551,7 @@ private fun SubscriptionEditDialog(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
                     ) {
-                        Text("Сохранить", fontWeight = FontWeight.Bold)
+                        Text(strings.save, fontWeight = FontWeight.Bold)
                     }
                 }
             }

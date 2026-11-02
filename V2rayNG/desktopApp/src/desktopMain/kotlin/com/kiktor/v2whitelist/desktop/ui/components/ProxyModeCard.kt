@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 
 @Composable
@@ -28,6 +29,7 @@ fun ProxyModeCard(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val httpPort by state.httpPort.collectAsState()
     val socksPort by state.socksPort.collectAsState()
     val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
@@ -68,13 +70,13 @@ fun ProxyModeCard(
                     Spacer(Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Режим чистого прокси (Standalone Proxy)",
+                            text = strings.proxyStandaloneTitle,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Text(
-                            text = if (allowLan) "Работает без TUN: локальные порты открыты для LAN" else "Работает без TUN адаптера и прав root",
+                            text = if (allowLan) strings.proxyStandaloneDescLan else strings.proxyStandaloneDescNoRoot,
                             fontSize = 12.sp,
                             color = TextSecondary
                         )
@@ -100,7 +102,7 @@ fun ProxyModeCard(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = if (isSystemProxyActive) "Системный прокси ОС: ВКЛ" else "Системный прокси ОС: ВЫКЛ",
+                            text = if (isSystemProxyActive) strings.proxySystemProxyOn else strings.proxySystemProxyOff,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isSystemProxyActive) AccentMint else TextSecondary
@@ -124,7 +126,7 @@ fun ProxyModeCard(
                     onClick = {
                         state.copyToClipboard(
                             DesktopProxyManager.getSocks5Url(socksPort),
-                            "SOCKS5 адрес $host:$socksPort"
+                            "SOCKS5 $host:$socksPort"
                         )
                     }
                 )
@@ -134,7 +136,7 @@ fun ProxyModeCard(
                     onClick = {
                         state.copyToClipboard(
                             DesktopProxyManager.getHttpUrl(httpPort),
-                            "HTTP адрес $host:$httpPort"
+                            "HTTP $host:$httpPort"
                         )
                     }
                 )
@@ -146,7 +148,7 @@ fun ProxyModeCard(
                         onClick = {
                             state.copyToClipboard(
                                 "http://$localIp:$httpPort",
-                                "Адрес для устройств в локальной сети http://$localIp:$httpPort"
+                                "LAN http://$localIp:$httpPort"
                             )
                         }
                     )
@@ -159,7 +161,7 @@ fun ProxyModeCard(
 
             // Quick App Export Buttons
             Text(
-                text = "Быстрая настройка приложений в 1 клик:",
+                text = strings.proxyQuickExportTitle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextSecondary
@@ -176,17 +178,17 @@ fun ProxyModeCard(
                     icon = Icons.AutoMirrored.Filled.Send,
                     onClick = {
                         val tgLink = DesktopProxyManager.getTelegramLink(socksPort)
-                        state.copyToClipboard(tgLink, "Ссылка Telegram Proxy")
+                        state.copyToClipboard(tgLink, strings.proxyTgLinkCopied)
                         state.openUri(tgLink)
                     }
                 )
 
                 QuickExportButton(
-                    title = "Терминал (Bash)",
+                    title = "Bash",
                     icon = Icons.Default.Terminal,
                     onClick = {
                         val cmd = DesktopProxyManager.getTerminalExport(socksPort, httpPort)
-                        state.copyToClipboard(cmd, "Команда экспорта для терминала")
+                        state.copyToClipboard(cmd, strings.proxyTerminalCopied)
                     }
                 )
 
@@ -195,25 +197,7 @@ fun ProxyModeCard(
                     icon = Icons.Default.Code,
                     onClick = {
                         val cmd = DesktopProxyManager.getPowerShellExport(socksPort, httpPort)
-                        state.copyToClipboard(cmd, "Команда экспорта для PowerShell")
-                    }
-                )
-
-                QuickExportButton(
-                    title = "Браузер",
-                    icon = Icons.Default.Web,
-                    onClick = {
-                        val flag = DesktopProxyManager.getBrowserFlag(socksPort)
-                        state.copyToClipboard(flag, "Параметр запуска браузера")
-                    }
-                )
-
-                QuickExportButton(
-                    title = "Git Proxy",
-                    icon = Icons.Default.Commit,
-                    onClick = {
-                        val gitCmd = DesktopProxyManager.getGitConfig(socksPort)
-                        state.copyToClipboard(gitCmd, "Настройка Git proxy")
+                        state.copyToClipboard(cmd, strings.proxyPsCopied)
                     }
                 )
             }
@@ -246,7 +230,8 @@ private fun EndpointChip(
             Spacer(Modifier.width(6.dp))
             Text(
                 text = endpoint,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
                 color = TextPrimary
             )
             Spacer(Modifier.width(6.dp))
@@ -261,7 +246,7 @@ private fun EndpointChip(
 }
 
 @Composable
-private fun QuickExportButton(
+private fun RowScope.QuickExportButton(
     title: String,
     icon: ImageVector,
     onClick: () -> Unit
@@ -270,11 +255,14 @@ private fun QuickExportButton(
         shape = RoundedCornerShape(8.dp),
         color = DarkSurfaceElevated,
         border = BorderStroke(1.dp, DarkBorder),
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier
+            .weight(1f)
+            .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,
@@ -286,7 +274,7 @@ private fun QuickExportButton(
             Text(
                 text = title,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 color = TextPrimary
             )
         }

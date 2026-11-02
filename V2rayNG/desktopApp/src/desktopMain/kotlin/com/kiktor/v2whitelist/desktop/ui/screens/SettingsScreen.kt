@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
+import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
@@ -31,44 +33,44 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class DesktopSettingsCategory(
-    val title: String,
+    val getTitle: (AppStrings) -> String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val description: String
+    val getDesc: (AppStrings) -> String
 ) {
     SCANNER_CORE(
-        title = "⚡ Сканер и ядро",
+        getTitle = { it.catScannerCore },
         icon = Icons.Default.Bolt,
-        description = "Настройки распределения серверов SmartConnect и параметры ядра v2w-core"
+        getDesc = { it.catScannerCoreDesc }
     ),
     PROFILE_CHECK(
-        title = "🛡️ Проверка",
+        getTitle = { it.catProfileCheck },
         icon = Icons.Default.VerifiedUser,
-        description = "Smart-проверка профилей перед подключением, доступность сервисов и замер скорости"
+        getDesc = { it.catProfileCheckDesc }
     ),
     FAILOVER(
-        title = "🔄 Failover",
+        getTitle = { it.catFailover },
         icon = Icons.Default.Autorenew,
-        description = "Авто-переключение серверов при сбоях соединения, Smart Failover и статус сети"
+        getDesc = { it.catFailoverDesc }
     ),
     UPDATES(
-        title = "📦 Обновление",
+        getTitle = { it.catUpdates },
         icon = Icons.Default.CloudDownload,
-        description = "Фоновое обновление подписок и проверка новых версий ПроБел на GitHub"
+        getDesc = { it.catUpdatesDesc }
     ),
     ROUTING(
-        title = "🌐 Маршрутизация",
+        getTitle = { it.catRouting },
         icon = Icons.Default.AltRoute,
-        description = "Обход блокировок РФ, сплит-туннелинг по доменам и конечный узел (цепочка)"
+        getDesc = { it.catRoutingDesc }
     ),
     VPN_CORE(
-        title = "⚙️ VPN и ядро",
+        getTitle = { it.catVpnCore },
         icon = Icons.Default.Settings,
-        description = "Сетевые параметры VPN, SOCKS5 прокси, DNS, Mux и фрагментация пакетов"
+        getDesc = { it.catVpnCoreDesc }
     ),
     BACKUP_DATA(
-        title = "💾 Данные",
+        getTitle = { it.catBackupData },
         icon = Icons.Default.Storage,
-        description = "Системные параметры, сворачивание в трей и сброс настроек"
+        getDesc = { it.catBackupDataDesc }
     )
 }
 
@@ -77,6 +79,7 @@ fun SettingsScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     var selectedCategory by remember { mutableStateOf(DesktopSettingsCategory.SCANNER_CORE) }
     var showResetConfirmDialog by remember { mutableStateOf(false) }
 
@@ -435,13 +438,13 @@ fun SettingsScreen(
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "Настройки",
+                        text = strings.settings,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Все параметры сетевого ядра v2w-core, VPN, маршрутизации и безопасности",
+                        text = strings.catVpnCoreDesc,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -455,7 +458,7 @@ fun SettingsScreen(
             ) {
                 Icon(Icons.Default.Save, null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Сохранить", fontWeight = FontWeight.Bold)
+                Text(strings.save, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -470,7 +473,7 @@ fun SettingsScreen(
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.CheckCircle, null, tint = AccentMint, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Настройки успешно применены!", color = AccentMint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(strings.saved, color = AccentMint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -510,7 +513,7 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = category.title,
+                            text = category.getTitle(strings),
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -522,7 +525,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(10.dp))
         Text(
-            text = selectedCategory.description,
+            text = selectedCategory.getDesc(strings),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -532,25 +535,25 @@ fun SettingsScreen(
             DesktopSettingsCategory.SCANNER_CORE -> {
                 // 1. Настройка распределения SmartConnect
                 SettingsCard(
-                    title = "Распределение серверов SmartConnect",
+                    title = strings.cardSmartConnect,
                     icon = Icons.Default.Bolt,
-                    description = "Параметры разбивки пула серверов на пачки"
+                    description = strings.cardSmartConnectDesc
                 ) {
                     OutlinedTextField(
                         value = smartBatchSize,
                         onValueChange = { smartBatchSize = it },
-                        label = { Text("Размер пачки серверов (по умолчанию 20)") },
+                        label = { Text(strings.smartBatchLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text("Пресет распределения по умолчанию:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(strings.smartPresetLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SettingsChip(label = "Поровну", selected = smartPreset == "EQUAL", onClick = { smartPreset = "EQUAL" })
-                        SettingsChip(label = "Случайный разброс", selected = smartPreset == "RANDOM", onClick = { smartPreset = "RANDOM" })
-                        SettingsChip(label = "Больше серверов больше доля", selected = smartPreset == "MORE", onClick = { smartPreset = "MORE" })
-                        SettingsChip(label = "Меньше серверов меньше доля", selected = smartPreset == "LESS", onClick = { smartPreset = "LESS" })
+                        SettingsChip(label = strings.presetEqual, selected = smartPreset == "EQUAL", onClick = { smartPreset = "EQUAL" })
+                        SettingsChip(label = strings.presetRandom, selected = smartPreset == "RANDOM", onClick = { smartPreset = "RANDOM" })
+                        SettingsChip(label = strings.presetMore, selected = smartPreset == "MORE", onClick = { smartPreset = "MORE" })
+                        SettingsChip(label = strings.presetLess, selected = smartPreset == "LESS", onClick = { smartPreset = "LESS" })
                     }
                 }
 
@@ -558,26 +561,26 @@ fun SettingsScreen(
 
                 // 2. Ядро v2w-core
                 SettingsCard(
-                    title = "Ядро v2w-core",
+                    title = strings.cardV2wCore,
                     icon = Icons.Default.Memory,
-                    description = "Высокоскоростное нативное ядро сканирования и пути к бинарным файлам"
+                    description = strings.cardV2wCoreDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Использовать v2w-core",
-                        desc = "Быстрое нативное сканирование и подключение (включено по умолчанию)",
+                        title = strings.v2wEnable,
+                        desc = strings.v2wEnableDesc,
                         checked = useV2w,
                         onCheckedChange = { useV2w = it }
                     )
                     SettingSwitchRow(
-                        title = "Резервный классический сканер",
-                        desc = "Использовать Kotlin fallback сканер при сбое бинарного ядра",
+                        title = strings.v2wFallback,
+                        desc = strings.v2wFallbackDesc,
                         checked = useFallback,
                         onCheckedChange = { useFallback = it }
                     )
                     OutlinedTextField(
                         value = v2wSockets,
                         onValueChange = { v2wSockets = it },
-                        label = { Text("Количество сокетов (по умолчанию 35)") },
+                        label = { Text(strings.v2wSocketsLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -585,14 +588,14 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = xrayPathInput,
                         onValueChange = { xrayPathInput = it },
-                        label = { Text("Путь к исполняемому файлу Xray") },
-                        placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                        label = { Text(strings.xrayPathLabel) },
+                        placeholder = { Text(strings.xrayPathLabel) },
                         supportingText = {
                             val activePath = state.xrayBinaryPath.value
                             if (activePath.isNotBlank()) {
-                                Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
+                                Text("${strings.cardV2wCore}: $activePath", color = MaterialTheme.colorScheme.primary)
                             } else {
-                                Text("Оставьте пустым для встроенного ядра (автопоиск)")
+                                Text(strings.xrayPathLabel)
                             }
                         },
                         singleLine = true,
@@ -602,14 +605,14 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = v2wPathInput,
                         onValueChange = { v2wPathInput = it },
-                        label = { Text("Путь к ядру сканера (v2w-scan / v2w-core)") },
-                        placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                        label = { Text(strings.v2wPathLabel) },
+                        placeholder = { Text(strings.xrayPathLabel) },
                         supportingText = {
                             val activePath = state.v2wScanPath.value
                             if (activePath.isNotBlank()) {
-                                Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
+                                Text("${strings.cardV2wCore}: $activePath", color = MaterialTheme.colorScheme.primary)
                             } else {
-                                Text("Оставьте пустым для встроенного ядра (автопоиск)")
+                                Text(strings.xrayPathLabel)
                             }
                         },
                         singleLine = true,
@@ -621,31 +624,31 @@ fun SettingsScreen(
             DesktopSettingsCategory.PROFILE_CHECK -> {
                 // 3. Проверка профилей
                 SettingsCard(
-                    title = "Проверка профилей перед подключением",
+                    title = strings.cardProfileCheck,
                     icon = Icons.Default.VerifiedUser,
-                    description = "Фильтрация небезопасных серверов и валидация доступности"
+                    description = strings.cardProfileCheckDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Удалять небезопасные профили",
-                        desc = "Не пропускать профили без TLS, Reality или allowInsecure",
+                        title = strings.removeInsecure,
+                        desc = strings.removeInsecureDesc,
                         checked = removeInsecure,
                         onCheckedChange = { removeInsecure = it }
                     )
                     SettingSwitchRow(
-                        title = "Проверка профиля перед подключением",
-                        desc = "Обеспечивает 100% стабильность. Без нее вы можете попасть на мертвый сервер.",
+                        title = strings.testBeforeConnect,
+                        desc = strings.testBeforeConnectDesc,
                         checked = testBeforeConnect,
                         onCheckedChange = { testBeforeConnect = it }
                     )
                     SettingSwitchRow(
-                        title = "e2e проверка конечного узла",
-                        desc = "Проверять сквозное HTTP 204 соединение через цепочку до конечного узла перед замером скорости",
+                        title = strings.endpointE2eEnable,
+                        desc = strings.endpointE2eEnableDesc,
                         checked = endpointE2eCheck,
                         onCheckedChange = { endpointE2eCheck = it }
                     )
                     SettingSwitchRow(
-                        title = "Проверять доступность сервисов",
-                        desc = "Проверять доступность выбранных сервисов (Google, YouTube, Telegram, WhatsApp, Instagram и др.) вместо теста 204. Игнорируется при использовании конечного узла.",
+                        title = strings.serviceCheckEnable,
+                        desc = strings.serviceCheckEnableDesc,
                         checked = serviceCheckEnabled,
                         onCheckedChange = { serviceCheckEnabled = it }
                     )
@@ -658,7 +661,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Список проверяемых сервисов ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
+                        Text("${strings.servCheckTitle} ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
                     }
                 }
 
@@ -666,20 +669,20 @@ fun SettingsScreen(
 
                 // Замер скорости
                 SettingsCard(
-                    title = "Замер скорости соединения (Speed Test)",
+                    title = strings.cardSpeedTest,
                     icon = Icons.Default.Speed,
-                    description = "Проверка реальной пропускной способности узла"
+                    description = strings.cardSpeedTestDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Тест скорости при проверке профиля",
-                        desc = "Загружает небольшой объем данных через сервер для проверки реальной пропускной способности.",
+                        title = strings.speedTestEnable,
+                        desc = strings.speedTestEnableDesc,
                         checked = speedTestOnCheck,
                         onCheckedChange = { speedTestOnCheck = it }
                     )
                     OutlinedTextField(
                         value = speedTestBytes,
                         onValueChange = { speedTestBytes = it },
-                        label = { Text("Объем загрузки (байт): 2000000") },
+                        label = { Text(strings.speedTestBytesLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -687,7 +690,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = speedTestTimeout,
                         onValueChange = { speedTestTimeout = it },
-                        label = { Text("Таймаут замера скорости (мс): 3000") },
+                        label = { Text(strings.speedTestTimeoutLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -695,7 +698,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = minSpeedThreshold,
                         onValueChange = { minSpeedThreshold = it },
-                        label = { Text("Минимальный порог скорости (Мбит/с): 1.0") },
+                        label = { Text(strings.minSpeedThresholdLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -703,7 +706,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = vipCacheLimitInput,
                         onValueChange = { vipCacheLimitInput = it },
-                        label = { Text("Лимит VIP-кэша проверенных серверов: 5") },
+                        label = { Text(strings.vipLimitLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -713,34 +716,34 @@ fun SettingsScreen(
             DesktopSettingsCategory.FAILOVER -> {
                 // 4. Настройки авто-переключения (Failover)
                 SettingsCard(
-                    title = "Авто-переключение (Failover)",
+                    title = strings.cardFailover,
                     icon = Icons.Default.Autorenew,
-                    description = "Автоматический переход на следующий рабочий сервер при деградации соединения"
+                    description = strings.cardFailoverDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Авто-переключение (Failover)",
-                        desc = "Автоматически переключаться на следующий сервер, если текущий не отвечает",
+                        title = strings.autoFailoverEnable,
+                        desc = strings.autoFailoverEnableDesc,
                         checked = autoFailover,
                         onCheckedChange = { autoFailover = it }
                     )
                     OutlinedTextField(
                         value = heartbeatSec,
                         onValueChange = { heartbeatSec = it },
-                        label = { Text("Интервал проверки Heartbeat (секунд): 30") },
+                        label = { Text(strings.heartbeatLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
                         title = "Smart Failover",
-                        desc = "Быстрое обнаружение затыков по трафику и арбитраж сети (ya.ru vs google.com) без долгих таймаутов",
+                        desc = strings.smartFailoverEnableDesc,
                         checked = smartFailover,
                         onCheckedChange = { smartFailover = it }
                     )
                     OutlinedTextField(
                         value = degradationKb,
                         onValueChange = { degradationKb = it },
-                        label = { Text("Порог деградации трафика (КБ/с): 3") },
+                        label = { Text(strings.failoverDegradationLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -748,7 +751,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = stuckSec,
                         onValueChange = { stuckSec = it },
-                        label = { Text("Время фиксации затыка (секунд): 3") },
+                        label = { Text(strings.failoverStuckLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -758,20 +761,20 @@ fun SettingsScreen(
 
                 // 5. Проверка статуса сети
                 SettingsCard(
-                    title = "Проверка статуса сети",
+                    title = strings.cardNetCheck,
                     icon = Icons.Default.NetworkCheck,
-                    description = "Домены арбитража сетевого статуса перед переключением"
+                    description = strings.cardNetCheckDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Проверка статуса сети",
-                        desc = "Проверять наличие сети перед подключением и для авто-переключения",
+                        title = strings.netCheckEnable,
+                        desc = strings.netCheckEnableDesc,
                         checked = netCheckEnabled,
                         onCheckedChange = { netCheckEnabled = it }
                     )
                     OutlinedTextField(
                         value = primaryDomain,
                         onValueChange = { primaryDomain = it },
-                        label = { Text("Основной домен для проверки (google.com)") },
+                        label = { Text(strings.primaryDomainLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -779,7 +782,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = fallbackDomain,
                         onValueChange = { fallbackDomain = it },
-                        label = { Text("Резервный домен для проверки (ya.ru)") },
+                        label = { Text(strings.fallbackDomainLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -789,40 +792,40 @@ fun SettingsScreen(
             DesktopSettingsCategory.UPDATES -> {
                 // 6. Фоновое обновление подписок
                 SettingsCard(
-                    title = "Фоновое обновление подписок",
+                    title = strings.cardSubUpdate,
                     icon = Icons.Default.Groups,
-                    description = "Автоматическая загрузка новых профилей и серверов"
+                    description = strings.cardSubUpdateDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Автоматически обновлять подписки",
-                        desc = "Автоматическое обновление подписок в фоновом режиме с указанным интервалом.",
+                        title = strings.subAutoUpdateEnable,
+                        desc = strings.subAutoUpdateEnableDesc,
                         checked = subAutoUpdate,
                         onCheckedChange = { subAutoUpdate = it }
                     )
                     SettingSwitchRow(
-                        title = "Обновлять подписки при запуске",
-                        desc = "Автоматически проверять и обновлять подписки при старте приложения (если база серверов пуста или устарела).",
+                        title = strings.subOnStartEnable,
+                        desc = strings.subOnStartEnableDesc,
                         checked = subUpdateOnStart,
                         onCheckedChange = { subUpdateOnStart = it }
                     )
                     OutlinedTextField(
                         value = subIntervalMins,
                         onValueChange = { subIntervalMins = it },
-                        label = { Text("Интервал автообновления (минут, не менее 15): 60") },
+                        label = { Text(strings.subIntervalLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
                     SettingSwitchRow(
-                        title = "Обновлять подписки только через VPN",
-                        desc = "Если включено, подписки будут обновляться только при наличии активного VPN-соединения, чтобы избежать утечек IP-адреса.",
+                        title = strings.subOnlyProxyEnable,
+                        desc = strings.subOnlyProxyEnableDesc,
                         checked = subOnlyProxy,
                         onCheckedChange = { subOnlyProxy = it }
                     )
                     OutlinedTextField(
                         value = subThreads,
                         onValueChange = { subThreads = it },
-                        label = { Text("Параллельное обновление подписок (потоков): 3") },
+                        label = { Text(strings.subThreadsLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -835,12 +838,12 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.CloudSync, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Проверить обновление сейчас (вручную)")
+                        Text(strings.updateAll)
                     }
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
-                        title = "Обновление подписок через Яндекс Переводчик",
-                        desc = "При блокировках (белые списки) и отключенном VPN обновлять подписки через прокси Яндекс Переводчика",
+                        title = strings.yandexTranslateEnable,
+                        desc = strings.yandexTranslateEnableDesc,
                         checked = yandexUpdate,
                         onCheckedChange = { yandexUpdate = it }
                     )
@@ -850,13 +853,13 @@ fun SettingsScreen(
 
                 // Обновления приложения и User-Agent
                 SettingsCard(
-                    title = "Обновления приложения и User-Agent",
+                    title = strings.cardAppUpdates,
                     icon = Icons.Default.CloudDownload,
-                    description = "Проверка новых версий приложения ПроБел на GitHub"
+                    description = strings.cardAppUpdatesDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Автоматически проверять обновления",
-                        desc = "Искать новые версии на GitHub при запуске приложения",
+                        title = strings.autoCheckUpdates,
+                        desc = strings.autoCheckUpdatesDesc,
                         checked = autoUpdateCheck,
                         onCheckedChange = { autoUpdateCheck = it }
                     )
@@ -873,7 +876,7 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             Text(
-                                text = "Версия приложения: v${DesktopAppState.APP_VERSION}",
+                                text = "ProBel v${DesktopAppState.APP_VERSION}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -883,7 +886,7 @@ fun SettingsScreen(
                                     text = updateMessage!!,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (updateMessage!!.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    color = if (updateMessage!!.startsWith("Ошибка") || updateMessage!!.startsWith("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
@@ -901,18 +904,18 @@ fun SettingsScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(Modifier.width(6.dp))
-                                Text("Проверка...", fontSize = 12.sp)
+                                Text(strings.statusTesting, fontSize = 12.sp)
                             } else {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Проверить сейчас", fontSize = 12.sp)
+                                Text(strings.btnUpdate, fontSize = 12.sp)
                             }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     SettingSwitchRow(
-                        title = "Получать Pre-release (Beta) обновления",
-                        desc = "Только для разработчиков и тестировщиков! Экспериментальные сборки.",
+                        title = strings.betaUpdates,
+                        desc = strings.betaUpdatesDesc,
                         checked = betaUpdates,
                         onCheckedChange = { betaUpdates = it }
                     )
@@ -920,7 +923,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = userAgent,
                         onValueChange = { userAgent = it },
-                        label = { Text("Пользовательский User-Agent (v2rayNG/1.10.x)") },
+                        label = { Text(strings.userAgentLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -930,13 +933,13 @@ fun SettingsScreen(
             DesktopSettingsCategory.ROUTING -> {
                 // 7. Сплит-туннелинг и обход
                 SettingsCard(
-                    title = "Обход российских сервисов",
+                    title = strings.cardRoutingBypass,
                     icon = Icons.Default.Security,
-                    description = "Исключение критических сервисов РФ из туннеля"
+                    description = strings.cardRoutingBypassDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Банки, Госуслуги, Ozon и WB вне VPN",
-                        desc = "Сбер, Тинькофф, Госуслуги, Озон, Wildberries, Авито и др. не будут маршрутизироваться через VPN. Включено по умолчанию.",
+                        title = strings.bypassRuEnable,
+                        desc = strings.bypassRuEnableDesc,
                         checked = bypassRu,
                         onCheckedChange = { bypassRu = it }
                     )
@@ -945,19 +948,19 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
 
                 SettingsCard(
-                    title = "Сплит-туннелинг по доменам",
+                    title = strings.cardSplitTunneling,
                     icon = Icons.Default.AltRoute,
-                    description = "Маршрутизация трафика на основе доменных имен"
+                    description = strings.cardSplitTunnelingDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Сплит-туннелинг по доменам",
-                        desc = "Раздельная маршрутизация доменов (в обход или через VPN). Включено по умолчанию.",
+                        title = strings.cardSplitTunneling,
+                        desc = strings.domainSplitEnableDesc,
                         checked = domainSplit,
                         onCheckedChange = { domainSplit = it }
                     )
                     SettingSwitchRow(
-                        title = "Только указанные домены через VPN",
-                        desc = "Режим белого списка: через VPN направляются только домены из списка «Домены через VPN», весь остальной трафик идет напрямую в обход VPN",
+                        title = strings.domainWhitelistMode,
+                        desc = strings.domainWhitelistMode,
                         checked = domainWhitelist,
                         onCheckedChange = { domainWhitelist = it }
                     )
@@ -965,14 +968,14 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = customProxy,
                         onValueChange = { customProxy = it },
-                        label = { Text("Домены через VPN (направляются в VPN, через запятую или перенос строки)") },
+                        label = { Text(strings.proxyDomainsLabel) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = customDirect,
                         onValueChange = { customDirect = it },
-                        label = { Text("Домены в обход VPN (прямой доступ в обход VPN, через запятую или перенос строки)") },
+                        label = { Text(strings.directDomainsLabel) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
@@ -985,7 +988,7 @@ fun SettingsScreen(
                             Icon(Icons.Default.Public, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Geo файлы: настроены по умолчанию (geoip:ru и geosite:category-ru напрямую, остальное через VPN)",
+                                text = "${strings.bypassRuEnable}: geoip:ru / geosite:category-ru",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -997,13 +1000,13 @@ fun SettingsScreen(
 
                 // Конечный узел
                 SettingsCard(
-                    title = "Конечный узел (Proxy Chaining)",
+                    title = strings.customEndpointEnable,
                     icon = Icons.Default.Share,
-                    description = "Каскадное проксирование через второй сервер"
+                    description = strings.customEndpointEnableDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Использовать свой прокси как конечный узел",
-                        desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка)",
+                        title = strings.customEndpointEnable,
+                        desc = strings.customEndpointEnableDesc,
                         checked = useCustomEp,
                         onCheckedChange = { useCustomEp = it }
                     )
@@ -1012,7 +1015,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = customEpSubUrl,
                             onValueChange = { customEpSubUrl = it },
-                            label = { Text("URL подписки конечного узла") },
+                            label = { Text(strings.endpointSubUrlLabel) },
                             placeholder = { Text("https://example.com/sub/...") },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1022,7 +1025,7 @@ fun SettingsScreen(
                                 onClick = {
                                     if (customEpSubUrl.isNotBlank()) {
                                         epLoading = true
-                                        epStatusMessage = "Загрузка подписки..."
+                                        epStatusMessage = strings.statusTesting
                                         scope.launch {
                                             val res = withContext(Dispatchers.IO) {
                                                 CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
@@ -1031,7 +1034,7 @@ fun SettingsScreen(
                                             res.fold(
                                                 onSuccess = { servers ->
                                                     if (servers.isEmpty()) {
-                                                        epStatusMessage = "В подписке не найдено серверов"
+                                                        epStatusMessage = strings.noServersFoundCriteria
                                                     } else {
                                                         epSubServers = servers
                                                         showEpServerPicker = true
@@ -1039,19 +1042,19 @@ fun SettingsScreen(
                                                     }
                                                 },
                                                 onFailure = { err ->
-                                                    epStatusMessage = "Ошибка: ${err.message}"
+                                                    epStatusMessage = "${strings.statusError}: ${err.message}"
                                                 }
                                             )
                                         }
                                     } else {
-                                        epStatusMessage = "Сначала укажите URL подписки"
+                                        epStatusMessage = strings.endpointSubUrlLabel
                                     }
                                 },
                                 enabled = !epLoading
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(if (epLoading) "Загрузка…" else "Выбрать из подписки", fontSize = 12.sp)
+                                Text(if (epLoading) strings.statusTesting else strings.endpointSelectServer, fontSize = 12.sp)
                             }
 
                             OutlinedButton(
@@ -1062,13 +1065,13 @@ fun SettingsScreen(
                                         showEpServerPicker = true
                                         epStatusMessage = null
                                     } else {
-                                        epStatusMessage = "Список серверов приложения пуст"
+                                        epStatusMessage = strings.serversNotFound
                                     }
                                 }
                             ) {
                                 Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Из серверов приложения", fontSize = 12.sp)
+                                Text(strings.serverList, fontSize = 12.sp)
                             }
                         }
 
@@ -1085,7 +1088,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = customEpConfig,
                             onValueChange = { customEpConfig = it },
-                            label = { Text("Конфиг конечного узла (vless://, vmess://, shadowsocks://, trojan://)") },
+                            label = { Text(strings.endpointConfigLabel) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -1095,114 +1098,114 @@ fun SettingsScreen(
             DesktopSettingsCategory.VPN_CORE -> {
                 // 9. Базовые настройки VPN
                 SettingsCard(
-                    title = "Базовые настройки VPN",
+                    title = strings.cardVpnDns,
                     icon = Icons.Default.VpnKey,
-                    description = "Параметры виртуального сетевого адаптера"
+                    description = strings.cardVpnDnsDesc
                 ) {
-                    SettingSwitchRow(title = "Предпочитать IPv6", desc = "Использовать маршрутизацию IPv6-адресов", checked = preferIpv6, onCheckedChange = { preferIpv6 = it })
-                    SettingSwitchRow(title = "Использовать локальную DNS", desc = "Обслуживание выполняется DNS-модулем ядра", checked = localDns, onCheckedChange = { localDns = it })
-                    SettingSwitchRow(title = "Использовать поддельную DNS (FakeDNS)", desc = "Локальная DNS возвращает поддельные IP-адреса", checked = fakeDns, onCheckedChange = { fakeDns = it })
-                    SettingSwitchRow(title = "Дополнительный HTTP-прокси", desc = "HTTP-прокси будет использоваться напрямую", checked = addHttpProxy, onCheckedChange = { addHttpProxy = it })
-                    OutlinedTextField(value = vpnDns, onValueChange = { vpnDns = it }, label = { Text("VPN DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    SettingSwitchRow(title = strings.preferIpv6, desc = strings.preferIpv6Desc, checked = preferIpv6, onCheckedChange = { preferIpv6 = it })
+                    SettingSwitchRow(title = strings.localDns, desc = strings.localDnsDesc, checked = localDns, onCheckedChange = { localDns = it })
+                    SettingSwitchRow(title = strings.fakeDns, desc = strings.fakeDnsDesc, checked = fakeDns, onCheckedChange = { fakeDns = it })
+                    SettingSwitchRow(title = strings.additionalHttpProxy, desc = strings.additionalHttpProxyDesc, checked = addHttpProxy, onCheckedChange = { addHttpProxy = it })
+                    OutlinedTextField(value = vpnDns, onValueChange = { vpnDns = it }, label = { Text(strings.vpnDnsLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    SettingSwitchRow(title = "VPN обходит LAN", desc = "Локальная сеть напрямую в обход VPN адаптера", checked = bypassLan, onCheckedChange = { bypassLan = it })
-                    OutlinedTextField(value = vpnAddress, onValueChange = { vpnAddress = it }, label = { Text("Адрес интерфейса VPN (10.10.14.x)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    SettingSwitchRow(title = strings.vpnBypassLan, desc = strings.vpnBypassLanDesc, checked = bypassLan, onCheckedChange = { bypassLan = it })
+                    OutlinedTextField(value = vpnAddress, onValueChange = { vpnAddress = it }, label = { Text(strings.vpnAddressLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = vpnMtu, onValueChange = { vpnMtu = it }, label = { Text("VPN MTU (1500)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = vpnMtu, onValueChange = { vpnMtu = it }, label = { Text(strings.vpnMtuLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
 
                 Spacer(Modifier.height(14.dp))
 
                 // 10. Базовые настройки ядра
                 SettingsCard(
-                    title = "Базовые настройки ядра и прокси",
+                    title = strings.cardCoreSocks,
                     icon = Icons.Default.DeveloperMode,
-                    description = "Локальные порты, авторизация и системный DNS"
+                    description = strings.cardCoreSocksDesc
                 ) {
-                    SettingSwitchRow(title = "Анализировать пакеты (Sniffing)", desc = "Пытаться определять доменные имена в пакетах", checked = sniffing, onCheckedChange = { sniffing = it })
-                    SettingSwitchRow(title = "Домен только для маршрутизации", desc = "Использовать доменное имя только для маршрутизации", checked = routeOnly, onCheckedChange = { routeOnly = it })
-                    SettingSwitchRow(title = "Разрешать соединения из LAN", desc = "Другие устройства в домашней сети могут использовать ваш прокси", checked = allowLan, onCheckedChange = { allowLan = it })
-                    SettingSwitchRow(title = "Разрешать небезопасные соединения (Insecure)", desc = "Отключить строгую проверку TLS сертификатов", checked = allowInsecure, onCheckedChange = { allowInsecure = it })
+                    SettingSwitchRow(title = strings.sniffingEnable, desc = strings.sniffingEnableDesc, checked = sniffing, onCheckedChange = { sniffing = it })
+                    SettingSwitchRow(title = strings.routeOnlyEnable, desc = strings.routeOnlyEnableDesc, checked = routeOnly, onCheckedChange = { routeOnly = it })
+                    SettingSwitchRow(title = strings.allowLanEnable, desc = strings.allowLanEnableDesc, checked = allowLan, onCheckedChange = { allowLan = it })
+                    SettingSwitchRow(title = strings.allowInsecureEnable, desc = strings.allowInsecureEnableDesc, checked = allowInsecure, onCheckedChange = { allowInsecure = it })
                     OutlinedTextField(
                         value = localPort,
                         onValueChange = { localPort = it },
-                        label = { Text("Порт SOCKS5 прокси (по умолчанию 10808)") },
+                        label = { Text(strings.localProxyPortLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     val socksPortInt = localPort.toIntOrNull() ?: 10808
                     Text(
-                        text = "HTTP порт прокси: ${socksPortInt + 1} (автоматически SOCKS5 + 1)",
+                        text = "HTTP: ${socksPortInt + 1}",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = localLogin, onValueChange = { localLogin = it }, label = { Text("Логин локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = localLogin, onValueChange = { localLogin = it }, label = { Text(strings.localProxyLoginLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = localPass, onValueChange = { localPass = it }, label = { Text("Пароль локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = localPass, onValueChange = { localPass = it }, label = { Text(strings.localProxyPasswordLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = remoteDns, onValueChange = { remoteDns = it }, label = { Text("Удалённая DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = remoteDns, onValueChange = { remoteDns = it }, label = { Text(strings.remoteDnsLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = internalDns, onValueChange = { internalDns = it }, label = { Text("Внутренняя DNS (223.5.5.5)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = internalDns, onValueChange = { internalDns = it }, label = { Text(strings.internalDnsLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = dnsHosts, onValueChange = { dnsHosts = it }, label = { Text("Узлы DNS (формат: домен:адрес,...)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = dnsHosts, onValueChange = { dnsHosts = it }, label = { Text(strings.dnsHostsLabel) }, modifier = Modifier.fillMaxWidth())
                 }
 
                 Spacer(Modifier.height(14.dp))
 
                 // 11. Мультиплексирование
                 SettingsCard(
-                    title = "Мультиплексирование (Mux)",
+                    title = strings.cardMux,
                     icon = Icons.Default.Layers,
-                    description = "Объединение множества соединений в один туннель"
+                    description = strings.cardMuxDesc
                 ) {
-                    SettingSwitchRow(title = "Использовать мультиплексирование", desc = "Объединение соединений в один туннель (Mux)", checked = muxEnabled, onCheckedChange = { muxEnabled = it })
-                    OutlinedTextField(value = muxTcp, onValueChange = { muxTcp = it }, label = { Text("TCP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    SettingSwitchRow(title = strings.muxEnable, desc = strings.muxEnableDesc, checked = muxEnabled, onCheckedChange = { muxEnabled = it })
+                    OutlinedTextField(value = muxTcp, onValueChange = { muxTcp = it }, label = { Text(strings.muxTcpLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = muxXudp, onValueChange = { muxXudp = it }, label = { Text("XUDP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = muxXudp, onValueChange = { muxXudp = it }, label = { Text(strings.muxXudpLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    Text("Обработка QUIC в мультиплексном туннеле: Отклонять (Reject)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("QUIC: Reject", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 Spacer(Modifier.height(14.dp))
 
                 // 12. Фрагментирование
                 SettingsCard(
-                    title = "Фрагментирование пакетов (DPI evasion)",
+                    title = strings.cardFragmentation,
                     icon = Icons.Default.CallSplit,
-                    description = "Разбивка TLS пакетов для обхода глубокого анализа пакетов"
+                    description = strings.cardFragmentationDesc
                 ) {
-                    SettingSwitchRow(title = "Использовать фрагментирование", desc = "Разбивка TLS ClientHello пакетов на мелкие части", checked = fragmentEnabled, onCheckedChange = { fragmentEnabled = it })
-                    OutlinedTextField(value = fragmentLen, onValueChange = { fragmentLen = it }, label = { Text("Длина фрагмента (от - до): 50-100") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    SettingSwitchRow(title = strings.fragmentEnable, desc = strings.fragmentEnableDesc, checked = fragmentEnabled, onCheckedChange = { fragmentEnabled = it })
+                    OutlinedTextField(value = fragmentLen, onValueChange = { fragmentLen = it }, label = { Text(strings.fragmentLengthLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = fragmentInt, onValueChange = { fragmentInt = it }, label = { Text("Интервал фрагментов (от - до): 10-20") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = fragmentInt, onValueChange = { fragmentInt = it }, label = { Text(strings.fragmentIntervalLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(value = fragmentPack, onValueChange = { fragmentPack = it }, label = { Text("Фрагментирование пакетов: tlshello") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = fragmentPack, onValueChange = { fragmentPack = it }, label = { Text(strings.fragmentPacketsLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             }
 
             DesktopSettingsCategory.BACKUP_DATA -> {
                 // 13. Прочее / Системные параметры
                 SettingsCard(
-                    title = "Системные параметры",
+                    title = strings.cardSystemTray,
                     icon = Icons.Default.MoreHoriz,
-                    description = "Поведение окна и фоновые проверки"
+                    description = strings.cardSystemTrayDesc
                 ) {
-                    OutlinedTextField(value = connCheckUrl, onValueChange = { connCheckUrl = it }, label = { Text("Сервис проверки соединения (https://api.ip.sb/geoip)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = connCheckUrl, onValueChange = { connCheckUrl = it }, label = { Text(strings.connCheckUrlLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(10.dp))
-                    SettingSwitchRow(title = "Сворачивать в системный трей", desc = "При закрытии окна программа продолжает работать в фоне", checked = minimizeToTray, onCheckedChange = { minimizeToTray = it })
+                    SettingSwitchRow(title = strings.minimizeToTrayEnable, desc = strings.minimizeToTrayEnableDesc, checked = minimizeToTray, onCheckedChange = { minimizeToTray = it })
                 }
 
                 Spacer(Modifier.height(14.dp))
 
                 // 14. Сброс всех настроек и данных
                 SettingsCard(
-                    title = "Сброс и очистка приложения",
+                    title = strings.cardReset,
                     icon = Icons.Default.DeleteForever,
-                    description = "Возврат всех настроек и базы серверов к заводскому состоянию"
+                    description = strings.cardResetDesc
                 ) {
                     Text(
-                        text = "Сбросить все настройки, подписки, серверы и VIP-кэш к начальному заводскому состоянию.",
+                        text = strings.cardResetDesc,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1213,7 +1216,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Сбросить все настройки и серверы")
+                        Text(strings.resetAllSettings)
                     }
                 }
             }
@@ -1222,9 +1225,9 @@ fun SettingsScreen(
         if (showResetConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showResetConfirmDialog = false },
-                title = { Text("Сбросить все данные?") },
+                title = { Text(strings.resetDialogTitle) },
                 text = {
-                    Text("Это действие остановит ядро, очистит все добавленные серверы, подписки, историю VIP-кэша и вернет все настройки приложения к значениям по умолчанию. Продолжить?")
+                    Text(strings.resetDialogConfirm)
                 },
                 confirmButton = {
                     Button(
@@ -1234,12 +1237,12 @@ fun SettingsScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Text("Да, сбросить всё")
+                        Text(strings.done)
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showResetConfirmDialog = false }) {
-                        Text("Отмена")
+                        Text(strings.cancel)
                     }
                 }
             )
@@ -1248,7 +1251,7 @@ fun SettingsScreen(
         if (showEpServerPicker && epSubServers.isNotEmpty()) {
             AlertDialog(
                 onDismissRequest = { showEpServerPicker = false },
-                title = { Text("Выберите конечный узел") },
+                title = { Text(strings.endpointSelectServerTitle) },
                 text = {
                     LazyColumn(modifier = Modifier.heightIn(max = 350.dp).fillMaxWidth()) {
                         items(epSubServers) { server ->
@@ -1274,7 +1277,7 @@ fun SettingsScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showEpServerPicker = false }) {
-                        Text("Закрыть")
+                        Text(strings.close)
                     }
                 }
             )

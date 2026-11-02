@@ -58,11 +58,20 @@ enum class DesktopTab {
     SETTINGS
 }
 
+enum class SubStatusType {
+    UPDATING,
+    FAILED,
+    NO_SUBS,
+    ACTUAL,
+    OUTDATED
+}
+
 data class SubscriptionStatusInfo(
     val statusText: String,
     val timeText: String,
     val isActual: Boolean,
-    val failedCount: Int
+    val failedCount: Int,
+    val type: SubStatusType = SubStatusType.NO_SUBS
 )
 
 class DesktopAppState(
@@ -483,7 +492,8 @@ class DesktopAppState(
                 statusText = "Обновление…",
                 timeText = "Загрузка серверов",
                 isActual = true,
-                failedCount = 0
+                failedCount = 0,
+                type = SubStatusType.UPDATING
             )
         }
 
@@ -498,7 +508,8 @@ class DesktopAppState(
                 statusText = "Сбой обновления ($failedCount)",
                 timeText = if (timeStr.isNotBlank()) timeStr else "",
                 isActual = false,
-                failedCount = failedCount
+                failedCount = failedCount,
+                type = SubStatusType.FAILED
             )
         }
 
@@ -507,7 +518,8 @@ class DesktopAppState(
                 statusText = "Нет подписок",
                 timeText = "",
                 isActual = false,
-                failedCount = 0
+                failedCount = 0,
+                type = SubStatusType.NO_SUBS
             )
         }
 
@@ -538,7 +550,8 @@ class DesktopAppState(
             statusText = if (isActual) "Актуальна" else "Устарела",
             timeText = fullTimeText,
             isActual = isActual,
-            failedCount = 0
+            failedCount = 0,
+            type = if (isActual) SubStatusType.ACTUAL else SubStatusType.OUTDATED
         )
     }
 
@@ -670,7 +683,7 @@ class DesktopAppState(
 
     fun submitSudoPassword(password: String) {
         if (password.isBlank()) {
-            sudoError.value = "Пароль не может быть пустым"
+            sudoError.value = "EMPTY_PASSWORD"
             return
         }
 
@@ -688,7 +701,7 @@ class DesktopAppState(
                 applyRoutingMode("TUN")
                 GeekModeLogger.log("TUN", "Права sudo успешно подтверждены. Режим TUN активирован.")
             } else {
-                sudoError.value = errorMsg ?: "Неверный пароль sudo. Пожалуйста, попробуйте снова."
+                sudoError.value = errorMsg ?: "INVALID_PASSWORD"
                 GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: ${sudoError.value}")
             }
         }
