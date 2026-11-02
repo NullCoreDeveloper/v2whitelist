@@ -15,7 +15,9 @@
     <string name="pull_down_to_refresh">Потяните вниз для обновления!</string>
 
     <!-- Notifications -->
-    <string name="notification_action_stop_v2ray">Остановить</string>
+    <string name="notification_action_stop_v2ray">Отключить</string>
+    <string name="notification_action_switch_server">След. сервер</string>
+    <string name="notification_action_restart_v2ray">Перезапуск</string>
     <string name="toast_permission_denied">Разрешение не получено</string>
     <string name="toast_permission_denied_notification">Разрешение на отображение уведомлений не получено</string>
     <string name="notification_action_more">Ещё…</string>
@@ -629,6 +631,14 @@
     <string name="notification_content_paused">VPN-соединение на паузе</string>
 
     <!-- Preferences Categories & Keys -->
+    <string name="title_category_scanner_and_core">⚡ Сканер и ядро v2w-core</string>
+    <string name="title_category_profile_check">🛡️ Проверка профилей и сервисов</string>
+    <string name="title_category_failover">🔄 Авто-переключение (Failover)</string>
+    <string name="title_category_updates">📦 Фоновое обновление</string>
+    <string name="title_category_routing">🌐 Маршрутизация и Proxy-каскад</string>
+    <string name="title_category_vpn_core">⚙️ Параметры VPN и ядра</string>
+    <string name="title_category_backup_system">💾 Резервное копирование и система</string>
+
     <string name="title_v2w_core_settings">Сканирующее ядро v2w-core</string>
     <string name="title_profile_check_settings">Проверка профилей</string>
     <string name="title_v2whitelist_settings_misc">Дополнительные настройки</string>

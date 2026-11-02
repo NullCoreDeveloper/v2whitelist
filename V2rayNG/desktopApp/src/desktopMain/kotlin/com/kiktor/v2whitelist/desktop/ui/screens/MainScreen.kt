@@ -105,8 +105,10 @@ fun MainScreen(
     }
 
     if (qrProfile != null) {
+        val qrSubName = qrProfile?.subscriptionId?.let { subNamesMap[it] }?.takeIf { it.isNotBlank() }
         QrCodeDialog(
             profile = qrProfile!!,
+            subscriptionName = qrSubName,
             onCopy = { text ->
                 state.copyToClipboard(text, qrProfile?.remarks ?: "Ссылка узла")
             },
@@ -309,7 +311,9 @@ fun MainScreen(
                             coreState == DesktopCoreState.RUNNING -> {
                                 val modePrefix = if (isManualSelection) "Ручной выбор: " else ""
                                 val name = activeProfile?.remarks.orEmpty().ifBlank { activeProfile?.server.orEmpty() }
-                                if (name.isNotBlank()) "Соединение через $modePrefix$name активно" else "Защищённый туннель активен"
+                                val subName = activeProfile?.subscriptionId?.let { subNamesMap[it] }?.takeIf { it.isNotBlank() }
+                                val subSuffix = if (!subName.isNullOrBlank()) " • $subName" else ""
+                                if (name.isNotBlank()) "Соединение через $modePrefix$name активно$subSuffix" else "Защищённый туннель активен"
                             }
                             isManualSelection && activeProfile != null -> "Выбран вручную: ${activeProfile.remarks.ifBlank { activeProfile.server }}"
                             activeProfile != null -> "Сценарий: ${scenario.name} (готов к автопоиску)"

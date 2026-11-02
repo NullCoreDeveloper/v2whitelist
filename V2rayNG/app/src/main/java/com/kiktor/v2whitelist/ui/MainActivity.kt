@@ -688,6 +688,8 @@ class MainActivity : HelperBaseActivity() {
             }
 
         val serverName = config.remarks.ifEmpty { V2RayServiceManager.getRunningServerName() }
+        val subId = config.subscriptionId
+        val subName = if (subId.isNotEmpty()) MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() } else null
         lifecycleScope.launch(Dispatchers.IO) {
             val bitmap: Bitmap? = AngConfigManager.share2QRCode(config)
             val configUrl: String = AngConfigManager.shareConfig(config)
@@ -703,7 +705,7 @@ class MainActivity : HelperBaseActivity() {
                 val btnClose = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_qr_close)
 
                 if (!serverName.isNullOrEmpty()) {
-                    tvSubtitle.text = serverName
+                    tvSubtitle.text = if (!subName.isNullOrBlank()) "$serverName\nПодписка: $subName" else serverName
                     tvSubtitle.visibility = View.VISIBLE
                 } else {
                     tvSubtitle.visibility = View.GONE
@@ -844,8 +846,16 @@ class MainActivity : HelperBaseActivity() {
                     }
                 }
             } else {
+                val subId = runningConfig?.subscriptionId ?: (if (!selectedGuid.isNullOrBlank()) {
+                    MmkvManager.decodeServerConfig(selectedGuid.orEmpty())?.subscriptionId
+                } else null)
+                val subName = if (!subId.isNullOrBlank()) {
+                    MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() }
+                } else null
+
                 if (serverName.isNotEmpty()) {
-                    binding.tvStatusDetail.text = getString(R.string.tv_server_name, serverName)
+                    val baseText = getString(R.string.tv_server_name, serverName)
+                    binding.tvStatusDetail.text = if (!subName.isNullOrBlank()) "$baseText • $subName" else baseText
                 } else {
                     binding.tvStatusDetail.text = getString(R.string.tv_status_protected)
                 }

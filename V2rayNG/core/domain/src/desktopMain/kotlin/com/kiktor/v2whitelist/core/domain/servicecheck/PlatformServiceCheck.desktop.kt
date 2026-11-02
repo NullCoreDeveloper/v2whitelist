@@ -484,6 +484,73 @@ private fun checkTelegramSmart(
     )
 }
 
+private fun checkWhatsAppSmart(
+    service: ServiceCheckItem,
+    proxy: Proxy,
+    timeoutMs: Long
+): ServiceCheckResult {
+    val probe = executeProbe(service.url, proxy, timeoutMs)
+    if (probe.statusCode in 200..399) {
+        return ServiceCheckResult(
+            service = service,
+            success = true,
+            latencyMs = probe.latencyMs,
+            httpCode = probe.statusCode
+        )
+    }
+    if (probe.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = probe.errorMessage ?: "Read timed out"
+        )
+    }
+    val fallback = executeProbe("https://www.whatsapp.com", proxy, timeoutMs)
+    val success = fallback.statusCode in 200..399
+    return ServiceCheckResult(
+        service = service,
+        success = success,
+        latencyMs = if (success) fallback.latencyMs else -1L,
+        httpCode = fallback.statusCode,
+        errorMessage = if (!success) (fallback.errorMessage ?: "HTTP ${fallback.statusCode}") else null
+    )
+}
+
+private fun checkInstagramSmart(
+    service: ServiceCheckItem,
+    proxy: Proxy,
+    timeoutMs: Long
+): ServiceCheckResult {
+    val probe = executeProbe(service.url, proxy, timeoutMs)
+    if (probe.statusCode in 200..399) {
+        return ServiceCheckResult(
+            service = service,
+            success = true,
+            latencyMs = probe.latencyMs,
+            httpCode = probe.statusCode
+        )
+    }
+    if (probe.statusCode <= 0) {
+        return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = -1,
+            errorMessage = probe.errorMessage ?: "Read timed out"
+        )
+    }
+    val success = probe.statusCode in 200..399 || probe.statusCode == 403
+    return ServiceCheckResult(
+        service = service,
+        success = success,
+        latencyMs = if (success) probe.latencyMs else -1L,
+        httpCode = probe.statusCode,
+        errorMessage = if (!success) (probe.errorMessage ?: "HTTP ${probe.statusCode}") else null
+    )
+}
+
 private fun checkGeneric(
     service: ServiceCheckItem,
     proxy: Proxy,
@@ -515,6 +582,8 @@ actual suspend fun rawServiceHttpCheck(
             "gemini" -> checkGeminiSmart(service, proxy, timeoutMs)
             "discord" -> checkDiscordSmart(service, proxy, timeoutMs)
             "telegram" -> checkTelegramSmart(service, proxy, timeoutMs)
+            "whatsapp" -> checkWhatsAppSmart(service, proxy, timeoutMs)
+            "instagram" -> checkInstagramSmart(service, proxy, timeoutMs)
             else -> checkGeneric(service, proxy, timeoutMs)
         }
     } else {

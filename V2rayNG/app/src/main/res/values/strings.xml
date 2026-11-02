@@ -17,6 +17,8 @@
 
     <!-- Notifications -->
     <string name="notification_action_stop_v2ray">Stop</string>
+    <string name="notification_action_switch_server">Next server</string>
+    <string name="notification_action_restart_v2ray">Restart</string>
     <string name="notification_action_pause">Pause</string>
     <string name="notification_action_resume">Resume</string>
     <string name="notification_content_paused">VPN connection paused</string>
@@ -594,6 +596,14 @@
     <string name="status_speed_test">Speed test: %.1f KB/s</string>
 
     <!-- Profile Check settings section title -->
+    <string name="title_category_scanner_and_core">⚡ Scanner &amp; v2w-core</string>
+    <string name="title_category_profile_check">🛡️ Profile &amp; Service Verification</string>
+    <string name="title_category_failover">🔄 Auto Failover &amp; Network Check</string>
+    <string name="title_category_updates">📦 Background Updates</string>
+    <string name="title_category_routing">🌐 Routing &amp; Proxy Chaining</string>
+    <string name="title_category_vpn_core">⚙️ VPN &amp; Core Parameters</string>
+    <string name="title_category_backup_system">💾 Backup &amp; System</string>
+
     <string name="title_profile_check_settings">Profile Verification</string>
     <!-- v2w-core scanner section title -->
     <string name="title_v2w_core_settings">v2w-core Scanner Engine</string>

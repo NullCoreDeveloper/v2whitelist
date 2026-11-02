@@ -134,14 +134,14 @@ object NotificationManager {
         val startMainIntent = Intent(service, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(service, NOTIFICATION_PENDING_INTENT_CONTENT, startMainIntent, flags)
 
-        val stopV2RayIntent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
-        stopV2RayIntent.`package` = service.packageName
-        stopV2RayIntent.putExtra("key", AppConfig.MSG_STATE_STOP)
+        val stopV2RayIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_STOP
+        }
         val stopV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_STOP_V2RAY, stopV2RayIntent, flags)
 
-        val restartV2RayIntent = Intent(AppConfig.BROADCAST_ACTION_SERVICE)
-        restartV2RayIntent.`package` = service.packageName
-        restartV2RayIntent.putExtra("key", AppConfig.MSG_STATE_RESTART)
+        val restartV2RayIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
+            action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_RESTART
+        }
         val restartV2RayPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_RESTART_V2RAY, restartV2RayIntent, flags)
 
         val nextIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
@@ -167,18 +167,18 @@ object NotificationManager {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentPendingIntent)
             .addAction(
-                R.drawable.ic_delete_24dp,
-                "Next",
+                R.drawable.ic_qu_switch_24dp,
+                service.getString(R.string.notification_action_switch_server),
                 nextPendingIntent
             )
             .addAction(
-                R.drawable.ic_delete_24dp,
+                R.drawable.ic_stop_24dp,
                 service.getString(R.string.notification_action_stop_v2ray),
                 stopV2RayPendingIntent
             )
             .addAction(
-                R.drawable.ic_delete_24dp,
-                service.getString(R.string.title_service_restart),
+                R.drawable.ic_restore_24dp,
+                service.getString(R.string.notification_action_restart_v2ray),
                 restartV2RayPendingIntent
             )
 
@@ -224,12 +224,12 @@ object NotificationManager {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentPendingIntent)
             .addAction(
-                R.drawable.ic_delete_24dp,
+                R.drawable.ic_play_24dp,
                 context.getString(R.string.notification_action_resume),
                 resumePendingIntent
             )
             .addAction(
-                R.drawable.ic_delete_24dp,
+                R.drawable.ic_stop_24dp,
                 context.getString(R.string.notification_action_stop_v2ray),
                 stopPendingIntent
             )

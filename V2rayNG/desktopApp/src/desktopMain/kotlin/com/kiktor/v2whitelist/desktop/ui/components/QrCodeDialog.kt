@@ -50,6 +50,7 @@ object QrCodeGenerator {
 @Composable
 fun QrCodeDialog(
     profile: ProfileItem,
+    subscriptionName: String? = null,
     onCopy: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -86,8 +87,9 @@ fun QrCodeDialog(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val subText = if (!subscriptionName.isNullOrBlank()) " • $subscriptionName" else ""
                         Text(
-                            text = "${profile.configType.name} • ${profile.server}:${profile.serverPort}",
+                            text = "${profile.configType.name} • ${profile.server}:${profile.serverPort}$subText",
                             fontSize = 12.sp,
                             color = TextSecondary
                         )

@@ -17,6 +17,8 @@ data class ServiceCheckItem(
             ServiceCheckItem(id = "google", name = "Google", url = "https://www.google.com/generate_204", enabled = true),
             ServiceCheckItem(id = "youtube", name = "YouTube", url = "https://www.youtube.com/generate_204", enabled = true),
             ServiceCheckItem(id = "telegram", name = "Telegram", url = "https://web.telegram.org", enabled = true),
+            ServiceCheckItem(id = "whatsapp", name = "WhatsApp", url = "https://web.whatsapp.com", enabled = true),
+            ServiceCheckItem(id = "instagram", name = "Instagram", url = "https://www.instagram.com", enabled = true),
             ServiceCheckItem(id = "gemini", name = "Gemini", url = "https://gemini.google.com", enabled = true),
             ServiceCheckItem(id = "claude", name = "Claude", url = "https://claude.ai", enabled = true),
             ServiceCheckItem(id = "chatgpt", name = "ChatGPT", url = "https://chatgpt.com", enabled = true),
@@ -33,7 +35,14 @@ data class ServiceCheckItem(
             if (jsonStr.isNullOrBlank()) return DEFAULT_SERVICES
             return try {
                 val list = json.decodeFromString<List<ServiceCheckItem>>(jsonStr)
-                if (list.isEmpty()) DEFAULT_SERVICES else list
+                if (list.isEmpty()) return DEFAULT_SERVICES
+                val existingIds = list.map { it.id.lowercase() }.toSet()
+                val missingDefaults = DEFAULT_SERVICES.filter { it.id.lowercase() !in existingIds }
+                if (missingDefaults.isNotEmpty()) {
+                    list + missingDefaults
+                } else {
+                    list
+                }
             } catch (_: Exception) {
                 DEFAULT_SERVICES
             }

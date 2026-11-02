@@ -18,6 +18,7 @@ class NotificationReceiver : BroadcastReceiver() {
         const val ACTION_NEXT = "com.kiktor.v2whitelist.action.notification.next"
         const val ACTION_RESUME = "com.kiktor.v2whitelist.action.notification.resume"
         const val ACTION_STOP = "com.kiktor.v2whitelist.action.notification.stop"
+        const val ACTION_RESTART = "com.kiktor.v2whitelist.action.notification.restart"
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -26,13 +27,12 @@ class NotificationReceiver : BroadcastReceiver() {
         when (action) {
             ACTION_NEXT -> {
                 val pendingResult = goAsync()
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                pendingResult?.finish()
+                CoroutineScope(Dispatchers.IO).launch {
                     try {
                         com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(context.applicationContext)
                     } catch (e: Exception) {
                         Log.e(AppConfig.TAG, "NotificationReceiver: switchServer failed", e)
-                    } finally {
-                        pendingResult.finish()
                     }
                 }
             }
@@ -48,7 +48,15 @@ class NotificationReceiver : BroadcastReceiver() {
             ACTION_STOP -> {
                 NotificationManager.cancelPausedNotification(context)
                 MmkvManager.encodeSettings(AppConfig.PREF_IS_PAUSED, false)
-                V2RayServiceManager.stopVService(context)
+                V2RayServiceManager.stopVService(context.applicationContext)
+            }
+            ACTION_RESTART -> {
+                NotificationManager.cancelPausedNotification(context)
+                MmkvManager.encodeSettings(AppConfig.PREF_IS_PAUSED, false)
+                V2RayServiceManager.stopVService(context.applicationContext)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    V2RayServiceManager.startVService(context.applicationContext)
+                }, 500L)
             }
         }
     }

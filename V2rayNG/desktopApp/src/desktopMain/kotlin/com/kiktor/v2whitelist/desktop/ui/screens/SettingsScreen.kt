@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -29,11 +30,56 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+enum class DesktopSettingsCategory(
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val description: String
+) {
+    SCANNER_CORE(
+        title = "⚡ Сканер и ядро",
+        icon = Icons.Default.Bolt,
+        description = "Настройки распределения серверов SmartConnect и параметры ядра v2w-core"
+    ),
+    PROFILE_CHECK(
+        title = "🛡️ Проверка",
+        icon = Icons.Default.VerifiedUser,
+        description = "Smart-проверка профилей перед подключением, доступность сервисов и замер скорости"
+    ),
+    FAILOVER(
+        title = "🔄 Failover",
+        icon = Icons.Default.Autorenew,
+        description = "Авто-переключение серверов при сбоях соединения, Smart Failover и статус сети"
+    ),
+    UPDATES(
+        title = "📦 Обновление",
+        icon = Icons.Default.CloudDownload,
+        description = "Фоновое обновление подписок и проверка новых версий ПроБел на GitHub"
+    ),
+    ROUTING(
+        title = "🌐 Маршрутизация",
+        icon = Icons.Default.AltRoute,
+        description = "Обход блокировок РФ, сплит-туннелинг по доменам и конечный узел (цепочка)"
+    ),
+    VPN_CORE(
+        title = "⚙️ VPN и ядро",
+        icon = Icons.Default.Settings,
+        description = "Сетевые параметры VPN, SOCKS5 прокси, DNS, Mux и фрагментация пакетов"
+    ),
+    BACKUP_DATA(
+        title = "💾 Данные",
+        icon = Icons.Default.Storage,
+        description = "Системные параметры, сворачивание в трей и сброс настроек"
+    )
+}
+
 @Composable
 fun SettingsScreen(
     state: DesktopAppState,
     modifier: Modifier = Modifier
 ) {
+    var selectedCategory by remember { mutableStateOf(DesktopSettingsCategory.SCANNER_CORE) }
+    var showResetConfirmDialog by remember { mutableStateOf(false) }
+
     // SmartConnect
     var smartBatchSize by remember { mutableStateOf(state.smartConnectBatchSize.value.toString()) }
     var smartPreset by remember { mutableStateOf(state.smartDistributionPreset.value) }
@@ -431,622 +477,745 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(18.dp))
 
-        // 1. Настройка SmartConnect
-        AccordionSection(title = "Настройка SmartConnect (старый сканер)", icon = Icons.Default.Bolt) {
-            OutlinedTextField(
-                value = smartBatchSize,
-                onValueChange = { smartBatchSize = it },
-                label = { Text("Размер пачки серверов (по умолчанию 20)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            Text("Пресет распределения по умолчанию:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsChip(label = "Поровну", selected = smartPreset == "EQUAL", onClick = { smartPreset = "EQUAL" })
-                SettingsChip(label = "Случайный разброс", selected = smartPreset == "RANDOM", onClick = { smartPreset = "RANDOM" })
-                SettingsChip(label = "Больше серверов больше доля", selected = smartPreset == "MORE", onClick = { smartPreset = "MORE" })
-                SettingsChip(label = "Меньше серверов меньше доля", selected = smartPreset == "LESS", onClick = { smartPreset = "LESS" })
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 2. Ядро v2w-core
-        AccordionSection(title = "Ядро v2w-core", icon = Icons.Default.Memory) {
-            SettingSwitchRow(
-                title = "Использовать v2w-core",
-                desc = "Быстрое нативное сканирование и подключение (включено по умолчанию)",
-                checked = useV2w,
-                onCheckedChange = { useV2w = it }
-            )
-            SettingSwitchRow(
-                title = "Резервный классический сканер",
-                desc = "Использовать Kotlin fallback сканер при сбое бинарного ядра",
-                checked = useFallback,
-                onCheckedChange = { useFallback = it }
-            )
-            OutlinedTextField(
-                value = v2wSockets,
-                onValueChange = { v2wSockets = it },
-                label = { Text("Количество сокетов (по умолчанию 35)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = xrayPathInput,
-                onValueChange = { xrayPathInput = it },
-                label = { Text("Путь к исполняемому файлу Xray") },
-                placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
-                supportingText = {
-                    val activePath = state.xrayBinaryPath.value
-                    if (activePath.isNotBlank()) {
-                        Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text("Оставьте пустым для встроенного ядра (автопоиск)")
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = v2wPathInput,
-                onValueChange = { v2wPathInput = it },
-                label = { Text("Путь к ядру сканера (v2w-scan / v2w-core)") },
-                placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
-                supportingText = {
-                    val activePath = state.v2wScanPath.value
-                    if (activePath.isNotBlank()) {
-                        Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text("Оставьте пустым для встроенного ядра (автопоиск)")
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 3. Проверка профилей
-        AccordionSection(title = "Проверка профилей", icon = Icons.Default.VerifiedUser) {
-            SettingSwitchRow(
-                title = "Удалять небезопасные профили",
-                desc = "Не пропускать профили без TLS, Reality или allowInsecure",
-                checked = removeInsecure,
-                onCheckedChange = { removeInsecure = it }
-            )
-            SettingSwitchRow(
-                title = "Проверка профиля перед подключением",
-                desc = "Обеспечивает 100% стабильность. Без нее вы можете попасть на мертвый сервер.",
-                checked = testBeforeConnect,
-                onCheckedChange = { testBeforeConnect = it }
-            )
-            SettingSwitchRow(
-                title = "e2e проверка конечного узла",
-                desc = "Проверять сквозное HTTP 204 соединение через цепочку до конечного узла перед замером скорости",
-                checked = endpointE2eCheck,
-                onCheckedChange = { endpointE2eCheck = it }
-            )
-            SettingSwitchRow(
-                title = "Проверять доступность сервисов",
-                desc = "Проверять доступность выбранных сервисов (Google, YouTube, Telegram, AI и др.) вместо теста 204. Игнорируется при использовании конечного узла.",
-                checked = serviceCheckEnabled,
-                onCheckedChange = { serviceCheckEnabled = it }
-            )
-            val currentServices by state.servicesList.collectAsState()
-            val enabledServicesCount = currentServices.count { it.enabled }
-            OutlinedButton(
-                onClick = { state.promptServiceCheckDialog() },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Список проверяемых сервисов ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
-            }
-            SettingSwitchRow(
-                title = "Тест скорости при проверке профиля",
-                desc = "Загружает небольшой объем данных через сервер для проверки реальной пропускной способности.",
-                checked = speedTestOnCheck,
-                onCheckedChange = { speedTestOnCheck = it }
-            )
-            OutlinedTextField(
-                value = speedTestBytes,
-                onValueChange = { speedTestBytes = it },
-                label = { Text("Объем загрузки (байт): 2000000") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = speedTestTimeout,
-                onValueChange = { speedTestTimeout = it },
-                label = { Text("Таймаут замера скорости (мс): 3000") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = minSpeedThreshold,
-                onValueChange = { minSpeedThreshold = it },
-                label = { Text("Минимальный порог скорости (Мбит/с): 1.0") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = vipCacheLimitInput,
-                onValueChange = { vipCacheLimitInput = it },
-                label = { Text("Лимит VIP-кэша проверенных серверов: 5") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 4. Настройки авто-переключения (Failover)
-        AccordionSection(title = "Настройки авто-переключения (Failover)", icon = Icons.Default.Autorenew) {
-            SettingSwitchRow(
-                title = "Авто-переключение (Failover)",
-                desc = "Автоматически переключаться на следующий сервер, если текущий не отвечает",
-                checked = autoFailover,
-                onCheckedChange = { autoFailover = it }
-            )
-            OutlinedTextField(
-                value = heartbeatSec,
-                onValueChange = { heartbeatSec = it },
-                label = { Text("Интервал проверки Heartbeat (секунд): 30") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            SettingSwitchRow(
-                title = "Smart Failover",
-                desc = "Быстрое обнаружение затыков по трафику и арбитраж сети (ya.ru vs google.com) без долгих таймаутов",
-                checked = smartFailover,
-                onCheckedChange = { smartFailover = it }
-            )
-            OutlinedTextField(
-                value = degradationKb,
-                onValueChange = { degradationKb = it },
-                label = { Text("Порог деградации трафика (КБ/с): 3") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = stuckSec,
-                onValueChange = { stuckSec = it },
-                label = { Text("Время фиксации затыка (секунд): 3") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 5. Проверка статуса сети
-        AccordionSection(title = "Проверка статуса сети", icon = Icons.Default.NetworkCheck) {
-            SettingSwitchRow(
-                title = "Проверка статуса сети",
-                desc = "Проверять наличие сети перед подключением и для авто-переключения",
-                checked = netCheckEnabled,
-                onCheckedChange = { netCheckEnabled = it }
-            )
-            OutlinedTextField(
-                value = primaryDomain,
-                onValueChange = { primaryDomain = it },
-                label = { Text("Основной домен для проверки (google.com)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = fallbackDomain,
-                onValueChange = { fallbackDomain = it },
-                label = { Text("Резервный домен для проверки (ya.ru)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 6. Группы
-        AccordionSection(title = "Группы (фоновое обновление подписок)", icon = Icons.Default.Groups) {
-            SettingSwitchRow(
-                title = "Автоматически обновлять подписки",
-                desc = "Автоматическое обновление подписок в фоновом режиме с указанным интервалом.",
-                checked = subAutoUpdate,
-                onCheckedChange = { subAutoUpdate = it }
-            )
-            SettingSwitchRow(
-                title = "Обновлять подписки при запуске",
-                desc = "Автоматически проверять и обновлять подписки при старте приложения (если база серверов пуста или устарела).",
-                checked = subUpdateOnStart,
-                onCheckedChange = { subUpdateOnStart = it }
-            )
-            OutlinedTextField(
-                value = subIntervalMins,
-                onValueChange = { subIntervalMins = it },
-                label = { Text("Интервал автообновления (минут, не менее 15): 60") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            SettingSwitchRow(
-                title = "Обновлять подписки только через VPN",
-                desc = "Если включено, подписки будут обновляться только при наличии активного VPN-соединения, чтобы избежать утечек IP-адреса.",
-                checked = subOnlyProxy,
-                onCheckedChange = { subOnlyProxy = it }
-            )
-            OutlinedTextField(
-                value = subThreads,
-                onValueChange = { subThreads = it },
-                label = { Text("Параллельное обновление подписок (потоков): 3") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { state.updateAllActiveSubscriptions() },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                Icon(Icons.Default.CloudSync, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Проверить обновление сейчас (вручную)")
-            }
-            Spacer(Modifier.height(10.dp))
-            SettingSwitchRow(
-                title = "Обновление подписок через Яндекс Переводчик",
-                desc = "При блокировках (белые списки) и отключенном VPN обновлять подписки через прокси Яндекс Переводчика",
-                checked = yandexUpdate,
-                onCheckedChange = { yandexUpdate = it }
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // 7. Сплит-туннелинг
-        AccordionSection(title = "Сплит-туннелинг", icon = Icons.Default.AltRoute) {
-            SettingSwitchRow(
-                title = "Сплит-туннелинг по доменам",
-                desc = "Раздельная маршрутизация доменов (в обход или через VPN). Включено по умолчанию.",
-                checked = domainSplit,
-                onCheckedChange = { domainSplit = it }
-            )
-            SettingSwitchRow(
-                title = "Только указанные домены через VPN",
-                desc = "Режим белого списка: через VPN направляются только домены из списка «Домены через VPN», весь остальной трафик идет напрямую в обход VPN",
-                checked = domainWhitelist,
-                onCheckedChange = { domainWhitelist = it }
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = customProxy,
-                onValueChange = { customProxy = it },
-                label = { Text("Домены через VPN (направляются в VPN, через запятую или перенос строки)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = customDirect,
-                onValueChange = { customDirect = it },
-                label = { Text("Домены в обход VPN (прямой доступ в обход VPN, через запятую или перенос строки)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-            ) {
-                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Public, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Geo файлы: настроены по умолчанию (geoip:ru и geosite:category-ru напрямую, остальное через VPN)",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // 8. Отдельные важные настройки
-        Text(
-            text = "Специальные параметры",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(8.dp))
-
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            modifier = Modifier.fillMaxWidth()
+        // Горизонтальный переключатель категорий настроек
+        val categoryScrollState = rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(categoryScrollState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                SettingSwitchRow(
-                    title = "Банки, Госуслуги, Ozon и WB вне VPN",
-                    desc = "Сбер, Тинькофф, Госуслуги, Озон, Wildberries, Авито и др. не будут маршрутизироваться через VPN. Включено по умолчанию.",
-                    checked = bypassRu,
-                    onCheckedChange = { bypassRu = it }
-                )
-                SettingSwitchRow(
-                    title = "Автоматически проверять обновления",
-                    desc = "Искать новые версии на GitHub при запуске приложения",
-                    checked = autoUpdateCheck,
-                    onCheckedChange = { autoUpdateCheck = it }
-                )
-
-                // Ручная проверка обновлений
-                val isCheckingUpdate by state.isCheckingAppUpdate.collectAsState()
-                val updateMessage by state.appUpdateCheckMessage.collectAsState()
-
-                Row(
+            DesktopSettingsCategory.entries.forEach { category ->
+                val isSelected = selectedCategory == category
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    ),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { selectedCategory = category }
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                            text = "Версия приложения: v${DesktopAppState.APP_VERSION}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (!updateMessage.isNullOrBlank()) {
-                            Text(
-                                text = updateMessage!!,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (updateMessage!!.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = { state.checkAppUpdate(manual = true) },
-                        enabled = !isCheckingUpdate,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isCheckingUpdate) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Проверка...", fontSize = 12.sp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Проверить сейчас", fontSize = 12.sp)
-                        }
+                        Icon(
+                            imageVector = category.icon,
+                            contentDescription = null,
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = category.title,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
-                OutlinedTextField(
-                    value = userAgent,
-                    onValueChange = { userAgent = it },
-                    label = { Text("Пользовательский User-Agent (v2rayNG/1.10.x)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = selectedCategory.description,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
 
-        // Конечный узел (Proxy Chaining) — отдельная раскрывающаяся категория
-        AccordionSection(title = "Конечный узел (Proxy Chaining)", icon = Icons.Default.Share) {
-            SettingSwitchRow(
-                title = "Использовать свой прокси как конечный узел",
-                desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка)",
-                checked = useCustomEp,
-                onCheckedChange = { useCustomEp = it }
-            )
-            if (useCustomEp) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = customEpSubUrl,
-                    onValueChange = { customEpSubUrl = it },
-                    label = { Text("URL подписки конечного узла") },
-                    placeholder = { Text("https://example.com/sub/...") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            if (customEpSubUrl.isNotBlank()) {
-                                epLoading = true
-                                epStatusMessage = "Загрузка подписки..."
-                                scope.launch {
-                                    val res = withContext(Dispatchers.IO) {
-                                        CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
-                                    }
-                                    epLoading = false
-                                    res.fold(
-                                        onSuccess = { servers ->
-                                            if (servers.isEmpty()) {
-                                                epStatusMessage = "В подписке не найдено серверов"
-                                            } else {
-                                                epSubServers = servers
-                                                showEpServerPicker = true
-                                                epStatusMessage = null
-                                            }
-                                        },
-                                        onFailure = { err ->
-                                            epStatusMessage = "Ошибка: ${err.message}"
-                                        }
-                                    )
-                                }
+        when (selectedCategory) {
+            DesktopSettingsCategory.SCANNER_CORE -> {
+                // 1. Настройка распределения SmartConnect
+                SettingsCard(
+                    title = "Распределение серверов SmartConnect",
+                    icon = Icons.Default.Bolt,
+                    description = "Параметры разбивки пула серверов на пачки"
+                ) {
+                    OutlinedTextField(
+                        value = smartBatchSize,
+                        onValueChange = { smartBatchSize = it },
+                        label = { Text("Размер пачки серверов (по умолчанию 20)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Пресет распределения по умолчанию:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsChip(label = "Поровну", selected = smartPreset == "EQUAL", onClick = { smartPreset = "EQUAL" })
+                        SettingsChip(label = "Случайный разброс", selected = smartPreset == "RANDOM", onClick = { smartPreset = "RANDOM" })
+                        SettingsChip(label = "Больше серверов больше доля", selected = smartPreset == "MORE", onClick = { smartPreset = "MORE" })
+                        SettingsChip(label = "Меньше серверов меньше доля", selected = smartPreset == "LESS", onClick = { smartPreset = "LESS" })
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 2. Ядро v2w-core
+                SettingsCard(
+                    title = "Ядро v2w-core",
+                    icon = Icons.Default.Memory,
+                    description = "Высокоскоростное нативное ядро сканирования и пути к бинарным файлам"
+                ) {
+                    SettingSwitchRow(
+                        title = "Использовать v2w-core",
+                        desc = "Быстрое нативное сканирование и подключение (включено по умолчанию)",
+                        checked = useV2w,
+                        onCheckedChange = { useV2w = it }
+                    )
+                    SettingSwitchRow(
+                        title = "Резервный классический сканер",
+                        desc = "Использовать Kotlin fallback сканер при сбое бинарного ядра",
+                        checked = useFallback,
+                        onCheckedChange = { useFallback = it }
+                    )
+                    OutlinedTextField(
+                        value = v2wSockets,
+                        onValueChange = { v2wSockets = it },
+                        label = { Text("Количество сокетов (по умолчанию 35)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = xrayPathInput,
+                        onValueChange = { xrayPathInput = it },
+                        label = { Text("Путь к исполняемому файлу Xray") },
+                        placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                        supportingText = {
+                            val activePath = state.xrayBinaryPath.value
+                            if (activePath.isNotBlank()) {
+                                Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
                             } else {
-                                epStatusMessage = "Сначала укажите URL подписки"
+                                Text("Оставьте пустым для встроенного ядра (автопоиск)")
                             }
                         },
-                        enabled = !epLoading
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (epLoading) "Загрузка…" else "Выбрать из подписки", fontSize = 12.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            val allServers = state.servers.value.map { it.second }
-                            if (allServers.isNotEmpty()) {
-                                epSubServers = allServers
-                                showEpServerPicker = true
-                                epStatusMessage = null
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = v2wPathInput,
+                        onValueChange = { v2wPathInput = it },
+                        label = { Text("Путь к ядру сканера (v2w-scan / v2w-core)") },
+                        placeholder = { Text("Оставьте пустым для встроенного ядра (автопоиск)") },
+                        supportingText = {
+                            val activePath = state.v2wScanPath.value
+                            if (activePath.isNotBlank()) {
+                                Text("Активное ядро: $activePath", color = MaterialTheme.colorScheme.primary)
                             } else {
-                                epStatusMessage = "Список серверов приложения пуст"
+                                Text("Оставьте пустым для встроенного ядра (автопоиск)")
                             }
-                        }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            DesktopSettingsCategory.PROFILE_CHECK -> {
+                // 3. Проверка профилей
+                SettingsCard(
+                    title = "Проверка профилей перед подключением",
+                    icon = Icons.Default.VerifiedUser,
+                    description = "Фильтрация небезопасных серверов и валидация доступности"
+                ) {
+                    SettingSwitchRow(
+                        title = "Удалять небезопасные профили",
+                        desc = "Не пропускать профили без TLS, Reality или allowInsecure",
+                        checked = removeInsecure,
+                        onCheckedChange = { removeInsecure = it }
+                    )
+                    SettingSwitchRow(
+                        title = "Проверка профиля перед подключением",
+                        desc = "Обеспечивает 100% стабильность. Без нее вы можете попасть на мертвый сервер.",
+                        checked = testBeforeConnect,
+                        onCheckedChange = { testBeforeConnect = it }
+                    )
+                    SettingSwitchRow(
+                        title = "e2e проверка конечного узла",
+                        desc = "Проверять сквозное HTTP 204 соединение через цепочку до конечного узла перед замером скорости",
+                        checked = endpointE2eCheck,
+                        onCheckedChange = { endpointE2eCheck = it }
+                    )
+                    SettingSwitchRow(
+                        title = "Проверять доступность сервисов",
+                        desc = "Проверять доступность выбранных сервисов (Google, YouTube, Telegram, WhatsApp, Instagram и др.) вместо теста 204. Игнорируется при использовании конечного узла.",
+                        checked = serviceCheckEnabled,
+                        onCheckedChange = { serviceCheckEnabled = it }
+                    )
+                    val currentServices by state.servicesList.collectAsState()
+                    val enabledServicesCount = currentServices.count { it.enabled }
+                    OutlinedButton(
+                        onClick = { state.promptServiceCheckDialog() },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Из серверов приложения", fontSize = 12.sp)
+                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Список проверяемых сервисов ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
                     }
                 }
 
-                if (epStatusMessage != null) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = epStatusMessage!!,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
+                Spacer(Modifier.height(14.dp))
+
+                // Замер скорости
+                SettingsCard(
+                    title = "Замер скорости соединения (Speed Test)",
+                    icon = Icons.Default.Speed,
+                    description = "Проверка реальной пропускной способности узла"
+                ) {
+                    SettingSwitchRow(
+                        title = "Тест скорости при проверке профиля",
+                        desc = "Загружает небольшой объем данных через сервер для проверки реальной пропускной способности.",
+                        checked = speedTestOnCheck,
+                        onCheckedChange = { speedTestOnCheck = it }
+                    )
+                    OutlinedTextField(
+                        value = speedTestBytes,
+                        onValueChange = { speedTestBytes = it },
+                        label = { Text("Объем загрузки (байт): 2000000") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = speedTestTimeout,
+                        onValueChange = { speedTestTimeout = it },
+                        label = { Text("Таймаут замера скорости (мс): 3000") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = minSpeedThreshold,
+                        onValueChange = { minSpeedThreshold = it },
+                        label = { Text("Минимальный порог скорости (Мбит/с): 1.0") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = vipCacheLimitInput,
+                        onValueChange = { vipCacheLimitInput = it },
+                        label = { Text("Лимит VIP-кэша проверенных серверов: 5") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            DesktopSettingsCategory.FAILOVER -> {
+                // 4. Настройки авто-переключения (Failover)
+                SettingsCard(
+                    title = "Авто-переключение (Failover)",
+                    icon = Icons.Default.Autorenew,
+                    description = "Автоматический переход на следующий рабочий сервер при деградации соединения"
+                ) {
+                    SettingSwitchRow(
+                        title = "Авто-переключение (Failover)",
+                        desc = "Автоматически переключаться на следующий сервер, если текущий не отвечает",
+                        checked = autoFailover,
+                        onCheckedChange = { autoFailover = it }
+                    )
+                    OutlinedTextField(
+                        value = heartbeatSec,
+                        onValueChange = { heartbeatSec = it },
+                        label = { Text("Интервал проверки Heartbeat (секунд): 30") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Smart Failover",
+                        desc = "Быстрое обнаружение затыков по трафику и арбитраж сети (ya.ru vs google.com) без долгих таймаутов",
+                        checked = smartFailover,
+                        onCheckedChange = { smartFailover = it }
+                    )
+                    OutlinedTextField(
+                        value = degradationKb,
+                        onValueChange = { degradationKb = it },
+                        label = { Text("Порог деградации трафика (КБ/с): 3") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = stuckSec,
+                        onValueChange = { stuckSec = it },
+                        label = { Text("Время фиксации затыка (секунд): 3") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = customEpConfig,
-                    onValueChange = { customEpConfig = it },
-                    label = { Text("Конфиг конечного узла (vless://, vmess://, shadowsocks://, trojan://)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Spacer(Modifier.height(14.dp))
+
+                // 5. Проверка статуса сети
+                SettingsCard(
+                    title = "Проверка статуса сети",
+                    icon = Icons.Default.NetworkCheck,
+                    description = "Домены арбитража сетевого статуса перед переключением"
+                ) {
+                    SettingSwitchRow(
+                        title = "Проверка статуса сети",
+                        desc = "Проверять наличие сети перед подключением и для авто-переключения",
+                        checked = netCheckEnabled,
+                        onCheckedChange = { netCheckEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = primaryDomain,
+                        onValueChange = { primaryDomain = it },
+                        label = { Text("Основной домен для проверки (google.com)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = fallbackDomain,
+                        onValueChange = { fallbackDomain = it },
+                        label = { Text("Резервный домен для проверки (ya.ru)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.height(16.dp))
+            DesktopSettingsCategory.UPDATES -> {
+                // 6. Фоновое обновление подписок
+                SettingsCard(
+                    title = "Фоновое обновление подписок",
+                    icon = Icons.Default.Groups,
+                    description = "Автоматическая загрузка новых профилей и серверов"
+                ) {
+                    SettingSwitchRow(
+                        title = "Автоматически обновлять подписки",
+                        desc = "Автоматическое обновление подписок в фоновом режиме с указанным интервалом.",
+                        checked = subAutoUpdate,
+                        onCheckedChange = { subAutoUpdate = it }
+                    )
+                    SettingSwitchRow(
+                        title = "Обновлять подписки при запуске",
+                        desc = "Автоматически проверять и обновлять подписки при старте приложения (если база серверов пуста или устарела).",
+                        checked = subUpdateOnStart,
+                        onCheckedChange = { subUpdateOnStart = it }
+                    )
+                    OutlinedTextField(
+                        value = subIntervalMins,
+                        onValueChange = { subIntervalMins = it },
+                        label = { Text("Интервал автообновления (минут, не менее 15): 60") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    SettingSwitchRow(
+                        title = "Обновлять подписки только через VPN",
+                        desc = "Если включено, подписки будут обновляться только при наличии активного VPN-соединения, чтобы избежать утечек IP-адреса.",
+                        checked = subOnlyProxy,
+                        onCheckedChange = { subOnlyProxy = it }
+                    )
+                    OutlinedTextField(
+                        value = subThreads,
+                        onValueChange = { subThreads = it },
+                        label = { Text("Параллельное обновление подписок (потоков): 3") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { state.updateAllActiveSubscriptions() },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Icon(Icons.Default.CloudSync, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Проверить обновление сейчас (вручную)")
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Обновление подписок через Яндекс Переводчик",
+                        desc = "При блокировках (белые списки) и отключенном VPN обновлять подписки через прокси Яндекс Переводчика",
+                        checked = yandexUpdate,
+                        onCheckedChange = { yandexUpdate = it }
+                    )
+                }
 
-        // 9. Базовые настройки VPN
-        AccordionSection(title = "Базовые настройки VPN", icon = Icons.Default.VpnKey) {
-            SettingSwitchRow(title = "Предпочитать IPv6", desc = "Использовать маршрутизацию IPv6-адресов", checked = preferIpv6, onCheckedChange = { preferIpv6 = it })
-            SettingSwitchRow(title = "Использовать локальную DNS", desc = "Обслуживание выполняется DNS-модулем ядра", checked = localDns, onCheckedChange = { localDns = it })
-            SettingSwitchRow(title = "Использовать поддельную DNS (FakeDNS)", desc = "Локальная DNS возвращает поддельные IP-адреса", checked = fakeDns, onCheckedChange = { fakeDns = it })
-            SettingSwitchRow(title = "Дополнительный HTTP-прокси", desc = "HTTP-прокси будет использоваться напрямую", checked = addHttpProxy, onCheckedChange = { addHttpProxy = it })
-            OutlinedTextField(value = vpnDns, onValueChange = { vpnDns = it }, label = { Text("VPN DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            SettingSwitchRow(title = "VPN обходит LAN", desc = "Локальная сеть напрямую в обход VPN адаптера", checked = bypassLan, onCheckedChange = { bypassLan = it })
-            OutlinedTextField(value = vpnAddress, onValueChange = { vpnAddress = it }, label = { Text("Адрес интерфейса VPN (10.10.14.x)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = vpnMtu, onValueChange = { vpnMtu = it }, label = { Text("VPN MTU (1500)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        }
+                Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(12.dp))
+                // Обновления приложения и User-Agent
+                SettingsCard(
+                    title = "Обновления приложения и User-Agent",
+                    icon = Icons.Default.CloudDownload,
+                    description = "Проверка новых версий приложения ПроБел на GitHub"
+                ) {
+                    SettingSwitchRow(
+                        title = "Автоматически проверять обновления",
+                        desc = "Искать новые версии на GitHub при запуске приложения",
+                        checked = autoUpdateCheck,
+                        onCheckedChange = { autoUpdateCheck = it }
+                    )
 
-        // 10. Базовые настройки ядра
-        AccordionSection(title = "Базовые настройки ядра", icon = Icons.Default.DeveloperMode) {
-            SettingSwitchRow(title = "Анализировать пакеты (Sniffing)", desc = "Пытаться определять доменные имена в пакетах", checked = sniffing, onCheckedChange = { sniffing = it })
-            SettingSwitchRow(title = "Домен только для маршрутизации", desc = "Использовать доменное имя только для маршрутизации", checked = routeOnly, onCheckedChange = { routeOnly = it })
-            SettingSwitchRow(title = "Разрешать соединения из LAN", desc = "Другие устройства в домашней сети могут использовать ваш прокси", checked = allowLan, onCheckedChange = { allowLan = it })
-            SettingSwitchRow(title = "Разрешать небезопасные соединения (Insecure)", desc = "Отключить строгую проверку TLS сертификатов", checked = allowInsecure, onCheckedChange = { allowInsecure = it })
-            OutlinedTextField(
-                value = localPort,
-                onValueChange = { localPort = it },
-                label = { Text("Порт SOCKS5 прокси (по умолчанию 10808)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            val socksPortInt = localPort.toIntOrNull() ?: 10808
-            Text(
-                text = "HTTP порт прокси: ${socksPortInt + 1} (автоматически SOCKS5 + 1)",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = localLogin, onValueChange = { localLogin = it }, label = { Text("Логин локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = localPass, onValueChange = { localPass = it }, label = { Text("Пароль локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = remoteDns, onValueChange = { remoteDns = it }, label = { Text("Удалённая DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = internalDns, onValueChange = { internalDns = it }, label = { Text("Внутренняя DNS (223.5.5.5)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = dnsHosts, onValueChange = { dnsHosts = it }, label = { Text("Узлы DNS (формат: домен:адрес,...)") }, modifier = Modifier.fillMaxWidth())
-        }
+                    val isCheckingUpdate by state.isCheckingAppUpdate.collectAsState()
+                    val updateMessage by state.appUpdateCheckMessage.collectAsState()
 
-        Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Версия приложения: v${DesktopAppState.APP_VERSION}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (!updateMessage.isNullOrBlank()) {
+                                Text(
+                                    text = updateMessage!!,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (updateMessage!!.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
 
-        // 11. Мультиплексирование
-        AccordionSection(title = "Настройки мультиплексирования (Mux)", icon = Icons.Default.Layers) {
-            SettingSwitchRow(title = "Использовать мультиплексирование", desc = "Объединение соединений в один туннель (Mux)", checked = muxEnabled, onCheckedChange = { muxEnabled = it })
-            OutlinedTextField(value = muxTcp, onValueChange = { muxTcp = it }, label = { Text("TCP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = muxXudp, onValueChange = { muxXudp = it }, label = { Text("XUDP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            Text("Обработка QUIC в мультиплексном туннеле: Отклонять (Reject)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+                        OutlinedButton(
+                            onClick = { state.checkAppUpdate(manual = true) },
+                            enabled = !isCheckingUpdate,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            if (isCheckingUpdate) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Проверка...", fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Проверить сейчас", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    SettingSwitchRow(
+                        title = "Получать Pre-release (Beta) обновления",
+                        desc = "Только для разработчиков и тестировщиков! Экспериментальные сборки.",
+                        checked = betaUpdates,
+                        onCheckedChange = { betaUpdates = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = userAgent,
+                        onValueChange = { userAgent = it },
+                        label = { Text("Пользовательский User-Agent (v2rayNG/1.10.x)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
 
-        Spacer(Modifier.height(12.dp))
+            DesktopSettingsCategory.ROUTING -> {
+                // 7. Сплит-туннелинг и обход
+                SettingsCard(
+                    title = "Обход российских сервисов",
+                    icon = Icons.Default.Security,
+                    description = "Исключение критических сервисов РФ из туннеля"
+                ) {
+                    SettingSwitchRow(
+                        title = "Банки, Госуслуги, Ozon и WB вне VPN",
+                        desc = "Сбер, Тинькофф, Госуслуги, Озон, Wildberries, Авито и др. не будут маршрутизироваться через VPN. Включено по умолчанию.",
+                        checked = bypassRu,
+                        onCheckedChange = { bypassRu = it }
+                    )
+                }
 
-        // 12. Фрагментирование
-        AccordionSection(title = "Настройки фрагментирования (DPI evasion)", icon = Icons.Default.CallSplit) {
-            SettingSwitchRow(title = "Использовать фрагментирование", desc = "Разбивка TLS ClientHello пакетов на мелкие части", checked = fragmentEnabled, onCheckedChange = { fragmentEnabled = it })
-            OutlinedTextField(value = fragmentLen, onValueChange = { fragmentLen = it }, label = { Text("Длина фрагмента (от - до): 50-100") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = fragmentInt, onValueChange = { fragmentInt = it }, label = { Text("Интервал фрагментов (от - до): 10-20") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = fragmentPack, onValueChange = { fragmentPack = it }, label = { Text("Фрагментирование пакетов: tlshello") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        }
+                Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(12.dp))
+                SettingsCard(
+                    title = "Сплит-туннелинг по доменам",
+                    icon = Icons.Default.AltRoute,
+                    description = "Маршрутизация трафика на основе доменных имен"
+                ) {
+                    SettingSwitchRow(
+                        title = "Сплит-туннелинг по доменам",
+                        desc = "Раздельная маршрутизация доменов (в обход или через VPN). Включено по умолчанию.",
+                        checked = domainSplit,
+                        onCheckedChange = { domainSplit = it }
+                    )
+                    SettingSwitchRow(
+                        title = "Только указанные домены через VPN",
+                        desc = "Режим белого списка: через VPN направляются только домены из списка «Домены через VPN», весь остальной трафик идет напрямую в обход VPN",
+                        checked = domainWhitelist,
+                        onCheckedChange = { domainWhitelist = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customProxy,
+                        onValueChange = { customProxy = it },
+                        label = { Text("Домены через VPN (направляются в VPN, через запятую или перенос строки)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customDirect,
+                        onValueChange = { customDirect = it },
+                        label = { Text("Домены в обход VPN (прямой доступ в обход VPN, через запятую или перенос строки)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Public, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Geo файлы: настроены по умолчанию (geoip:ru и geosite:category-ru напрямую, остальное через VPN)",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
 
-        // 13. Прочее
-        AccordionSection(title = "Прочее", icon = Icons.Default.MoreHoriz) {
-            OutlinedTextField(value = connCheckUrl, onValueChange = { connCheckUrl = it }, label = { Text("Сервис проверки соединения (https://api.ip.sb/geoip)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(10.dp))
-            SettingSwitchRow(title = "Получать Pre-release (Beta) обновления", desc = "Только для разработчиков и тестировщиков! Экспериментальные сборки.", checked = betaUpdates, onCheckedChange = { betaUpdates = it })
-            SettingSwitchRow(title = "Сворачивать в системный трей", desc = "При закрытии окна программа продолжает работать в фоне", checked = minimizeToTray, onCheckedChange = { minimizeToTray = it })
-        }
+                Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(12.dp))
+                // Конечный узел
+                SettingsCard(
+                    title = "Конечный узел (Proxy Chaining)",
+                    icon = Icons.Default.Share,
+                    description = "Каскадное проксирование через второй сервер"
+                ) {
+                    SettingSwitchRow(
+                        title = "Использовать свой прокси как конечный узел",
+                        desc = "Маршрутизировать трафик через ваш личный прокси после подключения к серверу Smart Connect (цепочка)",
+                        checked = useCustomEp,
+                        onCheckedChange = { useCustomEp = it }
+                    )
+                    if (useCustomEp) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = customEpSubUrl,
+                            onValueChange = { customEpSubUrl = it },
+                            label = { Text("URL подписки конечного узла") },
+                            placeholder = { Text("https://example.com/sub/...") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    if (customEpSubUrl.isNotBlank()) {
+                                        epLoading = true
+                                        epStatusMessage = "Загрузка подписки..."
+                                        scope.launch {
+                                            val res = withContext(Dispatchers.IO) {
+                                                CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
+                                            }
+                                            epLoading = false
+                                            res.fold(
+                                                onSuccess = { servers ->
+                                                    if (servers.isEmpty()) {
+                                                        epStatusMessage = "В подписке не найдено серверов"
+                                                    } else {
+                                                        epSubServers = servers
+                                                        showEpServerPicker = true
+                                                        epStatusMessage = null
+                                                    }
+                                                },
+                                                onFailure = { err ->
+                                                    epStatusMessage = "Ошибка: ${err.message}"
+                                                }
+                                            )
+                                        }
+                                    } else {
+                                        epStatusMessage = "Сначала укажите URL подписки"
+                                    }
+                                },
+                                enabled = !epLoading
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (epLoading) "Загрузка…" else "Выбрать из подписки", fontSize = 12.sp)
+                            }
 
-        // 14. Сброс всех настроек и данных
-        var showResetConfirmDialog by remember { mutableStateOf(false) }
+                            OutlinedButton(
+                                onClick = {
+                                    val allServers = state.servers.value.map { it.second }
+                                    if (allServers.isNotEmpty()) {
+                                        epSubServers = allServers
+                                        showEpServerPicker = true
+                                        epStatusMessage = null
+                                    } else {
+                                        epStatusMessage = "Список серверов приложения пуст"
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Из серверов приложения", fontSize = 12.sp)
+                            }
+                        }
 
-        AccordionSection(title = "Сброс и очистка приложения", icon = Icons.Default.DeleteForever) {
-            Text(
-                text = "Сбросить все настройки, подписки, серверы и VIP-кэш к начальному заводскому состоянию.",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { showResetConfirmDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Сбросить все настройки и серверы")
+                        if (epStatusMessage != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = epStatusMessage!!,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = customEpConfig,
+                            onValueChange = { customEpConfig = it },
+                            label = { Text("Конфиг конечного узла (vless://, vmess://, shadowsocks://, trojan://)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            DesktopSettingsCategory.VPN_CORE -> {
+                // 9. Базовые настройки VPN
+                SettingsCard(
+                    title = "Базовые настройки VPN",
+                    icon = Icons.Default.VpnKey,
+                    description = "Параметры виртуального сетевого адаптера"
+                ) {
+                    SettingSwitchRow(title = "Предпочитать IPv6", desc = "Использовать маршрутизацию IPv6-адресов", checked = preferIpv6, onCheckedChange = { preferIpv6 = it })
+                    SettingSwitchRow(title = "Использовать локальную DNS", desc = "Обслуживание выполняется DNS-модулем ядра", checked = localDns, onCheckedChange = { localDns = it })
+                    SettingSwitchRow(title = "Использовать поддельную DNS (FakeDNS)", desc = "Локальная DNS возвращает поддельные IP-адреса", checked = fakeDns, onCheckedChange = { fakeDns = it })
+                    SettingSwitchRow(title = "Дополнительный HTTP-прокси", desc = "HTTP-прокси будет использоваться напрямую", checked = addHttpProxy, onCheckedChange = { addHttpProxy = it })
+                    OutlinedTextField(value = vpnDns, onValueChange = { vpnDns = it }, label = { Text("VPN DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    SettingSwitchRow(title = "VPN обходит LAN", desc = "Локальная сеть напрямую в обход VPN адаптера", checked = bypassLan, onCheckedChange = { bypassLan = it })
+                    OutlinedTextField(value = vpnAddress, onValueChange = { vpnAddress = it }, label = { Text("Адрес интерфейса VPN (10.10.14.x)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = vpnMtu, onValueChange = { vpnMtu = it }, label = { Text("VPN MTU (1500)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 10. Базовые настройки ядра
+                SettingsCard(
+                    title = "Базовые настройки ядра и прокси",
+                    icon = Icons.Default.DeveloperMode,
+                    description = "Локальные порты, авторизация и системный DNS"
+                ) {
+                    SettingSwitchRow(title = "Анализировать пакеты (Sniffing)", desc = "Пытаться определять доменные имена в пакетах", checked = sniffing, onCheckedChange = { sniffing = it })
+                    SettingSwitchRow(title = "Домен только для маршрутизации", desc = "Использовать доменное имя только для маршрутизации", checked = routeOnly, onCheckedChange = { routeOnly = it })
+                    SettingSwitchRow(title = "Разрешать соединения из LAN", desc = "Другие устройства в домашней сети могут использовать ваш прокси", checked = allowLan, onCheckedChange = { allowLan = it })
+                    SettingSwitchRow(title = "Разрешать небезопасные соединения (Insecure)", desc = "Отключить строгую проверку TLS сертификатов", checked = allowInsecure, onCheckedChange = { allowInsecure = it })
+                    OutlinedTextField(
+                        value = localPort,
+                        onValueChange = { localPort = it },
+                        label = { Text("Порт SOCKS5 прокси (по умолчанию 10808)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val socksPortInt = localPort.toIntOrNull() ?: 10808
+                    Text(
+                        text = "HTTP порт прокси: ${socksPortInt + 1} (автоматически SOCKS5 + 1)",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = localLogin, onValueChange = { localLogin = it }, label = { Text("Логин локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = localPass, onValueChange = { localPass = it }, label = { Text("Пароль локального прокси") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = remoteDns, onValueChange = { remoteDns = it }, label = { Text("Удалённая DNS (1.1.1.1)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = internalDns, onValueChange = { internalDns = it }, label = { Text("Внутренняя DNS (223.5.5.5)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = dnsHosts, onValueChange = { dnsHosts = it }, label = { Text("Узлы DNS (формат: домен:адрес,...)") }, modifier = Modifier.fillMaxWidth())
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 11. Мультиплексирование
+                SettingsCard(
+                    title = "Мультиплексирование (Mux)",
+                    icon = Icons.Default.Layers,
+                    description = "Объединение множества соединений в один туннель"
+                ) {
+                    SettingSwitchRow(title = "Использовать мультиплексирование", desc = "Объединение соединений в один туннель (Mux)", checked = muxEnabled, onCheckedChange = { muxEnabled = it })
+                    OutlinedTextField(value = muxTcp, onValueChange = { muxTcp = it }, label = { Text("TCP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = muxXudp, onValueChange = { muxXudp = it }, label = { Text("XUDP-соединения (1-1024, по умолчанию 8)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Text("Обработка QUIC в мультиплексном туннеле: Отклонять (Reject)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 12. Фрагментирование
+                SettingsCard(
+                    title = "Фрагментирование пакетов (DPI evasion)",
+                    icon = Icons.Default.CallSplit,
+                    description = "Разбивка TLS пакетов для обхода глубокого анализа пакетов"
+                ) {
+                    SettingSwitchRow(title = "Использовать фрагментирование", desc = "Разбивка TLS ClientHello пакетов на мелкие части", checked = fragmentEnabled, onCheckedChange = { fragmentEnabled = it })
+                    OutlinedTextField(value = fragmentLen, onValueChange = { fragmentLen = it }, label = { Text("Длина фрагмента (от - до): 50-100") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = fragmentInt, onValueChange = { fragmentInt = it }, label = { Text("Интервал фрагментов (от - до): 10-20") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(value = fragmentPack, onValueChange = { fragmentPack = it }, label = { Text("Фрагментирование пакетов: tlshello") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+            DesktopSettingsCategory.BACKUP_DATA -> {
+                // 13. Прочее / Системные параметры
+                SettingsCard(
+                    title = "Системные параметры",
+                    icon = Icons.Default.MoreHoriz,
+                    description = "Поведение окна и фоновые проверки"
+                ) {
+                    OutlinedTextField(value = connCheckUrl, onValueChange = { connCheckUrl = it }, label = { Text("Сервис проверки соединения (https://api.ip.sb/geoip)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(title = "Сворачивать в системный трей", desc = "При закрытии окна программа продолжает работать в фоне", checked = minimizeToTray, onCheckedChange = { minimizeToTray = it })
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 14. Сброс всех настроек и данных
+                SettingsCard(
+                    title = "Сброс и очистка приложения",
+                    icon = Icons.Default.DeleteForever,
+                    description = "Возврат всех настроек и базы серверов к заводскому состоянию"
+                ) {
+                    Text(
+                        text = "Сбросить все настройки, подписки, серверы и VIP-кэш к начальному заводскому состоянию.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { showResetConfirmDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Сбросить все настройки и серверы")
+                    }
+                }
             }
         }
 
@@ -1118,55 +1287,41 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun AccordionSection(
+private fun SettingsCard(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    description: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
-
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Column {
                     Text(
                         text = title,
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                }
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            AnimatedVisibility(visible = isExpanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(bottom = 12.dp))
-                    content()
+                    if (description != null) {
+                        Text(
+                            text = description,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), modifier = Modifier.padding(top = 12.dp, bottom = 12.dp))
+            content()
         }
     }
 }

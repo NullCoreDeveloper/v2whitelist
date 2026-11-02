@@ -262,11 +262,15 @@ object SmartConnectManager {
     
 
     private suspend fun connectToBest(context: Context, best: Triple<String, ProfileItem, Long>, isStartup: Boolean = false, isFromVipCache: Boolean = false) {
-        GeekModeLogger.log("SmartConnect", "Smart Connect: Selected ${best.second.remarks} (${best.third}ms)")
+        val subId = best.second.subscriptionId
+        val subName = if (subId.isNotEmpty()) MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() } else null
+        val subSuffix = if (subName != null) " [$subName]" else ""
+        val displayName = "${best.second.remarks}$subSuffix"
+        GeekModeLogger.log("SmartConnect", "Smart Connect: Selected $displayName (${best.third}ms)")
         if (isFromVipCache) {
-            sendStatus(context, context.getString(R.string.status_using_cached_server, best.second.remarks))
+            sendStatus(context, context.getString(R.string.status_using_cached_server, displayName))
         } else {
-            sendStatus(context, context.getString(R.string.status_connecting_to, best.second.remarks))
+            sendStatus(context, context.getString(R.string.status_connecting_to, displayName))
         }
         MmkvManager.setSelectServer(best.first)
 
@@ -470,9 +474,6 @@ object SmartConnectManager {
         }
         NotificationManager.showScanningNotification(context, context.getString(R.string.status_switching_server))
         try {
-            // Ждем появления интернета (dzen.ru) перед переключением
-            NetworkManager.waitForInternet(context)
-            
             val currentGuid = MmkvManager.getSelectServer()
             val allServers = MmkvManager.decodeServerList()
             val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()

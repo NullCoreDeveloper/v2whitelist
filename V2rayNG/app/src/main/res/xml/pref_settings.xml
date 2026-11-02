@@ -2,32 +2,27 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- Управление подписками (всегда вверху) -->
     <PreferenceCategory android:title="@string/title_v2whitelist_settings">
-        <!-- Manage Subscriptions -->
         <Preference
             android:key="pref_manage_custom_subs"
             android:summary="@string/summary_pref_manage_subs"
             android:title="@string/title_pref_manage_subs" />
 
-        <!-- Subscription Setup Wizard -->
         <Preference
             android:key="pref_subscription_setup_wizard"
             android:summary="@string/summary_subscription_setup_wizard"
             android:title="@string/title_subscription_setup_wizard" />
-
     </PreferenceCategory>
 
-    <!-- SmartConnect — разворачивается -->
-    <PreferenceCategory
-        android:title="@string/title_smartconnect_settings"
-        app:initialExpandedChildrenCount="0">
-
-        <!-- SmartConnect Server Chunking -->
+    <!-- 1. ⚡ Сканер и ядро v2w-core -->
+    <PreferenceCategory android:title="@string/title_category_scanner_and_core">
         <SwitchPreference
             android:key="pref_filter_insecure_profiles"
             android:title="Удалять небезопасные профили"
             android:summary="Не пропускать в балансировщике и удалить профили без шифрования (без TLS/Reality или с allowInsecure)"
             android:defaultValue="false" />
+
         <EditTextPreference
             android:inputType="number"
             android:key="pref_chunk_size"
@@ -42,13 +37,6 @@
             android:key="pref_chunk_preset"
             android:summary="%s"
             android:title="@string/title_pref_chunk_preset" />
-
-    </PreferenceCategory>
-
-    <!-- Ядро сканера v2w-core — разворачивается -->
-    <PreferenceCategory
-        android:title="@string/title_v2w_core_settings"
-        app:initialExpandedChildrenCount="0">
 
         <CheckBoxPreference
             android:key="pref_v2w_core_enabled"
@@ -69,49 +57,39 @@
             android:defaultValue="35"
             android:summary="@string/summary_pref_v2w_core_concurrency"
             android:title="@string/title_pref_v2w_core_concurrency" />
-
     </PreferenceCategory>
 
-    <!-- Проверка профиля — разворачивается -->
-    <PreferenceCategory
-        android:title="@string/title_profile_check_settings"
-        app:initialExpandedChildrenCount="0">
-
-        <!-- Включить проверку профиля перед подключением -->
+    <!-- 2. 🛡️ Проверка профилей и сервисов -->
+    <PreferenceCategory android:title="@string/title_category_profile_check">
         <CheckBoxPreference
             android:key="pref_profile_check_enabled"
             android:defaultValue="true"
             android:summary="@string/summary_pref_profile_check"
             android:title="@string/title_pref_profile_check" />
 
-        <!-- Проверять доступность сервисов -->
         <CheckBoxPreference
             android:key="pref_service_check_enabled"
             android:defaultValue="false"
             android:summary="@string/summary_pref_service_check"
             android:title="@string/title_pref_service_check" />
 
-        <!-- Настройка списка сервисов -->
         <Preference
             android:key="pref_service_check_config"
             android:summary="@string/summary_pref_service_check_config"
             android:title="@string/title_pref_service_check_config" />
 
-        <!-- e2e проверка конечного узла перед замером скорости -->
         <CheckBoxPreference
             android:key="pref_endpoint_e2e_check_enabled"
             android:defaultValue="true"
             android:summary="@string/summary_pref_endpoint_e2e_check_enabled"
             android:title="@string/title_pref_endpoint_e2e_check_enabled" />
 
-        <!-- Тест скорости в составе проверки -->
         <CheckBoxPreference
             android:key="pref_profile_speed_check_enabled"
             android:defaultValue="true"
             android:summary="@string/summary_pref_profile_speed_check"
             android:title="@string/title_pref_profile_speed_check" />
 
-        <!-- Объём загрузки для замера скорости -->
         <EditTextPreference
             android:inputType="number"
             android:key="pref_profile_speed_check_bytes"
@@ -119,7 +97,6 @@
             android:summary="@string/summary_pref_profile_speed_check_bytes"
             android:title="@string/title_pref_profile_speed_check_bytes" />
 
-        <!-- Таймаут теста скорости, мс -->
         <EditTextPreference
             android:inputType="number"
             android:key="pref_profile_speed_check_timeout_ms"
@@ -127,7 +104,6 @@
             android:summary="@string/summary_pref_profile_speed_check_timeout"
             android:title="@string/title_pref_profile_speed_check_timeout" />
 
-        <!-- Минимальная скорость, Мбит/с -->
         <EditTextPreference
             android:inputType="numberDecimal"
             android:key="pref_profile_min_speed_mbps"
@@ -135,29 +111,22 @@
             android:summary="@string/summary_pref_profile_min_speed_mbps"
             android:title="@string/title_pref_profile_min_speed_mbps" />
 
-        <!-- Лимит VIP-кэша проверенных серверов -->
         <EditTextPreference
             android:inputType="number"
             android:key="pref_vip_cache_limit"
             android:defaultValue="5"
             android:summary="@string/summary_pref_vip_cache_limit"
             android:title="@string/title_pref_vip_cache_limit" />
-
     </PreferenceCategory>
 
-    <!-- Настройки авто-переключения (Failover) -->
-    <PreferenceCategory
-        android:title="@string/title_auto_failover_settings"
-        app:initialExpandedChildrenCount="0">
-
-        <!-- Включить авто-переключение -->
+    <!-- 3. 🔄 Авто-переключение (Failover) -->
+    <PreferenceCategory android:title="@string/title_category_failover">
         <CheckBoxPreference
             android:key="pref_auto_failover"
             android:defaultValue="false"
             android:summary="@string/summary_pref_auto_failover"
             android:title="@string/title_pref_auto_failover" />
 
-        <!-- Интервал плановой проверки (сек) -->
         <EditTextPreference
             android:dependency="pref_auto_failover"
             android:inputType="number"
@@ -166,7 +135,6 @@
             android:summary="@string/summary_pref_auto_failover_interval"
             android:title="@string/title_pref_auto_failover_interval" />
 
-        <!-- Smart Failover (пассивный мониторинг трафика) -->
         <CheckBoxPreference
             android:dependency="pref_auto_failover"
             android:key="pref_smart_failover_enabled"
@@ -174,7 +142,6 @@
             android:summary="@string/summary_pref_smart_failover"
             android:title="@string/title_pref_smart_failover" />
 
-        <!-- Порог деградации трафика (КБ/с) -->
         <EditTextPreference
             android:dependency="pref_smart_failover_enabled"
             android:inputType="number"
@@ -183,7 +150,6 @@
             android:summary="@string/summary_pref_smart_failover_threshold"
             android:title="@string/title_pref_smart_failover_threshold" />
 
-        <!-- Время фиксации затыка (сек) -->
         <EditTextPreference
             android:dependency="pref_smart_failover_enabled"
             android:inputType="number"
@@ -191,13 +157,6 @@
             android:defaultValue="3"
             android:summary="@string/summary_pref_smart_failover_stall"
             android:title="@string/title_pref_smart_failover_stall" />
-
-    </PreferenceCategory>
-
-    <!-- Настройки проверки сети — отдельный раздел -->
-    <PreferenceCategory
-        android:title="@string/title_network_check_settings"
-        app:initialExpandedChildrenCount="0">
 
         <CheckBoxPreference
             android:key="pref_network_check_enabled"
@@ -218,126 +177,80 @@
             android:defaultValue="ya.ru"
             android:summary="@string/summary_pref_network_check_url_2"
             android:title="@string/title_pref_network_check_url_2" />
-
     </PreferenceCategory>
 
-        <!-- Bypass RU Apps -->
-        <CheckBoxPreference
-            android:key="pref_bypass_ru_apps"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_bypass_ru_apps"
-            android:title="@string/title_pref_bypass_ru_apps" />
-
-
-        <!-- Auto Check App Updates -->
-        <CheckBoxPreference
-            android:key="pref_auto_check_update"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_auto_check_update"
-            android:title="@string/title_pref_auto_check_update" />
-
-    <!-- Конечный узел (Proxy Chain) — отдельная раскрывающаяся категория -->
-    <PreferenceCategory
-        android:title="@string/title_pref_category_custom_endpoint"
-        app:initialExpandedChildrenCount="0">
-
-        <CheckBoxPreference
-            android:key="pref_custom_endpoint_enabled"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_custom_endpoint_enabled"
-            android:title="@string/title_pref_custom_endpoint_enabled" />
-
-        <EditTextPreference
-            android:key="pref_custom_endpoint_sub_url"
-            android:summary="@string/summary_pref_custom_endpoint_sub_url"
-            android:title="@string/title_pref_custom_endpoint_sub_url" />
-
-        <androidx.preference.Preference
-            android:key="pref_custom_endpoint_select_server"
-            android:summary="@string/summary_pref_custom_endpoint_select_server"
-            android:title="@string/title_pref_custom_endpoint_select_server" />
-
-        <EditTextPreference
-            android:key="pref_custom_endpoint_url"
-            android:summary="@string/summary_pref_custom_endpoint_url"
-            android:title="@string/title_pref_custom_endpoint_url" />
-
-    </PreferenceCategory>
-
-        <EditTextPreference
-            android:key="pref_custom_user_agent"
-            android:summary="@string/summary_pref_custom_user_agent"
-            android:title="@string/title_pref_custom_user_agent" />
-
-    <PreferenceCategory
-        android:title="@string/title_sub_setting"
-        app:initialExpandedChildrenCount="0">
+    <!-- 4. 📦 Фоновое обновление -->
+    <PreferenceCategory android:title="@string/title_category_updates">
         <CheckBoxPreference
             android:key="pref_auto_update_subscription"
             android:summary="@string/summary_pref_auto_update_subscription"
             android:title="@string/title_pref_auto_update_subscription" />
+
         <EditTextPreference
             android:inputType="number"
             android:key="pref_auto_update_interval"
             android:summary="60"
             android:title="@string/title_pref_auto_update_interval" />
+
         <CheckBoxPreference
             android:key="pref_update_sub_only_via_vpn"
             android:defaultValue="false"
             android:summary="@string/summary_pref_update_sub_only_via_vpn"
             android:title="@string/title_pref_update_sub_only_via_vpn" />
+
         <EditTextPreference
             android:inputType="number"
             android:key="pref_sub_concurrency"
             android:defaultValue="3"
             android:summary="@string/summary_pref_sub_concurrency"
             android:title="@string/title_pref_sub_concurrency" />
+
         <Preference
             android:key="pref_check_update_now"
             android:summary="@string/summary_pref_check_update_now"
             android:title="@string/title_pref_check_update_now" />
+
         <CheckBoxPreference
             android:key="pref_update_via_yandex_on_bs"
             android:defaultValue="false"
             android:summary="@string/summary_pref_update_via_yandex_on_bs"
             android:title="@string/title_pref_update_via_yandex_on_bs" />
+
         <Preference
             android:key="pref_test_update_via_yandex"
             android:summary="@string/summary_pref_debug_update_via_yandex"
             android:title="@string/title_pref_debug_update_via_yandex" />
+
         <Preference
             android:key="pref_clear_yandex_cookies"
             android:summary="@string/summary_pref_clear_yandex_cookies"
             android:title="@string/title_pref_clear_yandex_cookies" />
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/title_ui_settings">
-        <CheckBoxPreference
-            android:key="pref_speed_enabled"
-            android:summary="@string/summary_pref_speed_enabled"
-            android:title="@string/title_pref_speed_enabled" />
 
         <CheckBoxPreference
-            android:key="pref_confirm_remove"
-            android:summary="@string/summary_pref_confirm_remove"
-            android:title="@string/title_pref_confirm_remove" />
+            android:key="pref_auto_check_update"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_auto_check_update"
+            android:title="@string/title_pref_auto_check_update" />
 
         <CheckBoxPreference
-            android:key="pref_start_scan_immediate"
-            android:summary="@string/summary_pref_start_scan_immediate"
-            android:title="@string/title_pref_start_scan_immediate" />
+            android:key="pref_check_update_pre_release"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_check_update_pre_release"
+            android:title="@string/title_pref_check_update_pre_release" />
+
+        <EditTextPreference
+            android:key="pref_custom_user_agent"
+            android:summary="@string/summary_pref_custom_user_agent"
+            android:title="@string/title_pref_custom_user_agent" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_appearance_settings">
-
-        <Preference
-            android:key="pref_appearance_settings"
-            android:summary="@string/summary_appearance_settings"
-            android:title="@string/title_appearance_settings" />
-
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/title_split_tunneling">
+    <!-- 5. 🌐 Маршрутизация и Proxy-каскад -->
+    <PreferenceCategory android:title="@string/title_category_routing">
+        <CheckBoxPreference
+            android:key="pref_bypass_ru_apps"
+            android:defaultValue="true"
+            android:summary="@string/summary_pref_bypass_ru_apps"
+            android:title="@string/title_pref_bypass_ru_apps" />
 
         <CheckBoxPreference
             android:key="pref_per_app_proxy"
@@ -349,7 +262,6 @@
             android:summary="@string/summary_pref_per_app_proxy_settings"
             android:title="@string/title_pref_per_app_proxy_settings" />
 
-        <!-- Domain-based split tunneling — отключено по умолчанию, гранулярная настройка -->
         <CheckBoxPreference
             android:key="pref_domain_split_tunneling_enabled"
             android:defaultValue="false"
@@ -381,14 +293,62 @@
             android:summary="@string/summary_pref_domain_geo_files"
             android:title="@string/title_pref_domain_geo_files" />
 
+        <CheckBoxPreference
+            android:key="pref_custom_endpoint_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_custom_endpoint_enabled"
+            android:title="@string/title_pref_custom_endpoint_enabled" />
+
+        <EditTextPreference
+            android:key="pref_custom_endpoint_sub_url"
+            android:summary="@string/summary_pref_custom_endpoint_sub_url"
+            android:title="@string/title_pref_custom_endpoint_sub_url" />
+
+        <androidx.preference.Preference
+            android:key="pref_custom_endpoint_select_server"
+            android:summary="@string/summary_pref_custom_endpoint_select_server"
+            android:title="@string/title_pref_custom_endpoint_select_server" />
+
+        <EditTextPreference
+            android:key="pref_custom_endpoint_url"
+            android:summary="@string/summary_pref_custom_endpoint_url"
+            android:title="@string/title_pref_custom_endpoint_url" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_vpn_settings">
+    <!-- 6. ⚙️ Параметры VPN и ядра -->
+    <PreferenceCategory android:title="@string/title_category_vpn_core">
+        <ListPreference
+            android:defaultValue="VPN"
+            android:entries="@array/mode_entries"
+            android:entryValues="@array/mode_value"
+            android:key="pref_mode"
+            android:summary="%s"
+            android:title="@string/title_mode" />
+
+        <Preference
+            android:key="pref_appearance_settings"
+            android:summary="@string/summary_appearance_settings"
+            android:title="@string/title_appearance_settings" />
+
+        <CheckBoxPreference
+            android:key="pref_speed_enabled"
+            android:summary="@string/summary_pref_speed_enabled"
+            android:title="@string/title_pref_speed_enabled" />
+
+        <CheckBoxPreference
+            android:key="pref_confirm_remove"
+            android:summary="@string/summary_pref_confirm_remove"
+            android:title="@string/title_pref_confirm_remove" />
+
+        <CheckBoxPreference
+            android:key="pref_start_scan_immediate"
+            android:summary="@string/summary_pref_start_scan_immediate"
+            android:title="@string/title_pref_start_scan_immediate" />
+
         <CheckBoxPreference
             android:key="pref_prefer_ipv6"
             android:summary="@string/summary_pref_prefer_ipv6"
             android:title="@string/title_pref_prefer_ipv6" />
-
 
         <CheckBoxPreference
             android:key="pref_local_dns_enabled"
@@ -404,12 +364,6 @@
             android:key="pref_append_http_proxy"
             android:summary="@string/summary_pref_append_http_proxy"
             android:title="@string/title_pref_append_http_proxy" />
-
-<!--        <EditTextPreference-->
-<!--            android:inputType="number"-->
-<!--            android:key="pref_local_dns_port"-->
-<!--            android:summary="10853"-->
-<!--            android:title="@string/title_pref_local_dns_port" />-->
 
         <EditTextPreference
             android:key="pref_vpn_dns"
@@ -437,11 +391,6 @@
             android:key="pref_vpn_mtu"
             android:summary="1500"
             android:title="@string/title_pref_vpn_mtu" />
-
-
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/title_core_settings">
 
         <CheckBoxPreference
             android:defaultValue="true"
@@ -514,11 +463,6 @@
             android:summary="%s"
             android:title="@string/title_outbound_domain_resolve_method" />
 
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:title="@string/title_mux_settings"
-        app:initialExpandedChildrenCount="0">
         <CheckBoxPreference
             android:key="pref_mux_enabled"
             android:summary="@string/summary_pref_mux_enabled"
@@ -543,11 +487,7 @@
             android:key="pref_mux_xudp_quic"
             android:summary="%s"
             android:title="@string/title_pref_mux_xudp_quic" />
-    </PreferenceCategory>
 
-    <PreferenceCategory
-        android:title="@string/title_fragment_settings"
-        app:initialExpandedChildrenCount="0">
         <CheckBoxPreference
             android:key="pref_fragment_enabled"
             android:title="@string/title_pref_fragment_enabled" />
@@ -571,24 +511,12 @@
             android:title="@string/title_pref_fragment_packets" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/title_advanced">
-
+    <!-- 7. 💾 Резервное копирование и система -->
+    <PreferenceCategory android:title="@string/title_category_backup_system">
         <CheckBoxPreference
             android:key="pref_is_booted"
             android:summary="@string/summary_pref_is_booted"
             android:title="@string/title_pref_is_booted" />
-
-        <CheckBoxPreference
-            android:key="pref_auto_remove_invalid_after_test"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_auto_remove_invalid_after_test"
-            android:title="@string/title_pref_auto_remove_invalid_after_test" />
-
-        <CheckBoxPreference
-            android:key="pref_auto_sort_after_test"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_auto_sort_after_test"
-            android:title="@string/title_pref_auto_sort_after_test" />
 
         <EditTextPreference
             android:key="pref_delay_test_url"
@@ -600,28 +528,11 @@
             android:summary="@string/summary_pref_ip_api_url"
             android:title="@string/title_pref_ip_api_url" />
 
-        <ListPreference
-            android:defaultValue="VPN"
-            android:entries="@array/mode_entries"
-            android:entryValues="@array/mode_value"
-            android:key="pref_mode"
-            android:summary="%s"
-            android:title="@string/title_mode" />
-
         <Preference
             android:key="pref_logcat"
             android:summary="@string/summary_pref_logcat"
             android:title="@string/title_pref_logcat" />
 
-        <CheckBoxPreference
-            android:key="pref_check_update_pre_release"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_check_update_pre_release"
-            android:title="@string/title_pref_check_update_pre_release" />
-
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/title_backup_restore">
         <Preference
             android:key="pref_export_data"
             android:summary="@string/summary_export_data"

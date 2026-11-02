@@ -13,22 +13,23 @@ import java.net.Socket
 object NetworkManager {
 
     /**
-     * Блокирует выполнение до тех пор, пока не появится реальный доступ в интернет (проверка dzen.ru).
+     * Ожидает появления реального доступа в интернет с таймаутом (не более maxWaitMs).
      * Защищает кэш серверов от удаления при выключенном WiFi или отсутствии сети.
      */
-    suspend fun waitForInternet(context: Context) {
+    suspend fun waitForInternet(context: Context, maxWaitMs: Long = 5000L) {
         val checkEnabled = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
         if (!checkEnabled) return
 
+        val startTime = System.currentTimeMillis()
         var isWaiting = false
-        while (true) {
+        while (System.currentTimeMillis() - startTime < maxWaitMs) {
             val hasInternet = checkInternetStatus() != 2
 
             if (hasInternet) {
                 if (isWaiting) {
                     GeekModeLogger.log("Network", "waitForInternet: Интернет появился")
                 }
-                break
+                return
             }
 
             if (!isWaiting) {
@@ -37,8 +38,9 @@ object NetworkManager {
             }
             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_waiting_for_network))
             
-            delay(2000)
+            delay(1500)
         }
+        GeekModeLogger.log("Network", "waitForInternet: таймаут ожидания сети (${maxWaitMs}ms), продолжаем работу")
     }
 
     /**
