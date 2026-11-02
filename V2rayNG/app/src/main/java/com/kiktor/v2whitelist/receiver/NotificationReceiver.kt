@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
@@ -28,6 +29,8 @@ class NotificationReceiver : BroadcastReceiver() {
             ACTION_NEXT -> {
                 val pendingResult = goAsync()
                 pendingResult?.finish()
+                com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.set(true)
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_switching_server))
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(context.applicationContext)

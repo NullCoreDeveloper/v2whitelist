@@ -524,6 +524,7 @@
     <string name="tv_server_name">Сервер: %s</string>
     <string name="btn_scan_add">Скан</string>
     <string name="title_qr_current_server">QR-код текущего сервера</string>
+    <string name="subscription_label_prefix">Подписка: %1$s</string>
     <string name="btn_copy_to_clipboard">Скопировать в буфер</string>
     <string name="title_location_filter">Фильтр</string>
     <string name="btn_label_filter">Фильтр</string>
@@ -631,13 +632,21 @@
     <string name="notification_content_paused">VPN-соединение на паузе</string>
 
     <!-- Preferences Categories & Keys -->
+    <string name="title_settings_sections">Разделы настроек</string>
     <string name="title_category_scanner_and_core">⚡ Сканер и ядро v2w-core</string>
+    <string name="summary_category_scanner_and_core">Параметры параллельного сканирования, фильтр безопасности и v2w-core</string>
     <string name="title_category_profile_check">🛡️ Проверка профилей и сервисов</string>
+    <string name="summary_category_profile_check">Проверка доступности интернета, пинг, тест скорости и сервисы</string>
     <string name="title_category_failover">🔄 Авто-переключение (Failover)</string>
+    <string name="summary_category_failover">Автоматический выбор наилучшего сервера при сбоях и обрывах</string>
     <string name="title_category_updates">📦 Фоновое обновление</string>
+    <string name="summary_category_updates">Интервал автообновления подписок, обновление через Яндекс на БС</string>
     <string name="title_category_routing">🌐 Маршрутизация и Proxy-каскад</string>
+    <string name="summary_category_routing">Режим туннеля, каскад конечного узла, списки доменов и обход LAN</string>
     <string name="title_category_vpn_core">⚙️ Параметры VPN и ядра</string>
+    <string name="summary_category_vpn_core">DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
     <string name="title_category_backup_system">💾 Резервное копирование и система</string>
+    <string name="summary_category_backup_system">Экспорт и импорт настроек, логкат и системные параметры</string>
 
     <string name="title_v2w_core_settings">Сканирующее ядро v2w-core</string>
     <string name="title_profile_check_settings">Проверка профилей</string>

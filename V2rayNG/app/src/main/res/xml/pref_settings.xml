@@ -15,8 +15,14 @@
             android:title="@string/title_subscription_setup_wizard" />
     </PreferenceCategory>
 
-    <!-- 1. ⚡ Сканер и ядро v2w-core -->
-    <PreferenceCategory android:title="@string/title_category_scanner_and_core">
+    <!-- Разделы настроек (вложенные экраны) -->
+    <PreferenceCategory android:title="@string/title_settings_sections">
+
+        <!-- 1. ⚡ Сканер и ядро v2w-core -->
+        <PreferenceScreen
+            android:key="screen_scanner_and_core"
+            android:title="@string/title_category_scanner_and_core"
+            android:summary="@string/summary_category_scanner_and_core">
         <SwitchPreference
             android:key="pref_filter_insecure_profiles"
             android:title="@string/title_pref_filter_insecure_profiles"
@@ -57,10 +63,13 @@
             android:defaultValue="35"
             android:summary="@string/summary_pref_v2w_core_concurrency"
             android:title="@string/title_pref_v2w_core_concurrency" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 2. 🛡️ Проверка профилей и сервисов -->
-    <PreferenceCategory android:title="@string/title_category_profile_check">
+        <!-- 2. 🛡️ Проверка профилей и сервисов -->
+        <PreferenceScreen
+            android:key="screen_profile_check"
+            android:title="@string/title_category_profile_check"
+            android:summary="@string/summary_category_profile_check">
         <CheckBoxPreference
             android:key="pref_profile_check_enabled"
             android:defaultValue="true"
@@ -117,10 +126,13 @@
             android:defaultValue="5"
             android:summary="@string/summary_pref_vip_cache_limit"
             android:title="@string/title_pref_vip_cache_limit" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 3. 🔄 Авто-переключение (Failover) -->
-    <PreferenceCategory android:title="@string/title_category_failover">
+        <!-- 3. 🔄 Авто-переключение (Failover) -->
+        <PreferenceScreen
+            android:key="screen_failover"
+            android:title="@string/title_category_failover"
+            android:summary="@string/summary_category_failover">
         <CheckBoxPreference
             android:key="pref_auto_failover"
             android:defaultValue="false"
@@ -177,10 +189,13 @@
             android:defaultValue="ya.ru"
             android:summary="@string/summary_pref_network_check_url_2"
             android:title="@string/title_pref_network_check_url_2" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 4. 📦 Фоновое обновление -->
-    <PreferenceCategory android:title="@string/title_category_updates">
+        <!-- 4. 📦 Фоновое обновление -->
+        <PreferenceScreen
+            android:key="screen_updates"
+            android:title="@string/title_category_updates"
+            android:summary="@string/summary_category_updates">
         <CheckBoxPreference
             android:key="pref_auto_update_subscription"
             android:summary="@string/summary_pref_auto_update_subscription"
@@ -242,10 +257,13 @@
             android:key="pref_custom_user_agent"
             android:summary="@string/summary_pref_custom_user_agent"
             android:title="@string/title_pref_custom_user_agent" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 5. 🌐 Маршрутизация и Proxy-каскад -->
-    <PreferenceCategory android:title="@string/title_category_routing">
+        <!-- 5. 🌐 Маршрутизация и Proxy-каскад -->
+        <PreferenceScreen
+            android:key="screen_routing"
+            android:title="@string/title_category_routing"
+            android:summary="@string/summary_category_routing">
         <CheckBoxPreference
             android:key="pref_bypass_ru_apps"
             android:defaultValue="true"
@@ -313,10 +331,13 @@
             android:key="pref_custom_endpoint_url"
             android:summary="@string/summary_pref_custom_endpoint_url"
             android:title="@string/title_pref_custom_endpoint_url" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 6. ⚙️ Параметры VPN и ядра -->
-    <PreferenceCategory android:title="@string/title_category_vpn_core">
+        <!-- 6. ⚙️ Параметры VPN и ядра -->
+        <PreferenceScreen
+            android:key="screen_vpn_core"
+            android:title="@string/title_category_vpn_core"
+            android:summary="@string/summary_category_vpn_core">
         <ListPreference
             android:defaultValue="VPN"
             android:entries="@array/mode_entries"
@@ -509,10 +530,13 @@
             android:key="pref_fragment_packets"
             android:summary="%s"
             android:title="@string/title_pref_fragment_packets" />
-    </PreferenceCategory>
+        </PreferenceScreen>
 
-    <!-- 7. 💾 Резервное копирование и система -->
-    <PreferenceCategory android:title="@string/title_category_backup_system">
+        <!-- 7. 💾 Резервное копирование и система -->
+        <PreferenceScreen
+            android:key="screen_backup_system"
+            android:title="@string/title_category_backup_system"
+            android:summary="@string/summary_category_backup_system">
         <CheckBoxPreference
             android:key="pref_is_booted"
             android:summary="@string/summary_pref_is_booted"
@@ -542,6 +566,8 @@
             android:key="pref_import_data"
             android:summary="@string/summary_import_data"
             android:title="@string/title_import_data" />
+        </PreferenceScreen>
+
     </PreferenceCategory>
 
 </PreferenceScreen>

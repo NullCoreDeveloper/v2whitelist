@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
+import com.kiktor.v2whitelist.core.model.ProfileItem
 
 typealias CustomSubData = com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 
@@ -827,5 +828,39 @@ object SubscriptionHelper {
         }
         
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+    }
+
+    fun getSubscriptionName(subId: String?): String? {
+        if (subId.isNullOrBlank()) return null
+        // 1. subStorage
+        MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() }?.let { return it }
+        val altId = if (subId.startsWith("custom_sub_")) subId.removePrefix("custom_sub_") else "custom_sub_$subId"
+        MmkvManager.decodeSubscription(altId)?.remarks?.takeIf { it.isNotBlank() }?.let { return it }
+        // 2. loadCustomSubs
+        loadCustomSubs().find { it.id == subId || it.id == altId || "custom_sub_${it.id}" == subId }?.name?.takeIf { it.isNotBlank() }?.let { return it }
+        // 3. decodeSubscriptions
+        MmkvManager.decodeSubscriptions().find { it.guid == subId || it.guid == altId }?.subscription?.remarks?.takeIf { it.isNotBlank() }?.let { return it }
+        // 4. DefaultSubscriptions
+        DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == subId || it.id == altId || "custom_sub_${it.id}" == subId }?.name?.takeIf { it.isNotBlank() }?.let { return it }
+        return null
+    }
+
+    fun getSubscriptionName(config: ProfileItem?): String? {
+        if (config == null) return null
+        val direct = getSubscriptionName(config.subscriptionId)
+        if (!direct.isNullOrBlank()) return direct
+
+        // Fallback: match by server address + port + remarks against all stored profiles
+        try {
+            val allGuids = MmkvManager.decodeServerList()
+            for (guid in allGuids) {
+                val p = MmkvManager.decodeServerConfig(guid) ?: continue
+                if (p.remarks == config.remarks && p.server == config.server && p.serverPort == config.serverPort && p.subscriptionId.isNotBlank()) {
+                    val fallbackName = getSubscriptionName(p.subscriptionId)
+                    if (!fallbackName.isNullOrBlank()) return fallbackName
+                }
+            }
+        } catch (_: Exception) {}
+        return null
     }
 }

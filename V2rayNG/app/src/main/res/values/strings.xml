@@ -540,6 +540,7 @@
     <string name="btn_show_qr">QR</string>
     <string name="btn_scan_add">Scan</string>
     <string name="title_qr_current_server">Current server QR Code</string>
+    <string name="subscription_label_prefix">Subscription: %1$s</string>
     <string name="btn_copy_to_clipboard">Copy to clipboard</string>
 
     <!-- Location Filter -->
@@ -596,13 +597,21 @@
     <string name="status_speed_test">Speed test: %.1f KB/s</string>
 
     <!-- Profile Check settings section title -->
+    <string name="title_settings_sections">Settings Sections</string>
     <string name="title_category_scanner_and_core">⚡ Scanner &amp; v2w-core</string>
+    <string name="summary_category_scanner_and_core">Parallel scanning settings, security filter and v2w-core</string>
     <string name="title_category_profile_check">🛡️ Profile &amp; Service Verification</string>
+    <string name="summary_category_profile_check">Internet connectivity check, ping, speedtest and services</string>
     <string name="title_category_failover">🔄 Auto Failover &amp; Network Check</string>
+    <string name="summary_category_failover">Automatic switch to best server on failures and drops</string>
     <string name="title_category_updates">📦 Background Updates</string>
+    <string name="summary_category_updates">Auto-update interval for subscriptions, Yandex proxy on BS</string>
     <string name="title_category_routing">🌐 Routing &amp; Proxy Chaining</string>
+    <string name="summary_category_routing">Tunnel mode, custom endpoint cascade, domain lists and LAN bypass</string>
     <string name="title_category_vpn_core">⚙️ VPN &amp; Core Parameters</string>
+    <string name="summary_category_vpn_core">DNS, packet fragmentation, Mux, MTU and core options</string>
     <string name="title_category_backup_system">💾 Backup &amp; System</string>
+    <string name="summary_category_backup_system">Export/import configuration, appearance and system parameters</string>
 
     <string name="title_profile_check_settings">Profile Verification</string>
     <!-- v2w-core scanner section title -->

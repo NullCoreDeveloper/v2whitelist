@@ -27,7 +27,7 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
 import com.kiktor.v2whitelist.handler.AngConfigManager
 
-class SettingsActivity : BaseActivity() {
+class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
     private var lastNightMode: String? = null
     private var lastAmoled: Boolean = false
     private var lastPalette: String? = null
@@ -38,6 +38,38 @@ class SettingsActivity : BaseActivity() {
         lastAmoled = SettingsManager.isAmoledBlackEnabled()
         lastPalette = MmkvManager.decodeSettingsString(AppConfig.PREF_THEME_PALETTE)
         setContentViewWithToolbar(R.layout.activity_settings, showHomeAsUp = true, title = getString(R.string.title_settings))
+
+        supportFragmentManager.addOnBackStackChangedListener {
+            if (supportFragmentManager.backStackEntryCount == 0) {
+                supportActionBar?.title = getString(R.string.title_settings)
+            }
+        }
+    }
+
+    override fun onPreferenceStartScreen(caller: PreferenceFragmentCompat, pref: androidx.preference.PreferenceScreen): Boolean {
+        val fragment = SettingsFragment().apply {
+            arguments = Bundle().apply {
+                putString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, pref.key)
+            }
+        }
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_settings, fragment, pref.key)
+            .addToBackStack(pref.key)
+            .commit()
+        supportActionBar?.title = pref.title
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == android.R.id.home) {
+            if (supportFragmentManager.backStackEntryCount > 0) {
+                supportFragmentManager.popBackStack()
+                return true
+            }
+            finish()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
     }
 
     override fun onResume() {
@@ -57,9 +89,9 @@ class SettingsActivity : BaseActivity() {
 
     class SettingsFragment : PreferenceFragmentCompat() {
 
-        private val localDns by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_LOCAL_DNS_ENABLED) }
-        private val fakeDns by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_FAKE_DNS_ENABLED) }
-        private val appendHttpProxy by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_APPEND_HTTP_PROXY) }
+        private val localDns get() = findPreference<CheckBoxPreference>(AppConfig.PREF_LOCAL_DNS_ENABLED)
+        private val fakeDns get() = findPreference<CheckBoxPreference>(AppConfig.PREF_FAKE_DNS_ENABLED)
+        private val appendHttpProxy get() = findPreference<CheckBoxPreference>(AppConfig.PREF_APPEND_HTTP_PROXY)
 
         private val exportDataLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri != null) {
@@ -86,31 +118,31 @@ class SettingsActivity : BaseActivity() {
 
 
         //        private val localDnsPort by lazy { findPreference<EditTextPreference>(AppConfig.PREF_LOCAL_DNS_PORT) }
-        private val vpnDns by lazy { findPreference<EditTextPreference>(AppConfig.PREF_VPN_DNS) }
-        private val vpnBypassLan by lazy { findPreference<ListPreference>(AppConfig.PREF_VPN_BYPASS_LAN) }
-        private val vpnInterfaceAddress by lazy { findPreference<ListPreference>(AppConfig.PREF_VPN_INTERFACE_ADDRESS_CONFIG_INDEX) }
-        private val vpnMtu by lazy { findPreference<EditTextPreference>(AppConfig.PREF_VPN_MTU) }
+        private val vpnDns get() = findPreference<EditTextPreference>(AppConfig.PREF_VPN_DNS)
+        private val vpnBypassLan get() = findPreference<ListPreference>(AppConfig.PREF_VPN_BYPASS_LAN)
+        private val vpnInterfaceAddress get() = findPreference<ListPreference>(AppConfig.PREF_VPN_INTERFACE_ADDRESS_CONFIG_INDEX)
+        private val vpnMtu get() = findPreference<EditTextPreference>(AppConfig.PREF_VPN_MTU)
 
-        private val mux by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_MUX_ENABLED) }
-        private val muxConcurrency by lazy { findPreference<EditTextPreference>(AppConfig.PREF_MUX_CONCURRENCY) }
-        private val muxXudpConcurrency by lazy { findPreference<EditTextPreference>(AppConfig.PREF_MUX_XUDP_CONCURRENCY) }
-        private val muxXudpQuic by lazy { findPreference<ListPreference>(AppConfig.PREF_MUX_XUDP_QUIC) }
+        private val mux get() = findPreference<CheckBoxPreference>(AppConfig.PREF_MUX_ENABLED)
+        private val muxConcurrency get() = findPreference<EditTextPreference>(AppConfig.PREF_MUX_CONCURRENCY)
+        private val muxXudpConcurrency get() = findPreference<EditTextPreference>(AppConfig.PREF_MUX_XUDP_CONCURRENCY)
+        private val muxXudpQuic get() = findPreference<ListPreference>(AppConfig.PREF_MUX_XUDP_QUIC)
 
-        private val fragment by lazy { findPreference<CheckBoxPreference>(AppConfig.PREF_FRAGMENT_ENABLED) }
-        private val fragmentPackets by lazy { findPreference<ListPreference>(AppConfig.PREF_FRAGMENT_PACKETS) }
-        private val fragmentLength by lazy { findPreference<EditTextPreference>(AppConfig.PREF_FRAGMENT_LENGTH) }
-        private val fragmentInterval by lazy { findPreference<EditTextPreference>(AppConfig.PREF_FRAGMENT_INTERVAL) }
+        private val fragment get() = findPreference<CheckBoxPreference>(AppConfig.PREF_FRAGMENT_ENABLED)
+        private val fragmentPackets get() = findPreference<ListPreference>(AppConfig.PREF_FRAGMENT_PACKETS)
+        private val fragmentLength get() = findPreference<EditTextPreference>(AppConfig.PREF_FRAGMENT_LENGTH)
+        private val fragmentInterval get() = findPreference<EditTextPreference>(AppConfig.PREF_FRAGMENT_INTERVAL)
 
-        private val autoUpdateCheck by lazy { findPreference<CheckBoxPreference>(AppConfig.SUBSCRIPTION_AUTO_UPDATE) }
-        private val autoUpdateInterval by lazy { findPreference<EditTextPreference>(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL) }
-        private val mode by lazy { findPreference<ListPreference>(AppConfig.PREF_MODE) }
+        private val autoUpdateCheck get() = findPreference<CheckBoxPreference>(AppConfig.SUBSCRIPTION_AUTO_UPDATE)
+        private val autoUpdateInterval get() = findPreference<EditTextPreference>(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL)
+        private val mode get() = findPreference<ListPreference>(AppConfig.PREF_MODE)
 
         override fun onCreatePreferences(bundle: Bundle?, s: String?) {
             // Use MMKV as the storage backend for all Preferences
             // This prevents inconsistencies between SharedPreferences and MMKV
             preferenceManager.preferenceDataStore = MmkvPreferenceDataStore()
 
-            addPreferencesFromResource(R.xml.pref_settings)
+            setPreferencesFromResource(R.xml.pref_settings, s)
 
             initPreferenceSummaries()
 

@@ -96,6 +96,7 @@ class AngApplication : Application(), Configuration.Provider {
             val daemonAlive = am?.runningAppProcesses?.any { it.processName == daemonProcName } == true
             if (!daemonAlive) {
                 com.kiktor.v2whitelist.handler.MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+                com.kiktor.v2whitelist.handler.MmkvManager.encodeSettings(AppConfig.PREF_IS_SCANNING, false)
             }
 
             SettingsManager.setNightMode()

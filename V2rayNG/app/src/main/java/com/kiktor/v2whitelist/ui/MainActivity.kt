@@ -472,15 +472,10 @@ class MainActivity : HelperBaseActivity() {
                         while (SmartConnectManager.isScanning.get()) {
                             delay(200)
                         }
-                        var waited = 0
-                        while (waited < 5000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
-                            delay(200)
-                            waited += 200
-                        }
-                        if (isTaskRunning && activeJob == null && !V2RayServiceManager.isRunning()) {
-                            isTaskRunning = false
-                            updateUIState(false)
-                        }
+                        delay(300)
+                        isTaskRunning = false
+                        updateUIState(V2RayServiceManager.isRunning())
+                        updateSubscriptionStatusUI()
                     }
                 } else {
                     binding.tvStatusDetail.text = status
@@ -492,6 +487,8 @@ class MainActivity : HelperBaseActivity() {
                     tvUpdateStatus?.setTextColor(ContextCompat.getColor(this, R.color.color_fab_active))
                     tvUpdateTime?.text = status
                 }
+            } else if (SmartConnectManager.isScanning.get()) {
+                setConnectingState(status)
             }
         }
         mainViewModel.updateListAction.observe(this) {
@@ -688,8 +685,7 @@ class MainActivity : HelperBaseActivity() {
             }
 
         val serverName = config.remarks.ifEmpty { V2RayServiceManager.getRunningServerName() }
-        val subId = config.subscriptionId
-        val subName = if (subId.isNotEmpty()) MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() } else null
+        val subName = com.kiktor.v2whitelist.handler.SubscriptionHelper.getSubscriptionName(config)
         lifecycleScope.launch(Dispatchers.IO) {
             val bitmap: Bitmap? = AngConfigManager.share2QRCode(config)
             val configUrl: String = AngConfigManager.shareConfig(config)
@@ -705,7 +701,8 @@ class MainActivity : HelperBaseActivity() {
                 val btnClose = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_qr_close)
 
                 if (!serverName.isNullOrEmpty()) {
-                    tvSubtitle.text = if (!subName.isNullOrBlank()) "$serverName\nПодписка: $subName" else serverName
+                    val formattedSub = if (!subName.isNullOrBlank()) "\n${getString(R.string.subscription_label_prefix, subName)}" else ""
+                    tvSubtitle.text = "$serverName$formattedSub"
                     tvSubtitle.visibility = View.VISIBLE
                 } else {
                     tvSubtitle.visibility = View.GONE
@@ -846,12 +843,10 @@ class MainActivity : HelperBaseActivity() {
                     }
                 }
             } else {
-                val subId = runningConfig?.subscriptionId ?: (if (!selectedGuid.isNullOrBlank()) {
-                    MmkvManager.decodeServerConfig(selectedGuid.orEmpty())?.subscriptionId
+                val activeProfile = runningConfig ?: (if (!selectedGuid.isNullOrBlank()) {
+                    MmkvManager.decodeServerConfig(selectedGuid.orEmpty())
                 } else null)
-                val subName = if (!subId.isNullOrBlank()) {
-                    MmkvManager.decodeSubscription(subId)?.remarks?.takeIf { it.isNotBlank() }
-                } else null
+                val subName = com.kiktor.v2whitelist.handler.SubscriptionHelper.getSubscriptionName(activeProfile)
 
                 if (serverName.isNotEmpty()) {
                     val baseText = getString(R.string.tv_server_name, serverName)
@@ -916,15 +911,10 @@ class MainActivity : HelperBaseActivity() {
                 while (SmartConnectManager.isScanning.get()) {
                     delay(200)
                 }
-                var waited = 0
-                while (waited < 5000 && !V2RayServiceManager.isRunning() && isTaskRunning && activeJob == null) {
-                    delay(200)
-                    waited += 200
-                }
-                if (isTaskRunning && activeJob == null && !V2RayServiceManager.isRunning()) {
-                    isTaskRunning = false
-                    updateUIState(false)
-                }
+                delay(300)
+                isTaskRunning = false
+                updateUIState(V2RayServiceManager.isRunning())
+                updateSubscriptionStatusUI()
             }
         }
 

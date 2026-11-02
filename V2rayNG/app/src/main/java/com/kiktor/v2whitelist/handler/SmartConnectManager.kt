@@ -40,8 +40,27 @@ import java.net.URL
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
+class ScanningStateHolder {
+    fun get(): Boolean {
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SCANNING, false)
+    }
+    fun set(value: Boolean) {
+        MmkvManager.encodeSettings(AppConfig.PREF_IS_SCANNING, value)
+    }
+    fun compareAndSet(expect: Boolean, update: Boolean): Boolean {
+        synchronized(this) {
+            val current = get()
+            if (current == expect) {
+                set(update)
+                return true
+            }
+            return false
+        }
+    }
+}
+
 object SmartConnectManager {
-    val isScanning = java.util.concurrent.atomic.AtomicBoolean(false)
+    val isScanning = ScanningStateHolder()
     private val vipFailCounters = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     private fun sendStatus(context: Context, status: String) {
@@ -334,7 +353,9 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "smartConnect: already scanning, ignoring duplicate call")
             return@withContext false
         }
-        NotificationManager.showScanningNotification(context)
+        val testingMsg = context.getString(R.string.status_testing_servers)
+        NotificationManager.showScanningNotification(context, testingMsg)
+        sendStatus(context, testingMsg)
         try {
             // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
             NetworkManager.waitForInternet(context)
@@ -461,6 +482,7 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "")
         }
     }
 
@@ -472,7 +494,9 @@ object SmartConnectManager {
             GeekModeLogger.log("SmartConnect", "switchServer: already scanning, ignoring duplicate call")
             return@withContext false
         }
-        NotificationManager.showScanningNotification(context, context.getString(R.string.status_switching_server))
+        val switchingMsg = context.getString(R.string.status_switching_server)
+        NotificationManager.showScanningNotification(context, switchingMsg)
+        sendStatus(context, switchingMsg)
         try {
             val currentGuid = MmkvManager.getSelectServer()
             val allServers = MmkvManager.decodeServerList()
@@ -566,6 +590,7 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "")
         }
     }
 

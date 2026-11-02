@@ -130,6 +130,8 @@ object AppConfig {
     const val PREF_IS_PAUSED = "pref_is_paused"
     /** Флаг: ядро V2Ray активно и запущено в процессе демона (межпроцессный статус) */
     const val PREF_IS_SERVICE_RUNNING = "pref_is_service_running"
+    /** Флаг: идёт поиск/сканирование/переключение сервера (межпроцессный статус) */
+    const val PREF_IS_SCANNING = "pref_is_scanning"
 
     /** Cloudflare WARP Offloading Settings */
     const val PREF_WARP_ENABLED = "pref_warp_enabled"
