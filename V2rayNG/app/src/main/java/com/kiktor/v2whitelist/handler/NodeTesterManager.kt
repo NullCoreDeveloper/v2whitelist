@@ -226,7 +226,7 @@ object NodeTesterManager {
             // Реальная проверка: проверка доступности сервисов либо HTTP 204
             val (elapsed, isSuccess) = if (serviceCheckEnabled && services.isNotEmpty()) {
                 if (showStatus) {
-                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "Проверяем сервисы (${services.size})…")
+                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
                 }
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = services,

@@ -28,7 +28,6 @@ class NotificationReceiver : BroadcastReceiver() {
         when (action) {
             ACTION_NEXT -> {
                 val pendingResult = goAsync()
-                pendingResult?.finish()
                 com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.set(true)
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_switching_server))
                 CoroutineScope(Dispatchers.IO).launch {
@@ -36,6 +35,8 @@ class NotificationReceiver : BroadcastReceiver() {
                         com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(context.applicationContext)
                     } catch (e: Exception) {
                         Log.e(AppConfig.TAG, "NotificationReceiver: switchServer failed", e)
+                    } finally {
+                        pendingResult?.finish()
                     }
                 }
             }

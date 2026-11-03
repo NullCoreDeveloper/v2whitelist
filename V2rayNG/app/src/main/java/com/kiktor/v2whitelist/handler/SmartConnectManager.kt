@@ -482,7 +482,6 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "")
         }
     }
 
@@ -590,7 +589,6 @@ object SmartConnectManager {
         } finally {
             isScanning.set(false)
             NotificationManager.cancelScanningNotification(context)
-            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "")
         }
     }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,6 +77,7 @@ enum class DesktopSettingsCategory(
     )
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsScreen(
     state: DesktopAppState,
@@ -482,9 +486,27 @@ fun SettingsScreen(
 
         // Горизонтальный переключатель категорий настроек
         val categoryScrollState = rememberScrollState()
+        val categoryScope = rememberCoroutineScope()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+        if (categoryScrollState.maxValue > 0) {
+            IconButton(
+                onClick = { categoryScope.launch { categoryScrollState.animateScrollBy(-300f) } },
+                enabled = categoryScrollState.value > 0
+            ) { Icon(Icons.Default.ChevronLeft, null) }
+        }
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                .weight(1f)
+                .onPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Scroll) { ev ->
+                    val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                    if (dy != 0f) {
+                        categoryScope.launch { categoryScrollState.scrollBy(dy * 60f) }
+                        ev.changes.forEach { it.consume() }
+                    }
+                }
                 .horizontalScroll(categoryScrollState),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -521,6 +543,13 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        if (categoryScrollState.maxValue > 0) {
+            IconButton(
+                onClick = { categoryScope.launch { categoryScrollState.animateScrollBy(300f) } },
+                enabled = categoryScrollState.value < categoryScrollState.maxValue
+            ) { Icon(Icons.Default.ChevronRight, null) }
+        }
         }
 
         Spacer(Modifier.height(10.dp))
