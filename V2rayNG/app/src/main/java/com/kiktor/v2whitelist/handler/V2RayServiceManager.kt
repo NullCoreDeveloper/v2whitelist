@@ -200,6 +200,31 @@ object V2RayServiceManager {
         }
     }
 
+    @Volatile
+    private var lastLanToastTime = 0L
+
+    /**
+     * Показывает предупреждающий toast на 3.5 секунды, если включена раздача прокси в LAN.
+     */
+    fun notifyLanSharingIfEnabled(context: Context?, force: Boolean = false) {
+        val ctx = context ?: return
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastLanToastTime < 2500L) return
+        lastLanToastTime = now
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                val msg = ctx.getString(R.string.toast_lan_sharing_warning, SettingsManager.getSocksPort())
+                es.dmoral.toasty.Toasty.warning(ctx, msg, android.widget.Toast.LENGTH_LONG, true).show()
+            } catch (_: Exception) {
+                try {
+                    val msg = ctx.getString(R.string.toast_lan_sharing_warning, SettingsManager.getSocksPort())
+                    android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show()
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
     /**
      * Starts the context service for V2Ray.
      * Chooses between VPN service or Proxy-only service based on user settings.
@@ -228,8 +253,8 @@ object V2RayServiceManager {
         }
 
         GlobalScope.launch(Dispatchers.Main) {
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING)) {
-                context.toast(R.string.toast_warning_pref_proxysharing_short)
+            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)) {
+                notifyLanSharingIfEnabled(context, force = true)
             } else {
                 context.toast(R.string.toast_services_start)
             }
@@ -338,6 +363,7 @@ object V2RayServiceManager {
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
             NotificationManager.startSpeedNotification(currentConfig)
             startFailoverMonitor()
+            notifyLanSharingIfEnabled(service)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "startCoreLoop: Failed to send startup notifications", e)
             return false
@@ -606,6 +632,8 @@ object V2RayServiceManager {
                         if (!success) {
                             Log.e(AppConfig.TAG, "MSG_STATE_SWITCH_SERVER: startCoreLoop failed, stopping service to prevent dead TUN interface")
                             serviceControl.stopService()
+                        } else {
+                            notifyLanSharingIfEnabled(serviceControl.getService(), force = true)
                         }
                     }, 500L) // Wait for core to fully release resources
                 }
