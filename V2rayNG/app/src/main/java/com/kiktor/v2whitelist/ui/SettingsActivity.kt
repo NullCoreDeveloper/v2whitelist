@@ -149,6 +149,15 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
         private val autoUpdateInterval get() = findPreference<EditTextPreference>(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL)
         private val mode get() = findPreference<ListPreference>(AppConfig.PREF_MODE)
 
+        override fun onResume() {
+            super.onResume()
+            // Тумблер раздачи в LAN может быть изменён с отдельного экрана — синхронизируем галку
+            findPreference<CheckBoxPreference>(AppConfig.PREF_PROXY_SHARING)?.let {
+                val v = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)
+                if (it.isChecked != v) it.isChecked = v
+            }
+        }
+
         override fun onCreatePreferences(bundle: Bundle?, s: String?) {
             // Use MMKV as the storage backend for all Preferences
             // This prevents inconsistencies between SharedPreferences and MMKV

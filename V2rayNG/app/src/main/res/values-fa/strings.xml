@@ -821,4 +821,5 @@
     <string name="lan_sharing_clients_none">کلاینت متصلی وجود ندارد</string>
     <string name="lan_sharing_refresh">تازه‌سازی</string>
     <string name="lan_sharing_both_same_lan">هر دو دستگاه باید در یک شبکه محلی باشند</string>
+    <string name="lan_sharing_clients_unavailable">فهرست کلاینت‌ها در دسترس نیست (اندروید دسترسی به جدول اتصال‌ها را محدود می‌کند)</string>
 </resources>

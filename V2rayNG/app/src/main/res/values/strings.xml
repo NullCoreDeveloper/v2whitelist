@@ -863,4 +863,5 @@
     <string name="lan_sharing_clients_none">No connected clients</string>
     <string name="lan_sharing_refresh">Refresh</string>
     <string name="lan_sharing_both_same_lan">Both devices must be on the same local network</string>
+    <string name="lan_sharing_clients_unavailable">Client list is unavailable (Android restricts access to network tables)</string>
 </resources>

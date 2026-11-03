@@ -856,4 +856,5 @@
     <string name="lan_sharing_clients_none">Нет подключённых клиентов</string>
     <string name="lan_sharing_refresh">Обновить</string>
     <string name="lan_sharing_both_same_lan">Оба устройства должны быть в одной локальной сети</string>
+    <string name="lan_sharing_clients_unavailable">Список клиентов недоступен (Android ограничивает доступ к таблице соединений)</string>
 </resources>

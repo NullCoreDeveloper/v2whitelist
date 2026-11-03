@@ -84,7 +84,7 @@ class LanProxySharingActivity : BaseActivity() {
         lifecycleScope.launch {
             while (isActive) {
                 val clients = withContext(Dispatchers.IO) { readClients() }
-                tvClients.text = if (clients.isEmpty()) getString(R.string.lan_sharing_clients_none)
+                tvClients.text = if (clients.isEmpty()) getString(if (readFailed) R.string.lan_sharing_clients_unavailable else R.string.lan_sharing_clients_none)
                 else getString(R.string.lan_sharing_clients, clients.size) + "\n" + clients.joinToString("\n") { "• $it" }
                 delay(3000)
             }
@@ -120,26 +120,45 @@ class LanProxySharingActivity : BaseActivity() {
         ivQr.setImageBitmap(if (link != null) QRCodeDecoder.createQRCode(link) else null)
     }
 
-    /** Уникальные IP клиентов с ESTABLISHED-сокетами на наши порты (из /proc/net/tcp, без root). */
+    private var readFailed = false
+
+    /** Уникальные IP клиентов с ESTABLISHED-сокетами на наши порты (из /proc/net/tcp и tcp6, без root). */
     private fun readClients(): List<String> {
         val ports = setOf(SettingsManager.getSocksPort(), SettingsManager.getHttpPort())
         val result = linkedSetOf<String>()
-        for (f in listOf("/proc/net/tcp")) {
+        var okFiles = 0
+        for (f in listOf("/proc/net/tcp", "/proc/net/tcp6")) {
             try {
                 File(f).readLines().drop(1).forEach { line ->
                     val c = line.trim().split(Regex("\\s+"))
                     if (c.size > 3 && c[3] == "01") {
                         val local = c[1].split(":")
                         val remote = c[2].split(":")
-                        if (local.size == 2 && local[1].toInt(16) in ports && local[0].length == 8) {
-                            val h = remote[0]
-                            val ip = (3 downTo 0).joinToString(".") { h.substring(it * 2, it * 2 + 2).toInt(16).toString() }
-                            if (!ip.startsWith("127.") && ip != "0.0.0.0") result.add(ip)
+                        if (local.size == 2 && local[1].toInt(16) in ports) {
+                            parseIp(remote[0])?.let { ip ->
+                                if (!ip.startsWith("127.") && ip != "0.0.0.0" && ip != "::1") result.add(ip)
+                            }
                         }
                     }
                 }
+                okFiles++
             } catch (_: Exception) { }
         }
+        readFailed = okFiles == 0
         return result.toList()
+    }
+
+    private fun parseIp(h: String): String? {
+        fun v4(x: String) = (3 downTo 0).joinToString(".") { x.substring(it * 2, it * 2 + 2).toInt(16).toString() }
+        return when (h.length) {
+            8 -> v4(h)
+            // IPv6: 4 слова по 4 байта little-endian; IPv4-mapped = 00000000 00000000 0000FFFF + IPv4
+            32 -> if (h.startsWith("0000000000000000FFFF0000", ignoreCase = true)) v4(h.substring(24)) else
+                (0 until 4).joinToString(":") { w ->
+                    val x = h.substring(w * 8, w * 8 + 8)
+                    "%s%s:%s%s".format(x.substring(6, 8), x.substring(4, 6), x.substring(2, 4), x.substring(0, 2)).lowercase()
+                }
+            else -> null
+        }
     }
 }
