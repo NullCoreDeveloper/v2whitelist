@@ -40,10 +40,21 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
         setContentViewWithToolbar(R.layout.activity_settings, showHomeAsUp = true, title = getString(R.string.title_settings))
 
         supportFragmentManager.addOnBackStackChangedListener {
-            if (supportFragmentManager.backStackEntryCount == 0) {
-                supportActionBar?.title = getString(R.string.title_settings)
-            }
+            syncToolbarTitle()
         }
+    }
+
+    private fun syncToolbarTitle() {
+        val count = supportFragmentManager.backStackEntryCount
+        val title: CharSequence = if (count == 0) {
+            getString(R.string.title_settings)
+        } else {
+            val key = supportFragmentManager.getBackStackEntryAt(count - 1).name
+            val frag = key?.let { supportFragmentManager.findFragmentByTag(it) } as? PreferenceFragmentCompat
+            frag?.preferenceScreen?.title ?: getString(R.string.title_settings)
+        }
+        supportActionBar?.title = title
+        supportActionBar?.subtitle = null
     }
 
     override fun onPreferenceStartScreen(caller: PreferenceFragmentCompat, pref: androidx.preference.PreferenceScreen): Boolean {
@@ -57,6 +68,7 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             .addToBackStack(pref.key)
             .commit()
         supportActionBar?.title = pref.title
+        supportActionBar?.subtitle = null
         return true
     }
 
@@ -189,6 +201,10 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             findPreference<CheckBoxPreference>(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN)?.setOnPreferenceChangeListener { _, newValue ->
                 val onlyViaVpn = newValue as Boolean
                 updateYandexUpdatePreferences(onlyViaVpn)
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_lan_proxy_sharing_screen")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), LanProxySharingActivity::class.java))
                 true
             }
             findPreference<androidx.preference.Preference>("pref_service_check_config")?.setOnPreferenceClickListener {
