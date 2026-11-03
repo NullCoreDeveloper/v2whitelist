@@ -826,5 +826,5 @@
     <string name="lan_sharing_summary_active">فعال (پورت ساکس۵: %1$d) • لمس برای بارکد و تنظیمات</string>
     <string name="lan_sharing_status_listening">🟢 پروکسی فعال و آماده دریافت اتصالات است</string>
     <string name="lan_sharing_status_not_running">⚠️ وی‌پی‌ان متصل نیست. لطفا در صفحه اصلی اتصال را فعال کنید</string>
-    <string name="toast_lan_sharing_warning">هشدار: اشتراک‌گذاری پروکسی در شبکه محلی فعال است (ساکس۵: %1$d)</string>
+    <string name="toast_lan_sharing_warning">هشدار: اشتراک‌گذاری پروکسی در شبکه محلی فعال است</string>
 </resources>

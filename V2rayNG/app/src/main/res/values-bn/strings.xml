@@ -414,5 +414,5 @@
         <item>WebDAV</item>
     </string-array>
 
-    <string name="toast_lan_sharing_warning">সতর্কতা: LAN প্রক্সি শেয়ারিং সক্রিয় (SOCKS5: %1$d)</string>
+    <string name="toast_lan_sharing_warning">সতর্কতা: LAN প্রক্সি শেয়ারিং সক্রিয়</string>
 </resources>

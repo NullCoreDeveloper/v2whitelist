@@ -826,5 +826,5 @@
     <string name="lan_sharing_summary_active">已启用（SOCKS5 端口：%1$d）• 点击查看二维码及设置</string>
     <string name="lan_sharing_status_listening">🟢 代理已运行并正在监听传入连接</string>
     <string name="lan_sharing_status_not_running">⚠️ VPN 未连接。请在主界面开启连接</string>
-    <string name="toast_lan_sharing_warning">注意：局域网代理共享已开启（SOCKS5 端口：%1$d），局域网设备可连接</string>
+    <string name="toast_lan_sharing_warning">注意：局域网代理共享已开启，局域网设备可连接</string>
 </resources>

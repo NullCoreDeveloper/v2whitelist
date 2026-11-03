@@ -861,5 +861,5 @@
     <string name="lan_sharing_summary_active">Включено (SOCKS5 порт: %1$d) • Нажмите для QR и настроек</string>
     <string name="lan_sharing_status_listening">🟢 Прокси активен и принимает подключения</string>
     <string name="lan_sharing_status_not_running">⚠️ VPN отключён. Запустите подключение на главном экране</string>
-    <string name="toast_lan_sharing_warning">Внимание: включена раздача прокси в локальной сети (SOCKS5: %1$d)</string>
+    <string name="toast_lan_sharing_warning">Внимание: включена раздача прокси в локальной сети</string>
 </resources>

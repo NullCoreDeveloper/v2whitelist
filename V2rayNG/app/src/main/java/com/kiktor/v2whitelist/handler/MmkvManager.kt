@@ -736,7 +736,22 @@ object MmkvManager {
      * @return The settings value.
      */
     fun decodeSettingsString(key: String): String? {
-        return settingsStorage.decodeString(key)
+        val str = settingsStorage.decodeString(key)
+        if (str != null) return str
+        // Fallback / self-heal для ключей, которые могли быть ошибочно записаны как float/int
+        val floatVal = settingsStorage.decodeFloat(key, Float.NaN)
+        if (!floatVal.isNaN()) {
+            val formatted = if (floatVal % 1.0f == 0.0f) floatVal.toLong().toString() else floatVal.toString()
+            settingsStorage.encode(key, formatted)
+            return formatted
+        }
+        val intVal = settingsStorage.decodeInt(key, Int.MIN_VALUE)
+        if (intVal != Int.MIN_VALUE) {
+            val formatted = intVal.toString()
+            settingsStorage.encode(key, formatted)
+            return formatted
+        }
+        return null
     }
 
     /**
@@ -747,7 +762,7 @@ object MmkvManager {
      * @return The settings value.
      */
     fun decodeSettingsString(key: String, defaultValue: String?): String? {
-        return settingsStorage.decodeString(key, defaultValue)
+        return decodeSettingsString(key) ?: defaultValue
     }
 
     /**
@@ -823,9 +838,7 @@ object MmkvManager {
         AppConfig.PREF_LOCAL_DNS_ENABLED,
         AppConfig.PREF_FAKE_DNS_ENABLED,
         AppConfig.PREF_APPEND_HTTP_PROXY,
-        AppConfig.PREF_VPN_BYPASS_LAN,
         AppConfig.PREF_MUX_ENABLED,
-        AppConfig.PREF_MUX_XUDP_QUIC,
         AppConfig.PREF_FRAGMENT_ENABLED,
         AppConfig.SUBSCRIPTION_AUTO_UPDATE,
         AppConfig.PREF_AUTO_FAILOVER,
@@ -853,6 +866,18 @@ object MmkvManager {
         AppConfig.PREF_V2W_CORE_ENABLED,
         AppConfig.PREF_V2W_CORE_FALLBACK,
         AppConfig.PREF_V2W_CORE_MIGRATION_V1,
+        AppConfig.PREF_AMOLED_BLACK,
+        AppConfig.PREF_PREMIUM_GRADIENTS,
+        AppConfig.PREF_PREMIUM_GLASS,
+        AppConfig.PREF_PREMIUM_ANIMATIONS,
+        AppConfig.PREF_PREMIUM_PULSE,
+        AppConfig.PREF_PREMIUM_HAPTIC,
+        AppConfig.PREF_FILTER_INSECURE_PROFILES,
+        AppConfig.PREF_SERVICE_CHECK_ENABLED,
+        AppConfig.PREF_SMART_FAILOVER_ENABLED,
+        AppConfig.PREF_NETWORK_CHECK_ENABLED,
+        AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN,
+        AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS,
         "pref_defaults_added_v1",
         "hysteria2_pin_sha256_migrated",
         "speed_check_timeout_3s_migrated",
@@ -863,14 +888,7 @@ object MmkvManager {
         AppConfig.PREF_WARP_COOLDOWN_STEP,
         AppConfig.PREF_WARP_AWG_JC,
         AppConfig.PREF_WARP_AWG_JMIN,
-        AppConfig.PREF_WARP_AWG_JMAX,
-        AppConfig.PREF_WARP_COOLDOWN_MINUTES,
-        AppConfig.PREF_WARP_MAX_ATTEMPTS,
-        AppConfig.PREF_WARP_SPEED_CHECK_TIMEOUT_MS,
-        AppConfig.PREF_WARP_SPEED_CHECK_BYTES,
-        AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES,
-        AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT,
-        AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT
+        AppConfig.PREF_WARP_AWG_JMAX
     )
 
     private val LONG_SETTINGS_KEYS: Set<String> = setOf(
@@ -878,10 +896,7 @@ object MmkvManager {
         AppConfig.PREF_LAST_CONNECT_TIME
     )
 
-    private val FLOAT_SETTINGS_KEYS: Set<String> = setOf(
-        AppConfig.PREF_PROFILE_MIN_SPEED_MBPS,
-        AppConfig.PREF_WARP_MIN_SPEED_MBPS
-    )
+    private val FLOAT_SETTINGS_KEYS: Set<String> = emptySet()
 
     private val STRING_SET_SETTINGS_KEYS: Set<String> = setOf(
         AppConfig.PREF_PER_APP_PROXY_SET,
@@ -928,7 +943,7 @@ object MmkvManager {
                     result[key] = settingsStorage.decodeFloat(key)
                 }
                 else -> {
-                    val str = settingsStorage.decodeString(key)
+                    val str = decodeSettingsString(key)
                     if (str != null) {
                         result[key] = str
                     } else {
@@ -993,20 +1008,34 @@ object MmkvManager {
                     }
                 }
                 else -> {
+                    // Все остальные параметры в MMKV сохраняются как String (в т.ч. EditTextPreference, ListPreference)
                     when (value) {
                         is String -> encodeSettings(key, value)
-                        is Boolean -> encodeSettings(key, value)
-                        is Int -> encodeSettings(key, value)
-                        is Long -> encodeSettings(key, value)
-                        is Float -> encodeSettings(key, value)
-                        is Double -> {
-                            if (value % 1.0 == 0.0 && value <= Int.MAX_VALUE && value >= Int.MIN_VALUE) {
-                                encodeSettings(key, value.toInt())
-                            } else {
-                                encodeSettings(key, value.toFloat())
+                        is Boolean -> {
+                            val strVal = when (key) {
+                                AppConfig.PREF_VPN_BYPASS_LAN -> if (value) "1" else "0"
+                                AppConfig.PREF_MUX_XUDP_QUIC -> if (value) "allow" else "reject"
+                                else -> value.toString()
                             }
+                            encodeSettings(key, strVal)
                         }
-                        is Number -> encodeSettings(key, value.toLong())
+                        is Double -> {
+                            val strVal = if (value % 1.0 == 0.0) {
+                                value.toLong().toString()
+                            } else {
+                                value.toString()
+                            }
+                            encodeSettings(key, strVal)
+                        }
+                        is Float -> {
+                            val strVal = if (value % 1.0f == 0.0f) {
+                                value.toLong().toString()
+                            } else {
+                                value.toString()
+                            }
+                            encodeSettings(key, strVal)
+                        }
+                        is Number -> encodeSettings(key, value.toLong().toString())
                         is Collection<*> -> {
                             val set = value.mapNotNull { it?.toString() }.toMutableSet()
                             encodeSettings(key, set)

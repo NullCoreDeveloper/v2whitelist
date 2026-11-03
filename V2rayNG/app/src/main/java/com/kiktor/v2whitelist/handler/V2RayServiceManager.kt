@@ -214,11 +214,11 @@ object V2RayServiceManager {
         lastLanToastTime = now
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             try {
-                val msg = ctx.getString(R.string.toast_lan_sharing_warning, SettingsManager.getSocksPort())
+                val msg = ctx.getString(R.string.toast_lan_sharing_warning)
                 es.dmoral.toasty.Toasty.warning(ctx, msg, android.widget.Toast.LENGTH_LONG, true).show()
             } catch (_: Exception) {
                 try {
-                    val msg = ctx.getString(R.string.toast_lan_sharing_warning, SettingsManager.getSocksPort())
+                    val msg = ctx.getString(R.string.toast_lan_sharing_warning)
                     android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_LONG).show()
                 } catch (_: Exception) { }
             }

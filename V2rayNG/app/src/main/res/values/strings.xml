@@ -868,5 +868,5 @@
     <string name="lan_sharing_summary_active">Enabled (SOCKS5 port: %1$d) • Tap for QR and settings</string>
     <string name="lan_sharing_status_listening">🟢 Proxy is active and accepting connections</string>
     <string name="lan_sharing_status_not_running">⚠️ VPN is disconnected. Start connection on main screen</string>
-    <string name="toast_lan_sharing_warning">LAN proxy sharing is active (SOCKS5: %1$d). Devices on your network can connect</string>
+    <string name="toast_lan_sharing_warning">LAN proxy sharing is active. Devices on your network can connect</string>
 </resources>
