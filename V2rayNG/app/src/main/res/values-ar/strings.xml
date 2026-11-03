@@ -421,4 +421,5 @@
     <string name="location_filter_server_count">الخوادم: %d</string>
     <string name="location_filter_unknown">غير معروف</string>
     <string name="btn_copy_to_clipboard">نسخ إلى الحافظة</string>
+    <string name="toast_lan_sharing_warning">تنبيه: مشاركة البروكسي في الشبكة المحلية مفعلة (منفذ SOCKS5: %1$d)</string>
 </resources>

@@ -756,7 +756,7 @@
     <string name="title_category_updates">📦 后台更新</string>
     <string name="summary_category_updates">订阅自动更新间隔、基站环境下经由 Yandex 更新</string>
     <string name="title_category_vpn_core">⚙️ VPN 与核心参数</string>
-    <string name="summary_category_vpn_core">局域网绕行与共享、DNS、分片、Mux、MTU 及内核参数</string>
+    <string name="summary_category_vpn_core">局域网绕行、DNS、分片、Mux、MTU 及内核参数</string>
     <string name="title_pref_add_qs_tile">快捷设置磁贴</string>
     <string name="title_pref_amoled_black">纯黑模式 (AMOLED)</string>
     <string name="title_pref_category_custom_endpoint">自定义终端 (代理链)</string>
@@ -806,7 +806,8 @@
     <string name="scanner_btn_clipboard">从剪贴板导入</string>
     <string name="scanner_btn_clipboard_desc">服务器、订阅、预设和设置</string>
     <string name="title_lan_sharing">局域网代理共享</string>
-    <string name="summary_lan_sharing">向局域网设备共享 SOCKS5/HTTP 代理、二维码、已连接客户端</string>
+    <string name="summary_lan_sharing">在局域网内共享 SOCKS5/HTTP 代理，提供扫码连接二维码</string>
+    <string name="lan_sharing_explanation">允许在局域网或同一 Wi-Fi 内与其他设备共享当前 VPN 连接。其他手机、电脑或 Telegram 可将此设备作为 SOCKS5/HTTP 代理使用，无需额外安装 VPN。</string>
     <string name="lan_sharing_switch">启用局域网共享</string>
     <string name="lan_sharing_restart_hint">请重新连接 VPN 以应用更改</string>
     <string name="lan_sharing_off_hint">共享已关闭。请开启并重新连接。</string>
@@ -822,4 +823,8 @@
     <string name="lan_sharing_refresh">刷新</string>
     <string name="lan_sharing_both_same_lan">两台设备必须在同一局域网内</string>
     <string name="lan_sharing_clients_unavailable">无法获取客户端列表（Android 限制访问网络连接表）</string>
+    <string name="lan_sharing_summary_active">已启用（SOCKS5 端口：%1$d）• 点击查看二维码及设置</string>
+    <string name="lan_sharing_status_listening">🟢 代理已运行并正在监听传入连接</string>
+    <string name="lan_sharing_status_not_running">⚠️ VPN 未连接。请在主界面开启连接</string>
+    <string name="toast_lan_sharing_warning">注意：局域网代理共享已开启（SOCKS5 端口：%1$d），局域网设备可连接</string>
 </resources>

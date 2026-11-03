@@ -644,7 +644,7 @@
     <string name="title_category_routing">🌐 Маршрутизация и Proxy-каскад</string>
     <string name="summary_category_routing">Режим туннеля, каскад конечного узла и списки доменов</string>
     <string name="title_category_vpn_core">⚙️ Параметры VPN и ядра</string>
-    <string name="summary_category_vpn_core">Обход и раздача в LAN, DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
+    <string name="summary_category_vpn_core">Обход LAN, DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
     <string name="title_category_backup_system">💾 Резервное копирование и система</string>
     <string name="summary_category_backup_system">Экспорт и импорт настроек, логкат и системные параметры</string>
 
@@ -841,7 +841,8 @@
     <string name="scanner_btn_clipboard">Из буфера обмена</string>
     <string name="scanner_btn_clipboard_desc">Серверы, подписки, сценарии и настройки</string>
     <string name="title_lan_sharing">Раздача прокси в локальной сети</string>
-    <string name="summary_lan_sharing">Поделиться SOCKS5/HTTP прокси с устройствами в сети, QR-коды, список клиентов</string>
+    <string name="summary_lan_sharing">Раздача SOCKS5/HTTP прокси на устройства в сети Wi-Fi, QR-коды для подключения</string>
+    <string name="lan_sharing_explanation">Позволяет раздавать ваше VPN-соединение на другие устройства в локальной сети или домашнем Wi-Fi. Другие телефоны, ПК или Telegram могут использовать этот телефон как SOCKS5/HTTP прокси без установки VPN.</string>
     <string name="lan_sharing_switch">Включить раздачу в LAN</string>
     <string name="lan_sharing_restart_hint">Переподключите VPN, чтобы применить изменение</string>
     <string name="lan_sharing_off_hint">Раздача выключена. Включите её и переподключитесь.</string>
@@ -857,4 +858,8 @@
     <string name="lan_sharing_refresh">Обновить</string>
     <string name="lan_sharing_both_same_lan">Оба устройства должны быть в одной локальной сети</string>
     <string name="lan_sharing_clients_unavailable">Список клиентов недоступен (Android ограничивает доступ к таблице соединений)</string>
+    <string name="lan_sharing_summary_active">Включено (SOCKS5 порт: %1$d) • Нажмите для QR и настроек</string>
+    <string name="lan_sharing_status_listening">🟢 Прокси активен и принимает подключения</string>
+    <string name="lan_sharing_status_not_running">⚠️ VPN отключён. Запустите подключение на главном экране</string>
+    <string name="toast_lan_sharing_warning">Внимание: включена раздача прокси в локальной сети (SOCKS5: %1$d)</string>
 </resources>

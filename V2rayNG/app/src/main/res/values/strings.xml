@@ -609,7 +609,7 @@
     <string name="title_category_routing">🌐 Routing &amp; Proxy Chaining</string>
     <string name="summary_category_routing">Tunnel mode, custom endpoint cascade and domain lists</string>
     <string name="title_category_vpn_core">⚙️ VPN &amp; Core Parameters</string>
-    <string name="summary_category_vpn_core">LAN bypass &amp; sharing, DNS, packet fragmentation, Mux, MTU and core parameters</string>
+    <string name="summary_category_vpn_core">LAN bypass, DNS, packet fragmentation, Mux, MTU and core parameters</string>
     <string name="title_category_backup_system">💾 Backup &amp; System</string>
     <string name="summary_category_backup_system">Export/import configuration, appearance and system parameters</string>
 
@@ -848,7 +848,8 @@
     <string name="scanner_btn_clipboard">From clipboard</string>
     <string name="scanner_btn_clipboard_desc">Servers, subscriptions, presets and settings</string>
     <string name="title_lan_sharing">LAN proxy sharing</string>
-    <string name="summary_lan_sharing">Share SOCKS5/HTTP proxy with devices on your network, QR codes, connected clients</string>
+    <string name="summary_lan_sharing">Share SOCKS5/HTTP proxy with devices on your Wi-Fi network, QR codes</string>
+    <string name="lan_sharing_explanation">Allows sharing your VPN connection with other devices on your local Wi-Fi network. Other phones, PCs, or Telegram can use this device as a SOCKS5/HTTP proxy without installing a VPN.</string>
     <string name="lan_sharing_switch">Enable sharing in LAN</string>
     <string name="lan_sharing_restart_hint">Reconnect the VPN to apply the change</string>
     <string name="lan_sharing_off_hint">Sharing is off. Turn it on and reconnect.</string>
@@ -864,4 +865,8 @@
     <string name="lan_sharing_refresh">Refresh</string>
     <string name="lan_sharing_both_same_lan">Both devices must be on the same local network</string>
     <string name="lan_sharing_clients_unavailable">Client list is unavailable (Android restricts access to network tables)</string>
+    <string name="lan_sharing_summary_active">Enabled (SOCKS5 port: %1$d) • Tap for QR and settings</string>
+    <string name="lan_sharing_status_listening">🟢 Proxy is active and accepting connections</string>
+    <string name="lan_sharing_status_not_running">⚠️ VPN is disconnected. Start connection on main screen</string>
+    <string name="toast_lan_sharing_warning">LAN proxy sharing is active (SOCKS5: %1$d). Devices on your network can connect</string>
 </resources>

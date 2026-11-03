@@ -415,4 +415,5 @@
         <item>WebDAV</item>
     </string-array>
 
+    <string name="toast_lan_sharing_warning">注意：區域網路代理共享已開啟（SOCKS5 埠：%1$d），區域網路裝置可連線</string>
 </resources>

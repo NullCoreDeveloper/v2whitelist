@@ -151,10 +151,17 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
 
         override fun onResume() {
             super.onResume()
-            // Тумблер раздачи в LAN может быть изменён с отдельного экрана — синхронизируем галку
-            findPreference<CheckBoxPreference>(AppConfig.PREF_PROXY_SHARING)?.let {
-                val v = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)
-                if (it.isChecked != v) it.isChecked = v
+            updateLanSharingSummary()
+        }
+
+        private fun updateLanSharingSummary() {
+            findPreference<androidx.preference.Preference>("pref_lan_proxy_sharing_screen")?.let {
+                val isSharing = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)
+                it.summary = if (isSharing) {
+                    getString(R.string.lan_sharing_summary_active, SettingsManager.getSocksPort())
+                } else {
+                    getString(R.string.summary_lan_sharing)
+                }
             }
         }
 
@@ -166,6 +173,7 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             setPreferencesFromResource(R.xml.pref_settings, s)
 
             initPreferenceSummaries()
+            updateLanSharingSummary()
 
             localDns?.setOnPreferenceChangeListener { _, any ->
                 updateLocalDns(any as Boolean)

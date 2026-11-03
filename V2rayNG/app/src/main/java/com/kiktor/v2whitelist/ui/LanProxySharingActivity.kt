@@ -31,6 +31,7 @@ class LanProxySharingActivity : BaseActivity() {
     private lateinit var tvInfo: TextView
     private lateinit var tvClients: TextView
     private lateinit var tvHint: TextView
+    private lateinit var tvStatus: TextView
     private lateinit var ivQr: ImageView
     private var qrMode = 0 // 0 = Telegram, 1 = socks5://
 
@@ -43,6 +44,13 @@ class LanProxySharingActivity : BaseActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
         }
+        val tvDesc = TextView(this).apply {
+            text = getString(R.string.lan_sharing_explanation)
+            alpha = 0.85f
+            textSize = 14f
+            setPadding(0, 0, 0, (pad * 0.75f).toInt())
+        }
+        column.addView(tvDesc)
         val sw = MaterialSwitch(this).apply {
             setText(R.string.lan_sharing_switch)
             isChecked = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)
@@ -54,8 +62,10 @@ class LanProxySharingActivity : BaseActivity() {
             }
         }
         column.addView(sw)
-        tvHint = TextView(this).apply { alpha = 0.7f; setPadding(0, pad / 2, 0, pad / 2) }
+        tvHint = TextView(this).apply { alpha = 0.7f; setPadding(0, pad / 2, 0, pad / 4) }
         column.addView(tvHint)
+        tvStatus = TextView(this).apply { textSize = 14f; setTypeface(typeface, Typeface.BOLD); setPadding(0, 0, 0, pad / 2) }
+        column.addView(tvStatus)
         tvInfo = TextView(this).apply { textSize = 16f; setPadding(0, pad / 2, 0, pad / 2) }
         column.addView(tvInfo)
 
@@ -83,12 +93,28 @@ class LanProxySharingActivity : BaseActivity() {
         refresh()
         lifecycleScope.launch {
             while (isActive) {
+                val enabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)
+                val socks = SettingsManager.getSocksPort()
+                val listening = if (enabled) withContext(Dispatchers.IO) { isPortListening(socks) } else false
+                tvStatus.text = if (!enabled) ""
+                else if (listening) getString(R.string.lan_sharing_status_listening)
+                else getString(R.string.lan_sharing_status_not_running)
+
                 val clients = withContext(Dispatchers.IO) { readClients() }
                 tvClients.text = if (clients.isEmpty()) getString(if (readFailed) R.string.lan_sharing_clients_unavailable else R.string.lan_sharing_clients_none)
                 else getString(R.string.lan_sharing_clients, clients.size) + "\n" + clients.joinToString("\n") { "• $it" }
                 delay(3000)
             }
         }
+    }
+
+    private fun isPortListening(port: Int): Boolean = try {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress("127.0.0.1", port), 300)
+            true
+        }
+    } catch (_: Exception) {
+        false
     }
 
     private fun lanIp(): String? = try {

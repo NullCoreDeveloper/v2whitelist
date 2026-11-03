@@ -756,7 +756,7 @@
     <string name="title_category_updates">📦 به‌روزرسانی پس‌زمینه</string>
     <string name="summary_category_updates">فاصله زمانی به‌روزرسانی خودکار اشتراک‌ها، به‌روزرسانی یاندکس در شرایط اختلال</string>
     <string name="title_category_vpn_core">⚙️ تنظیمات VPN و هسته</string>
-    <string name="summary_category_vpn_core">دور زدن و اشتراک‌گذاری LAN، DNS، فرگمنتیشن، Mux، MTU و پارامترهای هسته</string>
+    <string name="summary_category_vpn_core">دور زدن LAN، DNS، فرگمنتیشن، Mux، MTU و پارامترهای هسته</string>
     <string name="title_pref_add_qs_tile">کاشی تنظیمات سریع</string>
     <string name="title_pref_amoled_black">سیاه خالص (AMOLED)</string>
     <string name="title_pref_category_custom_endpoint">گره پایانی سفارشی (زنجیره پروکسی)</string>
@@ -806,7 +806,8 @@
     <string name="scanner_btn_clipboard">از کلیپ‌بورد</string>
     <string name="scanner_btn_clipboard_desc">سرورها، اشتراک‌ها، سناریوها و تنظیمات</string>
     <string name="title_lan_sharing">اشتراک پروکسی در شبکه محلی</string>
-    <string name="summary_lan_sharing">اشتراک پروکسی SOCKS5/HTTP با دستگاه‌های شبکه، کد QR، فهرست کلاینت‌ها</string>
+    <string name="summary_lan_sharing">اشتراک پروکسی SOCKS5/HTTP با دستگاه‌های شبکه وای‌فای، بارکد اتصال</string>
+    <string name="lan_sharing_explanation">امکان اشتراک‌گذاری اتصال VPN را با سایر دستگاه‌های موجود در همان شبکه وای‌فای فراهم می‌کند. سایر دستگاه‌ها یا تلگرام می‌توانند بدون نصب VPN از این دستگاه به عنوان پروکسی SOCKS5/HTTP استفاده کنند.</string>
     <string name="lan_sharing_switch">فعال‌سازی اشتراک در LAN</string>
     <string name="lan_sharing_restart_hint">برای اعمال تغییر، VPN را دوباره متصل کنید</string>
     <string name="lan_sharing_off_hint">اشتراک خاموش است. آن را روشن کرده و دوباره متصل شوید.</string>
@@ -822,4 +823,8 @@
     <string name="lan_sharing_refresh">تازه‌سازی</string>
     <string name="lan_sharing_both_same_lan">هر دو دستگاه باید در یک شبکه محلی باشند</string>
     <string name="lan_sharing_clients_unavailable">فهرست کلاینت‌ها در دسترس نیست (اندروید دسترسی به جدول اتصال‌ها را محدود می‌کند)</string>
+    <string name="lan_sharing_summary_active">فعال (پورت ساکس۵: %1$d) • لمس برای بارکد و تنظیمات</string>
+    <string name="lan_sharing_status_listening">🟢 پروکسی فعال و آماده دریافت اتصالات است</string>
+    <string name="lan_sharing_status_not_running">⚠️ وی‌پی‌ان متصل نیست. لطفا در صفحه اصلی اتصال را فعال کنید</string>
+    <string name="toast_lan_sharing_warning">هشدار: اشتراک‌گذاری پروکسی در شبکه محلی فعال است (ساکس۵: %1$d)</string>
 </resources>

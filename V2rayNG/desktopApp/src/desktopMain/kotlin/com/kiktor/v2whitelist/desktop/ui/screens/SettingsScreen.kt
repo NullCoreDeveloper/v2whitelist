@@ -534,8 +534,9 @@ fun SettingsScreen(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(Modifier.width(8.dp))
+                        val title = category.getTitle(strings).replace(Regex("^[\\p{So}\\p{Sk}\\p{Sm}\\p{Sc}\\p{Extended_Pictographic}\\uFE0F\\s]+"), "").trim()
                         Text(
-                            text = category.getTitle(strings),
+                            text = if (title.isNotEmpty()) title else category.getTitle(strings),
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
