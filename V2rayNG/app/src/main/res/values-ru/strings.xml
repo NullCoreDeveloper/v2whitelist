@@ -642,9 +642,9 @@
     <string name="title_category_updates">📦 Фоновое обновление</string>
     <string name="summary_category_updates">Интервал автообновления подписок, обновление через Яндекс на БС</string>
     <string name="title_category_routing">🌐 Маршрутизация и Proxy-каскад</string>
-    <string name="summary_category_routing">Режим туннеля, каскад конечного узла, списки доменов и обход LAN</string>
+    <string name="summary_category_routing">Режим туннеля, каскад конечного узла и списки доменов</string>
     <string name="title_category_vpn_core">⚙️ Параметры VPN и ядра</string>
-    <string name="summary_category_vpn_core">DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
+    <string name="summary_category_vpn_core">Обход и раздача в LAN, DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
     <string name="title_category_backup_system">💾 Резервное копирование и система</string>
     <string name="summary_category_backup_system">Экспорт и импорт настроек, логкат и системные параметры</string>
 
@@ -833,4 +833,27 @@
     <string name="summary_pref_socks_pass">Оставьте пустым для автогенерации (рекомендуется)</string>
     <string name="summary_pref_appearance_settings">Тема, Material You, AMOLED черный, язык</string>
     <string name="summary_pref_theme_palette">Выберите основной акцентный цвет интерфейса</string>
+    <string name="status_verifying_services">Проверяем сервисы (%1$d)…</string>
+    <string name="scanner_btn_scan">Сканировать QR</string>
+    <string name="scanner_btn_scan_desc">Навести камеру на QR-код</string>
+    <string name="scanner_btn_photo">Выбрать фото</string>
+    <string name="scanner_btn_photo_desc">Распознать QR из галереи или файла</string>
+    <string name="scanner_btn_clipboard">Из буфера обмена</string>
+    <string name="scanner_btn_clipboard_desc">Серверы, подписки, сценарии и настройки</string>
+    <string name="title_lan_sharing">Раздача прокси в локальной сети</string>
+    <string name="summary_lan_sharing">Поделиться SOCKS5/HTTP прокси с устройствами в сети, QR-коды, список клиентов</string>
+    <string name="lan_sharing_switch">Включить раздачу в LAN</string>
+    <string name="lan_sharing_restart_hint">Переподключите VPN, чтобы применить изменение</string>
+    <string name="lan_sharing_off_hint">Раздача выключена. Включите её и переподключитесь.</string>
+    <string name="lan_sharing_ip">IP устройства</string>
+    <string name="lan_sharing_no_ip">Нет подключения к Wi-Fi / локальной сети</string>
+    <string name="lan_sharing_ports">Порт SOCKS5: %1$d\nПорт HTTP: %2$d</string>
+    <string name="lan_sharing_auth">Логин: %1$s\nПароль: %2$s</string>
+    <string name="lan_sharing_qr_tg">QR для Telegram</string>
+    <string name="lan_sharing_qr_socks">QR socks5://</string>
+    <string name="lan_sharing_copy">Скопировать ссылку</string>
+    <string name="lan_sharing_clients">Подключено клиентов: %1$d</string>
+    <string name="lan_sharing_clients_none">Нет подключённых клиентов</string>
+    <string name="lan_sharing_refresh">Обновить</string>
+    <string name="lan_sharing_both_same_lan">Оба устройства должны быть в одной локальной сети</string>
 </resources>

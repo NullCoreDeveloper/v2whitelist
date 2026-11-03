@@ -607,9 +607,9 @@
     <string name="title_category_updates">📦 Background Updates</string>
     <string name="summary_category_updates">Auto-update interval for subscriptions, Yandex proxy on BS</string>
     <string name="title_category_routing">🌐 Routing &amp; Proxy Chaining</string>
-    <string name="summary_category_routing">Tunnel mode, custom endpoint cascade, domain lists and LAN bypass</string>
+    <string name="summary_category_routing">Tunnel mode, custom endpoint cascade and domain lists</string>
     <string name="title_category_vpn_core">⚙️ VPN &amp; Core Parameters</string>
-    <string name="summary_category_vpn_core">DNS, packet fragmentation, Mux, MTU and core options</string>
+    <string name="summary_category_vpn_core">LAN bypass &amp; sharing, DNS, packet fragmentation, Mux, MTU and core parameters</string>
     <string name="title_category_backup_system">💾 Backup &amp; System</string>
     <string name="summary_category_backup_system">Export/import configuration, appearance and system parameters</string>
 
@@ -840,4 +840,27 @@
     <string name="summary_pref_socks_pass">Leave empty for autogeneration (recommended)</string>
     <string name="summary_pref_appearance_settings">Theme, Material You, AMOLED black, language</string>
     <string name="summary_pref_theme_palette">Choose the primary interface accent color</string>
+    <string name="status_verifying_services">Verifying services (%1$d)…</string>
+    <string name="scanner_btn_scan">Scan QR code</string>
+    <string name="scanner_btn_scan_desc">Point the camera at a QR code</string>
+    <string name="scanner_btn_photo">Pick a photo</string>
+    <string name="scanner_btn_photo_desc">Recognize QR from gallery or file</string>
+    <string name="scanner_btn_clipboard">From clipboard</string>
+    <string name="scanner_btn_clipboard_desc">Servers, subscriptions, presets and settings</string>
+    <string name="title_lan_sharing">LAN proxy sharing</string>
+    <string name="summary_lan_sharing">Share SOCKS5/HTTP proxy with devices on your network, QR codes, connected clients</string>
+    <string name="lan_sharing_switch">Enable sharing in LAN</string>
+    <string name="lan_sharing_restart_hint">Reconnect the VPN to apply the change</string>
+    <string name="lan_sharing_off_hint">Sharing is off. Turn it on and reconnect.</string>
+    <string name="lan_sharing_ip">Device IP</string>
+    <string name="lan_sharing_no_ip">Not connected to Wi-Fi / LAN</string>
+    <string name="lan_sharing_ports">SOCKS5 port: %1$d\nHTTP port: %2$d</string>
+    <string name="lan_sharing_auth">Login: %1$s\nPassword: %2$s</string>
+    <string name="lan_sharing_qr_tg">QR for Telegram</string>
+    <string name="lan_sharing_qr_socks">QR socks5://</string>
+    <string name="lan_sharing_copy">Copy link</string>
+    <string name="lan_sharing_clients">Connected clients: %1$d</string>
+    <string name="lan_sharing_clients_none">No connected clients</string>
+    <string name="lan_sharing_refresh">Refresh</string>
+    <string name="lan_sharing_both_same_lan">Both devices must be on the same local network</string>
 </resources>
