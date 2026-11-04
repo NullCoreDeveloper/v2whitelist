@@ -176,6 +176,9 @@ tasks.matching {
         val commonDir = File(resDir, "common").apply { mkdirs() }
         if (binDir.exists()) binDir.copyRecursively(File(commonDir, "bin"), overwrite = true)
         if (assetsDir.exists()) assetsDir.copyRecursively(File(commonDir, "assets"), overwrite = true)
+        val winDir = File(resDir, "windows-x64").apply { mkdirs() }
+        if (binDir.exists()) binDir.copyRecursively(File(winDir, "bin"), overwrite = true)
+        if (assetsDir.exists()) assetsDir.copyRecursively(File(winDir, "assets"), overwrite = true)
     }
 }
 
@@ -263,13 +266,26 @@ tasks.matching {
             val destAssets = File(appDir, "assets").apply { mkdirs() }
             val resBin = File(appDir, "app/resources/bin").apply { mkdirs() }
             val resAssets = File(appDir, "app/resources/assets").apply { mkdirs() }
+            val rBin = File(appDir, "resources/bin").apply { mkdirs() }
+            val rAssets = File(appDir, "resources/assets").apply { mkdirs() }
             if (binDir.exists()) {
                 binDir.copyRecursively(destBin, overwrite = true)
                 binDir.copyRecursively(resBin, overwrite = true)
+                binDir.copyRecursively(rBin, overwrite = true)
             }
             if (assetsDir.exists()) {
                 assetsDir.copyRecursively(destAssets, overwrite = true)
                 assetsDir.copyRecursively(resAssets, overwrite = true)
+                assetsDir.copyRecursively(rAssets, overwrite = true)
+            }
+            val exeFile = File(appDir, "v2whitelist.exe")
+            val manifestFile = project.file("src/desktopMain/resources/windows/app.manifest")
+            if (exeFile.exists() && manifestFile.exists()) {
+                try {
+                    ProcessBuilder("mt.exe", "-manifest", manifestFile.absolutePath, "-outputresource:${exeFile.absolutePath};#1")
+                        .start()
+                        .waitFor()
+                } catch (_: Exception) {}
             }
         }
 

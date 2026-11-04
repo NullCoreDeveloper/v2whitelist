@@ -55,6 +55,12 @@ object DesktopBinaryResolver {
         listOf("tun2socks")
     }
 
+    val serviceBinaryNames: List<String> = if (isWindows) {
+        listOf("v2w-service.exe", "v2w-service")
+    } else {
+        listOf("v2w-service")
+    }
+
     /**
      * Проверяет, указывает ли путь на временную точку монтирования AppImage.
      */

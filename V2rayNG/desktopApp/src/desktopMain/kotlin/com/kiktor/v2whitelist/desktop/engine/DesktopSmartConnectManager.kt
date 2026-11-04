@@ -5,6 +5,7 @@ import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
 import com.kiktor.v2whitelist.core.model.AppScenario
+import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
@@ -128,7 +129,12 @@ class DesktopSmartConnectManager(
 
             // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто) + фильтр локаций 1-в-1 как на Android
             val filterConfig = loadLocationFilterConfig(scenario = scenario)
-            val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig).shuffled()
+            val allCandidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
+            // Исключаем протоколы, не поддерживаемые десктопным ядром Xray
+            val supported = allCandidates.filter { (_, p) ->
+                p.configType != EConfigType.HYSTERIA2 && p.configType != EConfigType.HYSTERIA
+            }
+            val candidates = (if (supported.isNotEmpty()) supported else allCandidates).shuffled()
             if (candidates.isEmpty()) {
                 GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario с учетом фильтра стран.")
                 onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет серверов под сценарий $scenario")

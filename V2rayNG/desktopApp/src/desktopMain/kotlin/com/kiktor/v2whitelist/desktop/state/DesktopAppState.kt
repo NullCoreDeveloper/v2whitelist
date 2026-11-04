@@ -7,6 +7,7 @@ import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
 import com.kiktor.v2whitelist.core.domain.update.UpdateChecker
 import com.kiktor.v2whitelist.core.model.AppScenario
+import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.core.model.update.CheckUpdateResult
@@ -610,8 +611,12 @@ class DesktopAppState(
             else -> allServers
         }
 
-        // Если для фильтра серверов не нашлось, возвращаем все, чтобы не оставлять список пустым
-        return if (matched.isNotEmpty()) matched else allServers
+        // Если для фильтра серверов не нашлось, берем все, но исключаем протоколы, не поддерживаемые десктопным ядром Xray (Hysteria)
+        val baseList = if (matched.isNotEmpty()) matched else allServers
+        val supported = baseList.filter { (_, p) ->
+            p.configType != EConfigType.HYSTERIA2 && p.configType != EConfigType.HYSTERIA
+        }
+        return if (supported.isNotEmpty()) supported else baseList
     }
 
     fun setTab(tab: DesktopTab) {

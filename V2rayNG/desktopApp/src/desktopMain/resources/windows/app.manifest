@@ -6,11 +6,11 @@
     name="com.kiktor.v2whitelist"
     type="win32"
   />
-  <description>ПроБел Desktop — v2whitelist</description>
+  <description>ProBel Desktop - v2whitelist</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

@@ -27,5 +27,6 @@ class DesktopTunManagerTest {
     @Test
     fun testInitialTunState() {
         assertFalse(DesktopTunManager.isTunActive)
+        assertFalse(DesktopTunManager.isServiceMode)
     }
 }

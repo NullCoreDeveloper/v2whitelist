@@ -3,6 +3,7 @@ package com.kiktor.v2whitelist.desktop.engine
 import com.kiktor.v2whitelist.core.config.xray.XrayConfigGenerator
 import com.kiktor.v2whitelist.core.config.xray.XrayGeneratorOptions
 import com.kiktor.v2whitelist.core.model.AppScenario
+import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import kotlinx.coroutines.*
@@ -114,6 +115,14 @@ class XrayDesktopRunner(
 
         _coreState.value = DesktopCoreState.STARTING
         _lastError.value = null
+
+        if (profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.HYSTERIA) {
+            val err = "Протокол Hysteria/Hysteria2 не поддерживается встроенным ядром Xray."
+            GeekModeLogger.log("DesktopRunner", err)
+            _lastError.value = err
+            _coreState.value = DesktopCoreState.ERROR
+            return false
+        }
 
         val binary = findXrayExecutable(xrayBinaryPath)
         if (binary == null) {

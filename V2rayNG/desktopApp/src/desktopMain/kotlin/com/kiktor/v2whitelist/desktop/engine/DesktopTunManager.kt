@@ -7,6 +7,11 @@ import java.io.File
 import java.io.InputStreamReader
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 data class ConfiguredServerRoute(
@@ -16,18 +21,25 @@ data class ConfiguredServerRoute(
 )
 
 /**
- * Управляет виртуальным сетевым адаптером TUN (v2w-tun) на Desktop через tun2socks.
+ * Управляет виртуальным сетевым адаптером TUN (v2w-tun / wintun) на Desktop через tun2socks
+ * и фоновую службу Windows (v2w-service).
  *
  * Архитектурные принципы:
- * 1. Автономность: не требует внешних демонов. Ищет tun2socks в каталоге bin/ приложения,
- *    затем в системном PATH.
- * 2. Безопасность маршрутизации: перенаправляет трафик через два префикса 0.0.0.0/1 и 128.0.0.0/1,
- *    не затирая системный default route, и добавляет прямой маршрут до удалённого сервера
+ * 1. Режим службы (Windows Service Mode, Вариант 1): на Windows работает через фоновую
+ *    системную службу v2w-service (NT AUTHORITY\SYSTEM), поэтому GUI-клиент запускается
+ *    без повышенных привилегий (asInvoker, без UAC при старте).
+ * 2. Автономный режим: если служба не установлена, поддерживает прямой запуск tun2socks
+ *    с настройкой IP-адреса Wintun (198.18.0.1/16), DNS (1.1.1.1, 8.8.8.8) и метрик маршрутов.
+ * 3. Безопасность маршрутизации: перенаправляет трафик через два префикса 0.0.0.0/1 и 128.0.0.0/1
+ *    с метрикой 1, не затирая системный default route, и добавляет прямой маршрут до удалённого сервера
  *    через физический шлюз во избежание петли маршрутизации.
- * 3. Отказоустойчивость (Graceful fallback): если tun2socks не найден или не получены права root,
- *    возвращает false для мягкого переключения на системный прокси.
+ * 4. Защита от утечки DNS: на интерфейс назначаются DNS-серверы Cloudflare/Google.
  */
 object DesktopTunManager {
+
+    private const val SERVICE_IPC_URL = "http://127.0.0.1:53729"
+    private const val DEFAULT_TUN_IP = "198.18.0.1"
+    private const val DEFAULT_TUN_MASK = "255.255.0.0"
 
     private val osName = System.getProperty("os.name")?.lowercase().orEmpty()
     val isWindows = osName.contains("windows")
@@ -41,6 +53,9 @@ object DesktopTunManager {
     private var configuredRoute: ConfiguredServerRoute? = null
 
     var isTunActive: Boolean = false
+        private set
+
+    var isServiceMode: Boolean = false
         private set
 
     init {
@@ -65,11 +80,134 @@ object DesktopTunManager {
     }
 
     /**
+     * Поиск бинарного файла службы v2w-service.
+     */
+    fun findServiceExecutable(): File? {
+        return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.serviceBinaryNames)
+    }
+
+    /**
+     * Проверяет, отвечает ли локальная фоновая служба v2w-service.
+     */
+    fun isServiceAvailable(): Boolean {
+        if (!isWindows) return false
+        return try {
+            val client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(500))
+                .build()
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$SERVICE_IPC_URL/ping"))
+                .timeout(Duration.ofMillis(600))
+                .GET()
+                .build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            response.statusCode() == 200 && response.body().contains("\"status\":\"ok\"")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Запуск TUN через системную службу Windows (Service Mode).
+     */
+    private fun startViaService(
+        socksPort: Int,
+        serverIp: String?,
+        gateway: String,
+        physicalDev: String,
+        tun2socksPath: String?
+    ): Boolean {
+        return try {
+            val client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(1500))
+                .build()
+
+            val jsonBody = StringBuilder()
+                .append("{")
+                .append("\"socks_port\":").append(socksPort).append(",")
+                .append("\"server_ip\":\"").append(serverIp.orEmpty()).append("\",")
+                .append("\"gateway\":\"").append(gateway).append("\",")
+                .append("\"physical_dev\":\"").append(physicalDev).append("\",")
+                .append("\"tun2socks_path\":\"").append((tun2socksPath.orEmpty()).replace("\\", "\\\\")).append("\",")
+                .append("\"tun_ip\":\"").append(DEFAULT_TUN_IP).append("\",")
+                .append("\"tun_mask\":\"").append(DEFAULT_TUN_MASK).append("\",")
+                .append("\"dns_servers\":[\"1.1.1.1\",\"8.8.8.8\"]")
+                .append("}")
+                .toString()
+
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$SERVICE_IPC_URL/tun/start"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(6))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build()
+
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() == 200 && response.body().contains("\"success\":true")) {
+                GeekModeLogger.log("TUN", "Служба v2w-service успешно запустила и настроила TUN интерфейс Wintun.")
+                true
+            } else {
+                GeekModeLogger.log("TUN", "Ошибка ответа службы v2w-service (${response.statusCode()}): ${response.body()}")
+                false
+            }
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Не удалось связаться со службой v2w-service: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Остановка TUN через службу Windows.
+     */
+    private fun stopViaService(): Boolean {
+        return try {
+            val client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(1000))
+                .build()
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$SERVICE_IPC_URL/tun/stop"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(4))
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            response.statusCode() == 200
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Ошибка отправки команды остановки службе v2w-service: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Попытка инсталляции или запуска службы v2w-service через PowerShell RunAs (если не запущена).
+     */
+    private fun installOrStartService() {
+        val srvBin = findServiceExecutable() ?: return
+        try {
+            GeekModeLogger.log("TUN", "Служба v2w-service не активна. Попытка фонового старта...")
+            // Сначала пробуем запустить сервис, если он уже зарегистрирован в системе
+            val startRes = runCommand("cmd", "/c", "net start v2w-service")
+            if (startRes.first == 0) {
+                Thread.sleep(800)
+                if (isServiceAvailable()) return
+            }
+
+            // Если служба не установлена, вызываем регистрацию через UAC один раз
+            GeekModeLogger.log("TUN", "Регистрация службы v2w-service через Windows SCM: ${srvBin.absolutePath}")
+            val psCmd = "Start-Process '${srvBin.absolutePath}' -ArgumentList '-install' -Verb RunAs -Wait"
+            runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd)
+            Thread.sleep(1200)
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Не удалось автоматически установить/запустить службу: ${e.message}")
+        }
+    }
+
+    /**
      * Запуск L3 TUN интерфейса:
-     * - Запуск tun2socks
-     * - Назначение IP-адреса и перевод интерфейса v2w-tun в состояние UP
+     * - Запуск tun2socks (через службу v2w-service или напрямую)
+     * - Назначение IP-адреса и DNS на адаптер (wintun / v2w-tun)
      * - Добавление прямого маршрута до сервера через шлюз по умолчанию (защита от петли)
-     * - Маршрутизация 0.0.0.0/1 и 128.0.0.0/1 в интерфейс v2w-tun
+     * - Маршрутизация 0.0.0.0/1 и 128.0.0.0/1 в интерфейс TUN
      */
     @Synchronized
     fun start(
@@ -83,21 +221,6 @@ object DesktopTunManager {
         }
 
         currentSudoPassword = sudoPassword
-
-        val binary = findTun2SocksExecutable(customPath)
-        if (binary == null) {
-            GeekModeLogger.log("TUN", "Исполняемый файл tun2socks не найден в bin/ и системе. Переход в резервный режим.")
-            return false
-        }
-
-        GeekModeLogger.log("TUN", "Используется tun2socks: ${binary.absolutePath}")
-
-        if (isWindows && !isWindowsAdmin()) {
-            GeekModeLogger.log(
-                "TUN",
-                "Предупреждение: для создания интерфейса Wintun и настройки сетевых маршрутов на Windows требуются права Администратора («Запуск от имени администратора»)."
-            )
-        }
 
         // 1. Определение шлюза и сетевого интерфейса по умолчанию
         val (gateway, physicalDev) = detectDefaultGateway()
@@ -113,7 +236,45 @@ object DesktopTunManager {
             GeekModeLogger.log("TUN", "Целевой сервер для исключения из туннеля: $serverIp ($serverAddress)")
         }
 
-        // 0. Подготовка виртуального интерфейса
+        // 3. Windows Service Mode (Вариант 1)
+        if (isWindows) {
+            if (!isServiceAvailable()) {
+                installOrStartService()
+            }
+            if (isServiceAvailable()) {
+                GeekModeLogger.log("TUN", "Используется системная служба v2w-service (Service Mode, запуск без UAC)")
+                val started = startViaService(
+                    socksPort = socksPort,
+                    serverIp = serverIp,
+                    gateway = gateway,
+                    physicalDev = physicalDev,
+                    tun2socksPath = findTun2SocksExecutable(customPath)?.absolutePath
+                )
+                if (started) {
+                    isTunActive = true
+                    isServiceMode = true
+                    return true
+                }
+                GeekModeLogger.log("TUN", "Служба v2w-service не смогла запустить TUN. Переход в резервный прямой режим...")
+            }
+        }
+
+        // 4. Прямой режим (Direct process mode)
+        val binary = findTun2SocksExecutable(customPath)
+        if (binary == null) {
+            GeekModeLogger.log("TUN", "Исполняемый файл tun2socks не найден в bin/ и системе. Переход в резервный режим.")
+            return false
+        }
+
+        GeekModeLogger.log("TUN", "Используется tun2socks: ${binary.absolutePath}")
+
+        if (isWindows && !isWindowsAdmin()) {
+            GeekModeLogger.log(
+                "TUN",
+                "Предупреждение: для создания интерфейса Wintun и настройки сетевых маршрутов на Windows требуются права Администратора либо работающая служба v2w-service."
+            )
+        }
+
         val deviceName = when {
             isWindows -> "wintun"
             isMac -> "utun"
@@ -127,7 +288,6 @@ object DesktopTunManager {
             runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
         }
 
-        // 3. Запуск tun2socks
         val useSudo = !sudoPassword.isNullOrBlank() && isLinux
         val tunArgs = mutableListOf<String>()
         if (useSudo) {
@@ -155,7 +315,6 @@ object DesktopTunManager {
                 } catch (_: Exception) {}
             }
 
-            // Мониторинг логов tun2socks
             logJob = scope.launch(Dispatchers.IO) {
                 try {
                     BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
@@ -171,8 +330,7 @@ object DesktopTunManager {
                 } catch (_: Exception) {}
             }
 
-            // Ждём инициализации виртуального интерфейса
-            Thread.sleep(350)
+            Thread.sleep(500)
 
             if (!proc.isAlive) {
                 val code = proc.exitValue()
@@ -181,7 +339,6 @@ object DesktopTunManager {
                 return false
             }
 
-            // 4. Конфигурация интерфейса и маршрутов
             when {
                 isLinux -> {
                     val addrRes = runSudoCommand(listOf("ip", "addr", "add", "198.18.0.1/15", "dev", "v2w-tun"), sudoPassword)
@@ -219,8 +376,19 @@ object DesktopTunManager {
                 }
 
                 isWindows -> {
+                    // 1. Присваиваем статический IP 198.18.0.1 интерфейсу wintun
+                    val netshAddrRes = runCommand("netsh", "interface", "ipv4", "set", "address", "name=wintun", "source=static", "addr=198.18.0.1", "mask=255.255.0.0", "gateway=none")
+                    if (netshAddrRes.first != 0) {
+                        GeekModeLogger.log("TUN", "Windows: netsh set address: ${netshAddrRes.second}")
+                    }
+
+                    // 2. Назначаем DNS Cloudflare и Google на wintun адаптер для предотвращения DNS Leak
+                    runCommand("netsh", "interface", "ipv4", "set", "dnsservers", "name=wintun", "source=static", "address=1.1.1.1", "validate=no")
+                    runCommand("netsh", "interface", "ipv4", "add", "dnsservers", "name=wintun", "address=8.8.8.8", "validate=no")
+
+                    // 3. Прямой маршрут до сервера через физический шлюз
                     if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
-                        val routeRes = runCommand("cmd", "/c", "route add $serverIp mask 255.255.255.255 $gateway")
+                        val routeRes = runCommand("cmd", "/c", "route add $serverIp mask 255.255.255.255 $gateway metric 1")
                         if (routeRes.first == 0) {
                             configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
                             GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к серверу: $serverIp -> $gateway")
@@ -228,8 +396,10 @@ object DesktopTunManager {
                             GeekModeLogger.log("TUN", "Windows: Предупреждение при добавлении маршрута к серверу: ${routeRes.second}")
                         }
                     }
-                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1")
-                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1")
+
+                    // 4. Направляем весь IPv4 интернет в wintun
+                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1 metric 1")
+                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1 metric 1")
                     if (r1.first != 0 || r2.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: Сбой установки маршрутов TUN (требуются права Администратора): ${r1.second} / ${r2.second}")
                         stopSync(null)
@@ -249,6 +419,7 @@ object DesktopTunManager {
             }
 
             isTunActive = true
+            isServiceMode = false
             GeekModeLogger.log("TUN", "Адаптер $deviceName успешно активен. Все соединения ОС направлены через Xray TUN.")
             return true
         } catch (e: Exception) {
@@ -270,6 +441,13 @@ object DesktopTunManager {
         GeekModeLogger.log("TUN", "Остановка TUN адаптера и снятие маршрутов...")
         isTunActive = false
 
+        if (isServiceMode) {
+            stopViaService()
+            isServiceMode = false
+            GeekModeLogger.log("TUN", "Режим TUN через службу отключен.")
+            return true
+        }
+
         when {
             isLinux -> {
                 runSudoCommand(listOf("ip", "route", "del", "0.0.0.0/1", "dev", "v2w-tun"), sudoPassword)
@@ -281,10 +459,10 @@ object DesktopTunManager {
             }
 
             isWindows -> {
-                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0")
-                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0")
+                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 198.18.0.1")
+                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 198.18.0.1")
                 configuredRoute?.let { route ->
-                    runCommand("cmd", "/c", "route delete ${route.ip}")
+                    runCommand("cmd", "/c", "route delete ${route.ip} mask 255.255.255.255 ${route.gateway}")
                     configuredRoute = null
                 }
             }
@@ -455,7 +633,7 @@ object DesktopTunManager {
             val (code, _) = runCommand("cmd", "/c", "net session")
             code == 0
         } catch (_: Exception) {
-            true // При сомнениях не блокируем заранее
+            true
         }
     }
 }
