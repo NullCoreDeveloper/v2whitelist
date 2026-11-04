@@ -153,11 +153,18 @@ compose.desktop {
     }
 }
 
+tasks.withType<org.gradle.api.tasks.AbstractCopyTask>().configureEach {
+    duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.EXCLUDE
+}
+
 tasks.matching {
     it.name.contains("Distributable", ignoreCase = true) ||
     it.name.contains("package", ignoreCase = true) ||
     it.name.contains("appResources", ignoreCase = true)
 }.configureEach {
+    if (this is org.gradle.api.tasks.AbstractCopyTask) {
+        duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.EXCLUDE
+    }
     doFirst {
         val resDir = file("package-resources")
         val binDir = project.file("bin")
@@ -178,7 +185,6 @@ tasks.matching {
         if (assetsDir.exists()) assetsDir.copyRecursively(File(commonDir, "assets"), overwrite = true)
         val winDir = File(resDir, "windows-x64").apply { mkdirs() }
         if (binDir.exists()) binDir.copyRecursively(File(winDir, "bin"), overwrite = true)
-        if (assetsDir.exists()) assetsDir.copyRecursively(File(winDir, "assets"), overwrite = true)
     }
 }
 
