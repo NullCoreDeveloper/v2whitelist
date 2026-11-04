@@ -67,8 +67,9 @@ object V2WCoreScanner {
         val validCustom = customBinaryPath?.takeIf { File(it).exists() }
         val binary = (validCustom?.let { findV2WScanExecutable(it) }) ?: findV2WScanExecutable(null)
         if (binary == null) {
-            val checkedDirs = DesktopBinaryResolver.getCandidateDirectories().map { it.absolutePath }
-            val err = "Бинарник v2w-scan не найден ни по указанному пути, ни в каталогах приложения: $checkedDirs"
+            val allDirs = DesktopBinaryResolver.getCandidateDirectories().map { it.absolutePath }
+            val checkedDirs = allDirs.take(8).joinToString(", ") + if (allDirs.size > 8) " … (+${allDirs.size - 8})" else ""
+            val err = "Бинарник v2w-scan не найден ни по указанному пути, ни в каталогах приложения: [$checkedDirs]"
             GeekModeLogger.log("v2w-core", err)
             return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
         }

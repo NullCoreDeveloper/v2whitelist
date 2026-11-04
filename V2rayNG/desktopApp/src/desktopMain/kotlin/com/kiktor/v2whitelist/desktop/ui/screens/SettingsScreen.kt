@@ -534,7 +534,7 @@ fun SettingsScreen(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        val title = category.getTitle(strings).replace(Regex("^[\\p{So}\\p{Sk}\\p{Sm}\\p{Sc}\\p{Extended_Pictographic}\\uFE0F\\s]+"), "").trim()
+                        val title = category.getTitle(strings).replace(Regex("^[\\p{So}\\p{Sk}\\p{Sm}\\p{Sc}\\x{1F000}-\\x{1FAFF}\\x{2190}-\\x{2BFF}\\u200D\\uFE0F\\s]+"), "").trim()
                         Text(
                             text = if (title.isNotEmpty()) title else category.getTitle(strings),
                             fontSize = 13.sp,

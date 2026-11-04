@@ -100,9 +100,7 @@ object DesktopBinaryResolver {
                 dirs.add(File(parent, "app"))
                 dirs.add(File(parent, "lib/app"))
                 dirs.add(parent)
-                try {
-                    parent.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
-                } catch (_: Exception) {}
+                // Обход вглубь родителя не делаем: для C:\\Program Files это сотни каталогов и десятки секунд задержки
             }
         }
 
@@ -323,9 +321,7 @@ object DesktopBinaryResolver {
                 dirs.add(File(parent, "lib/app/resources"))
                 dirs.add(File(parent, "bin"))
                 dirs.add(parent)
-                try {
-                    parent.walkTopDown().maxDepth(3).filter { it.isDirectory }.forEach { dirs.add(it) }
-                } catch (_: Exception) {}
+                // Обход вглубь родителя не делаем: для C:\\Program Files это сотни каталогов и десятки секунд задержки
             }
         }
 

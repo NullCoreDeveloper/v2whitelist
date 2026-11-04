@@ -86,6 +86,8 @@ compose.desktop {
     application {
         mainClass = "com.kiktor.v2whitelist.desktop.MainKt"
         jvmArgs += listOf(
+            "-Dfile.encoding=UTF-8",
+            "-Dstdout.encoding=UTF-8",
             "-Djdk.gtk.version=3",
             "-Djdk.lang.Process.launchMechanism=vfork"
         )
@@ -116,9 +118,9 @@ compose.desktop {
 
             packageName = "v2whitelist"
             packageVersion = effectiveVersion
-            description = "ПроБел — v2whitelist Desktop"
+            description = "ProBel - v2whitelist Desktop"
             vendor = "NullCore"
-            copyright = "© 2026 NullCore"
+            copyright = "Copyright (c) 2026 NullCore"
             appResourcesRootDir.set(project.layout.projectDirectory.dir("package-resources"))
 
             linux {
@@ -131,7 +133,7 @@ compose.desktop {
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/icon.ico"))
                 menu = true
-                menuGroup = "ПроБел"
+                menuGroup = "ProBel"
                 upgradeUuid = "d7e98a35-43a1-4ee3-b0be-0e54b6b19812"
                 dirChooser = true
                 perUserInstall = false
@@ -169,6 +171,11 @@ tasks.matching {
         if (assetsDir.exists()) {
             assetsDir.copyRecursively(destAssets, overwrite = true)
         }
+        // Compose копирует в каталог ресурсов приложения (app/resources) только содержимое common/ и <os>-<arch>/,
+        // иначе в MSI/EXE-установщике нет xray/tun2socks/v2w-scan.
+        val commonDir = File(resDir, "common").apply { mkdirs() }
+        if (binDir.exists()) binDir.copyRecursively(File(commonDir, "bin"), overwrite = true)
+        if (assetsDir.exists()) assetsDir.copyRecursively(File(commonDir, "assets"), overwrite = true)
     }
 }
 

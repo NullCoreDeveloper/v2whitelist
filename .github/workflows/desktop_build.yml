@@ -117,6 +117,9 @@ jobs:
           mkdir -p V2rayNG/desktopApp/package-resources/assets
           cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/bin/ || true
           cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/assets/ || true
+          mkdir -p V2rayNG/desktopApp/package-resources/common/bin V2rayNG/desktopApp/package-resources/common/assets
+          cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/common/bin/ || true
+          cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/common/assets/ || true
 
       - name: Grant execute permission for gradlew
         shell: bash

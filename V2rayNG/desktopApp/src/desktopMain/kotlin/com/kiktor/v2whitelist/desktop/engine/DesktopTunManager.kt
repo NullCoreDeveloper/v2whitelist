@@ -137,7 +137,7 @@ object DesktopTunManager {
             binary.absolutePath,
             "-device", deviceName,
             "-proxy", "socks5://127.0.0.1:$socksPort",
-            "-loglevel", "warn"
+            "-loglevel", "warning"
         ))
 
         try {
