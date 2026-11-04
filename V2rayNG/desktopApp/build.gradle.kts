@@ -287,6 +287,38 @@ tasks.matching {
                         .waitFor()
                 } catch (_: Exception) {}
             }
+            File(appDir, "install_service.bat").writeText(
+                """
+                @echo off
+                chcp 65001 >nul
+                net session >nul 2>&1
+                if %errorLevel% neq 0 (
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+                    exit /b
+                )
+                set "BIN=%~dp0bin\v2w-service.exe"
+                if not exist "%BIN%" set "BIN=%~dp0app\resources\bin\v2w-service.exe"
+                if not exist "%BIN%" set "BIN=%~dp0v2w-service.exe"
+                "%BIN%" -install
+                pause
+                """.trimIndent()
+            )
+            File(appDir, "uninstall_service.bat").writeText(
+                """
+                @echo off
+                chcp 65001 >nul
+                net session >nul 2>&1
+                if %errorLevel% neq 0 (
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+                    exit /b
+                )
+                set "BIN=%~dp0bin\v2w-service.exe"
+                if not exist "%BIN%" set "BIN=%~dp0app\resources\bin\v2w-service.exe"
+                if not exist "%BIN%" set "BIN=%~dp0v2w-service.exe"
+                "%BIN%" -uninstall
+                pause
+                """.trimIndent()
+            )
         }
 
         val macAppDir = layout.buildDirectory.dir("compose/binaries/main/app/v2whitelist.app").get().asFile

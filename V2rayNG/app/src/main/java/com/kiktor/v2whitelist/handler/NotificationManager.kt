@@ -32,6 +32,7 @@ object NotificationManager {
     private const val NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2
     private const val NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY = 3
     private const val NOTIFICATION_PENDING_INTENT_RESUME_V2RAY = 4
+    private const val NOTIFICATION_PENDING_INTENT_NEXT = 5
     private const val NOTIFICATION_ICON_THRESHOLD = 3000
 
     private var lastQueryTime = 0L
@@ -147,7 +148,7 @@ object NotificationManager {
         val nextIntent = Intent(service, com.kiktor.v2whitelist.receiver.NotificationReceiver::class.java).apply {
             action = com.kiktor.v2whitelist.receiver.NotificationReceiver.ACTION_NEXT
         }
-        val nextPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_PAUSE_V2RAY, nextIntent, flags)
+        val nextPendingIntent = PendingIntent.getBroadcast(service, NOTIFICATION_PENDING_INTENT_NEXT, nextIntent, flags)
 
         val channelId =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

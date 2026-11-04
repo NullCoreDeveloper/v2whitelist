@@ -58,7 +58,7 @@ object XrayConfigGenerator {
     fun buildConfig(profile: ProfileItem, options: XrayGeneratorOptions = XrayGeneratorOptions()): XrayConfig {
         val inbounds = mutableListOf<XrayInbound>()
 
-        // SOCKS inbound with optional authentication
+        // Mixed inbound (поддерживает одновременно SOCKS5 и HTTP-прокси для браузеров и расширений)
         val socksSettings = if (!options.socksUsername.isNullOrBlank() && !options.socksPassword.isNullOrBlank()) {
             InboundSettings(
                 auth = "password",
@@ -73,26 +73,26 @@ object XrayConfigGenerator {
             XrayInbound(
                 tag = "socks-in",
                 port = options.socksPort,
-                protocol = "socks",
+                protocol = "mixed",
                 listen = options.listenAddress,
                 settings = socksSettings,
                 sniffing = if (options.sniffingEnabled) {
-                    InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"), routeOnly = options.routeOnly)
+                    InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"), routeOnly = true)
                 } else null
             )
         )
 
-        // HTTP inbound (optional)
+        // HTTP / Mixed inbound на дополнительном порту
         if (options.enableHttpInbound && options.httpPort > 0) {
             inbounds.add(
                 XrayInbound(
                     tag = "http-in",
                     port = options.httpPort,
-                    protocol = "http",
+                    protocol = "mixed",
                     listen = options.listenAddress,
                     settings = null,
                     sniffing = if (options.sniffingEnabled) {
-                        InboundSniffing(enabled = true, destOverride = listOf("http", "tls"), routeOnly = options.routeOnly)
+                        InboundSniffing(enabled = true, destOverride = listOf("http", "tls"), routeOnly = true)
                     } else null
                 )
             )

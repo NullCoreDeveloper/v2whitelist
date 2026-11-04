@@ -185,13 +185,18 @@ jobs:
         with:
           go-version: '1.24.x'
 
-      - name: Build v2w-scan for ${{ matrix.os_name }}
+      - name: Build v2w-scan and v2w-service for ${{ matrix.os_name }}
         shell: bash
         run: |
           mkdir -p V2rayNG/desktopApp/bin
           pushd v2w-core
           CGO_ENABLED=0 GOOS=${{ matrix.platform }} GOARCH=${{ matrix.arch }} \
             go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o ../V2rayNG/desktopApp/bin/v2w-scan${{ matrix.binary_ext }} ./cmd/v2w-scan
+          if [ "${{ matrix.platform }}" == "windows" ]; then
+            echo "Компиляция фоновой системной службы Windows v2w-service..."
+            CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+              go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o ../V2rayNG/desktopApp/bin/v2w-service.exe ./cmd/v2w-service
+          fi
           popd
           chmod +x V2rayNG/desktopApp/bin/* || true
 
@@ -201,7 +206,7 @@ jobs:
           mkdir -p V2rayNG/desktopApp/bin
           mkdir -p V2rayNG/desktopApp/assets
           
-          XRAY_VER="v25.1.30"
+          XRAY_VER="v26.10.31"
           curl -sSL -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${{ matrix.xray_asset }}"
           unzip -q xray.zip -d xray_tmp
           
@@ -241,6 +246,12 @@ jobs:
           mkdir -p V2rayNG/desktopApp/package-resources/assets
           cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/bin/ || true
           cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/assets/ || true
+          mkdir -p V2rayNG/desktopApp/package-resources/common/bin V2rayNG/desktopApp/package-resources/common/assets
+          cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/common/bin/ || true
+          cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/common/assets/ || true
+          mkdir -p V2rayNG/desktopApp/package-resources/windows-x64/bin V2rayNG/desktopApp/package-resources/windows-x64/assets
+          cp -a V2rayNG/desktopApp/bin/* V2rayNG/desktopApp/package-resources/windows-x64/bin/ || true
+          cp -a V2rayNG/desktopApp/assets/* V2rayNG/desktopApp/package-resources/windows-x64/assets/ || true
 
       - name: Grant execute permission for gradlew
         shell: bash
@@ -250,7 +261,39 @@ jobs:
         shell: bash
         run: |
           cd V2rayNG
-          ./gradlew :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS -PpackageVersion=0.0.1 --no-daemon --stacktrace
+          ./gradlew :desktopApp:createDistributable -PpackageVersion=0.0.1 --no-daemon --stacktrace
+
+          # Предварительное наполнение каталогов дистрибутива bin и assets ДО упаковки в MSI / инсталлятор
+          APP_DIR=$(find desktopApp/build/compose/binaries/main/app -mindepth 1 -maxdepth 1 -type d | head -n 1)
+          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
+            echo "Предварительное наполнение каталога приложения $APP_DIR..."
+            mkdir -p "$APP_DIR/bin" "$APP_DIR/assets" "$APP_DIR/app/resources/bin" "$APP_DIR/app/resources/assets" "$APP_DIR/resources/bin" "$APP_DIR/resources/assets"
+            cp -a desktopApp/bin/* "$APP_DIR/bin/" || true
+            cp -a desktopApp/assets/* "$APP_DIR/assets/" || true
+            cp -a desktopApp/bin/* "$APP_DIR/app/resources/bin/" || true
+            cp -a desktopApp/assets/* "$APP_DIR/app/resources/assets/" || true
+            cp -a desktopApp/bin/* "$APP_DIR/resources/bin/" || true
+            cp -a desktopApp/assets/* "$APP_DIR/resources/assets/" || true
+          fi
+
+          # Windows: вшиваем манифест asInvoker в v2whitelist.exe для корректных метаданных
+          if [ "${{ matrix.platform }}" == "windows" ]; then
+            echo "Поиск mt.exe для интеграции манифеста..."
+            MT_BIN="mt.exe"
+            if ! command -v mt.exe >/dev/null 2>&1; then
+              FOUND_MT=$(find "C:/Program Files (x86)/Windows Kits" -name "mt.exe" 2>/dev/null | grep "/x64/mt.exe" | head -n 1)
+              if [ -n "$FOUND_MT" ]; then
+                MT_BIN="$FOUND_MT"
+              fi
+            fi
+            MANIFEST_PATH="$GITHUB_WORKSPACE/V2rayNG/desktopApp/src/desktopMain/resources/windows/app.manifest"
+            for EXE in $(find desktopApp/build/compose/binaries/main/app -name "v2whitelist.exe"); do
+              echo "Интеграция манифеста в $EXE..."
+              "$MT_BIN" -manifest "$MANIFEST_PATH" -outputresource:"$EXE;#1" || true
+            done
+          fi
+
+          ./gradlew :desktopApp:packageDistributionForCurrentOS -PpackageVersion=0.0.1 --no-daemon --stacktrace
 
       - name: Package Linux AppImage
         if: matrix.platform == 'linux'

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
@@ -1126,6 +1127,55 @@ fun SettingsScreen(
             }
 
             DesktopSettingsCategory.VPN_CORE -> {
+                if (DesktopTunManager.isWindows) {
+                    val isServiceActive by state.isWindowsServiceAvailable.collectAsState()
+                    SettingsCard(
+                        title = "Служба Windows (v2w-service)",
+                        icon = Icons.Default.Security,
+                        description = "Фоновая системная служба для работы TUN-режима без запроса прав администратора (UAC)"
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isServiceActive) "Статус: Служба активна" else "Статус: Служба не установлена / остановлена",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (isServiceActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = if (isServiceActive)
+                                        "TUN работает прозрачно от имени SYSTEM без UAC окон при запуске."
+                                    else
+                                        "Установите службу один раз, чтобы TUN запускался без прав администратора.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            if (!isServiceActive) {
+                                Button(
+                                    onClick = { state.installWindowsService() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("Установить службу")
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { state.uninstallWindowsService() }
+                                ) {
+                                    Text("Удалить службу")
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                }
+
                 // 9. Базовые настройки VPN
                 SettingsCard(
                     title = strings.cardVpnDns,

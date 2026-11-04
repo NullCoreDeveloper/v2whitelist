@@ -248,6 +248,7 @@ class DesktopAppState(
 
     // Расширенные настройки ядра и VPN
     val smartConnectBatchSize = MutableStateFlow(settingsRepo.getInt("pref_smart_batch_size", 20))
+    val isWindowsServiceAvailable = MutableStateFlow(false)
     val smartDistributionPreset = MutableStateFlow(settingsRepo.getString("pref_smart_distribution", "EQUAL"))
     val useV2WCore = MutableStateFlow(settingsRepo.getBoolean("pref_use_v2w_core", true))
     val useFallbackScanner = MutableStateFlow(settingsRepo.getBoolean("pref_use_fallback_scanner", true))
@@ -420,6 +421,38 @@ class DesktopAppState(
                 checkAppUpdate(manual = false)
             }
         }
+
+        // Проверка и тихая регистрация службы Windows (если приложение запущено от администратора)
+        if (DesktopTunManager.isWindows) {
+            scope.launch(Dispatchers.IO) {
+                if (DesktopTunManager.isWindowsAdmin() && !DesktopTunManager.isServiceAvailable()) {
+                    DesktopTunManager.runSilentServiceInstall()
+                }
+                isWindowsServiceAvailable.value = DesktopTunManager.isServiceAvailable()
+            }
+        }
+    }
+
+    fun refreshWindowsServiceStatus() {
+        if (DesktopTunManager.isWindows) {
+            scope.launch(Dispatchers.IO) {
+                isWindowsServiceAvailable.value = DesktopTunManager.isServiceAvailable()
+            }
+        }
+    }
+
+    fun installWindowsService(): Boolean {
+        if (!DesktopTunManager.isWindows) return false
+        val ok = DesktopTunManager.installServiceViaUac()
+        refreshWindowsServiceStatus()
+        return ok
+    }
+
+    fun uninstallWindowsService(): Boolean {
+        if (!DesktopTunManager.isWindows) return false
+        val ok = DesktopTunManager.uninstallServiceViaUac()
+        refreshWindowsServiceStatus()
+        return ok
     }
 
     private fun loadSubscriptions() {
@@ -1526,7 +1559,7 @@ class DesktopAppState(
                 upstreamProxyHost = null,
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
-                sudoPassword = if (routingMode.value == "TUN") sessionSudoPassword else null,
+                sudoPassword = null,
                 socksUsername = localProxyLogin.value.ifBlank { null },
                 socksPassword = localProxyPassword.value.ifBlank { null },
                 remoteDns = remoteDns.value.ifBlank { null },
@@ -1581,6 +1614,7 @@ class DesktopAppState(
                         } else {
                             "Для режима TUN требуются root права. Включен системный прокси."
                         }
+                        routingMode.value = "PROXY"
                         if (autoEnableSystemProxy.value) {
                             DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                             isSystemProxyActive.value = true

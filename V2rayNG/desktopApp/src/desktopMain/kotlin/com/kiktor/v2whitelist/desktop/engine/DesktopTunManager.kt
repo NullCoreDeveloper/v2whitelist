@@ -179,9 +179,67 @@ object DesktopTunManager {
     }
 
     /**
-     * Попытка инсталляции или запуска службы v2w-service через PowerShell RunAs (если не запущена).
+     * Тихая установка службы (если процесс уже имеет права Администратора).
      */
-    private fun installOrStartService() {
+    fun runSilentServiceInstall(srvBin: File? = null): Boolean {
+        val bin = srvBin ?: findServiceExecutable() ?: return false
+        return try {
+            val pb = ProcessBuilder(bin.absolutePath, "-install").redirectErrorStream(true)
+            val proc = pb.start()
+            val finished = proc.waitFor(4, TimeUnit.SECONDS)
+            if (finished && proc.exitValue() == 0) {
+                Thread.sleep(500)
+                isServiceAvailable()
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Запуск инсталляции службы через системное UAC окно (PowerShell Start-Process -Verb RunAs).
+     */
+    fun installServiceViaUac(): Boolean {
+        val srvBin = findServiceExecutable() ?: return false
+        return try {
+            GeekModeLogger.log("TUN", "Запрос прав администратора для установки службы: ${srvBin.absolutePath}")
+            val psCmd = "Start-Process '${srvBin.absolutePath}' -ArgumentList '-install' -Verb RunAs -Wait"
+            runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd)
+            Thread.sleep(1000)
+            val available = isServiceAvailable()
+            if (available) {
+                GeekModeLogger.log("TUN", "Служба v2w-service успешно установлена и запущена!")
+            }
+            available
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Ошибка при установке службы: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Удаление службы через UAC (PowerShell Start-Process -Verb RunAs).
+     */
+    fun uninstallServiceViaUac(): Boolean {
+        val srvBin = findServiceExecutable() ?: return false
+        return try {
+            GeekModeLogger.log("TUN", "Запрос прав администратора для удаления службы: ${srvBin.absolutePath}")
+            val psCmd = "Start-Process '${srvBin.absolutePath}' -ArgumentList '-uninstall' -Verb RunAs -Wait"
+            runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd)
+            Thread.sleep(800)
+            !isServiceAvailable()
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Ошибка при удалении службы: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Попытка инсталляции или запуска службы v2w-service (если не запущена).
+     */
+    fun installOrStartService() {
         val srvBin = findServiceExecutable() ?: return
         try {
             GeekModeLogger.log("TUN", "Служба v2w-service не активна. Попытка фонового старта...")
@@ -192,11 +250,13 @@ object DesktopTunManager {
                 if (isServiceAvailable()) return
             }
 
-            // Если служба не установлена, вызываем регистрацию через UAC один раз
-            GeekModeLogger.log("TUN", "Регистрация службы v2w-service через Windows SCM: ${srvBin.absolutePath}")
-            val psCmd = "Start-Process '${srvBin.absolutePath}' -ArgumentList '-install' -Verb RunAs -Wait"
-            runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd)
-            Thread.sleep(1200)
+            // Если запущены от администратора — ставим тихо
+            if (isWindowsAdmin()) {
+                if (runSilentServiceInstall(srvBin)) return
+            }
+
+            // Иначе запрашиваем UAC разово для регистрации службы
+            installServiceViaUac()
         } catch (e: Exception) {
             GeekModeLogger.log("TUN", "Не удалось автоматически установить/запустить службу: ${e.message}")
         }
@@ -289,12 +349,29 @@ object DesktopTunManager {
         }
 
         val useSudo = !sudoPassword.isNullOrBlank() && isLinux
+        val effectiveBinary = if (isLinux && (DesktopBinaryResolver.isTemporaryMountPath(binary.absolutePath) || useSudo)) {
+            val extracted = File("/tmp/v2w-tun2socks")
+            try {
+                if (!extracted.exists() || extracted.length() != binary.length()) {
+                    binary.copyTo(extracted, overwrite = true)
+                    extracted.setReadable(true, false)
+                    extracted.setExecutable(true, false)
+                }
+                extracted
+            } catch (e: Exception) {
+                GeekModeLogger.log("TUN", "Копирование tun2socks в /tmp не удалось: ${e.message}")
+                binary
+            }
+        } else {
+            binary
+        }
+
         val tunArgs = mutableListOf<String>()
         if (useSudo) {
             tunArgs.addAll(listOf("sudo", "-S"))
         }
         tunArgs.addAll(listOf(
-            binary.absolutePath,
+            effectiveBinary.absolutePath,
             "-device", deviceName,
             "-proxy", "socks5://127.0.0.1:$socksPort",
             "-loglevel", "warning"
@@ -302,7 +379,7 @@ object DesktopTunManager {
 
         try {
             val pb = ProcessBuilder(tunArgs).redirectErrorStream(true)
-            binary.parentFile?.let { if (it.exists()) pb.directory(it) }
+            effectiveBinary.parentFile?.let { if (it.exists()) pb.directory(it) }
             val proc = pb.start()
             tunProcess = proc
 

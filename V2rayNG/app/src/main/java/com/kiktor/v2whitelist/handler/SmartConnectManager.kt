@@ -42,10 +42,26 @@ import libv2ray.CoreController
 
 class ScanningStateHolder {
     fun get(): Boolean {
-        return MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SCANNING, false)
+        val isScanning = MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SCANNING, false)
+        if (!isScanning) return false
+        val startTime = MmkvManager.decodeSettingsLong("pref_scanning_start_time", 0L)
+        if (startTime > 0 && System.currentTimeMillis() - startTime > 45_000L) {
+            // Защита от зависшего лока (процесс был убит или упал во время сканирования)
+            set(false)
+            return false
+        }
+        return true
     }
     fun set(value: Boolean) {
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SCANNING, value)
+        if (value) {
+            MmkvManager.encodeSettings("pref_scanning_start_time", System.currentTimeMillis())
+        } else {
+            MmkvManager.encodeSettings("pref_scanning_start_time", 0L)
+        }
+    }
+    fun forceReset() {
+        set(false)
     }
     fun compareAndSet(expect: Boolean, update: Boolean): Boolean {
         synchronized(this) {

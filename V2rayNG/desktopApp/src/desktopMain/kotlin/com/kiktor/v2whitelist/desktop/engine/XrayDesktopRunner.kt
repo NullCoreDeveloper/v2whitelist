@@ -171,18 +171,9 @@ class XrayDesktopRunner(
             }
             tempConfigFile = tempFile
 
-            val useSudo = !sudoPassword.isNullOrBlank()
-            currentSudoPassword = if (useSudo) sudoPassword else null
-            isLaunchedWithSudo = useSudo
-
             GeekModeLogger.log("DesktopRunner", "Конфигурация создана: ${tempFile.absolutePath}")
-            val pb = if (useSudo) {
-                GeekModeLogger.log("DesktopRunner", "Запуск ядра с правами root (sudo) для режима TUN: ${binary.absolutePath}")
-                ProcessBuilder("sudo", "-S", binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
-            } else {
-                GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
-                ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
-            }
+            GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
+            val pb = ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
             pb.directory(binary.parentFile)
 
             // Настройка расположения геофайлов geosite.dat и geoip.dat
@@ -195,15 +186,6 @@ class XrayDesktopRunner(
 
             val proc = pb.start()
             process = proc
-
-            if (useSudo) {
-                try {
-                    proc.outputStream.bufferedWriter().use { writer ->
-                        writer.write("$sudoPassword\n")
-                        writer.flush()
-                    }
-                } catch (_: Exception) {}
-            }
 
             val startupLogBuffer = java.util.concurrent.CopyOnWriteArrayList<String>()
 
@@ -263,7 +245,6 @@ class XrayDesktopRunner(
                 }
 
                 val err = when {
-                    useSudo -> "Сбой запуска TUN через sudo (код $exitCode). Если приложение запущено в IDE/контейнере, запустите его в системном терминале."
                     detail.isNotBlank() -> "Сбой Xray (код $exitCode): $detail"
                     else -> "Процесс Xray завершился сразу с кодом: $exitCode"
                 }
