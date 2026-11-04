@@ -27,16 +27,24 @@ class NotificationReceiver : BroadcastReceiver() {
         Log.i(AppConfig.TAG, "NotificationReceiver received action: $action")
         when (action) {
             ACTION_NEXT -> {
-                val pendingResult = goAsync()
-                com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.set(true)
+                // Та же логика, что у кнопки «Следующий профиль» в UI: SmartConnectManager.switchServer.
+                // ВАЖНО: флаг isScanning здесь НЕ выставляем — switchServer сам захватывает его через
+                // compareAndSet(false, true); раньше предварительный set(true) приводил к тому, что
+                // switchServer считал, что поиск уже идёт, и молча выходил (переключение из шторки не работало).
+                if (com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.get()) {
+                    Log.i(AppConfig.TAG, "NotificationReceiver: switch already in progress, ignoring")
+                    return
+                }
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_switching_server))
+                // goAsync() не используем: переключение может идти дольше 10 секунд (лимит ресивера),
+                // процесс при этом живёт, т.к. работает foreground-сервис VPN.
+                val appContext = context.applicationContext
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(context.applicationContext)
+                        com.kiktor.v2whitelist.handler.SmartConnectManager.switchServer(appContext)
                     } catch (e: Exception) {
                         Log.e(AppConfig.TAG, "NotificationReceiver: switchServer failed", e)
-                    } finally {
-                        pendingResult?.finish()
+                        com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.set(false)
                     }
                 }
             }
