@@ -16,6 +16,13 @@ private val CHATGPT_BLOCKED_REGIONS = setOf("AF", "BY", "CN", "CU", "HK", "IR", 
 private val GEMINI_BLOCKED_REGIONS = setOf("CHN", "RUS", "BLR", "CUB", "IRN", "PRK", "SYR", "HKG", "MAC")
 private const val BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+private val WHATSAPP_BROWSER_HEADERS = mapOf(
+    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Sec-Fetch-Site" to "none",
+    "Sec-Fetch-Mode" to "navigate",
+    "Sec-Fetch-Dest" to "document"
+)
+
 private data class RawProbeResult(
     val statusCode: Int,
     val latencyMs: Long,
@@ -487,7 +494,8 @@ private fun checkWhatsAppSmart(
     proxy: Proxy,
     timeoutMs: Long
 ): ServiceCheckResult {
-    val probe = executeProbe(service.url, proxy, timeoutMs)
+    // 1. Проверяем основной URL с браузерными заголовками навигации (без них Meta WAF возвращает HTTP 400)
+    val probe = executeProbe(service.url, proxy, timeoutMs, headers = WHATSAPP_BROWSER_HEADERS)
     if (probe.statusCode in 200..399) {
         return ServiceCheckResult(
             service = service,
@@ -496,23 +504,28 @@ private fun checkWhatsAppSmart(
             httpCode = probe.statusCode
         )
     }
-    if (probe.statusCode <= 0) {
+
+    // 2. Официальный мобильный эндпоинт проверки связности WhatsApp
+    val mobileProbe = executeProbe("https://v.whatsapp.net/v2/exist", proxy, timeoutMs)
+    if (mobileProbe.statusCode in 200..399) {
         return ServiceCheckResult(
             service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = -1,
-            errorMessage = probe.errorMessage ?: "Read timed out"
+            success = true,
+            latencyMs = mobileProbe.latencyMs,
+            httpCode = mobileProbe.statusCode
         )
     }
-    val fallback = executeProbe("https://www.whatsapp.com", proxy, timeoutMs)
+
+    // 3. Fallback на www.whatsapp.com с браузерными заголовками
+    val fallback = executeProbe("https://www.whatsapp.com", proxy, timeoutMs, headers = WHATSAPP_BROWSER_HEADERS)
     val success = fallback.statusCode in 200..399
+    val bestCode = if (fallback.statusCode > 0) fallback.statusCode else if (mobileProbe.statusCode > 0) mobileProbe.statusCode else probe.statusCode
     return ServiceCheckResult(
         service = service,
         success = success,
         latencyMs = if (success) fallback.latencyMs else -1L,
-        httpCode = fallback.statusCode,
-        errorMessage = if (!success) (fallback.errorMessage ?: "HTTP ${fallback.statusCode}") else null
+        httpCode = bestCode,
+        errorMessage = if (!success) (fallback.errorMessage ?: mobileProbe.errorMessage ?: probe.errorMessage ?: "HTTP $bestCode") else null
     )
 }
 
