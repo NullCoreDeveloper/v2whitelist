@@ -129,12 +129,7 @@ class DesktopSmartConnectManager(
 
             // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто) + фильтр локаций 1-в-1 как на Android
             val filterConfig = loadLocationFilterConfig(scenario = scenario)
-            val allCandidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
-            // Исключаем протоколы, не поддерживаемые десктопным ядром Xray
-            val supported = allCandidates.filter { (_, p) ->
-                p.configType != EConfigType.HYSTERIA2 && p.configType != EConfigType.HYSTERIA
-            }
-            val candidates = (if (supported.isNotEmpty()) supported else allCandidates).shuffled()
+            val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig).shuffled()
             if (candidates.isEmpty()) {
                 GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario с учетом фильтра стран.")
                 onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет серверов под сценарий $scenario")

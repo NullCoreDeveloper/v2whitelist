@@ -566,7 +566,7 @@ object XrayConfigGenerator {
                         down = profile.bandwidthDown?.ifEmpty { "0" }
                     ),
                     streamSettings = buildStreamSettings(profile, options),
-                    mux = mux
+                    mux = null
                 )
             }
 
@@ -621,13 +621,15 @@ object XrayConfigGenerator {
     }
 
     private fun buildStreamSettings(profile: ProfileItem, options: XrayGeneratorOptions): XrayStreamSettings {
-        val network = profile.network?.lowercase() ?: "tcp"
+        val isHysteria = profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.HYSTERIA
+        val network = if (isHysteria) "hysteria" else (profile.network?.lowercase() ?: "tcp")
         val sec = profile.security?.lowercase()?.trim()
         val sni = profile.sni?.takeIf { it.isNotBlank() }
             ?: profile.host?.takeIf { it.isNotBlank() }
             ?: profile.server
 
         val security = when {
+            isHysteria -> "tls"
             sec == "tls" || sec == "reality" -> sec
             sec.isNullOrBlank() || sec == "none" || sec == "null" -> {
                 when {
@@ -642,9 +644,11 @@ object XrayConfigGenerator {
         }
 
         val tlsSettings = if (security == "tls") {
+            val alpnList = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?: if (isHysteria) listOf("h3") else null
             TlsSettings(
                 serverName = sni,
-                alpn = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() },
+                alpn = alpnList,
                 fingerprint = profile.fingerPrint,
                 pinnedPeerCertSha256 = profile.pinnedCA256
             )
@@ -698,7 +702,7 @@ object XrayConfigGenerator {
             )
         } else null
 
-        val hysteriaSettings = if (network == "hysteria" || profile.configType == EConfigType.HYSTERIA2) {
+        val hysteriaSettings = if (network == "hysteria" || isHysteria) {
             val udphop = profile.portHopping?.let {
                 HysteriaUdpHop(
                     port = it,

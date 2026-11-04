@@ -79,7 +79,7 @@ jobs:
           mkdir -p V2rayNG/desktopApp/bin
           mkdir -p V2rayNG/desktopApp/assets
           
-          XRAY_VER="v25.1.30"
+          XRAY_VER="v26.10.31"
           curl -sSL -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${{ matrix.xray_asset }}"
           unzip -q xray.zip -d xray_tmp
           

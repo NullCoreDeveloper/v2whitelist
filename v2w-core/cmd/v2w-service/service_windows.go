@@ -79,8 +79,22 @@ func installService() error {
 
 	s, err := m.OpenService(ServiceName)
 	if err == nil {
-		s.Close()
-		return fmt.Errorf("service %s already exists", ServiceName)
+		defer s.Close()
+		// Служба уже зарегистрирована в системе. Проверяем путь исполняемого файла
+		cfg, errCfg := s.Config()
+		if errCfg == nil && cfg.BinaryPathName != exePath {
+			cfg.BinaryPathName = exePath
+			if errUpd := s.UpdateConfig(cfg); errUpd != nil {
+				log.Printf("[v2w-service] Warning: failed to update service binary path: %v", errUpd)
+			} else {
+				log.Printf("[v2w-service] Successfully updated service binary path to: %s", exePath)
+			}
+		}
+		// Запускаем службу, если она была остановлена
+		if startErr := s.Start(); startErr != nil {
+			log.Printf("[v2w-service] Service already running or failed to start: %v", startErr)
+		}
+		return nil
 	}
 
 	s, err = m.CreateService(ServiceName, exePath, mgr.Config{

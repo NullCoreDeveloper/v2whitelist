@@ -65,12 +65,6 @@ object DesktopProfileVerifier {
         onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
         if (!isActive) throw CancellationException("Верификация отменена")
-        if (profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.HYSTERIA) {
-            return@withContext VerifyResult(
-                success = false,
-                errorMessage = "Протокол Hysteria/Hysteria2 не поддерживается встроенным десктопным ядром Xray"
-            )
-        }
         val runner = XrayDesktopRunner()
         val binary = runner.findXrayExecutable(xrayBinaryPath)
         if (binary == null) {

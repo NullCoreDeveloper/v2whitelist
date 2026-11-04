@@ -116,14 +116,6 @@ class XrayDesktopRunner(
         _coreState.value = DesktopCoreState.STARTING
         _lastError.value = null
 
-        if (profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.HYSTERIA) {
-            val err = "Протокол Hysteria/Hysteria2 не поддерживается встроенным ядром Xray."
-            GeekModeLogger.log("DesktopRunner", err)
-            _lastError.value = err
-            _coreState.value = DesktopCoreState.ERROR
-            return false
-        }
-
         val binary = findXrayExecutable(xrayBinaryPath)
         if (binary == null) {
             val err = "Исполняемый файл Xray не найден. Установите xray или укажите путь в настройках."
