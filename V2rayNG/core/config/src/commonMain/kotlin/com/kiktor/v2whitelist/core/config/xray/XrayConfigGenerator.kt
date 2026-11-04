@@ -323,87 +323,14 @@ object XrayConfigGenerator {
             }
         }
 
-        // Пресеты маршрутизации сценариев
-        when (options.scenario) {
-            com.kiktor.v2whitelist.core.model.AppScenario.WHITELIST -> {
-                // В сценарии белого списка разрешенные домены РФ идут напрямую, остальное через прокси
-                rules.add(
-                    XrayRule(
-                        outboundTag = "direct",
-                        domain = listOf(
-                            "geosite:category-gov-ru",
-                            "geosite:category-ru",
-                            "domain:ru",
-                            "domain:su",
-                            "domain:рф",
-                            "domain:gov.ru",
-                            "domain:gosuslugi.ru",
-                            "domain:ya.ru",
-                            "domain:yandex.ru",
-                            "domain:vk.com",
-                            "domain:mail.ru"
-                        )
-                    )
+        if (!options.domainWhitelistMode) {
+            // По умолчанию весь интернет направляется через proxy
+            rules.add(
+                XrayRule(
+                    outboundTag = "proxy",
+                    network = "tcp,udp"
                 )
-                rules.add(
-                    XrayRule(
-                        outboundTag = "proxy",
-                        network = "tcp,udp"
-                    )
-                )
-            }
-            com.kiktor.v2whitelist.core.model.AppScenario.VPN_BLACKLIST -> {
-                // В сценарии черного списка заблокированные домены идут через прокси, остальное напрямую
-                rules.add(
-                    XrayRule(
-                        outboundTag = "proxy",
-                        domain = listOf(
-                            "domain:instagram.com",
-                            "domain:cdninstagram.com",
-                            "domain:facebook.com",
-                            "domain:fbcdn.net",
-                            "domain:twitter.com",
-                            "domain:x.com",
-                            "domain:t.co",
-                            "domain:notion.so",
-                            "domain:rutracker.org",
-                            "domain:discord.com",
-                            "domain:discordapp.com",
-                            "domain:discord.gg"
-                        )
-                    )
-                )
-                rules.add(
-                    XrayRule(
-                        outboundTag = "direct",
-                        network = "tcp,udp"
-                    )
-                )
-            }
-            com.kiktor.v2whitelist.core.model.AppScenario.YOUTUBE -> {
-                // В сценарии YouTube только ютуб через прокси, остальное напрямую
-                rules.add(
-                    XrayRule(
-                        outboundTag = "proxy",
-                        domain = listOf("geosite:youtube", "domain:youtube.com", "domain:youtu.be", "domain:googlevideo.com", "domain:ytimg.com", "domain:ggpht.com")
-                    )
-                )
-                rules.add(
-                    XrayRule(
-                        outboundTag = "direct",
-                        network = "tcp,udp"
-                    )
-                )
-            }
-            else -> {
-                // По умолчанию (AUTO) весь интернет через proxy
-                rules.add(
-                    XrayRule(
-                        outboundTag = "proxy",
-                        network = "tcp,udp"
-                    )
-                )
-            }
+            )
         }
 
         val routing = XrayRouting(
