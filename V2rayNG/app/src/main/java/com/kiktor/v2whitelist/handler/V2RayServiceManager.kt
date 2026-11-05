@@ -255,8 +255,6 @@ object V2RayServiceManager {
         GlobalScope.launch(Dispatchers.Main) {
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false)) {
                 notifyLanSharingIfEnabled(context, force = true)
-            } else {
-                context.toast(R.string.toast_services_start)
             }
         }
         val intent = if (SettingsManager.isVpnMode()) {

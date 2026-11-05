@@ -122,8 +122,8 @@ object SmartFailoverManager {
             if (!isProbing.compareAndSet(false, true)) return@launch
             try {
                 GeekModeLogger.log("Failover", "Triggering express probe. Reason: $reason")
-                val delay = testTunnelDelay(2000L)
-                if (delay <= 0L || delay > 3000L) {
+                val delay = testTunnelDelay(4000L)
+                if (delay <= 0L || delay > 5000L) {
                     GeekModeLogger.log("Failover", "Express probe confirmed tunnel dead ($delay ms). Initiating failover...")
                     handleServerFailure(service, reason)
                 } else {
@@ -141,12 +141,12 @@ object SmartFailoverManager {
     private suspend fun runHeartbeatCheck(service: Service) {
         if (!isProbing.compareAndSet(false, true)) return
         try {
-            val delay = testTunnelDelay(3000L)
-            if (delay <= 0L || delay > 5000L) {
-                GeekModeLogger.log("Failover", "Heartbeat probe failed ($delay ms). Retrying in 1.5s...")
-                delay(1500L)
-                val retryDelay = testTunnelDelay(3000L)
-                if (retryDelay <= 0L || retryDelay > 5000L) {
+            val delay = testTunnelDelay(5000L)
+            if (delay <= 0L || delay > 6000L) {
+                GeekModeLogger.log("Failover", "Heartbeat probe failed ($delay ms). Retrying in 2.0s...")
+                delay(2000L)
+                val retryDelay = testTunnelDelay(5000L)
+                if (retryDelay <= 0L || retryDelay > 6000L) {
                     GeekModeLogger.log("Failover", "Heartbeat retry failed ($retryDelay ms). Initiating failover...")
                     handleServerFailure(service, "Heartbeat check failed twice")
                 } else {
@@ -184,6 +184,18 @@ object SmartFailoverManager {
         if (!com.kiktor.v2whitelist.core.domain.failover.FailoverServerSelector.shouldProceedWithFailover(physicalState)) {
             GeekModeLogger.log("Failover", "Physical network is down. Aborting failover, staying on current node.")
             return
+        }
+
+        val personalCfg = PersonalServersManager.getConfig()
+        if (personalCfg.enabled) {
+            val currentGuid = MmkvManager.getSelectServer()
+            val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
+            val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
+
+            if (isCurrentPersonal && !personalCfg.selectedServerGuid.isNullOrBlank() && !personalCfg.fallbackToPublicOnFailure) {
+                GeekModeLogger.log("Failover", "Personal server statically selected and fallback to public is disabled. Aborting failover, staying on personal node.")
+                return
+            }
         }
 
         GeekModeLogger.log("Failover", "Triggering SmartConnectManager.switchServer due to: $reason")

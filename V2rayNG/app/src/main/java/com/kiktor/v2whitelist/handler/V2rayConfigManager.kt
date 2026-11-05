@@ -481,7 +481,7 @@ object V2rayConfigManager {
                 MmkvManager.decodeSettingsBool(AppConfig.PREF_SNIFFING_ENABLED, true) != false
             inbound1.sniffing?.enabled = fakedns || sniffAllTlsAndHttp
             inbound1.sniffing?.routeOnly =
-                MmkvManager.decodeSettingsBool(AppConfig.PREF_ROUTE_ONLY_ENABLED, false)
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_ROUTE_ONLY_ENABLED, true)
             if (!sniffAllTlsAndHttp) {
                 inbound1.sniffing?.destOverride?.clear()
             }
@@ -1029,6 +1029,12 @@ object V2rayConfigManager {
                 || outbound.streamSettings?.network == "grpc"
             ) {
                 muxEnabled = false
+            } else if (protocol.equals(EConfigType.VLESS.name, true) &&
+                (outbound.settings?.vnext?.firstOrNull()?.users?.firstOrNull()?.flow?.isNotEmpty() == true
+                    || outbound.streamSettings?.security == AppConfig.REALITY)
+            ) {
+                // XTLS Vision и REALITY строго не поддерживают мультиплексирование MUX (вызывает разрывы/RST)
+                muxEnabled = false
             }
 
             if (muxEnabled == true) {
@@ -1036,12 +1042,8 @@ object V2rayConfigManager {
                 outbound.mux?.concurrency = MmkvManager.decodeSettingsString(AppConfig.PREF_MUX_CONCURRENCY, "8").orEmpty().toInt()
                 outbound.mux?.xudpConcurrency = MmkvManager.decodeSettingsString(AppConfig.PREF_MUX_XUDP_CONCURRENCY, "16").orEmpty().toInt()
                 outbound.mux?.xudpProxyUDP443 = MmkvManager.decodeSettingsString(AppConfig.PREF_MUX_XUDP_QUIC, "reject")
-                if (protocol.equals(EConfigType.VLESS.name, true) && outbound.settings?.vnext?.first()?.users?.first()?.flow?.isNotEmpty() == true) {
-                    outbound.mux?.concurrency = -1
-                }
             } else {
-                outbound.mux?.enabled = false
-                outbound.mux?.concurrency = -1
+                outbound.mux = null
             }
 
             if (protocol.equals(EConfigType.WIREGUARD.name, true)) {
@@ -1231,13 +1233,17 @@ object V2rayConfigManager {
                     interval = MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_INTERVAL)
                         ?: "10-20"
                 ),
-                noises = listOf(
-                    OutSettingsBean.NoiseBean(
-                        type = "rand",
-                        packet = "10-20",
-                        delay = "10-16",
+                noises = if (v2rayConfig.outbounds[0].streamSettings?.security == AppConfig.REALITY) {
+                    null
+                } else {
+                    listOf(
+                        OutSettingsBean.NoiseBean(
+                            type = "rand",
+                            packet = "10-20",
+                            delay = "10-16",
+                        )
                     )
-                ),
+                },
             )
             fragmentOutbound.streamSettings = StreamSettingsBean(
                 sockopt = StreamSettingsBean.SockoptBean(
@@ -1590,9 +1596,10 @@ object V2rayConfigManager {
 
         streamSettings.security = streamSecurity.nullIfBlank()
         if (streamSettings.security == null) return
+        val defaultFp = if (streamSettings.security == AppConfig.REALITY || streamSettings.security == AppConfig.TLS) "chrome" else null
         val tlsSetting = StreamSettingsBean.TlsSettingsBean(
             serverName = sni.nullIfBlank(),
-            fingerprint = profileItem.fingerPrint.nullIfBlank(),
+            fingerprint = profileItem.fingerPrint.nullIfBlank() ?: defaultFp,
             alpn =  profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },
             echConfigList = profileItem.echConfigList.nullIfBlank(),
             echForceQuery = profileItem.echForceQuery.nullIfBlank(),

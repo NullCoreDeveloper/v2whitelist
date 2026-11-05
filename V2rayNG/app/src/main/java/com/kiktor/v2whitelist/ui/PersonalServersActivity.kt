@@ -1,9 +1,11 @@
 package com.kiktor.v2whitelist.ui
 
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -16,6 +18,7 @@ import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -85,6 +88,34 @@ class PersonalServersActivity : BaseActivity() {
         loadData()
     }
 
+    private val mMsgReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            when (intent?.getIntExtra("key", 0)) {
+                AppConfig.MSG_STATE_RUNNING,
+                AppConfig.MSG_STATE_NOT_RUNNING,
+                AppConfig.MSG_STATE_START_SUCCESS,
+                AppConfig.MSG_STATE_STOP_SUCCESS,
+                AppConfig.MSG_STATE_SWITCH_SERVER -> {
+                    updateConnectionStatus()
+                    loadData()
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(AppConfig.BROADCAST_ACTION_ACTIVITY)
+        ContextCompat.registerReceiver(this, mMsgReceiver, filter, Utils.receiverFlags())
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(mMsgReceiver)
+        } catch (_: Exception) {}
+    }
+
     override fun onResume() {
         super.onResume()
         updateConnectionStatus()
@@ -113,6 +144,13 @@ class PersonalServersActivity : BaseActivity() {
         swEnablePersonal.setOnCheckedChangeListener { _, isChecked ->
             PersonalServersManager.setEnabled(isChecked)
             updateConnectionStatus()
+            if (V2RayServiceManager.isRunning()) {
+                lifecycleScope.launch {
+                    SmartConnectManager.smartConnect(this@PersonalServersActivity)
+                    updateConnectionStatus()
+                    loadData()
+                }
+            }
         }
 
         swIgnoreExitNode.setOnCheckedChangeListener { _, isChecked ->
@@ -138,14 +176,19 @@ class PersonalServersActivity : BaseActivity() {
             showAddServerOptionsDialog()
         }
 
-        cardAutoSelect.setOnClickListener {
+        val triggerAutoSelect = {
             PersonalServersManager.setSelectedServer(null)
             loadData()
+            if (V2RayServiceManager.isRunning()) {
+                lifecycleScope.launch {
+                    SmartConnectManager.smartConnect(this@PersonalServersActivity)
+                    updateConnectionStatus()
+                    loadData()
+                }
+            }
         }
-        rbAutoSelect.setOnClickListener {
-            PersonalServersManager.setSelectedServer(null)
-            loadData()
-        }
+        cardAutoSelect.setOnClickListener { triggerAutoSelect() }
+        rbAutoSelect.setOnClickListener { triggerAutoSelect() }
     }
 
     private fun setupSpinners() {
@@ -196,6 +239,13 @@ class PersonalServersActivity : BaseActivity() {
             onSelect = { guid ->
                 PersonalServersManager.setSelectedServer(guid)
                 loadData()
+                if (V2RayServiceManager.isRunning()) {
+                    lifecycleScope.launch {
+                        SmartConnectManager.connectDirectlyTo(this@PersonalServersActivity, guid)
+                        updateConnectionStatus()
+                        loadData()
+                    }
+                }
             },
             onPing = { guid ->
                 testServerPing(guid)
