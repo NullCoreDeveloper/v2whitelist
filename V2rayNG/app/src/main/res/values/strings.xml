@@ -928,4 +928,12 @@
     <string name="personal_sub_delete_title">Delete subscription</string>
     <string name="personal_sub_delete_confirm">Delete subscription \"%s\" and all its servers?</string>
     <string name="personal_sub_single_updated">Subscription \"%1$s\" updated (%2$d servers)</string>
+    <string name="toast_invalid_value">Invalid value</string>
+    <string name="pref_min_speed_disabled">Disabled (0 Mbps)</string>
+    <string name="pref_vip_cache_limit_summary">%1$d servers</string>
+    <string name="pref_speed_bytes_summary">%1$s bytes (≈%2$s MB)</string>
+    <string name="pref_speed_timeout_summary">%1$s ms (≈%2$s s)</string>
+    <string name="pref_min_speed_summary">%1$s Mbps</string>
+    <string name="pref_chunk_size_summary">%1$d servers</string>
+    <string name="pref_concurrency_summary">%1$d threads</string>
 </resources>

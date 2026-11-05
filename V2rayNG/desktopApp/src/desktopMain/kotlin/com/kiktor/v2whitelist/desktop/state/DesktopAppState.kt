@@ -251,7 +251,7 @@ class DesktopAppState(
     val isFindingVip = MutableStateFlow(false)
     val isForcePinging = MutableStateFlow(false)
     val vipGuids: StateFlow<Set<String>> = serverRepo.vipGuidsFlow
-    val vipCacheLimit = MutableStateFlow(settingsRepo.getInt("pref_vip_cache_limit", 5))
+    val vipCacheLimit = MutableStateFlow(settingsRepo.getInt("pref_vip_cache_limit", 5).coerceIn(1, 100))
 
     // Расширенные настройки ядра и VPN
     val smartConnectBatchSize = MutableStateFlow(settingsRepo.getInt("pref_smart_batch_size", 20))
@@ -274,9 +274,15 @@ class DesktopAppState(
     val serviceCheckResults = MutableStateFlow<List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckResult>?>(null)
 
     val speedTestOnCheck = MutableStateFlow(settingsRepo.getBoolean("pref_speed_test_on_check", true))
-    val speedTestDownloadBytes = MutableStateFlow(settingsRepo.getInt("pref_speed_test_bytes", 2000000))
-    val speedTestTimeoutMs = MutableStateFlow(settingsRepo.getInt("pref_speed_test_timeout_ms", 3000))
-    val minSpeedThresholdMbps = MutableStateFlow(settingsRepo.getString("pref_min_speed_mbps", "1.0").toDoubleOrNull() ?: 1.0)
+    val speedTestDownloadBytes = MutableStateFlow(
+        settingsRepo.getInt("pref_speed_test_bytes", 2000000).let { if (it < 10000) 2000000 else it }
+    )
+    val speedTestTimeoutMs = MutableStateFlow(
+        settingsRepo.getInt("pref_speed_test_timeout_ms", 3000).let { if (it < 500) 3000 else it }
+    )
+    val minSpeedThresholdMbps = MutableStateFlow(
+        (settingsRepo.getString("pref_min_speed_mbps", "1.0").toDoubleOrNull() ?: 1.0).let { if (it < 0.0) 1.0 else it }
+    )
 
     val autoFailover = MutableStateFlow(settingsRepo.getBoolean("pref_auto_failover", true))
     val heartbeatIntervalSeconds = MutableStateFlow(settingsRepo.getInt("pref_heartbeat_interval", 30))
@@ -1306,6 +1312,25 @@ class DesktopAppState(
             xrayRunner.markStarting()
             _smartConnectStatus.value = "Переключение на следующий сервер…"
             try {
+                if (personalServersEnabled.value) {
+                    val allPersonal = servers.value.filter { com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId) }
+                    val otherPersonal = allPersonal.filter { it.first != _selectedGuid.value }
+                    val next = otherPersonal.firstOrNull()
+                    if (next != null) {
+                        GeekModeLogger.log("AppState", "Переключение на следующий личный сервер: ${next.second.remarks}")
+                        personalSelectedGuid.value = next.first
+                        settingsRepo.setString("pref_personal_selected_guid", next.first)
+                        selectServer(next.first)
+                        connectCurrent()
+                        return@launch
+                    }
+                    if (!personalFallbackPublic.value) {
+                        xrayRunner.setError("Нет других доступных личных серверов")
+                        _smartConnectStatus.value = null
+                        return@launch
+                    }
+                }
+
                 val current = _selectedGuid.value
                 val success = smartConnectManager.switchToNextServer(current)
                 if (!success) {

@@ -236,9 +236,9 @@ fun SettingsScreen(
             testBeforeConnect = testBeforeConnect,
             serviceCheck = serviceCheckEnabled,
             speedTestCheck = speedTestOnCheck,
-            speedTestBytes = speedTestBytes.toIntOrNull() ?: 2000000,
-            speedTestTimeout = speedTestTimeout.toIntOrNull() ?: 3000,
-            minSpeed = minSpeedThreshold.toDoubleOrNull() ?: 1.0,
+            speedTestBytes = (speedTestBytes.toIntOrNull() ?: 2000000).let { if (it < 10000) 2000000 else it },
+            speedTestTimeout = (speedTestTimeout.toIntOrNull() ?: 3000).let { if (it < 500) 3000 else it },
+            minSpeed = (minSpeedThreshold.toDoubleOrNull() ?: 1.0).let { if (it < 0.0) 0.0 else it },
             autoFailoverEnabled = autoFailover,
             heartbeatSec = heartbeatSec.toIntOrNull() ?: 30,
             smartFailoverEnabled = smartFailover,
@@ -275,7 +275,7 @@ fun SettingsScreen(
             yandexUpdateVal = yandexUpdate,
             domainSplitVal = domainSplit,
             domainWhitelistVal = domainWhitelist,
-            vipLimit = vipCacheLimitInput.toIntOrNull() ?: 5
+            vipLimit = (vipCacheLimitInput.toIntOrNull() ?: 5).coerceIn(1, 100)
         )
         state.setMinimizeToTray(minimizeToTray)
         state.setAllowLan(allowLan)

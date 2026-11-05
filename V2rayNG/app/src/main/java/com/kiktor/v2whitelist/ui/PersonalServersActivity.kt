@@ -30,6 +30,7 @@ import com.kiktor.v2whitelist.core.model.NetworkBindingRule
 import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.extension.toast
+import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.PersonalServersManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
@@ -200,19 +201,17 @@ class PersonalServersActivity : BaseActivity() {
                 testServerPing(guid)
             },
             onEdit = { guid ->
-                startActivity(Intent(this, ServerActivity::class.java).apply {
-                    putExtra("guid", guid)
-                })
-            },
-            onToggleExitNode = { guid ->
-                val cfg = PersonalServersManager.getConfig()
-                val isCurrentExit = cfg.exitNodeServerGuid == guid
-                PersonalServersManager.setExitNode(if (isCurrentExit) null else guid)
                 val profile = MmkvManager.decodeServerConfig(guid)
-                if (!isCurrentExit && profile != null) {
-                    toast(getString(R.string.personal_exit_node_set, profile.remarks))
+                if (profile != null) {
+                    val intent = Intent().putExtra("guid", guid)
+                        .putExtra("isRunning", V2RayServiceManager.isRunning() && guid == MmkvManager.getSelectServer())
+                        .putExtra("createConfigType", profile.configType.value)
+                    when (profile.configType) {
+                        EConfigType.CUSTOM -> startActivity(intent.setClass(this, ServerCustomConfigActivity::class.java))
+                        EConfigType.POLICYGROUP -> startActivity(intent.setClass(this, ServerGroupActivity::class.java))
+                        else -> startActivity(intent.setClass(this, ServerActivity::class.java))
+                    }
                 }
-                loadData()
             },
             onShare = { guid ->
                 shareServer(guid)
@@ -390,16 +389,9 @@ class PersonalServersActivity : BaseActivity() {
     }
 
     private fun showAddSubscriptionDialog() {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_subscription, null)
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_personal_subscription, null)
         val etName = dialogView.findViewById<EditText>(R.id.et_sub_name)
         val etUrl = dialogView.findViewById<EditText>(R.id.et_sub_url)
-
-        dialogView.findViewById<View>(R.id.et_sub_filter)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.et_sub_group_regex)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.et_sub_share_percent)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.cb_scenario_whitelist)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.cb_scenario_blacklist)?.visibility = View.GONE
-        dialogView.findViewById<View>(R.id.cb_scenario_youtube)?.visibility = View.GONE
 
         AlertDialog.Builder(this)
             .setTitle(R.string.personal_dialog_sub_title)
@@ -451,22 +443,38 @@ class PersonalServersActivity : BaseActivity() {
 
     private fun shareServer(guid: String) {
         val profile = MmkvManager.decodeServerConfig(guid) ?: return
-        val uri = UniversalConfigParser.toUri(profile) ?: return
+        val isCustom = profile.configType == EConfigType.CUSTOM || profile.configType == EConfigType.POLICYGROUP
 
-        Utils.setClipboard(this, uri)
-        toast(R.string.toast_link_copied)
-
-        val qrBitmap = QRCodeDecoder.createQRCode(uri)
-        if (qrBitmap != null) {
-            val iv = ImageView(this).apply {
-                setImageBitmap(qrBitmap)
-                setPadding(32, 32, 32, 32)
+        if (isCustom) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val result = AngConfigManager.shareFullContent2Clipboard(this@PersonalServersActivity, guid)
+                withContext(Dispatchers.Main) {
+                    if (result == 0) {
+                        toast(R.string.toast_success)
+                    } else {
+                        toast(R.string.toast_failure)
+                    }
+                }
             }
-            AlertDialog.Builder(this)
-                .setTitle(profile.remarks)
-                .setView(iv)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+        } else {
+            val qrBitmap = AngConfigManager.share2QRCode(guid)
+            val copyResult = AngConfigManager.share2Clipboard(this, guid)
+            if (copyResult == 0) {
+                toast(R.string.toast_link_copied)
+            }
+            if (qrBitmap != null) {
+                val iv = ImageView(this).apply {
+                    setImageBitmap(qrBitmap)
+                    setPadding(32, 32, 32, 32)
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(profile.remarks)
+                    .setView(iv)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            } else if (copyResult != 0) {
+                toast(R.string.toast_failure)
+            }
         }
     }
 

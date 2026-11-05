@@ -827,4 +827,12 @@
     <string name="lan_sharing_status_listening">🟢 代理已运行并正在监听传入连接</string>
     <string name="lan_sharing_status_not_running">⚠️ VPN 未连接。请在主界面开启连接</string>
     <string name="toast_lan_sharing_warning">注意：局域网代理共享已开启，局域网设备可连接</string>
+    <string name="toast_invalid_value">无效值</string>
+    <string name="pref_min_speed_disabled">已禁用 (0 Mbps)</string>
+    <string name="pref_vip_cache_limit_summary">%1$d 个节点</string>
+    <string name="pref_speed_bytes_summary">%1$s 字节 (≈%2$s MB)</string>
+    <string name="pref_speed_timeout_summary">%1$s 毫秒 (≈%2$s 秒)</string>
+    <string name="pref_min_speed_summary">%1$s Mbps</string>
+    <string name="pref_chunk_size_summary">%1$d 个节点</string>
+    <string name="pref_concurrency_summary">%1$d 线程</string>
 </resources>

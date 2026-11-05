@@ -1040,7 +1040,7 @@ private fun ServerCardItem(
                 }
 
                 IconButton(onClick = onPing, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = strings.ping, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.Speed, contentDescription = strings.ping, modifier = Modifier.size(15.dp))
                 }
 
                 IconButton(onClick = onQr, modifier = Modifier.size(28.dp)) {

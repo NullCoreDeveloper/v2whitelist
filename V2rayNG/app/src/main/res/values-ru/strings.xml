@@ -921,4 +921,12 @@
     <string name="personal_sub_delete_title">Удалить подписку</string>
     <string name="personal_sub_delete_confirm">Удалить подписку «%s» и все входящие в неё серверы?</string>
     <string name="personal_sub_single_updated">Подписка «%1$s» обновлена (серверов: %2$d)</string>
+    <string name="toast_invalid_value">Недопустимое значение</string>
+    <string name="pref_min_speed_disabled">Отключено (0 Мбит/с)</string>
+    <string name="pref_vip_cache_limit_summary">%1$d узлов</string>
+    <string name="pref_speed_bytes_summary">%1$s байт (≈%2$s МБ)</string>
+    <string name="pref_speed_timeout_summary">%1$s мс (≈%2$s с)</string>
+    <string name="pref_min_speed_summary">%1$s Мбит/с</string>
+    <string name="pref_chunk_size_summary">%1$d узлов</string>
+    <string name="pref_concurrency_summary">%1$d потоков</string>
 </resources>

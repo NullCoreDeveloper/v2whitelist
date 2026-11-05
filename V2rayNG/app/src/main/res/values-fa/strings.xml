@@ -827,4 +827,12 @@
     <string name="lan_sharing_status_listening">🟢 پروکسی فعال و آماده دریافت اتصالات است</string>
     <string name="lan_sharing_status_not_running">⚠️ وی‌پی‌ان متصل نیست. لطفا در صفحه اصلی اتصال را فعال کنید</string>
     <string name="toast_lan_sharing_warning">هشدار: اشتراک‌گذاری پروکسی در شبکه محلی فعال است</string>
+    <string name="toast_invalid_value">مقدار نامعتبر است</string>
+    <string name="pref_min_speed_disabled">غیرفعال (۰ مگابیت/ثانیه)</string>
+    <string name="pref_vip_cache_limit_summary">%1$d سرور</string>
+    <string name="pref_speed_bytes_summary">%1$s بایت (≈%2$s مگابایت)</string>
+    <string name="pref_speed_timeout_summary">%1$s میلی‌ثانیه (≈%2$s ثانیه)</string>
+    <string name="pref_min_speed_summary">%1$s مگابیت/ثانیه</string>
+    <string name="pref_chunk_size_summary">%1$d سرور</string>
+    <string name="pref_concurrency_summary">%1$d رشته</string>
 </resources>

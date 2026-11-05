@@ -118,6 +118,8 @@ object AppConfig {
     const val PREF_PROFILE_SPEED_CHECK_TIMEOUT = "pref_profile_speed_check_timeout_ms"
     /** Минимально допустимая скорость для прохождения проверки профиля, Мбит/с (default: 1.0) */
     const val PREF_PROFILE_MIN_SPEED_MBPS = "pref_profile_min_speed_mbps"
+    /** Лимит серверов в кэше VIP */
+    const val PREF_VIP_CACHE_LIMIT = "pref_vip_cache_limit"
     /** Проверка доступности сервисов вместо стандартного 204 при проверке профиля (default: false) */
     const val PREF_SERVICE_CHECK_ENABLED = "pref_service_check_enabled"
     /** Список настроенных сервисов для проверки (JSON строка) */

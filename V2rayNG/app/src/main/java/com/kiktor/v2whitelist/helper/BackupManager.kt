@@ -12,6 +12,7 @@ import com.kiktor.v2whitelist.dto.ProfileItem
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.SettingsChangeManager
+import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SubscriptionHelper
 import com.kiktor.v2whitelist.util.JsonUtil
 import com.kiktor.v2whitelist.util.MessageUtil
@@ -52,6 +53,7 @@ object BackupManager {
      */
     fun exportData(context: Context, uri: Uri): Boolean {
         return try {
+            SettingsManager.sanitizeSpeedCheckSettings()
             val settings = MmkvManager.getAllSettings().filterKeys { key ->
                 !EXCLUDED_SETTINGS_KEYS.contains(key)
             }
@@ -195,6 +197,7 @@ object BackupManager {
             if (count > 0) {
                 // Сбрасываем кэш MMKV в памяти
                 MmkvManager.reloadAll()
+                SettingsManager.sanitizeSpeedCheckSettings()
 
                 // Синхронизируем подписки (если старый бэкап содержал подписки только в subStorage)
                 syncSubscriptionsAfterRestore(context)
@@ -241,6 +244,7 @@ object BackupManager {
 
             // Restore Settings
             backupData.settings?.let { MmkvManager.importSettings(it) }
+            SettingsManager.sanitizeSpeedCheckSettings()
 
             // Restore and merge Subscriptions
             val mergedCustomSubs = mutableListOf<CustomSubData>()

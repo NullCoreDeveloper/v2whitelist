@@ -485,6 +485,39 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
+        sanitizeSpeedCheckSettings()
+    }
+
+    /**
+     * Проверяет и нормализует настройки проверки профилей и серверов,
+     * устраняя возможные искажения числовых значений (например, 7 байт, 4 мс, 0 Мбит/с),
+     * возникшие из-за ошибок старых бэкапов или десериализации.
+     */
+    fun sanitizeSpeedCheckSettings() {
+        // 1. Объем замера скорости (дефолт: 2 000 000 байт)
+        val bytesVal = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES)?.toLongOrNull()
+        if (bytesVal == null || bytesVal < 10_000L) {
+            MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES, "2000000")
+        }
+
+        // 2. Таймаут замера скорости (дефолт: 3000 мс)
+        val timeoutVal = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT)?.toLongOrNull()
+        if (timeoutVal == null || timeoutVal < 500L) {
+            MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
+        }
+
+        // 3. Минимальный порог скорости (дефолт: 1.0 Мбит/с)
+        val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS)
+        val minSpeedVal = minSpeedStr?.toDoubleOrNull()
+        if (minSpeedVal == null || minSpeedStr == "0" || minSpeedVal < 0.0) {
+            MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
+        }
+
+        // 4. Лимит VIP-кэша (дефолт: 5)
+        val vipLimit = MmkvManager.decodeSettingsString(AppConfig.PREF_VIP_CACHE_LIMIT)?.toIntOrNull()
+        if (vipLimit == null || vipLimit <= 0 || vipLimit > 100) {
+            MmkvManager.encodeSettings(AppConfig.PREF_VIP_CACHE_LIMIT, "5")
+        }
     }
 
     private fun ensureDefaultValue(key: String, default: String) {

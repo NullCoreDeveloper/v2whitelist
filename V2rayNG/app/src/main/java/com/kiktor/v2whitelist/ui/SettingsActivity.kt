@@ -189,6 +189,7 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             // This prevents inconsistencies between SharedPreferences and MMKV
             preferenceManager.preferenceDataStore = MmkvPreferenceDataStore()
 
+            SettingsManager.sanitizeSpeedCheckSettings()
             setPreferencesFromResource(R.xml.pref_settings, s)
 
             initPreferenceSummaries()
@@ -414,10 +415,124 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             fun updateSummary(pref: androidx.preference.Preference) {
                 when (pref) {
                     is EditTextPreference -> {
-                        pref.summary = pref.text.orEmpty()
-                        pref.setOnPreferenceChangeListener { p, newValue ->
-                            p.summary = (newValue as? String).orEmpty()
-                            true
+                        when (pref.key) {
+                            AppConfig.PREF_PROFILE_SPEED_CHECK_BYTES -> {
+                                fun formatBytes(raw: String?): String {
+                                    val bytes = raw?.toLongOrNull() ?: 2_000_000L
+                                    val formattedNum = String.format(java.util.Locale.getDefault(), "%,d", bytes).replace(',', ' ')
+                                    val formattedMb = String.format(java.util.Locale.US, "%.1f", bytes / 1_000_000.0)
+                                    return getString(R.string.pref_speed_bytes_summary, formattedNum, formattedMb)
+                                }
+                                pref.summary = formatBytes(pref.text)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val bytes = raw?.toLongOrNull()
+                                    if (bytes == null || bytes < 10_000L) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = formatBytes(raw)
+                                        true
+                                    }
+                                }
+                            }
+                            AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT -> {
+                                fun formatTimeout(raw: String?): String {
+                                    val ms = raw?.toLongOrNull() ?: 3000L
+                                    val formattedNum = String.format(java.util.Locale.getDefault(), "%,d", ms).replace(',', ' ')
+                                    val formattedSec = String.format(java.util.Locale.US, "%.1f", ms / 1000.0)
+                                    return getString(R.string.pref_speed_timeout_summary, formattedNum, formattedSec)
+                                }
+                                pref.summary = formatTimeout(pref.text)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val ms = raw?.toLongOrNull()
+                                    if (ms == null || ms < 500L) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = formatTimeout(raw)
+                                        true
+                                    }
+                                }
+                            }
+                            AppConfig.PREF_PROFILE_MIN_SPEED_MBPS -> {
+                                fun formatMinSpeed(raw: String?): String {
+                                    val mbps = raw?.toDoubleOrNull() ?: 1.0
+                                    return if (mbps <= 0.0) {
+                                        getString(R.string.pref_min_speed_disabled)
+                                    } else {
+                                        getString(R.string.pref_min_speed_summary, String.format(java.util.Locale.US, "%.1f", mbps))
+                                    }
+                                }
+                                pref.summary = formatMinSpeed(pref.text)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val mbps = raw?.toDoubleOrNull()
+                                    if (mbps == null || mbps < 0.0) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = formatMinSpeed(raw)
+                                        true
+                                    }
+                                }
+                            }
+                            AppConfig.PREF_VIP_CACHE_LIMIT -> {
+                                fun formatVipLimit(raw: String?): String {
+                                    val limit = raw?.toIntOrNull() ?: 5
+                                    return getString(R.string.pref_vip_cache_limit_summary, limit)
+                                }
+                                pref.summary = formatVipLimit(pref.text)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val limit = raw?.toIntOrNull()
+                                    if (limit == null || limit <= 0 || limit > 100) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = formatVipLimit(raw)
+                                        true
+                                    }
+                                }
+                            }
+                            "pref_chunk_size" -> {
+                                val size = pref.text?.toIntOrNull() ?: 20
+                                pref.summary = getString(R.string.pref_chunk_size_summary, size)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val s = raw?.toIntOrNull()
+                                    if (s == null || s <= 0 || s > 500) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = getString(R.string.pref_chunk_size_summary, s)
+                                        true
+                                    }
+                                }
+                            }
+                            "pref_v2w_core_concurrency" -> {
+                                val conc = pref.text?.toIntOrNull() ?: 35
+                                pref.summary = getString(R.string.pref_concurrency_summary, conc)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val c = raw?.toIntOrNull()
+                                    if (c == null || c <= 0 || c > 200) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = getString(R.string.pref_concurrency_summary, c)
+                                        true
+                                    }
+                                }
+                            }
+                            else -> {
+                                pref.summary = pref.text.orEmpty()
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    p.summary = (newValue as? String).orEmpty()
+                                    true
+                                }
+                            }
                         }
                     }
 
