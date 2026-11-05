@@ -582,6 +582,51 @@ object SmartConnectManager {
         sendStatus(context, switchingMsg)
         try {
             val currentGuid = MmkvManager.getSelectServer()
+
+            // ── Приоритет личных серверов при смене сервера ─────────────────────────
+            val personalConfig = PersonalServersManager.getConfig()
+            if (personalConfig.enabled) {
+                val personalCandidates = PersonalServersManager.getPersonalServers()
+                val otherPersonalCandidates = personalCandidates.filter { it.first != currentGuid }
+
+                if (otherPersonalCandidates.isNotEmpty()) {
+                    GeekModeLogger.log("SmartConnect", "switchServer: Switching among ${otherPersonalCandidates.size} personal servers")
+                    sendStatus(context, context.getString(R.string.status_personal_scanning))
+
+                    val results = NodeTesterManager.testServers(context, otherPersonalCandidates)
+                    val valid = results.filter { it.third < Long.MAX_VALUE }
+                    val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+
+                    var bestPersonal: Triple<String, ProfileItem, Long>? = null
+                    if (profileCheckEnabled) {
+                        for (candidate in valid) {
+                            if (NodeTesterManager.verifyProfile(context, candidate.first)) {
+                                bestPersonal = candidate
+                                break
+                            }
+                        }
+                    } else {
+                        bestPersonal = valid.firstOrNull()
+                    }
+
+                    if (bestPersonal != null) {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: Switched to next personal server: ${bestPersonal.second.remarks}")
+                        PersonalServersManager.setSelectedServer(bestPersonal.first)
+                        connectToBest(context, bestPersonal, isStartup = false)
+                        NotificationManager.cancelFailoverNotification()
+                        return@withContext true
+                    }
+                }
+
+                GeekModeLogger.log("SmartConnect", "PersonalServers: No other working personal server found in switchServer")
+                if (!personalConfig.fallbackToPublicOnFailure) {
+                    sendStatus(context, context.getString(R.string.status_personal_all_failed))
+                    return@withContext false
+                }
+                sendStatus(context, context.getString(R.string.status_personal_failed_fallback))
+                // Продолжаем ниже к публичным серверам при включенном фоллбеке
+            }
+
             val allServers = MmkvManager.decodeServerList()
             val filteredServers = filterServers(allServers, excludeGuid = currentGuid).shuffled()
 

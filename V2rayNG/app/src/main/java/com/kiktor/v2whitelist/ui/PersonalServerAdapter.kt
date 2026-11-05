@@ -20,7 +20,6 @@ class PersonalServerAdapter(
     private val onSelect: (String) -> Unit,
     private val onPing: (String) -> Unit,
     private val onEdit: (String) -> Unit,
-    private val onToggleExitNode: (String) -> Unit,
     private val onShare: (String) -> Unit,
     private val onDeleteServer: (String) -> Unit,
     private val onUpdateSub: (String) -> Unit,
@@ -298,27 +297,21 @@ class PersonalServerAdapter(
             }
 
             btnMenu.setOnClickListener { v ->
-                showPopupMenu(v, guid, isExitNode)
+                showPopupMenu(v, guid)
             }
         }
 
-        private fun showPopupMenu(anchor: View, guid: String, isExitNode: Boolean) {
+        private fun showPopupMenu(anchor: View, guid: String) {
             val popup = PopupMenu(context, anchor)
             popup.menu.add(0, 1, 0, R.string.menu_item_edit_config)
-            if (isExitNode) {
-                popup.menu.add(0, 2, 1, R.string.personal_btn_remove_exit_node)
-            } else {
-                popup.menu.add(0, 2, 1, R.string.personal_btn_make_exit_node)
-            }
-            popup.menu.add(0, 3, 2, R.string.btn_label_share)
-            popup.menu.add(0, 4, 3, R.string.menu_item_del_config)
+            popup.menu.add(0, 2, 1, R.string.btn_label_share)
+            popup.menu.add(0, 3, 2, R.string.menu_item_del_config)
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> onEdit(guid)
-                    2 -> onToggleExitNode(guid)
-                    3 -> onShare(guid)
-                    4 -> onDeleteServer(guid)
+                    2 -> onShare(guid)
+                    3 -> onDeleteServer(guid)
                 }
                 true
             }

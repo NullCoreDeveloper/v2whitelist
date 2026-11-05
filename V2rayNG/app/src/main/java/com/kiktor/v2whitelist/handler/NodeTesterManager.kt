@@ -53,10 +53,12 @@ object NodeTesterManager {
             servers.map { (guid, profile) ->
                 async(Dispatchers.IO) {
                     if (!currentCoroutineContext().isActive) return@async null
-                    val isUdpProtocol = profile.configType == EConfigType.WIREGUARD ||
-                                        profile.configType == EConfigType.HYSTERIA2
-                    if (isUdpProtocol) {
-                        // Для UDP протоколов TCP сокет неприменим — пропускаем на этап 204
+                    val isUdpOrCustom = profile.configType == EConfigType.WIREGUARD ||
+                                        profile.configType == EConfigType.HYSTERIA2 ||
+                                        profile.configType == EConfigType.CUSTOM ||
+                                        profile.configType == EConfigType.POLICYGROUP
+                    if (isUdpOrCustom) {
+                        // Для UDP/Custom протоколов TCP сокет может быть неприменим — пропускаем на этап 204
                         Pair(guid, profile)
                     } else {
                         val host = profile.server
