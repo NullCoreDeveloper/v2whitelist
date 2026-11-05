@@ -59,6 +59,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
 
     private val connectivity by lazy { getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager }
 
+    private var lastIsWifi: Boolean? = null
+
     @delegate:RequiresApi(Build.VERSION_CODES.P)
     private val defaultNetworkCallback by lazy {
         object : ConnectivityManager.NetworkCallback() {
@@ -69,10 +71,41 @@ class V2RayVpnService : VpnService(), ServiceControl {
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 // it's a good idea to refresh capabilities
                 setUnderlyingNetworks(arrayOf(network))
+
+                val isWifi = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                if (lastIsWifi != null && lastIsWifi != isWifi) {
+                    lastIsWifi = isWifi
+                    checkNetworkRuleSwitch(isWifi)
+                } else if (lastIsWifi == null) {
+                    lastIsWifi = isWifi
+                }
             }
 
             override fun onLost(network: Network) {
                 setUnderlyingNetworks(null)
+            }
+        }
+    }
+
+    private fun checkNetworkRuleSwitch(isWifi: Boolean) {
+        val config = com.kiktor.v2whitelist.handler.PersonalServersManager.getConfig()
+        if (!config.enabled) return
+        val currentGuid = MmkvManager.getSelectServer() ?: return
+        val currentProfile = MmkvManager.decodeServerConfig(currentGuid)
+        val isCurrentPersonal = com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile?.subscriptionId)
+
+        val targetRule = if (isWifi) config.wifiRule else config.cellularRule
+        val needsSwitch = when (targetRule) {
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PUBLIC_SUBS -> isCurrentPersonal
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PERSONAL_SELECTED,
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PERSONAL_AUTO -> !isCurrentPersonal
+            else -> false
+        }
+
+        if (needsSwitch && !com.kiktor.v2whitelist.handler.SmartConnectManager.isScanning.get()) {
+            Log.i(AppConfig.TAG, "V2RayVpnService: Network switched (isWifi=$isWifi), rotating server based on rule: $targetRule")
+            serviceScope.launch(Dispatchers.IO) {
+                com.kiktor.v2whitelist.handler.SmartConnectManager.smartConnect(this@V2RayVpnService)
             }
         }
     }

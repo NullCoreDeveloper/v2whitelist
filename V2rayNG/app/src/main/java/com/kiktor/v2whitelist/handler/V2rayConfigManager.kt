@@ -262,7 +262,7 @@ object V2rayConfigManager {
 
         getOutbounds(v2rayConfig, config) ?: return result
         getMoreOutbounds(v2rayConfig, config.subscriptionId)
-        getCustomEndpointOutbound(v2rayConfig)
+        getCustomEndpointOutbound(v2rayConfig, config)
 
         getRouting(v2rayConfig)
 
@@ -329,7 +329,7 @@ object V2rayConfigManager {
 
         getBalance(v2rayConfig, config)
         if (!ignoreCustomEndpoint) {
-            getCustomEndpointOutbound(v2rayConfig)
+            getCustomEndpointOutbound(v2rayConfig, config)
         }
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED)) {
@@ -372,7 +372,7 @@ object V2rayConfigManager {
         getOutbounds(v2rayConfig, config) ?: return result
         getMoreOutbounds(v2rayConfig, config.subscriptionId)
         if (!ignoreCustomEndpoint) {
-            getCustomEndpointOutbound(v2rayConfig)
+            getCustomEndpointOutbound(v2rayConfig, config)
         }
 
         v2rayConfig.log.loglevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: "error"
@@ -956,7 +956,13 @@ object V2rayConfigManager {
      * Configures a custom user endpoint proxy to form a proxy chain.
      * Local -> Smart Connect Node -> Custom Endpoint -> Internet
      */
-    private fun getCustomEndpointOutbound(v2rayConfig: V2rayConfig): Boolean {
+    private fun getCustomEndpointOutbound(v2rayConfig: V2rayConfig, currentConfig: ProfileItem? = null): Boolean {
+        if (currentConfig != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentConfig.subscriptionId)) {
+            val personalConfig = PersonalServersManager.getConfig()
+            if (personalConfig.ignoreExitNodeForPersonal) {
+                return false
+            }
+        }
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED) != true) {
             return false
         }

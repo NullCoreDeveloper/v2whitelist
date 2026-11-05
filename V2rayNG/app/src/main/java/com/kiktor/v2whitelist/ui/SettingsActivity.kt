@@ -152,6 +152,25 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
         override fun onResume() {
             super.onResume()
             updateLanSharingSummary()
+            updatePersonalServersSummary()
+        }
+
+        private fun updatePersonalServersSummary() {
+            findPreference<androidx.preference.Preference>("pref_personal_servers_screen")?.let {
+                val cfg = com.kiktor.v2whitelist.handler.PersonalServersManager.getConfig()
+                if (cfg.enabled) {
+                    val count = com.kiktor.v2whitelist.handler.PersonalServersManager.getPersonalServers().size
+                    val selGuid = cfg.selectedServerGuid
+                    it.summary = if (!selGuid.isNullOrBlank()) {
+                        val name = MmkvManager.decodeServerConfig(selGuid)?.remarks ?: "Выбран сервер"
+                        "Включено: $name"
+                    } else {
+                        "Включено: Автовыбор ($count узлов)"
+                    }
+                } else {
+                    it.summary = getString(R.string.summary_pref_personal_servers)
+                }
+            }
         }
 
         private fun updateLanSharingSummary() {
@@ -222,6 +241,10 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             }
             findPreference<androidx.preference.Preference>("pref_lan_proxy_sharing_screen")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), LanProxySharingActivity::class.java))
+                true
+            }
+            findPreference<androidx.preference.Preference>("pref_personal_servers_screen")?.setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(), PersonalServersActivity::class.java))
                 true
             }
             findPreference<androidx.preference.Preference>("pref_service_check_config")?.setOnPreferenceClickListener {

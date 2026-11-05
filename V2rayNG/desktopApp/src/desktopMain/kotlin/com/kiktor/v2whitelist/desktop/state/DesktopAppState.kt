@@ -232,6 +232,13 @@ class DesktopAppState(
     val customEndpointSubUrl = MutableStateFlow(settingsRepo.getString("pref_custom_endpoint_sub_url", ""))
     val endpointE2eCheckEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true))
 
+    // Личные сервера (Personal Servers)
+    val personalServersEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_personal_servers_enabled", false))
+    val personalSelectedGuid = MutableStateFlow(settingsRepo.getString("pref_personal_selected_guid", ""))
+    val personalIgnoreExitNode = MutableStateFlow(settingsRepo.getBoolean("pref_personal_ignore_exit_node", true))
+    val personalAutoConnectOnStartup = MutableStateFlow(settingsRepo.getBoolean("pref_personal_auto_connect", true))
+    val personalFallbackPublic = MutableStateFlow(settingsRepo.getBoolean("pref_personal_fallback_public", true))
+
     // Ручной выбор сервера vs сценарий (Авто, БС, ЧС, YouTube)
     val isManualSelection = MutableStateFlow(settingsRepo.getBoolean("pref_manual_server_selected", false))
 
@@ -1239,6 +1246,20 @@ class DesktopAppState(
     private var smartConnectJob: Job? = null
 
     fun startSmartConnect() {
+        if (personalServersEnabled.value) {
+            val allPersonal = servers.value.filter { com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId) }
+            val selGuid = personalSelectedGuid.value
+            val targetPersonal = if (selGuid.isNotBlank()) allPersonal.find { it.first == selGuid } else null
+
+            if (targetPersonal != null) {
+                GeekModeLogger.log("AppState", "Подключение к выбранному личному серверу: ${targetPersonal.second.remarks}")
+                _smartConnectStatus.value = "Подключение к личному серверу: ${targetPersonal.second.remarks}"
+                selectServer(targetPersonal.first)
+                connectCurrent()
+                return
+            }
+        }
+
         smartConnectJob?.cancel()
         smartConnectManager.stop()
         V2WCoreScanner.stop()
@@ -1540,7 +1561,12 @@ class DesktopAppState(
                 customProxyDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
             } else emptyList()
 
-            val endpoint = if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) customEndpointUrl.value.trim() else null
+            val isPersonal = com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)
+            val endpoint = if (isPersonal && personalIgnoreExitNode.value) {
+                null
+            } else if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) {
+                customEndpointUrl.value.trim()
+            } else null
 
             val currentSocksPort = socksPort.value
             val currentHttpPort = currentSocksPort + 1

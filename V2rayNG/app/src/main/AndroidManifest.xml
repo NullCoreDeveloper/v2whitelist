@@ -171,6 +171,9 @@
             android:name=".ui.LanProxySharingActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.PersonalServersActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.ServiceCheckActivity"
             android:exported="false" />
         <activity

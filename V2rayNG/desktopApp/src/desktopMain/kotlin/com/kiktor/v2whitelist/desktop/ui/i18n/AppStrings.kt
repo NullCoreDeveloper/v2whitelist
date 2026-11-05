@@ -203,6 +203,8 @@ interface AppStrings {
     val catUpdatesDesc: String
     val catRouting: String
     val catRoutingDesc: String
+    val catPersonalServers: String
+    val catPersonalServersDesc: String
     val catVpnCore: String
     val catVpnCoreDesc: String
     val catBackupData: String
@@ -605,6 +607,8 @@ object StringsRu : AppStrings {
     override val catUpdatesDesc: String = "Фоновое обновление подписок и проверка новых версий ПроБел на GitHub"
     override val catRouting: String = "Маршрутизация"
     override val catRoutingDesc: String = "Обход блокировок РФ, сплит-туннелинг по доменам и конечный узел (цепочка)"
+    override val catPersonalServers: String = "Личные сервера"
+    override val catPersonalServersDesc: String = "Свои VPS-узлы, приватные подписки, автопоиск и управление конечным узлом"
     override val catVpnCore: String = "VPN и ядро"
     override val catVpnCoreDesc: String = "Сетевые параметры VPN, SOCKS5 прокси, DNS, Mux и фрагментация пакетов"
     override val catBackupData: String = "Данные"
@@ -997,6 +1001,8 @@ object StringsEn : AppStrings {
     override val catUpdatesDesc: String = "Background subscription updates and ProBel application release checks on GitHub"
     override val catRouting: String = "Routing"
     override val catRoutingDesc: String = "Direct national routing bypass, domain split-tunneling, and proxy chaining (endpoint)"
+    override val catPersonalServers: String = "Personal Servers"
+    override val catPersonalServersDesc: String = "Custom VPS nodes, private subscriptions, auto-search and exit node management"
     override val catVpnCore: String = "VPN & Core"
     override val catVpnCoreDesc: String = "VPN networking, local SOCKS5 proxy, DNS resolution, Mux, and TCP/TLS fragmentation"
     override val catBackupData: String = "System & Data"
@@ -1389,6 +1395,8 @@ object StringsZh : AppStrings {
     override val catUpdatesDesc: String = "后台订阅自动同步及 GitHub 新版本检测"
     override val catRouting: String = "路由与分流"
     override val catRoutingDesc: String = "本国服务直连白名单、域名分流黑白名单及链式出口节点"
+    override val catPersonalServers: String = "个人服务器"
+    override val catPersonalServersDesc: String = "自建 VPS 节点、私有订阅、自动优选及出口节点管理"
     override val catVpnCore: String = "VPN 与核心"
     override val catVpnCoreDesc: String = "VPN 虚拟网卡、本地 SOCKS5/HTTP 代理、DNS 解析、多路复用及分片抗审查"
     override val catBackupData: String = "系统与重置"
@@ -1781,6 +1789,8 @@ object StringsFa : AppStrings {
     override val catUpdatesDesc: String = "به‌روزرسانی خودکار اشتراک‌ها و بررسی نسخه جدید برنامه"
     override val catRouting: String = "مسیریابی"
     override val catRoutingDesc: String = "دور زدن سایت‌های داخلی، تونل اختصاصی دامنه‌ها و زنجیره پروکسی"
+    override val catPersonalServers: String = "سرورهای شخصی"
+    override val catPersonalServersDesc: String = "سرورهای اختصاصی، اشتراک‌های خصوصی و مدیریت گره خروجی"
     override val catVpnCore: String = "تنظیمات VPN و هسته"
     override val catVpnCoreDesc: String = "تنظیمات شبکه VPN، پروکسی محلی، DNS، چندبخشی Mux و تکه‌تکه کردن بسته‌ها"
     override val catBackupData: String = "سیستم و داده‌ها"

@@ -151,9 +151,22 @@ object SmartConnectManager {
     fun filterServers(allServers: List<String>, excludeGuid: String? = null, filterByScenario: Boolean = true): List<Pair<String, ProfileItem>> {
         val candidates = allServers.mapNotNull { guid ->
             val profile = MmkvManager.decodeServerConfig(guid)
-            if (profile != null) guid to profile else null
+            if (profile != null && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                guid to profile
+            } else null
         }
         return filterServerPairs(candidates, excludeGuid, filterByScenario)
+    }
+
+    /**
+     * Прямое мгновенное подключение к конкретному серверу (например, из экрана Личных серверов).
+     */
+    suspend fun connectDirectlyTo(context: Context, guid: String): Boolean = withContext(Dispatchers.IO) {
+        val profile = MmkvManager.decodeServerConfig(guid) ?: return@withContext false
+        sendStatus(context, context.getString(R.string.status_connecting_to, profile.remarks))
+        connectToBest(context, Triple(guid, profile, 0L), isStartup = false)
+        NotificationManager.cancelFailoverNotification()
+        return@withContext true
     }
 
     fun cleanVipCacheForFilter() {
@@ -375,6 +388,61 @@ object SmartConnectManager {
         try {
             // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
             NetworkManager.waitForInternet(context)
+
+            // ── Приоритет личных серверов (Personal Servers) ──────────────────────────
+            val personalConfig = PersonalServersManager.getConfig()
+            if (personalConfig.enabled) {
+                val personalCandidates = PersonalServersManager.getPersonalServers()
+                val isWifi = NetworkManager.isWifiActive(context)
+                val isCellular = NetworkManager.isCellularActive(context)
+                val isBsJamming = NetworkManager.checkInternetStatus() == 1
+
+                val decision = com.kiktor.v2whitelist.core.domain.personal.PersonalServerEvaluator.evaluate(
+                    config = personalConfig,
+                    isWifi = isWifi,
+                    isCellular = isCellular,
+                    isBsJamming = isBsJamming,
+                    allPersonalCandidates = personalCandidates
+                )
+
+                when (decision) {
+                    is com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision.ConnectPersonalDirect -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: Direct connect to ${decision.profile.remarks}")
+                        sendStatus(context, context.getString(R.string.status_connecting_to, decision.profile.remarks))
+                        connectToBest(context, Triple(decision.guid, decision.profile, 0L), isStartup = true)
+                        NotificationManager.cancelFailoverNotification()
+                        return@withContext true
+                    }
+                    is com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision.ScanPersonalPool -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: Scanning personal pool of ${decision.candidates.size} servers")
+                        sendStatus(context, context.getString(R.string.status_personal_scanning))
+                        val results = NodeTesterManager.testServers(context, decision.candidates)
+                        val valid = results.filter { it.third < Long.MAX_VALUE }
+                        val bestPersonal = valid.firstOrNull()
+                        if (bestPersonal != null) {
+                            GeekModeLogger.log("SmartConnect", "PersonalServers: Found working personal server: ${bestPersonal.second.remarks}")
+                            connectToBest(context, bestPersonal, isStartup = true)
+                            NotificationManager.cancelFailoverNotification()
+                            return@withContext true
+                        }
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: All personal servers failed")
+                        if (!personalConfig.fallbackToPublicOnFailure) {
+                            sendStatus(context, context.getString(R.string.status_personal_all_failed))
+                            return@withContext false
+                        }
+                        sendStatus(context, context.getString(R.string.status_personal_failed_fallback))
+                        // Продолжаем к публичному пулу ниже
+                    }
+                    is com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision.DirectNoVpn -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: Rule specifies DirectNoVpn")
+                        return@withContext false
+                    }
+                    is com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision.UsePublicSubscriptions -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: ${decision.reason}")
+                        // Продолжаем к публичному пулу ниже
+                    }
+                }
+            }
 
             // ── Быстрый путь: кэш проверенных VIP-серверов ──────────────────────────────
             if (checkVipCacheAndConnect(context, isStartup = true)) {

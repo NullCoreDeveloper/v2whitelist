@@ -18,6 +18,11 @@
             android:key="pref_lan_proxy_sharing_screen"
             android:summary="@string/summary_lan_sharing"
             android:title="@string/title_lan_sharing" />
+
+        <Preference
+            android:key="pref_personal_servers_screen"
+            android:summary="@string/summary_pref_personal_servers"
+            android:title="@string/title_pref_personal_servers" />
     </PreferenceCategory>
 
     <!-- Разделы настроек (вложенные экраны) -->

@@ -154,6 +154,9 @@ object AppConfig {
     const val PREF_CUSTOM_ENDPOINT_SELECTED_NAME = "pref_custom_endpoint_selected_name"
     const val PREF_ENDPOINT_E2E_CHECK_ENABLED = "pref_endpoint_e2e_check_enabled"
 
+    /** Personal Servers (Личные сервера) */
+    const val PREF_PERSONAL_SERVERS_CONFIG = "pref_personal_servers_config"
+
     /** DPI Bypass (Geek Mode) */
     const val PREF_GLOBAL_SNI = "pref_global_sni"
     const val PREF_CLOUDFLARE_IP = "pref_cloudflare_ip"

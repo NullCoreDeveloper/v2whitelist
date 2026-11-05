@@ -31,6 +31,8 @@ import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
+import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -65,6 +67,11 @@ enum class DesktopSettingsCategory(
         getTitle = { it.catRouting },
         icon = Icons.Default.AltRoute,
         getDesc = { it.catRoutingDesc }
+    ),
+    PERSONAL_SERVERS(
+        getTitle = { it.catPersonalServers },
+        icon = Icons.Default.Dns,
+        getDesc = { it.catPersonalServersDesc }
     ),
     VPN_CORE(
         getTitle = { it.catVpnCore },
@@ -148,6 +155,14 @@ fun SettingsScreen(
     var epLoading by remember { mutableStateOf(false) }
     var epStatusMessage by remember { mutableStateOf<String?>(null) }
     var userAgent by remember { mutableStateOf(state.subscriptionUserAgent.value) }
+
+    // Личные сервера
+    var personalEnabled by remember { mutableStateOf(state.personalServersEnabled.value) }
+    var personalSelectedGuid by remember { mutableStateOf(state.personalSelectedGuid.value) }
+    var personalIgnoreExit by remember { mutableStateOf(state.personalIgnoreExitNode.value) }
+    var personalAutoConnect by remember { mutableStateOf(state.personalAutoConnectOnStartup.value) }
+    var personalFallbackPub by remember { mutableStateOf(state.personalFallbackPublic.value) }
+    var newPersonalLink by remember { mutableStateOf("") }
 
     // Базовые VPN
     var preferIpv6 by remember { mutableStateOf(state.preferIpv6.value) }
@@ -264,10 +279,25 @@ fun SettingsScreen(
         )
         state.setMinimizeToTray(minimizeToTray)
         state.setAllowLan(allowLan)
+        state.personalServersEnabled.value = personalEnabled
+        state.settingsRepo.setBoolean("pref_personal_servers_enabled", personalEnabled)
+        state.personalIgnoreExitNode.value = personalIgnoreExit
+        state.settingsRepo.setBoolean("pref_personal_ignore_exit_node", personalIgnoreExit)
+        state.personalAutoConnectOnStartup.value = personalAutoConnect
+        state.settingsRepo.setBoolean("pref_personal_auto_connect", personalAutoConnect)
+        state.personalFallbackPublic.value = personalFallbackPub
+        state.settingsRepo.setBoolean("pref_personal_fallback_public", personalFallbackPub)
+        state.personalSelectedGuid.value = personalSelectedGuid
+        state.settingsRepo.setString("pref_personal_selected_guid", personalSelectedGuid)
         isSavedNotice = true
     }
 
     val doDiscard = {
+        personalEnabled = state.personalServersEnabled.value
+        personalIgnoreExit = state.personalIgnoreExitNode.value
+        personalAutoConnect = state.personalAutoConnectOnStartup.value
+        personalFallbackPub = state.personalFallbackPublic.value
+        personalSelectedGuid = state.personalSelectedGuid.value
         smartBatchSize = state.smartConnectBatchSize.value.toString()
         smartPreset = state.smartDistributionPreset.value
         useV2w = state.useV2WCore.value
@@ -407,7 +437,12 @@ fun SettingsScreen(
         fragmentPack != state.fragmentPackets.value ||
         minimizeToTray != state.minimizeToTray.value ||
         connCheckUrl != state.connectionCheckServiceUrl.value ||
-        betaUpdates != state.receiveBetaUpdates.value
+        betaUpdates != state.receiveBetaUpdates.value ||
+        personalEnabled != state.personalServersEnabled.value ||
+        personalIgnoreExit != state.personalIgnoreExitNode.value ||
+        personalAutoConnect != state.personalAutoConnectOnStartup.value ||
+        personalFallbackPub != state.personalFallbackPublic.value ||
+        personalSelectedGuid != state.personalSelectedGuid.value
     }
 
     DisposableEffect(state) {
@@ -1122,6 +1157,173 @@ fun SettingsScreen(
                             label = { Text(strings.endpointConfigLabel) },
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+            }
+
+            DesktopSettingsCategory.PERSONAL_SERVERS -> {
+                SettingsCard(
+                    title = "Управление личными серверами",
+                    icon = Icons.Default.Dns,
+                    description = "Использование персональных VPS узлов, приватных подписок и автопоиска"
+                ) {
+                    SettingSwitchRow(
+                        title = "Включить личные сервера",
+                        desc = "Приоритетно использовать персональные узлы вместо публичных подписок",
+                        checked = personalEnabled,
+                        onCheckedChange = { personalEnabled = it }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Игнорировать конечный узел при использовании",
+                        desc = "Не пропускать личный сервер через цепочку конечного узла (рекомендуется)",
+                        checked = personalIgnoreExit,
+                        onCheckedChange = { personalIgnoreExit = it }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Автоподключение при старте",
+                        desc = "Автоматически подключать личный сервер при нажатии подключения",
+                        checked = personalAutoConnect,
+                        onCheckedChange = { personalAutoConnect = it }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Фоллбек на публичные подписки при неудаче",
+                        desc = "Если личные серверы недоступны, бесшовно переключаться на публичные",
+                        checked = personalFallbackPub,
+                        onCheckedChange = { personalFallbackPub = it }
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                SettingsCard(
+                    title = "Добавить личный узел",
+                    icon = Icons.Default.Add,
+                    description = "Вставьте ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://)"
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = newPersonalLink,
+                            onValueChange = { newPersonalLink = it },
+                            label = { Text("Ссылка на конфигурацию сервера") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Button(
+                            onClick = {
+                                if (newPersonalLink.isNotBlank()) {
+                                    val parsed = UniversalConfigParser.parse(newPersonalLink.trim())
+                                    if (parsed != null) {
+                                        parsed.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
+                                        val guid = java.util.UUID.randomUUID().toString()
+                                        state.serverRepo.saveServerConfig(guid, parsed)
+                                        newPersonalLink = ""
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Добавить")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                val personalServers = state.servers.collectAsState().value.filter {
+                    PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+                }
+
+                SettingsCard(
+                    title = "Список личных серверов (${personalServers.size})",
+                    icon = Icons.Default.List,
+                    description = "Выберите сервер для прямого подключения или оставьте автовыбор"
+                ) {
+                    // Опция автовыбора
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { personalSelectedGuid = "" }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = personalSelectedGuid.isBlank(),
+                            onClick = { personalSelectedGuid = "" }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("⚡ Автовыбор среди личных", fontWeight = FontWeight.Bold)
+                            Text("Автоматический поиск наилучшего личного узла через v2w-core", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    if (personalServers.isEmpty()) {
+                        Text(
+                            text = "Нет добавленных личных серверов. Добавьте свой VPS выше.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                    } else {
+                        personalServers.forEach { (guid, profile) ->
+                            val isSel = personalSelectedGuid == guid
+                            val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { personalSelectedGuid = guid }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSel,
+                                    onClick = { personalSelectedGuid = guid }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(profile.remarks.ifBlank { "Сервер" }, fontWeight = FontWeight.SemiBold)
+                                        if (isExitNode) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primary,
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    "Конечный узел",
+                                                    color = MaterialTheme.colorScheme.onPrimary,
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text("${profile.configType.name} • ${profile.server}:${profile.serverPort}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(
+                                    onClick = {
+                                        val uri = UniversalConfigParser.toUri(profile) ?: ""
+                                        if (isExitNode) {
+                                            state.useCustomEndpoint.value = false
+                                            state.customEndpointUrl.value = ""
+                                        } else {
+                                            state.useCustomEndpoint.value = true
+                                            state.customEndpointUrl.value = uri
+                                        }
+                                    }
+                                ) {
+                                    Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
+                                }
+                                IconButton(onClick = { state.deleteServer(guid) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -175,6 +175,32 @@ object NetworkManager {
     }
 
     /**
+     * Проверяет, активно ли Wi-Fi подключение.
+     */
+    fun isWifiActive(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+            val activeCaps = cm.getNetworkCapabilities(cm.activeNetwork)
+            activeCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Проверяет, активно ли подключение по сотовой сети (Cellular/Mobile).
+     */
+    fun isCellularActive(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return false
+            val activeCaps = cm.getNetworkCapabilities(cm.activeNetwork)
+            activeCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Проверяет, активно ли любое реальное VPN-соединение:
      * 1. Внутренний сервис V2RayServiceManager (ядро живо и работает)
      * 2. Системный транспорт TRANSPORT_VPN в ConnectivityManager (активное соединение в ОС)
