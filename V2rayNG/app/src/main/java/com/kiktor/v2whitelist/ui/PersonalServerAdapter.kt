@@ -20,6 +20,7 @@ class PersonalServerAdapter(
     private val onSelect: (String) -> Unit,
     private val onPing: (String) -> Unit,
     private val onEdit: (String) -> Unit,
+    private val onToggleExitNode: (String) -> Unit,
     private val onShare: (String) -> Unit,
     private val onDeleteServer: (String) -> Unit,
     private val onUpdateSub: (String) -> Unit,
@@ -54,6 +55,7 @@ class PersonalServerAdapter(
 
     private var selectedGuid: String? = null
     private var exitNodeGuid: String? = null
+    private var activeGuid: String? = null
     private val latencyMap = mutableMapOf<String, Long>()
 
     companion object {
@@ -66,12 +68,14 @@ class PersonalServerAdapter(
         subscriptions: List<SubscriptionCache>,
         servers: List<Pair<String, ProfileItem>>,
         currentSelected: String?,
-        currentExitNode: String?
+        currentExitNode: String?,
+        currentActive: String? = null
     ) {
         rawSubscriptions = subscriptions
         rawServers = servers
         selectedGuid = currentSelected
         exitNodeGuid = currentExitNode
+        activeGuid = currentActive
         rebuildDisplayList()
         notifyDataSetChanged()
     }
@@ -250,6 +254,7 @@ class PersonalServerAdapter(
         val rbSelected: RadioButton = itemView.findViewById(R.id.rb_selected)
         val tvRemarks: TextView = itemView.findViewById(R.id.tv_remarks)
         val tvBadgeExitNode: TextView = itemView.findViewById(R.id.tv_badge_exit_node)
+        val tvBadgeActive: TextView = itemView.findViewById(R.id.tv_badge_active)
         val tvDetails: TextView = itemView.findViewById(R.id.tv_details)
         val tvLatency: TextView = itemView.findViewById(R.id.tv_latency)
         val btnPing: MaterialButton = itemView.findViewById(R.id.btn_ping)
@@ -260,6 +265,7 @@ class PersonalServerAdapter(
             val profile = item.profile
             val isSelected = guid == selectedGuid
             val isExitNode = guid == exitNodeGuid
+            val isActiveServer = guid == activeGuid
 
             rbSelected.isChecked = isSelected
             tvRemarks.text = profile.remarks.ifBlank { "Trusted Server" }
@@ -268,6 +274,7 @@ class PersonalServerAdapter(
             tvDetails.text = details
 
             tvBadgeExitNode.visibility = if (isExitNode) View.VISIBLE else View.GONE
+            tvBadgeActive.visibility = if (isActiveServer) View.VISIBLE else View.GONE
 
             val latency = latencyMap[guid]
             if (latency != null) {
@@ -297,21 +304,27 @@ class PersonalServerAdapter(
             }
 
             btnMenu.setOnClickListener { v ->
-                showPopupMenu(v, guid)
+                showPopupMenu(v, guid, isExitNode)
             }
         }
 
-        private fun showPopupMenu(anchor: View, guid: String) {
+        private fun showPopupMenu(anchor: View, guid: String, isExitNode: Boolean) {
             val popup = PopupMenu(context, anchor)
             popup.menu.add(0, 1, 0, R.string.menu_item_edit_config)
-            popup.menu.add(0, 2, 1, R.string.btn_label_share)
-            popup.menu.add(0, 3, 2, R.string.menu_item_del_config)
+            if (isExitNode) {
+                popup.menu.add(0, 4, 1, R.string.menu_item_remove_exit_node)
+            } else {
+                popup.menu.add(0, 4, 1, R.string.menu_item_make_exit_node)
+            }
+            popup.menu.add(0, 2, 2, R.string.btn_label_share)
+            popup.menu.add(0, 3, 3, R.string.menu_item_del_config)
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     1 -> onEdit(guid)
                     2 -> onShare(guid)
                     3 -> onDeleteServer(guid)
+                    4 -> onToggleExitNode(guid)
                 }
                 true
             }

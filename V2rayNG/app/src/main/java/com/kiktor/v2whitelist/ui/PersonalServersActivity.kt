@@ -35,6 +35,7 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.NetworkManager
 import com.kiktor.v2whitelist.handler.PersonalServersManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
@@ -49,6 +50,9 @@ class PersonalServersActivity : BaseActivity() {
     private lateinit var swEnablePersonal: MaterialSwitch
     private lateinit var tvConnectionStatus: TextView
     private lateinit var btnToggleConnect: MaterialButton
+
+    private lateinit var swExitNodeEnabled: MaterialSwitch
+    private lateinit var tvExitNodeStatus: TextView
 
     private lateinit var swIgnoreExitNode: MaterialSwitch
     private lateinit var swAutoConnect: MaterialSwitch
@@ -127,6 +131,9 @@ class PersonalServersActivity : BaseActivity() {
         tvConnectionStatus = findViewById(R.id.tv_connection_status)
         btnToggleConnect = findViewById(R.id.btn_toggle_connect)
 
+        swExitNodeEnabled = findViewById(R.id.sw_exit_node_enabled)
+        tvExitNodeStatus = findViewById(R.id.tv_exit_node_status)
+
         swIgnoreExitNode = findViewById(R.id.sw_ignore_exit_node)
         swAutoConnect = findViewById(R.id.sw_auto_connect)
         swFallbackPublic = findViewById(R.id.sw_fallback_public)
@@ -149,6 +156,17 @@ class PersonalServersActivity : BaseActivity() {
                     SmartConnectManager.smartConnect(this@PersonalServersActivity)
                     updateConnectionStatus()
                     loadData()
+                }
+            }
+        }
+
+        swExitNodeEnabled.setOnCheckedChangeListener { _, isChecked ->
+            val cfg = PersonalServersManager.getConfig()
+            if (cfg.exitNodeEnabled != isChecked) {
+                PersonalServersManager.saveConfig(cfg.copy(exitNodeEnabled = isChecked))
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, isChecked)
+                if (V2RayServiceManager.isRunning()) {
+                    com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
                 }
             }
         }
@@ -178,6 +196,11 @@ class PersonalServersActivity : BaseActivity() {
 
         val triggerAutoSelect = {
             PersonalServersManager.setSelectedServer(null)
+            val cfg = PersonalServersManager.getConfig()
+            val isWifi = NetworkManager.isWifiActive(this)
+            val updatedCfg = if (isWifi) cfg.copy(wifiRule = NetworkBindingRule.USE_PERSONAL_AUTO)
+            else cfg.copy(cellularRule = NetworkBindingRule.USE_PERSONAL_AUTO)
+            PersonalServersManager.saveConfig(updatedCfg)
             loadData()
             if (V2RayServiceManager.isRunning()) {
                 lifecycleScope.launch {
@@ -238,6 +261,14 @@ class PersonalServersActivity : BaseActivity() {
             context = this,
             onSelect = { guid ->
                 PersonalServersManager.setSelectedServer(guid)
+                val cfg = PersonalServersManager.getConfig()
+                val isWifi = NetworkManager.isWifiActive(this)
+                val currentRule = if (isWifi) cfg.wifiRule else cfg.cellularRule
+                if (currentRule == NetworkBindingRule.USE_PERSONAL_AUTO) {
+                    val updatedCfg = if (isWifi) cfg.copy(wifiRule = NetworkBindingRule.USE_PERSONAL_SELECTED)
+                    else cfg.copy(cellularRule = NetworkBindingRule.USE_PERSONAL_SELECTED)
+                    PersonalServersManager.saveConfig(updatedCfg)
+                }
                 loadData()
                 if (V2RayServiceManager.isRunning()) {
                     lifecycleScope.launch {
@@ -263,6 +294,21 @@ class PersonalServersActivity : BaseActivity() {
                     }
                 }
             },
+            onToggleExitNode = { guid ->
+                val cfg = PersonalServersManager.getConfig()
+                if (cfg.exitNodeServerGuid == guid) {
+                    PersonalServersManager.setExitNode(null)
+                    toast(R.string.toast_exit_node_cleared)
+                } else {
+                    PersonalServersManager.setExitNode(guid)
+                    val name = MmkvManager.decodeServerConfig(guid)?.remarks ?: "Server"
+                    toast(getString(R.string.toast_custom_endpoint_selected, name))
+                }
+                loadData()
+                if (V2RayServiceManager.isRunning()) {
+                    com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                }
+            },
             onShare = { guid ->
                 shareServer(guid)
             },
@@ -286,6 +332,18 @@ class PersonalServersActivity : BaseActivity() {
         swAutoConnect.isChecked = config.autoConnectOnStartup
         swFallbackPublic.isChecked = config.fallbackToPublicOnFailure
 
+        val exitGuid = config.exitNodeServerGuid
+        val exitProfile = exitGuid?.let { MmkvManager.decodeServerConfig(it) }
+        if (exitProfile != null) {
+            tvExitNodeStatus.text = getString(R.string.personal_exit_node_assigned, exitProfile.remarks)
+            swExitNodeEnabled.isEnabled = true
+            swExitNodeEnabled.isChecked = config.exitNodeEnabled
+        } else {
+            tvExitNodeStatus.text = getString(R.string.personal_exit_node_none)
+            swExitNodeEnabled.isEnabled = false
+            swExitNodeEnabled.isChecked = false
+        }
+
         val ruleValues = listOf(
             NetworkBindingRule.USE_PERSONAL_AUTO,
             NetworkBindingRule.USE_PERSONAL_SELECTED,
@@ -299,9 +357,10 @@ class PersonalServersActivity : BaseActivity() {
         rbAutoSelect.isChecked = isAuto
         cardAutoSelect.strokeWidth = if (isAuto) 3 else 0
 
+        val activeGuid = if (V2RayServiceManager.isRunning()) MmkvManager.getSelectServer() else null
         val subs = PersonalServersManager.getPersonalSubscriptions()
         val servers = PersonalServersManager.getPersonalServers()
-        adapter.setData(subs, servers, config.selectedServerGuid, config.exitNodeServerGuid)
+        adapter.setData(subs, servers, config.selectedServerGuid, config.exitNodeServerGuid, activeGuid)
 
         tvEmpty.visibility = if (subs.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
         updateConnectionStatus()

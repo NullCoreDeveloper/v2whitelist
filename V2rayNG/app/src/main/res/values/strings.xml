@@ -645,6 +645,11 @@
     <string name="toast_custom_endpoint_selected">Selected custom endpoint: %s</string>
     <string name="toast_custom_endpoint_loading">Loading custom endpoint subscription…</string>
     <string name="toast_custom_endpoint_empty">No valid servers found in subscription</string>
+    <string name="menu_item_make_exit_node">Set as Exit Node</string>
+    <string name="menu_item_remove_exit_node">Remove Exit Node</string>
+    <string name="personal_exit_node_none">Exit node: not assigned</string>
+    <string name="personal_exit_node_assigned">Exit node: %s</string>
+    <string name="toast_exit_node_cleared">Exit node cleared</string>
 
     <!-- Custom Subscriptions -->
     <string name="title_custom_subscriptions">Manage Subscriptions</string>

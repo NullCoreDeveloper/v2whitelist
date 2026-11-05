@@ -123,10 +123,10 @@ object DesktopProfileVerifier {
             // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 через SOCKS / HTTP ──
             val serverTitle = profile.remarks.ifBlank { profile.server }
             val enabledServices = servicesToCheck.filter { it.enabled }
-            val useServicesCheck = serviceCheckEnabled && enabledServices.isNotEmpty()
+            val useServicesCheck = serviceCheckEnabled && customEndpointUrl.isNullOrBlank() && enabledServices.isNotEmpty()
 
             val latency: Long
-            if (useServicesCheck && customEndpointUrl.isNullOrBlank()) {
+            if (useServicesCheck) {
                 onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = enabledServices,

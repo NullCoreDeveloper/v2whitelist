@@ -98,7 +98,7 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 	var links []string
 	for _, line := range rawLines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
+		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
 			links = append(links, line)
 		}
 	}
@@ -497,7 +497,7 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		return config, streamSettings, dest, nil
 	}
 
-	if strings.HasPrefix(rawURL, "hysteria2://") {
+	if strings.HasPrefix(rawURL, "hysteria2://") || strings.HasPrefix(rawURL, "hy2://") {
 		u, err := url.Parse(rawURL)
 		if err != nil {
 			return nil, nil, net.Destination{}, err
@@ -525,7 +525,8 @@ func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 			},
 			SecurityType: "tls",
 			SecuritySettings: &tls.Config{
-				ServerName: sni,
+				ServerName:   sni,
+				NextProtocol: []string{"h3"},
 			},
 		}
 		if fp := q.Get("fp"); fp != "" {

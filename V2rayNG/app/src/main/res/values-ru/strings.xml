@@ -588,6 +588,11 @@
     <string name="toast_custom_endpoint_selected">Выбран конечный узел: %s</string>
     <string name="toast_custom_endpoint_loading">Загрузка подписки конечного узла…</string>
     <string name="toast_custom_endpoint_empty">В подписке не найдено серверов</string>
+    <string name="menu_item_make_exit_node">Сделать конечным узлом</string>
+    <string name="menu_item_remove_exit_node">Убрать конечный узел</string>
+    <string name="personal_exit_node_none">Конечный узел: не назначен</string>
+    <string name="personal_exit_node_assigned">Конечный узел: %s</string>
+    <string name="toast_exit_node_cleared">Конечный узел отключен</string>
     <string name="title_custom_subscriptions">Управление подписками</string>
     <string name="title_pref_use_builtin_sub">Использовать встроенную подписку</string>
     <string name="summary_pref_use_builtin_sub">Встроенная подписка ПроБел Official</string>

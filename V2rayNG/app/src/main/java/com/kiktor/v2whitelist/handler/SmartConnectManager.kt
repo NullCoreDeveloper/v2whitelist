@@ -15,6 +15,7 @@ import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.core.model.NetworkBindingRule
 import com.kiktor.v2whitelist.ui.LocationFilterActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -582,10 +583,23 @@ object SmartConnectManager {
         sendStatus(context, switchingMsg)
         try {
             val currentGuid = MmkvManager.getSelectServer()
+            val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
+            val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
 
-            // ── Приоритет личных серверов при смене сервера ─────────────────────────
+            // ── Учет правил сети и приоритета серверов при смене сервера ────────────────
             val personalConfig = PersonalServersManager.getConfig()
-            if (personalConfig.enabled) {
+            val isWifi = NetworkManager.isWifiActive(context)
+            val currentRule = if (isWifi) personalConfig.wifiRule else personalConfig.cellularRule
+
+            // Переключаемся среди личных серверов только если:
+            // 1) Личные сервера включены
+            // 2) Правило сети НЕ требует использовать сторонние подписки (USE_PUBLIC_SUBS)
+            // 3) Текущий сервер является личным, ЛИБО правило требует личные серверы
+            val shouldSwitchPersonal = personalConfig.enabled &&
+                currentRule != NetworkBindingRule.USE_PUBLIC_SUBS &&
+                (isCurrentPersonal || currentRule == NetworkBindingRule.USE_PERSONAL_AUTO || currentRule == NetworkBindingRule.USE_PERSONAL_SELECTED)
+
+            if (shouldSwitchPersonal) {
                 val personalCandidates = PersonalServersManager.getPersonalServers()
                 val otherPersonalCandidates = personalCandidates.filter { it.first != currentGuid }
 

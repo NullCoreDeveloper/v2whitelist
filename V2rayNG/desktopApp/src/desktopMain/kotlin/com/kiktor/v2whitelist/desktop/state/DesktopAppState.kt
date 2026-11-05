@@ -1312,7 +1312,11 @@ class DesktopAppState(
             xrayRunner.markStarting()
             _smartConnectStatus.value = "Переключение на следующий сервер…"
             try {
-                if (personalServersEnabled.value) {
+                val currentGuid = _selectedGuid.value
+                val currentProfile = currentGuid?.let { serverRepo.getServerConfig(it) }
+                val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
+
+                if (personalServersEnabled.value && isCurrentPersonal) {
                     val allPersonal = servers.value.filter { com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId) }
                     val otherPersonal = allPersonal.filter { it.first != _selectedGuid.value }
                     val next = otherPersonal.firstOrNull()
@@ -1917,6 +1921,27 @@ class DesktopAppState(
         }
         serverRepo.removeServer(guid)
         _selectedGuid.value = serverRepo.getSelectedServerGuid()
+    }
+
+    fun setExitNode(guid: String?) {
+        if (guid.isNullOrBlank()) {
+            useCustomEndpoint.value = false
+            customEndpointUrl.value = ""
+            settingsRepo.setBoolean("pref_custom_endpoint_enabled", false)
+            settingsRepo.setString("pref_custom_endpoint_url", "")
+            GeekModeLogger.log("AppState", "Конечный узел отключен")
+        } else {
+            val profile = serverRepo.getServerConfig(guid)
+            val uri = profile?.let { com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(it) } ?: ""
+            useCustomEndpoint.value = true
+            customEndpointUrl.value = uri
+            settingsRepo.setBoolean("pref_custom_endpoint_enabled", true)
+            settingsRepo.setString("pref_custom_endpoint_url", uri)
+            GeekModeLogger.log("AppState", "Назначен конечный узел: ${profile?.remarks}")
+        }
+        if (coreState.value == DesktopCoreState.RUNNING) {
+            connectCurrent()
+        }
     }
 
     fun pingServer(guid: String) {

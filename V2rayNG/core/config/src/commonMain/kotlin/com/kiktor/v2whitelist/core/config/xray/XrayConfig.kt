@@ -80,7 +80,9 @@ data class OutboundSettings(
     val domainStrategy: String? = null,
     // Blackhole (block)
     val response: BlackholeResponse? = null,
-    // Hysteria 2
+    // Hysteria 2 / Single server outbound
+    val address: String? = null,
+    val port: Int? = null,
     val version: Int? = null,
     val auth: String? = null,
     val up: String? = null,
@@ -147,7 +149,24 @@ data class XrayStreamSettings(
     val tlsSettings: TlsSettings? = null,
     val realitySettings: RealitySettings? = null,
     val hysteriaSettings: HysteriaSettings? = null,
+    val finalmask: XrayFinalMask? = null,
     val sockopt: SockoptSettings? = null
+)
+
+@Serializable
+data class XrayFinalMask(
+    val udp: List<XrayFinalMaskEntry>? = null
+)
+
+@Serializable
+data class XrayFinalMaskEntry(
+    val type: String = "salamander",
+    val settings: XrayFinalMaskSettings? = null
+)
+
+@Serializable
+data class XrayFinalMaskSettings(
+    val password: String? = null
 )
 
 @Serializable

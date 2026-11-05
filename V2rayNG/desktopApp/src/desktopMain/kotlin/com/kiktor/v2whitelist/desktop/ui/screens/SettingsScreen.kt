@@ -712,10 +712,12 @@ fun SettingsScreen(
                         checked = endpointE2eCheck,
                         onCheckedChange = { endpointE2eCheck = it }
                     )
+                    val isExitNodeActive = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value.isNotBlank()
                     SettingSwitchRow(
                         title = strings.serviceCheckEnable,
-                        desc = strings.serviceCheckEnableDesc,
-                        checked = serviceCheckEnabled,
+                        desc = if (isExitNodeActive) "${strings.serviceCheckEnableDesc} (игнорируется при активном конечном узле)" else strings.serviceCheckEnableDesc,
+                        checked = if (isExitNodeActive) false else serviceCheckEnabled,
+                        enabled = !isExitNodeActive,
                         onCheckedChange = { serviceCheckEnabled = it }
                     )
                     val currentServices by state.servicesList.collectAsState()
@@ -723,7 +725,8 @@ fun SettingsScreen(
                     OutlinedButton(
                         onClick = { state.promptServiceCheckDialog() },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = !isExitNodeActive
                     ) {
                         Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
@@ -1297,14 +1300,7 @@ fun SettingsScreen(
                                         }
                                         TextButton(
                                             onClick = {
-                                                val uri = UniversalConfigParser.toUri(profile) ?: ""
-                                                if (isExitNode) {
-                                                    state.useCustomEndpoint.value = false
-                                                    state.customEndpointUrl.value = ""
-                                                } else {
-                                                    state.useCustomEndpoint.value = true
-                                                    state.customEndpointUrl.value = uri
-                                                }
+                                                state.setExitNode(if (isExitNode) null else guid)
                                             }
                                         ) {
                                             Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
@@ -1375,14 +1371,7 @@ fun SettingsScreen(
                                     }
                                     TextButton(
                                         onClick = {
-                                            val uri = UniversalConfigParser.toUri(profile) ?: ""
-                                            if (isExitNode) {
-                                                state.useCustomEndpoint.value = false
-                                                state.customEndpointUrl.value = ""
-                                            } else {
-                                                state.useCustomEndpoint.value = true
-                                                state.customEndpointUrl.value = uri
-                                            }
+                                            state.setExitNode(if (isExitNode) null else guid)
                                         }
                                     ) {
                                         Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
@@ -1685,6 +1674,7 @@ private fun SettingSwitchRow(
     title: String,
     desc: String,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -1699,17 +1689,18 @@ private fun SettingSwitchRow(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
             Text(
                 text = desc,
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
         Switch(
             checked = checked,
+            enabled = enabled,
             onCheckedChange = onCheckedChange
         )
     }

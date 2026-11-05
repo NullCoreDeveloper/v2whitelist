@@ -488,6 +488,8 @@ object XrayConfigGenerator {
                     protocol = "hysteria",
                     settings = OutboundSettings(
                         version = 2,
+                        address = serverAddr,
+                        port = port,
                         auth = profile.password.orEmpty(),
                         up = profile.bandwidthUp?.ifEmpty { "0" },
                         down = profile.bandwidthDown?.ifEmpty { "0" }
@@ -571,12 +573,15 @@ object XrayConfigGenerator {
         }
 
         val tlsSettings = if (security == "tls") {
-            val alpnList = profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
-                ?: if (isHysteria) listOf("h3") else null
+            val alpnList = if (isHysteria) {
+                listOf("h3")
+            } else {
+                profile.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            }
             TlsSettings(
                 serverName = sni,
                 alpn = alpnList,
-                fingerprint = profile.fingerPrint,
+                fingerprint = profile.fingerPrint?.takeIf { it.isNotBlank() } ?: (if (isHysteria) "chrome" else null),
                 pinnedPeerCertSha256 = profile.pinnedCA256
             )
         } else null
@@ -643,6 +648,17 @@ object XrayConfigGenerator {
             )
         } else null
 
+        val finalmask = if (isHysteria && !profile.obfsPassword.isNullOrBlank()) {
+            XrayFinalMask(
+                udp = listOf(
+                    XrayFinalMaskEntry(
+                        type = "salamander",
+                        settings = XrayFinalMaskSettings(password = profile.obfsPassword)
+                    )
+                )
+            )
+        } else null
+
         return XrayStreamSettings(
             network = network,
             security = security,
@@ -652,7 +668,8 @@ object XrayConfigGenerator {
             xhttpSettings = xhttpSettings,
             tlsSettings = tlsSettings,
             realitySettings = realitySettings,
-            hysteriaSettings = hysteriaSettings
+            hysteriaSettings = hysteriaSettings,
+            finalmask = finalmask
         )
     }
 
