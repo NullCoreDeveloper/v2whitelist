@@ -217,8 +217,14 @@ class PersonalServersActivity : BaseActivity() {
             onShare = { guid ->
                 shareServer(guid)
             },
-            onDelete = { guid ->
+            onDeleteServer = { guid ->
                 showDeleteConfirmDialog(guid)
+            },
+            onUpdateSub = { subId ->
+                updateSinglePersonalSubscription(subId)
+            },
+            onDeleteSub = { subId ->
+                showDeleteSubConfirmDialog(subId)
             }
         )
         rvPersonalServers.adapter = adapter
@@ -244,10 +250,11 @@ class PersonalServersActivity : BaseActivity() {
         rbAutoSelect.isChecked = isAuto
         cardAutoSelect.strokeWidth = if (isAuto) 3 else 0
 
+        val subs = PersonalServersManager.getPersonalSubscriptions()
         val servers = PersonalServersManager.getPersonalServers()
-        adapter.setData(servers, config.selectedServerGuid, config.exitNodeServerGuid)
+        adapter.setData(subs, servers, config.selectedServerGuid, config.exitNodeServerGuid)
 
-        tvEmpty.visibility = if (servers.isEmpty()) View.VISIBLE else View.GONE
+        tvEmpty.visibility = if (subs.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
         updateConnectionStatus()
     }
 
@@ -464,11 +471,37 @@ class PersonalServersActivity : BaseActivity() {
     }
 
     private fun showDeleteConfirmDialog(guid: String) {
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(R.string.menu_item_del_config)
             .setMessage(R.string.del_config_comfirm)
             .setPositiveButton(android.R.string.ok) { dialog, which ->
                 PersonalServersManager.removePersonalServer(guid)
+                toast(R.string.personal_server_deleted)
+                loadData()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateSinglePersonalSubscription(subId: String) {
+        val sub = PersonalServersManager.getPersonalSubscriptions().firstOrNull { it.guid == subId }
+        val name = sub?.subscription?.remarks ?: getString(R.string.personal_dialog_sub_title)
+        lifecycleScope.launch {
+            toast(R.string.personal_sub_updating)
+            val count = PersonalServersManager.fetchSubscription(subId)
+            toast(getString(R.string.personal_sub_single_updated, name, count))
+            loadData()
+        }
+    }
+
+    private fun showDeleteSubConfirmDialog(subId: String) {
+        val sub = PersonalServersManager.getPersonalSubscriptions().firstOrNull { it.guid == subId }
+        val name = sub?.subscription?.remarks ?: getString(R.string.personal_dialog_sub_title)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.personal_sub_delete_title)
+            .setMessage(getString(R.string.personal_sub_delete_confirm, name))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                PersonalServersManager.removePersonalSubscription(subId)
                 toast(R.string.personal_server_deleted)
                 loadData()
             }

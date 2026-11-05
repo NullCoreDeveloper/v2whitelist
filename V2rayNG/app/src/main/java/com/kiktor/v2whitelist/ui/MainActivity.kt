@@ -37,6 +37,7 @@ import com.kiktor.v2whitelist.extension.toastError
 import com.kiktor.v2whitelist.handler.AngConfigManager
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NotificationManager
+import com.kiktor.v2whitelist.handler.PersonalServersManager
 import com.kiktor.v2whitelist.handler.SettingsChangeManager
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
@@ -775,7 +776,7 @@ class MainActivity : HelperBaseActivity() {
                     val p = MmkvManager.decodeServerConfig(guid)
                     com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(p?.subscriptionId)
                 } ?: false
-            val personalConfig = com.kiktor.v2whitelist.handler.PersonalServersManager.getConfig()
+            val personalConfig = PersonalServersManager.getConfig()
             val ignoreExitForCurrent = isPersonal && personalConfig.ignoreExitNodeForPersonal
             val effectiveEndpointEnabled = isCustomEndpointEnabled && !ignoreExitForCurrent
 

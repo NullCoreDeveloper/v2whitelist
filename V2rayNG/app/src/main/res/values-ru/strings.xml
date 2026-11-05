@@ -916,4 +916,9 @@
     <string name="personal_servers_imported">Добавлено серверов: %d</string>
     <string name="personal_sub_updating">Обновление доверенных подписок…</string>
     <string name="personal_sub_updated">Подписки обновлены, активных серверов: %d</string>
+    <string name="personal_direct_servers_title">Отдельные серверы</string>
+    <string name="personal_sub_servers_count">Серверов: %d</string>
+    <string name="personal_sub_delete_title">Удалить подписку</string>
+    <string name="personal_sub_delete_confirm">Удалить подписку «%s» и все входящие в неё серверы?</string>
+    <string name="personal_sub_single_updated">Подписка «%1$s» обновлена (серверов: %2$d)</string>
 </resources>

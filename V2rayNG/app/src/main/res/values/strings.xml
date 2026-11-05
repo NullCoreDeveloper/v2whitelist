@@ -923,4 +923,9 @@
     <string name="personal_servers_imported">Added %d servers</string>
     <string name="personal_sub_updating">Updating trusted subscriptions…</string>
     <string name="personal_sub_updated">Subscriptions updated, active servers: %d</string>
+    <string name="personal_direct_servers_title">Direct servers</string>
+    <string name="personal_sub_servers_count">%d servers</string>
+    <string name="personal_sub_delete_title">Delete subscription</string>
+    <string name="personal_sub_delete_confirm">Delete subscription \"%s\" and all its servers?</string>
+    <string name="personal_sub_single_updated">Subscription \"%1$s\" updated (%2$d servers)</string>
 </resources>

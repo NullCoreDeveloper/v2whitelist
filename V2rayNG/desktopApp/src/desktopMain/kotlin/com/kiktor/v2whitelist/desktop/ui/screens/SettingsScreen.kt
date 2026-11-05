@@ -1101,9 +1101,9 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
 
                 SettingsCard(
-                    title = "Добавить доверенный узел",
+                    title = "Добавить доверенный узел или подписку",
                     icon = Icons.Default.Add,
-                    description = "Вставьте ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://)"
+                    description = "Вставьте ссылку на сервер (vless://, vmess://, ...) или URL подписки (http://, https://)"
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1112,7 +1112,7 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = newPersonalLink,
                             onValueChange = { newPersonalLink = it },
-                            label = { Text("Ссылка на конфигурацию сервера") },
+                            label = { Text("Ссылка на конфигурацию или подписку") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
@@ -1121,13 +1121,25 @@ fun SettingsScreen(
                             onClick = {
                                 if (newPersonalLink.isNotBlank()) {
                                     val trimmed = newPersonalLink.trim()
-                                    val lines = trimmed.lines().map { it.trim() }.filter { it.isNotBlank() }
-                                    for (line in lines) {
-                                        val parsed = UniversalConfigParser.parse(line)
-                                        if (parsed != null) {
-                                            parsed.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
-                                            val guid = java.util.UUID.randomUUID().toString()
-                                            state.serverRepo.saveServerConfig(guid, parsed)
+                                    if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                                        val subId = "${PersonalServersConfig.SUB_ID_PERSONAL_PREFIX}${java.util.UUID.randomUUID().toString().take(8)}"
+                                        val newSub = com.kiktor.v2whitelist.core.subscription.model.CustomSubData(
+                                            id = subId,
+                                            name = "Доверенная подписка",
+                                            url = trimmed,
+                                            enabled = true
+                                        )
+                                        state.saveSubscription(newSub)
+                                        state.updateAllActiveSubscriptions()
+                                    } else {
+                                        val lines = trimmed.lines().map { it.trim() }.filter { it.isNotBlank() }
+                                        for (line in lines) {
+                                            val parsed = UniversalConfigParser.parse(line)
+                                            if (parsed != null) {
+                                                parsed.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
+                                                val guid = java.util.UUID.randomUUID().toString()
+                                                state.serverRepo.saveServerConfig(guid, parsed)
+                                            }
                                         }
                                     }
                                     newPersonalLink = ""
@@ -1144,6 +1156,10 @@ fun SettingsScreen(
                 val personalServers = state.servers.collectAsState().value.filter {
                     PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
                 }
+                val personalSubs = state.subscriptions.collectAsState().value.filter {
+                    it.id.startsWith(PersonalServersConfig.SUB_ID_PERSONAL_PREFIX)
+                }
+                val collapsedPersonalSubs = remember { mutableStateListOf<String>() }
 
                 SettingsCard(
                     title = "Список доверенных серверов (${personalServers.size})",
@@ -1169,64 +1185,211 @@ fun SettingsScreen(
                         }
                     }
 
-                    if (personalServers.isEmpty()) {
+                    if (personalServers.isEmpty() && personalSubs.isEmpty()) {
                         Text(
-                            text = "Нет добавленных доверенных серверов. Добавьте свой VPS выше.",
+                            text = "Нет добавленных доверенных серверов. Добавьте свой VPS или подписку выше.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     } else {
-                        personalServers.forEach { (guid, profile) ->
-                            val isSel = personalSelectedGuid == guid
-                            val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
-                            Row(
+                        // 1. Группы по доверенным подпискам
+                        personalSubs.forEach { sub ->
+                            val subServers = personalServers.filter { it.second.subscriptionId == sub.id }
+                            val isExpanded = !collapsedPersonalSubs.contains(sub.id)
+
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { personalSelectedGuid = guid }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (isExpanded) collapsedPersonalSubs.add(sub.id) else collapsedPersonalSubs.remove(sub.id)
+                                    },
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                RadioButton(
-                                    selected = isSel,
-                                    onClick = { personalSelectedGuid = guid }
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(profile.remarks.ifBlank { "Сервер" }, fontWeight = FontWeight.SemiBold)
-                                        if (isExitNode) {
-                                            Spacer(Modifier.width(6.dp))
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                shape = RoundedCornerShape(4.dp)
-                                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.CloudDownload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(sub.name.ifBlank { "Доверенная подписка" }, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text("${subServers.size} серв.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    IconButton(
+                                        onClick = { state.updateAllActiveSubscriptions() },
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Обновить подписку", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { state.deleteSubscription(sub.id) },
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить подписку", tint = AccentRed, modifier = Modifier.size(16.dp))
+                                    }
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            if (isExpanded) {
+                                subServers.forEach { (guid, profile) ->
+                                    val isSel = personalSelectedGuid == guid
+                                    val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
+                                    val serverPing = state.pingMap.collectAsState().value[guid]
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp)
+                                            .clickable { personalSelectedGuid = guid }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = isSel,
+                                            onClick = { personalSelectedGuid = guid }
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(profile.remarks.ifBlank { "Сервер" }, fontWeight = FontWeight.SemiBold)
+                                                if (isExitNode) {
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            "Конечный узел",
+                                                            color = MaterialTheme.colorScheme.onPrimary,
+                                                            fontSize = 10.sp,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("${profile.configType.name} • ${profile.server}:${profile.serverPort}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                if (serverPing != null) {
+                                                    Text(
+                                                        if (serverPing > 0) " • ${serverPing}ms" else " • Таймаут",
+                                                        fontSize = 12.sp,
+                                                        color = if (serverPing > 0) AccentMint else AccentRed,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        IconButton(onClick = { state.pingServer(guid) }) {
+                                            Icon(Icons.Default.Speed, contentDescription = "Пинг", modifier = Modifier.size(16.dp))
+                                        }
+                                        TextButton(
+                                            onClick = {
+                                                val uri = UniversalConfigParser.toUri(profile) ?: ""
+                                                if (isExitNode) {
+                                                    state.useCustomEndpoint.value = false
+                                                    state.customEndpointUrl.value = ""
+                                                } else {
+                                                    state.useCustomEndpoint.value = true
+                                                    state.customEndpointUrl.value = uri
+                                                }
+                                            }
+                                        ) {
+                                            Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
+                                        }
+                                        IconButton(onClick = { state.deleteServer(guid) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Отдельные серверы
+                        val directServers = personalServers.filter { s -> personalSubs.none { it.id == s.second.subscriptionId } }
+                        if (directServers.isNotEmpty()) {
+                            if (personalSubs.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("Отдельные серверы (${directServers.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                            directServers.forEach { (guid, profile) ->
+                                val isSel = personalSelectedGuid == guid
+                                val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
+                                val serverPing = state.pingMap.collectAsState().value[guid]
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { personalSelectedGuid = guid }
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = isSel,
+                                        onClick = { personalSelectedGuid = guid }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(profile.remarks.ifBlank { "Сервер" }, fontWeight = FontWeight.SemiBold)
+                                            if (isExitNode) {
+                                                Spacer(Modifier.width(6.dp))
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        "Конечный узел",
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        fontSize = 10.sp,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("${profile.configType.name} • ${profile.server}:${profile.serverPort}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            if (serverPing != null) {
                                                 Text(
-                                                    "Конечный узел",
-                                                    color = MaterialTheme.colorScheme.onPrimary,
-                                                    fontSize = 10.sp,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                    if (serverPing > 0) " • ${serverPing}ms" else " • Таймаут",
+                                                    fontSize = 12.sp,
+                                                    color = if (serverPing > 0) AccentMint else AccentRed,
+                                                    fontWeight = FontWeight.Medium
                                                 )
                                             }
                                         }
                                     }
-                                    Text("${profile.configType.name} • ${profile.server}:${profile.serverPort}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                TextButton(
-                                    onClick = {
-                                        val uri = UniversalConfigParser.toUri(profile) ?: ""
-                                        if (isExitNode) {
-                                            state.useCustomEndpoint.value = false
-                                            state.customEndpointUrl.value = ""
-                                        } else {
-                                            state.useCustomEndpoint.value = true
-                                            state.customEndpointUrl.value = uri
-                                        }
+                                    IconButton(onClick = { state.pingServer(guid) }) {
+                                        Icon(Icons.Default.Speed, contentDescription = "Пинг", modifier = Modifier.size(16.dp))
                                     }
-                                ) {
-                                    Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
-                                }
-                                IconButton(onClick = { state.deleteServer(guid) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                                    TextButton(
+                                        onClick = {
+                                            val uri = UniversalConfigParser.toUri(profile) ?: ""
+                                            if (isExitNode) {
+                                                state.useCustomEndpoint.value = false
+                                                state.customEndpointUrl.value = ""
+                                            } else {
+                                                state.useCustomEndpoint.value = true
+                                                state.customEndpointUrl.value = uri
+                                            }
+                                        }
+                                    ) {
+                                        Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
+                                    }
+                                    IconButton(onClick = { state.deleteServer(guid) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                                    }
                                 }
                             }
                         }
