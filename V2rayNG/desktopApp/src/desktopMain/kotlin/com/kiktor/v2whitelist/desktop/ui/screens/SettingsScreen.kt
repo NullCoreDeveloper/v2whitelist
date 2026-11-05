@@ -1067,6 +1067,17 @@ fun SettingsScreen(
             }
 
             DesktopSettingsCategory.PERSONAL_SERVERS -> {
+                val currentEpEnabled by state.useCustomEndpoint.collectAsState()
+                val currentEpUrl by state.customEndpointUrl.collectAsState()
+                val assignedEpProfile = remember(currentEpUrl) {
+                    if (currentEpUrl.isNotBlank()) UniversalConfigParser.parse(currentEpUrl) else null
+                }
+                val exitNodeDesc = when {
+                    assignedEpProfile != null && currentEpEnabled -> "Конечный узел: ${assignedEpProfile.remarks.ifBlank { "${assignedEpProfile.server}:${assignedEpProfile.serverPort}" }}"
+                    assignedEpProfile != null -> "Отключен (назначен: ${assignedEpProfile.remarks.ifBlank { "${assignedEpProfile.server}:${assignedEpProfile.serverPort}" }})"
+                    else -> "Конечный узел: не назначен (выберите «Сделать Exit» у доверенного сервера ниже)"
+                }
+
                 SettingsCard(
                     title = "Управление доверенными серверами",
                     icon = Icons.Default.Dns,
@@ -1077,6 +1088,18 @@ fun SettingsScreen(
                         desc = "Приоритетно использовать доверенные узлы вместо сторонних подписок",
                         checked = personalEnabled,
                         onCheckedChange = { personalEnabled = it }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SettingSwitchRow(
+                        title = "Конечный узел (Proxy Chaining)",
+                        desc = exitNodeDesc,
+                        checked = currentEpEnabled && assignedEpProfile != null,
+                        enabled = assignedEpProfile != null,
+                        onCheckedChange = { enabled ->
+                            state.setExitNodeEnabled(enabled)
+                            useCustomEp = state.useCustomEndpoint.value
+                            customEpConfig = state.customEndpointUrl.value
+                        }
                     )
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
@@ -1301,6 +1324,8 @@ fun SettingsScreen(
                                         TextButton(
                                             onClick = {
                                                 state.setExitNode(if (isExitNode) null else guid)
+                                                useCustomEp = state.useCustomEndpoint.value
+                                                customEpConfig = state.customEndpointUrl.value
                                             }
                                         ) {
                                             Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")
@@ -1372,6 +1397,8 @@ fun SettingsScreen(
                                     TextButton(
                                         onClick = {
                                             state.setExitNode(if (isExitNode) null else guid)
+                                            useCustomEp = state.useCustomEndpoint.value
+                                            customEpConfig = state.customEndpointUrl.value
                                         }
                                     ) {
                                         Text(if (isExitNode) "Убрать Exit" else "Сделать Exit")

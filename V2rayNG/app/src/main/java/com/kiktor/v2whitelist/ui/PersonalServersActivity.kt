@@ -67,6 +67,7 @@ class PersonalServersActivity : BaseActivity() {
     private lateinit var tvEmpty: TextView
 
     private lateinit var adapter: PersonalServerAdapter
+    private var isUpdatingUi = false
 
     private val scannerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -149,18 +150,23 @@ class PersonalServersActivity : BaseActivity() {
 
     private fun setupListeners() {
         swEnablePersonal.setOnCheckedChangeListener { _, isChecked ->
-            PersonalServersManager.setEnabled(isChecked)
-            updateConnectionStatus()
-            if (V2RayServiceManager.isRunning()) {
-                lifecycleScope.launch {
-                    SmartConnectManager.smartConnect(this@PersonalServersActivity)
-                    updateConnectionStatus()
-                    loadData()
+            if (isUpdatingUi) return@setOnCheckedChangeListener
+            val cfg = PersonalServersManager.getConfig()
+            if (cfg.enabled != isChecked) {
+                PersonalServersManager.setEnabled(isChecked)
+                updateConnectionStatus()
+                if (V2RayServiceManager.isRunning()) {
+                    lifecycleScope.launch {
+                        SmartConnectManager.smartConnect(this@PersonalServersActivity)
+                        updateConnectionStatus()
+                        loadData()
+                    }
                 }
             }
         }
 
         swExitNodeEnabled.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
             val cfg = PersonalServersManager.getConfig()
             if (cfg.exitNodeEnabled != isChecked) {
                 if (isChecked && !cfg.exitNodeServerGuid.isNullOrBlank()) {
@@ -178,18 +184,30 @@ class PersonalServersActivity : BaseActivity() {
         }
 
         swIgnoreExitNode.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
             val cfg = PersonalServersManager.getConfig()
-            PersonalServersManager.saveConfig(cfg.copy(ignoreExitNodeForPersonal = isChecked))
+            if (cfg.ignoreExitNodeForPersonal != isChecked) {
+                PersonalServersManager.saveConfig(cfg.copy(ignoreExitNodeForPersonal = isChecked))
+                if (V2RayServiceManager.isRunning()) {
+                    com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
+                }
+            }
         }
 
         swAutoConnect.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
             val cfg = PersonalServersManager.getConfig()
-            PersonalServersManager.saveConfig(cfg.copy(autoConnectOnStartup = isChecked))
+            if (cfg.autoConnectOnStartup != isChecked) {
+                PersonalServersManager.saveConfig(cfg.copy(autoConnectOnStartup = isChecked))
+            }
         }
 
         swFallbackPublic.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
             val cfg = PersonalServersManager.getConfig()
-            PersonalServersManager.saveConfig(cfg.copy(fallbackToPublicOnFailure = isChecked))
+            if (cfg.fallbackToPublicOnFailure != isChecked) {
+                PersonalServersManager.saveConfig(cfg.copy(fallbackToPublicOnFailure = isChecked))
+            }
         }
 
         btnToggleConnect.setOnClickListener {
@@ -240,6 +258,7 @@ class PersonalServersActivity : BaseActivity() {
 
         spWifiRule.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
+                if (isUpdatingUi) return
                 val cfg = PersonalServersManager.getConfig()
                 val selectedRule = ruleValues.getOrElse(position) { NetworkBindingRule.USE_PERSONAL_AUTO }
                 if (cfg.wifiRule != selectedRule) {
@@ -251,6 +270,7 @@ class PersonalServersActivity : BaseActivity() {
 
         spCellularRule.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p0: AdapterView<*>?, p1: View?, position: Int, p3: Long) {
+                if (isUpdatingUi) return
                 val cfg = PersonalServersManager.getConfig()
                 val selectedRule = ruleValues.getOrElse(position) { NetworkBindingRule.USE_PUBLIC_SUBS }
                 if (cfg.cellularRule != selectedRule) {
@@ -332,45 +352,54 @@ class PersonalServersActivity : BaseActivity() {
     }
 
     private fun loadData() {
-        val config = PersonalServersManager.getConfig()
-        swEnablePersonal.isChecked = config.enabled
-        swIgnoreExitNode.isChecked = config.ignoreExitNodeForPersonal
-        swAutoConnect.isChecked = config.autoConnectOnStartup
-        swFallbackPublic.isChecked = config.fallbackToPublicOnFailure
+        isUpdatingUi = true
+        try {
+            PersonalServersManager.sanitizeExitNode()
+            val config = PersonalServersManager.getConfig()
+            swEnablePersonal.isChecked = config.enabled
+            swIgnoreExitNode.isChecked = config.ignoreExitNodeForPersonal
+            swAutoConnect.isChecked = config.autoConnectOnStartup
+            swFallbackPublic.isChecked = config.fallbackToPublicOnFailure
 
-        val exitGuid = config.exitNodeServerGuid
-        val exitProfile = exitGuid?.let { MmkvManager.decodeServerConfig(it) }
-        if (exitProfile != null) {
-            tvExitNodeStatus.text = if (config.exitNodeEnabled) getString(R.string.personal_exit_node_assigned, exitProfile.remarks)
-                else getString(R.string.personal_exit_node_none)
-            swExitNodeEnabled.isEnabled = true
-            swExitNodeEnabled.isChecked = config.exitNodeEnabled
-        } else {
-            tvExitNodeStatus.text = getString(R.string.personal_exit_node_none)
-            swExitNodeEnabled.isEnabled = false
-            swExitNodeEnabled.isChecked = false
+            val exitGuid = config.exitNodeServerGuid
+            val exitProfile = exitGuid?.let { MmkvManager.decodeServerConfig(it) }
+            if (exitProfile != null) {
+                tvExitNodeStatus.text = if (config.exitNodeEnabled) {
+                    getString(R.string.personal_exit_node_assigned, exitProfile.remarks)
+                } else {
+                    "Отключен (назначен: ${exitProfile.remarks})"
+                }
+                swExitNodeEnabled.isEnabled = true
+                swExitNodeEnabled.isChecked = config.exitNodeEnabled
+            } else {
+                tvExitNodeStatus.text = getString(R.string.personal_exit_node_none)
+                swExitNodeEnabled.isEnabled = false
+                swExitNodeEnabled.isChecked = false
+            }
+
+            val ruleValues = listOf(
+                NetworkBindingRule.USE_PERSONAL_AUTO,
+                NetworkBindingRule.USE_PERSONAL_SELECTED,
+                NetworkBindingRule.USE_PUBLIC_SUBS,
+                NetworkBindingRule.DIRECT_NO_VPN
+            )
+            spWifiRule.setSelection(ruleValues.indexOf(config.wifiRule).coerceAtLeast(0))
+            spCellularRule.setSelection(ruleValues.indexOf(config.cellularRule).coerceAtLeast(0))
+
+            val isAuto = config.selectedServerGuid.isNullOrBlank()
+            rbAutoSelect.isChecked = isAuto
+            cardAutoSelect.strokeWidth = if (isAuto) 3 else 0
+
+            val activeGuid = if (V2RayServiceManager.isRunning()) MmkvManager.getSelectServer() else null
+            val subs = PersonalServersManager.getPersonalSubscriptions()
+            val servers = PersonalServersManager.getPersonalServers()
+            adapter.setData(subs, servers, config.selectedServerGuid, if (config.exitNodeEnabled) config.exitNodeServerGuid else null, activeGuid)
+
+            tvEmpty.visibility = if (subs.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
+            updateConnectionStatus()
+        } finally {
+            isUpdatingUi = false
         }
-
-        val ruleValues = listOf(
-            NetworkBindingRule.USE_PERSONAL_AUTO,
-            NetworkBindingRule.USE_PERSONAL_SELECTED,
-            NetworkBindingRule.USE_PUBLIC_SUBS,
-            NetworkBindingRule.DIRECT_NO_VPN
-        )
-        spWifiRule.setSelection(ruleValues.indexOf(config.wifiRule).coerceAtLeast(0))
-        spCellularRule.setSelection(ruleValues.indexOf(config.cellularRule).coerceAtLeast(0))
-
-        val isAuto = config.selectedServerGuid.isNullOrBlank()
-        rbAutoSelect.isChecked = isAuto
-        cardAutoSelect.strokeWidth = if (isAuto) 3 else 0
-
-        val activeGuid = if (V2RayServiceManager.isRunning()) MmkvManager.getSelectServer() else null
-        val subs = PersonalServersManager.getPersonalSubscriptions()
-        val servers = PersonalServersManager.getPersonalServers()
-        adapter.setData(subs, servers, config.selectedServerGuid, if (config.exitNodeEnabled) config.exitNodeServerGuid else null, activeGuid)
-
-        tvEmpty.visibility = if (subs.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
-        updateConnectionStatus()
     }
 
     private fun updateConnectionStatus() {

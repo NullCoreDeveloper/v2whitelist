@@ -192,9 +192,17 @@ object SmartFailoverManager {
             val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
             val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
 
-            if (isCurrentPersonal && !personalCfg.selectedServerGuid.isNullOrBlank() && !personalCfg.fallbackToPublicOnFailure) {
-                GeekModeLogger.log("Failover", "Personal server statically selected and fallback to public is disabled. Aborting failover, staying on personal node.")
-                return
+            if (isCurrentPersonal && currentGuid != null) {
+                if (!personalCfg.selectedServerGuid.isNullOrBlank() && !personalCfg.fallbackToPublicOnFailure) {
+                    GeekModeLogger.log("Failover", "Personal server statically selected and fallback to public is disabled. Aborting failover, staying on personal node.")
+                    return
+                }
+                // Дополнительная проверка перед уходом с доверенного сервера (защита от ложных срабатываний)
+                val recheckDelay = testTunnelDelay(5000L)
+                if (recheckDelay > 0L) {
+                    GeekModeLogger.log("Failover", "Personal server ${currentProfile?.remarks} responded on recheck (${recheckDelay}ms). Staying on personal node.")
+                    return
+                }
             }
         }
 

@@ -1591,10 +1591,17 @@ class DesktopAppState(
             } else emptyList()
 
             val isPersonal = com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)
+            sanitizeExitNode()
             val endpoint = if (isPersonal && personalIgnoreExitNode.value) {
                 null
             } else if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) {
-                customEndpointUrl.value.trim()
+                val epUrl = customEndpointUrl.value.trim()
+                val epParsed = com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(epUrl)
+                if (epParsed != null && epParsed.server == profile.server && epParsed.serverPort == profile.serverPort) {
+                    null
+                } else {
+                    epUrl
+                }
             } else null
 
             val currentSocksPort = socksPort.value
@@ -1916,11 +1923,53 @@ class DesktopAppState(
     }
 
     fun deleteServer(guid: String) {
+        val deletedProfile = serverRepo.getServerConfig(guid)
         if (_selectedGuid.value == guid && coreState.value == DesktopCoreState.RUNNING) {
             stopCore()
         }
         serverRepo.removeServer(guid)
         _selectedGuid.value = serverRepo.getSelectedServerGuid()
+        if (deletedProfile != null) {
+            val deletedUri = com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(deletedProfile)
+            if (!deletedUri.isNullOrBlank() && customEndpointUrl.value == deletedUri) {
+                setExitNode(null)
+            }
+        }
+    }
+
+    fun sanitizeExitNode() {
+        val epUrl = customEndpointUrl.value.trim()
+        if (epUrl.isBlank()) {
+            if (useCustomEndpoint.value) {
+                useCustomEndpoint.value = false
+                settingsRepo.setBoolean("pref_custom_endpoint_enabled", false)
+            }
+            return
+        }
+        val epParsed = com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(epUrl)
+        val personalServers = servers.value.filter {
+            com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+        }
+        val isPersonalMatch = personalServers.any { (_, p) ->
+            com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(p) == epUrl ||
+                (epParsed != null && !p.server.isNullOrBlank() && p.server == epParsed.server && p.serverPort == epParsed.serverPort)
+        }
+        if (!isPersonalMatch) {
+            GeekModeLogger.log("AppState", "Автоочистка некорректного/публичного конечного узла")
+            useCustomEndpoint.value = false
+            customEndpointUrl.value = ""
+            settingsRepo.setBoolean("pref_custom_endpoint_enabled", false)
+            settingsRepo.setString("pref_custom_endpoint_url", "")
+        }
+    }
+
+    fun setExitNodeEnabled(enabled: Boolean) {
+        if (enabled && customEndpointUrl.value.isBlank()) return
+        useCustomEndpoint.value = enabled
+        settingsRepo.setBoolean("pref_custom_endpoint_enabled", enabled)
+        if (coreState.value == DesktopCoreState.RUNNING) {
+            connectCurrent()
+        }
     }
 
     fun setExitNode(guid: String?) {
@@ -1932,12 +1981,20 @@ class DesktopAppState(
             GeekModeLogger.log("AppState", "Конечный узел отключен")
         } else {
             val profile = serverRepo.getServerConfig(guid)
-            val uri = profile?.let { com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(it) } ?: ""
+            if (profile == null || !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                GeekModeLogger.log("AppState", "Отклонено назначение публичного сервера конечным узлом")
+                useCustomEndpoint.value = false
+                customEndpointUrl.value = ""
+                settingsRepo.setBoolean("pref_custom_endpoint_enabled", false)
+                settingsRepo.setString("pref_custom_endpoint_url", "")
+                return
+            }
+            val uri = com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(profile) ?: ""
             useCustomEndpoint.value = true
             customEndpointUrl.value = uri
             settingsRepo.setBoolean("pref_custom_endpoint_enabled", true)
             settingsRepo.setString("pref_custom_endpoint_url", uri)
-            GeekModeLogger.log("AppState", "Назначен конечный узел: ${profile?.remarks}")
+            GeekModeLogger.log("AppState", "Назначен конечный узел: ${profile.remarks}")
         }
         if (coreState.value == DesktopCoreState.RUNNING) {
             connectCurrent()

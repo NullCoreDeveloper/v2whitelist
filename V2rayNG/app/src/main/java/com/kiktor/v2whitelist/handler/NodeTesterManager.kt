@@ -156,6 +156,9 @@ object NodeTesterManager {
                 }
             }
         }
+        if (!currentCoroutineContext().isActive) {
+            throw kotlinx.coroutines.CancellationException("Scan cancelled")
+        }
 
         return resultsList.sortedBy { it.third }
     }

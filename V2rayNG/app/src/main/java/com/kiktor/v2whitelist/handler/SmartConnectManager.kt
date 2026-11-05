@@ -42,18 +42,27 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 
 class ScanningStateHolder {
+    private val activeInProcess = AtomicBoolean(false)
+
     fun get(): Boolean {
+        if (activeInProcess.get()) return true
         val isScanning = MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SCANNING, false)
         if (!isScanning) return false
         val startTime = MmkvManager.decodeSettingsLong("pref_scanning_start_time", 0L)
-        if (startTime > 0 && System.currentTimeMillis() - startTime > 45_000L) {
+        if (startTime > 0 && System.currentTimeMillis() - startTime > 90_000L) {
             // Защита от зависшего лока (процесс был убит или упал во время сканирования)
             set(false)
             return false
         }
         return true
     }
+    fun touch() {
+        if (activeInProcess.get() || MmkvManager.decodeSettingsBool(AppConfig.PREF_IS_SCANNING, false)) {
+            MmkvManager.encodeSettings("pref_scanning_start_time", System.currentTimeMillis())
+        }
+    }
     fun set(value: Boolean) {
+        activeInProcess.set(value)
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SCANNING, value)
         if (value) {
             MmkvManager.encodeSettings("pref_scanning_start_time", System.currentTimeMillis())
@@ -81,6 +90,7 @@ object SmartConnectManager {
     private val vipFailCounters = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     private fun sendStatus(context: Context, status: String) {
+        isScanning.touch()
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, status)
         // Если идёт поиск — обновляем текст уведомления (беззвучно)
         if (isScanning.get()) {
@@ -327,6 +337,11 @@ object SmartConnectManager {
         MmkvManager.saveLastConnectedServer(best.first)
         GeekModeLogger.log("SmartConnect", "SmartConnect: server ${best.second.remarks} saved to top VIP cache")
 
+        // Завершаем фазу сканирования до запуска/переключения сервиса, чтобы MSG_STATE_START_SUCCESS
+        // сразу переключил главный экран в статус "Подключено"
+        isScanning.set(false)
+        NotificationManager.cancelScanningNotification(context)
+
         val isRunning = V2RayServiceManager.isRunning()
         if (isRunning) {
             MessageUtil.sendMsg2Service(context, AppConfig.MSG_STATE_SWITCH_SERVER, "")
@@ -387,6 +402,7 @@ object SmartConnectManager {
         NotificationManager.showScanningNotification(context, testingMsg)
         sendStatus(context, testingMsg)
         try {
+            PersonalServersManager.sanitizeExitNode()
             // Ждем появления интернета (dzen.ru) перед тем, как трогать кэш и удалять мертвые серверы
             NetworkManager.waitForInternet(context)
 
@@ -417,7 +433,12 @@ object SmartConnectManager {
                     is com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision.ScanPersonalPool -> {
                         GeekModeLogger.log("SmartConnect", "PersonalServers: Scanning personal pool of ${decision.candidates.size} servers")
                         sendStatus(context, context.getString(R.string.status_personal_scanning))
-                        val results = NodeTesterManager.testServers(context, decision.candidates)
+                        val results = NodeTesterManager.testServers(
+                            context,
+                            decision.candidates,
+                            totalTimeoutMs = 10000L,
+                            perServerTimeoutMs = 4000L
+                        )
                         val valid = results.filter { it.third < Long.MAX_VALUE }
                         val bestPersonal = valid.firstOrNull()
                         if (bestPersonal != null) {
@@ -582,6 +603,7 @@ object SmartConnectManager {
         NotificationManager.showScanningNotification(context, switchingMsg)
         sendStatus(context, switchingMsg)
         try {
+            PersonalServersManager.sanitizeExitNode()
             val currentGuid = MmkvManager.getSelectServer()
             val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
             val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
@@ -607,7 +629,12 @@ object SmartConnectManager {
                     GeekModeLogger.log("SmartConnect", "switchServer: Switching among ${otherPersonalCandidates.size} personal servers")
                     sendStatus(context, context.getString(R.string.status_personal_scanning))
 
-                    val results = NodeTesterManager.testServers(context, otherPersonalCandidates)
+                    val results = NodeTesterManager.testServers(
+                        context,
+                        otherPersonalCandidates,
+                        totalTimeoutMs = 10000L,
+                        perServerTimeoutMs = 4000L
+                    )
                     val valid = results.filter { it.third < Long.MAX_VALUE }
                     val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
 
@@ -632,13 +659,25 @@ object SmartConnectManager {
                     }
                 }
 
-                GeekModeLogger.log("SmartConnect", "PersonalServers: No other working personal server found in switchServer")
+                // Если других доверенных серверов нет (или они не ответили), проверяем текущий доверенный сервер:
+                // если он жив, НЕ переключаемся на публичные подписки!
+                if (isCurrentPersonal && currentGuid != null && currentProfile != null) {
+                    val currentAlive = NodeTesterManager.verifyProfile(context, currentGuid, showStatus = false)
+                    if (currentAlive) {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: Current personal server ${currentProfile.remarks} is alive and no other personal servers available; staying on it")
+                        connectToBest(context, Triple(currentGuid, currentProfile, 0L), isStartup = false)
+                        NotificationManager.cancelFailoverNotification()
+                        return@withContext true
+                    }
+                }
+
+                GeekModeLogger.log("SmartConnect", "PersonalServers: No working personal server found in switchServer")
                 if (!personalConfig.fallbackToPublicOnFailure) {
                     sendStatus(context, context.getString(R.string.status_personal_all_failed))
                     return@withContext false
                 }
                 sendStatus(context, context.getString(R.string.status_personal_failed_fallback))
-                // Продолжаем ниже к публичным серверам при включенном фоллбеке
+                // Продолжаем ниже к публичным серверам только если ВСЕ доверенные серверы реально недоступны
             }
 
             val allServers = MmkvManager.decodeServerList()

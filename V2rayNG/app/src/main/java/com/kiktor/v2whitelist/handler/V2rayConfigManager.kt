@@ -957,17 +957,17 @@ object V2rayConfigManager {
      * Local -> Smart Connect Node -> Custom Endpoint -> Internet
      */
     private fun getCustomEndpointOutbound(v2rayConfig: V2rayConfig, currentConfig: ProfileItem? = null): Boolean {
+        PersonalServersManager.sanitizeExitNode()
+        val personalConfig = PersonalServersManager.getConfig()
+        val personalServers = PersonalServersManager.getPersonalServers()
         val isPersonal = currentConfig != null && (
             com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentConfig.subscriptionId) ||
-            PersonalServersManager.getPersonalServers().any { it.second.server == currentConfig.server && it.second.serverPort == currentConfig.serverPort }
+            personalServers.any { it.second.server == currentConfig.server && it.second.serverPort == currentConfig.serverPort }
         )
-        if (isPersonal) {
-            val personalConfig = PersonalServersManager.getConfig()
-            if (personalConfig.ignoreExitNodeForPersonal) {
-                return false
-            }
+        if (isPersonal && personalConfig.ignoreExitNodeForPersonal) {
+            return false
         }
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED) != true) {
+        if (!personalConfig.exitNodeEnabled || MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED) != true) {
             return false
         }
 
@@ -976,16 +976,27 @@ object V2rayConfigManager {
             return false
         }
 
+        val customProfile = AngConfigManager.identifyConfigType(url) ?: return false
+
+        // Строгая защита: конечным узлом может быть только доверенный сервер пользователя
+        val isExitPersonal = personalServers.any { (_, p) ->
+            com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(p) == url ||
+                (!p.server.isNullOrBlank() && p.server == customProfile.server && p.serverPort == customProfile.serverPort)
+        }
+        if (!isExitPersonal) {
+            Log.w(AppConfig.TAG, "getCustomEndpointOutbound: custom endpoint is not a personal server, auto-clearing")
+            PersonalServersManager.setExitNode(null)
+            return false
+        }
+
         // Защита от петли: сервер не может быть конечным узлом для самого себя
         if (currentConfig != null) {
-            val customProfile = AngConfigManager.identifyConfigType(url)
-            if (customProfile != null && customProfile.server == currentConfig.server && customProfile.serverPort == currentConfig.serverPort) {
+            if (customProfile.server == currentConfig.server && customProfile.serverPort == currentConfig.serverPort) {
                 return false
             }
         }
 
         try {
-            val customProfile = AngConfigManager.identifyConfigType(url) ?: return false
             val customOutbound = convertProfile2Outbound(customProfile) ?: return false
             updateOutboundWithGlobalSettings(customOutbound)
             

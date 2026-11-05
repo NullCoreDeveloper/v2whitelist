@@ -447,11 +447,13 @@ class MainActivity : HelperBaseActivity() {
     private fun setupViewModel() {
         mainViewModel.isRunning.observe(this) { isRunning ->
             if (isRunning) {
-                // Сервис успешно запущен! Принудительно сбрасываем статус "Загрузка"
-                cancelWatchdog()
-                isTaskRunning = false
-                isShowingError = false
-                updateUIState(true)
+                // Не сбрасываем состояние поиска, если в фоне всё ещё идёт сканирование (например, при switchServer)
+                if (!SmartConnectManager.isScanning.get() && !isSubscriptionUpdating) {
+                    cancelWatchdog()
+                    isTaskRunning = false
+                    isShowingError = false
+                    updateUIState(true)
+                }
             } else {
                 if (activeJob == null && !SmartConnectManager.isScanning.get()) {
                     cancelWatchdog()
@@ -736,6 +738,11 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun updateUIState(isRunning: Boolean) {
+        if (SmartConnectManager.isScanning.get() || isSubscriptionUpdating) {
+            setConnectingState(mainViewModel.uiStatus.value)
+            return
+        }
+        PersonalServersManager.sanitizeExitNode()
         com.kiktor.v2whitelist.util.PremiumUiHelper.updateGradientState(this, binding.root, isRunning)
         // Не трогаем activeJob здесь — это делает caller (finally-блок).
         // Иначе observer может обнулить activeJob пока корутина ещё работает.
@@ -764,7 +771,8 @@ class MainActivity : HelperBaseActivity() {
                     V2RayServiceManager.getRunningServerName()
                 }
 
-            val isCustomEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            val personalConfig = PersonalServersManager.getConfig()
+            val isCustomEndpointEnabled = personalConfig.exitNodeEnabled && MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
             val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
             val endpointProfile = if (isCustomEndpointEnabled && !endpointUrl.isNullOrBlank()) {
                 AngConfigManager.identifyConfigType(endpointUrl)
@@ -776,9 +784,10 @@ class MainActivity : HelperBaseActivity() {
                     val p = MmkvManager.decodeServerConfig(guid)
                     com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(p?.subscriptionId)
                 } ?: false
-            val personalConfig = PersonalServersManager.getConfig()
             val ignoreExitForCurrent = isPersonal && personalConfig.ignoreExitNodeForPersonal
-            val effectiveEndpointEnabled = isCustomEndpointEnabled && !ignoreExitForCurrent
+            val isSelfLoop = endpointProfile != null && runningConfig != null &&
+                endpointProfile.server == runningConfig.server && endpointProfile.serverPort == runningConfig.serverPort
+            val effectiveEndpointEnabled = isCustomEndpointEnabled && !ignoreExitForCurrent && !isSelfLoop
 
             if (effectiveEndpointEnabled && endpointUrl.isNullOrBlank()) {
                 val warnColor = ContextCompat.getColor(this, R.color.color_fab_active)
@@ -912,10 +921,11 @@ class MainActivity : HelperBaseActivity() {
         lastAmoled = currentAmoled
         lastPalette = currentPalette
 
+        PersonalServersManager.sanitizeExitNode()
         updateSubscriptionStatusUI()
 
         if (SmartConnectManager.isScanning.get()) {
-            setConnectingState()
+            setConnectingState(mainViewModel.uiStatus.value)
             cancelWatchdog()
             watchdogJob = lifecycleScope.launch {
                 while (SmartConnectManager.isScanning.get()) {
@@ -935,9 +945,9 @@ class MainActivity : HelperBaseActivity() {
                 MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
                 mainViewModel.isRunning.value = false
                 NotificationManager.cancelNotification()
-                if (!isTaskRunning && !SmartConnectManager.isScanning.get()) {
-                    updateUIState(false)
-                }
+            }
+            if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
+                updateUIState(false)
             }
             if (com.kiktor.v2whitelist.handler.NetworkManager.hasTunInterface()) {
                 Log.w(AppConfig.TAG, "onResume: Detected lingering zombie TUN interface! Cleaning up to restore internet...")
@@ -946,9 +956,9 @@ class MainActivity : HelperBaseActivity() {
         } else {
             if (mainViewModel.isRunning.value != true) {
                 mainViewModel.isRunning.value = true
-                if (!isTaskRunning && !SmartConnectManager.isScanning.get()) {
-                    updateUIState(true)
-                }
+            }
+            if (!isTaskRunning && !SmartConnectManager.isScanning.get() && !isShowingError) {
+                updateUIState(true)
             }
         }
     }

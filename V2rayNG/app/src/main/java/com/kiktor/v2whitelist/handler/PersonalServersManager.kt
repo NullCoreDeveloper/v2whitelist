@@ -127,6 +127,7 @@ object PersonalServersManager {
 
     /**
      * Назначает или отменяет назначение личного сервера в качестве Конечного узла (Exit Node).
+     * Строго проверяет принадлежность сервера к пулу доверенных серверов.
      */
     fun setExitNode(guid: String?) {
         val config = getConfig()
@@ -138,7 +139,16 @@ object PersonalServersManager {
             return
         }
 
-        val profile = MmkvManager.decodeServerConfig(guid) ?: return
+        val profile = MmkvManager.decodeServerConfig(guid)
+        if (profile == null || !PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+            Log.w(AppConfig.TAG, "Rejected non-personal server as exit node: guid=$guid, subId=${profile?.subscriptionId}")
+            saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+            return
+        }
+
         val uri = UniversalConfigParser.toUri(profile) ?: return
 
         saveConfig(config.copy(exitNodeServerGuid = guid, exitNodeEnabled = true))
@@ -146,6 +156,70 @@ object PersonalServersManager {
         MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
         MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, profile.remarks)
         Log.i(AppConfig.TAG, "Personal exit node set to: ${profile.remarks}")
+    }
+
+    /**
+     * Проверяет и синхронизирует настройки конечного узла (Self-healing).
+     * Если в PREF_CUSTOM_ENDPOINT_URL оказался сервер из публичной подписки или удаленный узел,
+     * автоматически очищает настройку и выключает Proxy Chaining.
+     */
+    fun sanitizeExitNode() {
+        val config = getConfig()
+        val mmkvEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+        val mmkvUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+
+        val exitGuid = config.exitNodeServerGuid
+        if (!exitGuid.isNullOrBlank()) {
+            val exitProfile = MmkvManager.decodeServerConfig(exitGuid)
+            if (exitProfile == null || !PersonalServersConfig.isPersonalServer(exitProfile.subscriptionId)) {
+                Log.w(AppConfig.TAG, "sanitizeExitNode: clearing invalid or non-personal exitNodeServerGuid=$exitGuid")
+                saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+                return
+            }
+
+            // Синхронизируем MMKV с флагом exitNodeEnabled из PersonalServersConfig
+            if (config.exitNodeEnabled) {
+                val uri = UniversalConfigParser.toUri(exitProfile)
+                if (!uri.isNullOrBlank()) {
+                    if (!mmkvEnabled) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, true)
+                    if (mmkvUrl != uri) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, exitProfile.remarks)
+                }
+            } else {
+                if (mmkvEnabled) {
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                }
+            }
+            return
+        }
+
+        // Если exitNodeServerGuid не задан, но в MMKV остался старый URL или включен флаг
+        if (mmkvEnabled || !mmkvUrl.isNullOrBlank()) {
+            val personalServers = getPersonalServers()
+            val matchedPersonal = if (!mmkvUrl.isNullOrBlank()) {
+                val parsed = AngConfigManager.identifyConfigType(mmkvUrl)
+                personalServers.firstOrNull { (_, p) ->
+                    UniversalConfigParser.toUri(p) == mmkvUrl ||
+                        (parsed != null && !p.server.isNullOrBlank() && p.server == parsed.server && p.serverPort == parsed.serverPort)
+                }
+            } else null
+
+            if (matchedPersonal != null) {
+                saveConfig(config.copy(exitNodeServerGuid = matchedPersonal.first, exitNodeEnabled = mmkvEnabled))
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, matchedPersonal.second.remarks)
+            } else {
+                Log.w(AppConfig.TAG, "sanitizeExitNode: clearing orphan/public custom endpoint from MMKV")
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+                if (config.exitNodeEnabled) {
+                    saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
+                }
+            }
+        }
     }
 
     /**
@@ -242,8 +316,38 @@ object PersonalServersManager {
      * Удаляет доверенную подписку и связанные с ней серверы.
      */
     fun removePersonalSubscription(subId: String) {
+        val config = getConfig()
+        val selectedProfile = config.selectedServerGuid?.let { MmkvManager.decodeServerConfig(it) }
+        val exitProfile = config.exitNodeServerGuid?.let { MmkvManager.decodeServerConfig(it) }
+
+        var newSelected = config.selectedServerGuid
+        var newExit = config.exitNodeServerGuid
+        var newExitEnabled = config.exitNodeEnabled
+        var updated = false
+
+        if (selectedProfile?.subscriptionId == subId) {
+            newSelected = null
+            updated = true
+        }
+        if (exitProfile?.subscriptionId == subId) {
+            newExit = null
+            newExitEnabled = false
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+            MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+            updated = true
+        }
+
         MmkvManager.removeSubscription(subId)
         MmkvManager.removeServerViaSubid(subId)
+
+        if (updated) {
+            saveConfig(config.copy(
+                selectedServerGuid = newSelected,
+                exitNodeServerGuid = newExit,
+                exitNodeEnabled = newExitEnabled
+            ))
+        }
     }
 
     /**
