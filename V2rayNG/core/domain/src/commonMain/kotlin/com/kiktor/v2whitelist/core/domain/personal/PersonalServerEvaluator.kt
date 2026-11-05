@@ -11,7 +11,7 @@ sealed class PersonalConnectDecision {
     /** Запуск сканера v2w-core только по пулу личных узлов */
     data class ScanPersonalPool(val candidates: List<Pair<String, ProfileItem>>) : PersonalConnectDecision()
 
-    /** Переключение на публичные подписки (по правилу сети или фоллбеку) */
+    /** Переключение на сторонние подписки (по правилу сети или фоллбеку) */
     data class UsePublicSubscriptions(val reason: String) : PersonalConnectDecision()
 
     /** Прямой интернет без VPN */
@@ -44,7 +44,7 @@ object PersonalServerEvaluator {
 
         when (activeRule) {
             NetworkBindingRule.USE_PUBLIC_SUBS -> {
-                return PersonalConnectDecision.UsePublicSubscriptions("Правило сети: переключение на публичные подписки")
+                return PersonalConnectDecision.UsePublicSubscriptions("Правило сети: переключение на сторонние подписки")
             }
             NetworkBindingRule.DIRECT_NO_VPN -> {
                 return PersonalConnectDecision.DirectNoVpn
@@ -81,11 +81,11 @@ object PersonalServerEvaluator {
             return PersonalConnectDecision.ScanPersonalPool(allPersonalCandidates)
         }
 
-        // 4. Если личных узлов нет вовсе
+        // 4. Если доверенных узлов нет вовсе
         return if (config.fallbackToPublicOnFailure) {
-            PersonalConnectDecision.UsePublicSubscriptions("Пул личных серверов пуст -> фоллбек на публичные")
+            PersonalConnectDecision.UsePublicSubscriptions("Пул доверенных серверов пуст -> фоллбек на сторонние")
         } else {
-            PersonalConnectDecision.UsePublicSubscriptions("Пул личных серверов пуст")
+            PersonalConnectDecision.UsePublicSubscriptions("Пул доверенных серверов пуст")
         }
     }
 }

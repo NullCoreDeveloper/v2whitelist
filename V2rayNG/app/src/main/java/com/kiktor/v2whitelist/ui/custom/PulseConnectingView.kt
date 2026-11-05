@@ -27,9 +27,9 @@ class PulseConnectingView @JvmOverloads constructor(
 
     private val density = context.resources.displayMetrics.density
 
-    // Base button dimensions (button radius is 110dp)
-    private val buttonRadius = 110f * density
-    private val maxWaveRadius = 152f * density
+    // Base button dimensions (190dp button -> radius is 95dp)
+    private val buttonRadius = 95f * density
+    private val maxWaveRadius = 124f * density
 
     // Paints
     private val waveStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -137,14 +137,17 @@ class PulseConnectingView @JvmOverloads constructor(
         val cy = height / 2f
         if (cx <= 0 || cy <= 0) return
 
+        val maxAllowed = minOf(cx, cy) - (6f * density)
+        val effectiveMaxWaveRadius = minOf(maxWaveRadius, maxAllowed)
+
         // 1. Draw 3 Expanding Pulse Waves
         val waveCount = 3
         for (i in 0 until waveCount) {
             val phaseOffset = i.toFloat() / waveCount
             val progress = (pulseFraction + phaseOffset) % 1.0f
 
-            // Radius interpolates from button edge to maxWaveRadius
-            val currentRadius = buttonRadius + progress * (maxWaveRadius - buttonRadius)
+            // Radius interpolates from button edge to effectiveMaxWaveRadius
+            val currentRadius = buttonRadius + progress * (effectiveMaxWaveRadius - buttonRadius)
 
             // Alpha curve: fast ramp-up, then smooth exponential fade-out
             val alpha = when {
@@ -165,7 +168,7 @@ class PulseConnectingView @JvmOverloads constructor(
         }
 
         // 2. Draw Orbiting Radar Arc around button edge
-        val orbitRadius = buttonRadius + 5f * density
+        val orbitRadius = buttonRadius + 3f * density
         orbitRect.set(cx - orbitRadius, cy - orbitRadius, cx + orbitRadius, cy + orbitRadius)
 
         canvas.save()
@@ -195,7 +198,7 @@ class PulseConnectingView @JvmOverloads constructor(
                 // simple deterministic pseudo-random based on rotation Angle and index
                 val pAngle = (rotationAngle * 1.5f + i * (360f / numParticles)) % 360f
                 val pProgress = ((pulseFraction + i.toFloat() / numParticles) % 1.0f)
-                val pRadius = buttonRadius + pProgress * (maxWaveRadius * 1.2f - buttonRadius)
+                val pRadius = buttonRadius + pProgress * (effectiveMaxWaveRadius - buttonRadius)
                 
                 val px = cx + pRadius * kotlin.math.cos(Math.toRadians(pAngle.toDouble())).toFloat()
                 val py = cy + pRadius * kotlin.math.sin(Math.toRadians(pAngle.toDouble())).toFloat()

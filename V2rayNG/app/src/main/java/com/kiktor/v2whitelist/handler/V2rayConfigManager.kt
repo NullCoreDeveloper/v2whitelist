@@ -957,7 +957,11 @@ object V2rayConfigManager {
      * Local -> Smart Connect Node -> Custom Endpoint -> Internet
      */
     private fun getCustomEndpointOutbound(v2rayConfig: V2rayConfig, currentConfig: ProfileItem? = null): Boolean {
-        if (currentConfig != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentConfig.subscriptionId)) {
+        val isPersonal = currentConfig != null && (
+            com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentConfig.subscriptionId) ||
+            PersonalServersManager.getPersonalServers().any { it.second.server == currentConfig.server && it.second.serverPort == currentConfig.serverPort }
+        )
+        if (isPersonal) {
             val personalConfig = PersonalServersManager.getConfig()
             if (personalConfig.ignoreExitNodeForPersonal) {
                 return false
@@ -970,6 +974,14 @@ object V2rayConfigManager {
         val url = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
         if (url.isNullOrBlank()) {
             return false
+        }
+
+        // Защита от петли: сервер не может быть конечным узлом для самого себя
+        if (currentConfig != null) {
+            val customProfile = AngConfigManager.identifyConfigType(url)
+            if (customProfile != null && customProfile.server == currentConfig.server && customProfile.serverPort == currentConfig.serverPort) {
+                return false
+            }
         }
 
         try {

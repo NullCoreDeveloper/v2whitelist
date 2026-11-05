@@ -321,26 +321,6 @@
             android:summary="@string/summary_pref_domain_geo_files"
             android:title="@string/title_pref_domain_geo_files" />
 
-        <CheckBoxPreference
-            android:key="pref_custom_endpoint_enabled"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_custom_endpoint_enabled"
-            android:title="@string/title_pref_custom_endpoint_enabled" />
-
-        <EditTextPreference
-            android:key="pref_custom_endpoint_sub_url"
-            android:summary="@string/summary_pref_custom_endpoint_sub_url"
-            android:title="@string/title_pref_custom_endpoint_sub_url" />
-
-        <androidx.preference.Preference
-            android:key="pref_custom_endpoint_select_server"
-            android:summary="@string/summary_pref_custom_endpoint_select_server"
-            android:title="@string/title_pref_custom_endpoint_select_server" />
-
-        <EditTextPreference
-            android:key="pref_custom_endpoint_url"
-            android:summary="@string/summary_pref_custom_endpoint_url"
-            android:title="@string/title_pref_custom_endpoint_url" />
         </PreferenceScreen>
 
         <!-- 6. ⚙️ Параметры VPN и ядра -->

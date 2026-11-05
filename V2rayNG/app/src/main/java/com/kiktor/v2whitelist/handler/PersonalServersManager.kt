@@ -10,6 +10,8 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.dto.SubscriptionItem
 import com.kiktor.v2whitelist.dto.SubscriptionCache
 import com.kiktor.v2whitelist.util.JsonUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 object PersonalServersManager {
@@ -203,6 +205,61 @@ object PersonalServersManager {
         return MmkvManager.decodeSubscriptions().filter {
             it.guid.startsWith(PersonalServersConfig.SUB_ID_PERSONAL_PREFIX)
         }
+    }
+
+    /**
+     * Загружает и обновляет серверы для конкретной доверенной подписки.
+     */
+    suspend fun fetchSubscription(subId: String): Int = withContext(Dispatchers.IO) {
+        val subItem = MmkvManager.decodeSubscription(subId) ?: return@withContext 0
+        val cache = SubscriptionCache(subId, subItem)
+        val socksPort = if (V2RayServiceManager.isRunning()) SettingsManager.getSocksPort() else 0
+        AngConfigManager.updateConfigViaSub(cache, socksPort = socksPort, sequential = false)
+    }
+
+    /**
+     * Создает доверенную подписку и сразу скачивает её серверы.
+     */
+    suspend fun addAndFetchPersonalSubscription(url: String, remarks: String): Pair<String, Int> = withContext(Dispatchers.IO) {
+        val subId = addPersonalSubscription(url, remarks)
+        val count = fetchSubscription(subId)
+        Pair(subId, count)
+    }
+
+    /**
+     * Обновляет все доверенные подписки.
+     */
+    suspend fun updateAllPersonalSubscriptions(): Int = withContext(Dispatchers.IO) {
+        val subs = getPersonalSubscriptions()
+        var total = 0
+        for (sub in subs) {
+            total += fetchSubscription(sub.guid)
+        }
+        total
+    }
+
+    /**
+     * Удаляет доверенную подписку и связанные с ней серверы.
+     */
+    fun removePersonalSubscription(subId: String) {
+        MmkvManager.removeSubscription(subId)
+        MmkvManager.removeServerViaSubid(subId)
+    }
+
+    /**
+     * Импортирует батч серверов из текста (несколько строк или base64).
+     */
+    fun importBatchPersonalServers(text: String): Int {
+        val decoded = com.kiktor.v2whitelist.util.Utils.decode(text)
+        val raw = if (!decoded.isNullOrBlank()) decoded else text
+        val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
+        var count = 0
+        for (line in lines) {
+            if (addPersonalServerFromUri(line) != null) {
+                count++
+            }
+        }
+        return count
     }
 }
 

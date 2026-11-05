@@ -1061,136 +1061,38 @@ fun SettingsScreen(
                         }
                     }
                 }
-
-                Spacer(Modifier.height(14.dp))
-
-                // Конечный узел
-                SettingsCard(
-                    title = strings.customEndpointEnable,
-                    icon = Icons.Default.Share,
-                    description = strings.customEndpointEnableDesc
-                ) {
-                    SettingSwitchRow(
-                        title = strings.customEndpointEnable,
-                        desc = strings.customEndpointEnableDesc,
-                        checked = useCustomEp,
-                        onCheckedChange = { useCustomEp = it }
-                    )
-                    if (useCustomEp) {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = customEpSubUrl,
-                            onValueChange = { customEpSubUrl = it },
-                            label = { Text(strings.endpointSubUrlLabel) },
-                            placeholder = { Text("https://example.com/sub/...") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    if (customEpSubUrl.isNotBlank()) {
-                                        epLoading = true
-                                        epStatusMessage = strings.statusTesting
-                                        scope.launch {
-                                            val res = withContext(Dispatchers.IO) {
-                                                CustomEndpointManager.fetchServersFromSubscription(customEpSubUrl)
-                                            }
-                                            epLoading = false
-                                            res.fold(
-                                                onSuccess = { servers ->
-                                                    if (servers.isEmpty()) {
-                                                        epStatusMessage = strings.noServersFoundCriteria
-                                                    } else {
-                                                        epSubServers = servers
-                                                        showEpServerPicker = true
-                                                        epStatusMessage = null
-                                                    }
-                                                },
-                                                onFailure = { err ->
-                                                    epStatusMessage = "${strings.statusError}: ${err.message}"
-                                                }
-                                            )
-                                        }
-                                    } else {
-                                        epStatusMessage = strings.endpointSubUrlLabel
-                                    }
-                                },
-                                enabled = !epLoading
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (epLoading) strings.statusTesting else strings.endpointSelectServer, fontSize = 12.sp)
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    val allServers = state.servers.value.map { it.second }
-                                    if (allServers.isNotEmpty()) {
-                                        epSubServers = allServers
-                                        showEpServerPicker = true
-                                        epStatusMessage = null
-                                    } else {
-                                        epStatusMessage = strings.serversNotFound
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(strings.serverList, fontSize = 12.sp)
-                            }
-                        }
-
-                        if (epStatusMessage != null) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = epStatusMessage!!,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        OutlinedTextField(
-                            value = customEpConfig,
-                            onValueChange = { customEpConfig = it },
-                            label = { Text(strings.endpointConfigLabel) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
             }
 
             DesktopSettingsCategory.PERSONAL_SERVERS -> {
                 SettingsCard(
-                    title = "Управление личными серверами",
+                    title = "Управление доверенными серверами",
                     icon = Icons.Default.Dns,
                     description = "Использование персональных VPS узлов, приватных подписок и автопоиска"
                 ) {
                     SettingSwitchRow(
-                        title = "Включить личные сервера",
-                        desc = "Приоритетно использовать персональные узлы вместо публичных подписок",
+                        title = "Включить доверенные сервера",
+                        desc = "Приоритетно использовать доверенные узлы вместо сторонних подписок",
                         checked = personalEnabled,
                         onCheckedChange = { personalEnabled = it }
                     )
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
                         title = "Игнорировать конечный узел при использовании",
-                        desc = "Не пропускать личный сервер через цепочку конечного узла (рекомендуется)",
+                        desc = "Не пропускать доверенный сервер через цепочку конечного узла (рекомендуется)",
                         checked = personalIgnoreExit,
                         onCheckedChange = { personalIgnoreExit = it }
                     )
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
                         title = "Автоподключение при старте",
-                        desc = "Автоматически подключать личный сервер при нажатии подключения",
+                        desc = "Автоматически подключать доверенный сервер при нажатии подключения",
                         checked = personalAutoConnect,
                         onCheckedChange = { personalAutoConnect = it }
                     )
                     Spacer(Modifier.height(10.dp))
                     SettingSwitchRow(
-                        title = "Фоллбек на публичные подписки при неудаче",
-                        desc = "Если личные серверы недоступны, бесшовно переключаться на публичные",
+                        title = "Фоллбек на сторонние подписки при неудаче",
+                        desc = "Если доверенные серверы недоступны, бесшовно переключаться на сторонние",
                         checked = personalFallbackPub,
                         onCheckedChange = { personalFallbackPub = it }
                     )
@@ -1199,7 +1101,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(14.dp))
 
                 SettingsCard(
-                    title = "Добавить личный узел",
+                    title = "Добавить доверенный узел",
                     icon = Icons.Default.Add,
                     description = "Вставьте ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://)"
                 ) {
@@ -1218,13 +1120,17 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 if (newPersonalLink.isNotBlank()) {
-                                    val parsed = UniversalConfigParser.parse(newPersonalLink.trim())
-                                    if (parsed != null) {
-                                        parsed.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
-                                        val guid = java.util.UUID.randomUUID().toString()
-                                        state.serverRepo.saveServerConfig(guid, parsed)
-                                        newPersonalLink = ""
+                                    val trimmed = newPersonalLink.trim()
+                                    val lines = trimmed.lines().map { it.trim() }.filter { it.isNotBlank() }
+                                    for (line in lines) {
+                                        val parsed = UniversalConfigParser.parse(line)
+                                        if (parsed != null) {
+                                            parsed.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
+                                            val guid = java.util.UUID.randomUUID().toString()
+                                            state.serverRepo.saveServerConfig(guid, parsed)
+                                        }
                                     }
+                                    newPersonalLink = ""
                                 }
                             }
                         ) {
@@ -1240,7 +1146,7 @@ fun SettingsScreen(
                 }
 
                 SettingsCard(
-                    title = "Список личных серверов (${personalServers.size})",
+                    title = "Список доверенных серверов (${personalServers.size})",
                     icon = Icons.Default.List,
                     description = "Выберите сервер для прямого подключения или оставьте автовыбор"
                 ) {
@@ -1258,14 +1164,14 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text("⚡ Автовыбор среди личных", fontWeight = FontWeight.Bold)
-                            Text("Автоматический поиск наилучшего личного узла через v2w-core", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("⚡ Автовыбор среди доверенных", fontWeight = FontWeight.Bold)
+                            Text("Автоматический поиск наилучшего доверенного узла через v2w-core", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
                     if (personalServers.isEmpty()) {
                         Text(
-                            text = "Нет добавленных личных серверов. Добавьте свой VPS выше.",
+                            text = "Нет добавленных доверенных серверов. Добавьте свой VPS выше.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )

@@ -770,13 +770,22 @@ class MainActivity : HelperBaseActivity() {
             } else null
             val endpointName = endpointProfile?.remarks?.takeIf { it.isNotBlank() } ?: "Конечный узел"
 
-            if (isCustomEndpointEnabled && endpointUrl.isNullOrBlank()) {
+            val isPersonal = runningConfig?.let { com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.subscriptionId) }
+                ?: selectedGuid?.let { guid ->
+                    val p = MmkvManager.decodeServerConfig(guid)
+                    com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(p?.subscriptionId)
+                } ?: false
+            val personalConfig = com.kiktor.v2whitelist.handler.PersonalServersManager.getConfig()
+            val ignoreExitForCurrent = isPersonal && personalConfig.ignoreExitNodeForPersonal
+            val effectiveEndpointEnabled = isCustomEndpointEnabled && !ignoreExitForCurrent
+
+            if (effectiveEndpointEnabled && endpointUrl.isNullOrBlank()) {
                 val warnColor = ContextCompat.getColor(this, R.color.color_fab_active)
                 binding.tvStatus.text = "⚠️ Конечный узел не настроен"
                 binding.tvStatus.setTextColor(warnColor)
                 binding.ivStatusIcon.setColorFilter(warnColor)
                 binding.tvStatusDetail.text = "Опция включена, но URL узла пуст"
-            } else if (isCustomEndpointEnabled) {
+            } else if (effectiveEndpointEnabled) {
                 binding.tvStatusDetail.text = if (serverName.isNotEmpty()) "$serverName ➔ $endpointName" else endpointName
                 customEndpointCheckJob?.cancel()
                 customEndpointCheckJob = lifecycleScope.launch(Dispatchers.IO) {

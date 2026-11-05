@@ -315,6 +315,7 @@ class PersonalServersActivity : BaseActivity() {
             getString(R.string.personal_add_from_clipboard),
             getString(R.string.personal_add_scan_qr),
             getString(R.string.personal_add_subscription),
+            getString(R.string.personal_refresh_subs),
             getString(R.string.personal_add_manual)
         )
 
@@ -325,10 +326,25 @@ class PersonalServersActivity : BaseActivity() {
                     0 -> importFromClipboard()
                     1 -> scannerLauncher.launch(Intent(this, ScannerActivity::class.java))
                     2 -> showAddSubscriptionDialog()
-                    3 -> showManualAddProtocolDialog()
+                    3 -> refreshPersonalSubscriptions()
+                    4 -> showManualAddProtocolDialog()
                 }
             }
             .show()
+    }
+
+    private fun refreshPersonalSubscriptions() {
+        val subs = PersonalServersManager.getPersonalSubscriptions()
+        if (subs.isEmpty()) {
+            toast(R.string.custom_sub_empty)
+            return
+        }
+        lifecycleScope.launch {
+            toast(R.string.personal_sub_updating)
+            val count = PersonalServersManager.updateAllPersonalSubscriptions()
+            toast(getString(R.string.personal_sub_updated, count))
+            loadData()
+        }
     }
 
     private fun importFromClipboard() {
@@ -342,10 +358,24 @@ class PersonalServersActivity : BaseActivity() {
     }
 
     private fun handleImportLink(link: String) {
-        val guid = PersonalServersManager.addPersonalServerFromUri(link)
-        if (guid != null) {
-            val profile = MmkvManager.decodeServerConfig(guid)
-            toast(getString(R.string.personal_server_added, profile?.remarks ?: ""))
+        val trimmed = link.trim()
+        if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            lifecycleScope.launch {
+                toast(R.string.personal_sub_downloading)
+                val (_, count) = PersonalServersManager.addAndFetchPersonalSubscription(trimmed, "Доверенная подписка")
+                if (count > 0) {
+                    toast(getString(R.string.personal_sub_imported, count))
+                } else {
+                    toast(R.string.personal_sub_fetch_failed)
+                }
+                loadData()
+            }
+            return
+        }
+
+        val count = PersonalServersManager.importBatchPersonalServers(trimmed)
+        if (count > 0) {
+            toast(getString(R.string.personal_servers_imported, count))
             loadData()
         } else {
             toast(R.string.personal_server_invalid)
@@ -374,9 +404,16 @@ class PersonalServersActivity : BaseActivity() {
                     toast(R.string.toast_invalid_url)
                     return@setPositiveButton
                 }
-                PersonalServersManager.addPersonalSubscription(url, name)
-                toast(R.string.toast_success)
-                loadData()
+                lifecycleScope.launch {
+                    toast(R.string.personal_sub_downloading)
+                    val (_, count) = PersonalServersManager.addAndFetchPersonalSubscription(url, name)
+                    if (count > 0) {
+                        toast(getString(R.string.personal_sub_imported, count))
+                    } else {
+                        toast(R.string.personal_sub_fetch_failed)
+                    }
+                    loadData()
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
