@@ -163,8 +163,14 @@ class PersonalServersActivity : BaseActivity() {
         swExitNodeEnabled.setOnCheckedChangeListener { _, isChecked ->
             val cfg = PersonalServersManager.getConfig()
             if (cfg.exitNodeEnabled != isChecked) {
-                PersonalServersManager.saveConfig(cfg.copy(exitNodeEnabled = isChecked))
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, isChecked)
+                if (isChecked && !cfg.exitNodeServerGuid.isNullOrBlank()) {
+                    // Включение: заново записываем URL/имя узла, чтобы цепочка гарантированно собралась
+                    PersonalServersManager.setExitNode(cfg.exitNodeServerGuid)
+                } else {
+                    PersonalServersManager.saveConfig(cfg.copy(exitNodeEnabled = isChecked))
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, isChecked)
+                }
+                loadData()
                 if (V2RayServiceManager.isRunning()) {
                     com.kiktor.v2whitelist.util.MessageUtil.sendMsg2Service(this, AppConfig.MSG_STATE_SWITCH_SERVER, "")
                 }
@@ -296,7 +302,7 @@ class PersonalServersActivity : BaseActivity() {
             },
             onToggleExitNode = { guid ->
                 val cfg = PersonalServersManager.getConfig()
-                if (cfg.exitNodeServerGuid == guid) {
+                if (cfg.exitNodeServerGuid == guid && cfg.exitNodeEnabled) {
                     PersonalServersManager.setExitNode(null)
                     toast(R.string.toast_exit_node_cleared)
                 } else {
@@ -335,7 +341,8 @@ class PersonalServersActivity : BaseActivity() {
         val exitGuid = config.exitNodeServerGuid
         val exitProfile = exitGuid?.let { MmkvManager.decodeServerConfig(it) }
         if (exitProfile != null) {
-            tvExitNodeStatus.text = getString(R.string.personal_exit_node_assigned, exitProfile.remarks)
+            tvExitNodeStatus.text = if (config.exitNodeEnabled) getString(R.string.personal_exit_node_assigned, exitProfile.remarks)
+                else getString(R.string.personal_exit_node_none)
             swExitNodeEnabled.isEnabled = true
             swExitNodeEnabled.isChecked = config.exitNodeEnabled
         } else {
@@ -360,7 +367,7 @@ class PersonalServersActivity : BaseActivity() {
         val activeGuid = if (V2RayServiceManager.isRunning()) MmkvManager.getSelectServer() else null
         val subs = PersonalServersManager.getPersonalSubscriptions()
         val servers = PersonalServersManager.getPersonalServers()
-        adapter.setData(subs, servers, config.selectedServerGuid, config.exitNodeServerGuid, activeGuid)
+        adapter.setData(subs, servers, config.selectedServerGuid, if (config.exitNodeEnabled) config.exitNodeServerGuid else null, activeGuid)
 
         tvEmpty.visibility = if (subs.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
         updateConnectionStatus()
