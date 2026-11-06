@@ -253,6 +253,7 @@ class PersonalServerAdapter(
         val cardServer: MaterialCardView = itemView.findViewById(R.id.card_server)
         val rbSelected: RadioButton = itemView.findViewById(R.id.rb_selected)
         val tvRemarks: TextView = itemView.findViewById(R.id.tv_remarks)
+        val layoutBadges: View = itemView.findViewById(R.id.layout_badges)
         val tvBadgeExitNode: TextView = itemView.findViewById(R.id.tv_badge_exit_node)
         val tvBadgeActive: TextView = itemView.findViewById(R.id.tv_badge_active)
         val tvDetails: TextView = itemView.findViewById(R.id.tv_details)
@@ -273,6 +274,8 @@ class PersonalServerAdapter(
             val details = "${profile.configType.name} • ${profile.server ?: ""}:${profile.serverPort ?: ""}"
             tvDetails.text = details
 
+            val hasBadge = isExitNode || isActiveServer
+            layoutBadges.visibility = if (hasBadge) View.VISIBLE else View.GONE
             tvBadgeExitNode.visibility = if (isExitNode) View.VISIBLE else View.GONE
             tvBadgeActive.visibility = if (isActiveServer) View.VISIBLE else View.GONE
 
