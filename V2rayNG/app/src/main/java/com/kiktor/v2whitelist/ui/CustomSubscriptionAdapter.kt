@@ -20,8 +20,11 @@ class CustomSubscriptionAdapter(
     private val onToggle: (position: Int, isEnabled: Boolean) -> Unit,
     private val onDelete: (position: Int) -> Unit,
     private val onEdit: (position: Int) -> Unit,
+    private val onUpdate: (position: Int) -> Unit,
     private val onMoveCompleted: () -> Unit
 ) : RecyclerView.Adapter<CustomSubscriptionAdapter.ViewHolder>(), ItemTouchHelperAdapter {
+
+    val updatingIds = mutableSetOf<String>()
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view), ItemTouchHelperViewHolder {
         val cardView: MaterialCardView = view as MaterialCardView
@@ -30,6 +33,8 @@ class CustomSubscriptionAdapter(
         val tvLastUpdate: TextView = view.findViewById(R.id.tv_sub_last_update)
         val tvScenarios: TextView = view.findViewById(R.id.tv_sub_scenarios)
         val switchEnabled: MaterialSwitch = view.findViewById(R.id.switch_sub_enabled)
+        val btnUpdate: ImageButton = view.findViewById(R.id.btn_update_sub)
+        val pbUpdating: View = view.findViewById(R.id.pb_updating)
         val btnDelete: ImageButton = view.findViewById(R.id.btn_delete)
         
         override fun onItemSelected() {
@@ -93,6 +98,19 @@ class CustomSubscriptionAdapter(
         holder.switchEnabled.isChecked = item.enabled
         holder.switchEnabled.setOnCheckedChangeListener { _, isChecked ->
             onToggle(holder.adapterPosition, isChecked)
+        }
+
+        val isUpdating = updatingIds.contains(item.id)
+        if (isUpdating) {
+            holder.pbUpdating.visibility = View.VISIBLE
+            holder.btnUpdate.visibility = View.GONE
+        } else {
+            holder.pbUpdating.visibility = View.GONE
+            holder.btnUpdate.visibility = View.VISIBLE
+        }
+
+        holder.btnUpdate.setOnClickListener {
+            onUpdate(holder.adapterPosition)
         }
 
         holder.btnDelete.setOnClickListener {

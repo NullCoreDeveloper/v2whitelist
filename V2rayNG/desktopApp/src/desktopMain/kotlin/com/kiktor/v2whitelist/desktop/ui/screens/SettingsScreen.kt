@@ -31,6 +31,7 @@ import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
 import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.core.model.NetworkBindingRule
 import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
@@ -162,6 +163,8 @@ fun SettingsScreen(
     var personalIgnoreExit by remember { mutableStateOf(state.personalIgnoreExitNode.value) }
     var personalAutoConnect by remember { mutableStateOf(state.personalAutoConnectOnStartup.value) }
     var personalFallbackPub by remember { mutableStateOf(state.personalFallbackPublic.value) }
+    var personalBlacklistRule by remember { mutableStateOf(state.personalBlacklistRule.value) }
+    var personalWhitelistRule by remember { mutableStateOf(state.personalWhitelistRule.value) }
     var newPersonalLink by remember { mutableStateOf("") }
 
     // Базовые VPN
@@ -289,6 +292,10 @@ fun SettingsScreen(
         state.settingsRepo.setBoolean("pref_personal_fallback_public", personalFallbackPub)
         state.personalSelectedGuid.value = personalSelectedGuid
         state.settingsRepo.setString("pref_personal_selected_guid", personalSelectedGuid)
+        state.personalBlacklistRule.value = personalBlacklistRule
+        state.settingsRepo.setString("pref_personal_blacklist_rule", personalBlacklistRule.name)
+        state.personalWhitelistRule.value = personalWhitelistRule
+        state.settingsRepo.setString("pref_personal_whitelist_rule", personalWhitelistRule.name)
         isSavedNotice = true
     }
 
@@ -298,6 +305,8 @@ fun SettingsScreen(
         personalAutoConnect = state.personalAutoConnectOnStartup.value
         personalFallbackPub = state.personalFallbackPublic.value
         personalSelectedGuid = state.personalSelectedGuid.value
+        personalBlacklistRule = state.personalBlacklistRule.value
+        personalWhitelistRule = state.personalWhitelistRule.value
         smartBatchSize = state.smartConnectBatchSize.value.toString()
         smartPreset = state.smartDistributionPreset.value
         useV2w = state.useV2WCore.value
@@ -442,7 +451,9 @@ fun SettingsScreen(
         personalIgnoreExit != state.personalIgnoreExitNode.value ||
         personalAutoConnect != state.personalAutoConnectOnStartup.value ||
         personalFallbackPub != state.personalFallbackPublic.value ||
-        personalSelectedGuid != state.personalSelectedGuid.value
+        personalSelectedGuid != state.personalSelectedGuid.value ||
+        personalBlacklistRule != state.personalBlacklistRule.value ||
+        personalWhitelistRule != state.personalWhitelistRule.value
     }
 
     DisposableEffect(state) {
@@ -1122,6 +1133,100 @@ fun SettingsScreen(
                         checked = personalFallbackPub,
                         onCheckedChange = { personalFallbackPub = it }
                     )
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(Modifier.height(14.dp))
+
+                    Text(
+                        text = strings.personalRulesHeader,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = strings.personalRulesHeaderDesc,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    // Правило для ЧС / YouTube
+                    Text(
+                        text = strings.personalBlacklistRuleTitle,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = strings.personalBlacklistRuleDesc,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsChip(
+                            label = strings.personalRuleAuto,
+                            selected = personalBlacklistRule == NetworkBindingRule.USE_PERSONAL_AUTO,
+                            onClick = { personalBlacklistRule = NetworkBindingRule.USE_PERSONAL_AUTO }
+                        )
+                        SettingsChip(
+                            label = strings.personalRuleSelected,
+                            selected = personalBlacklistRule == NetworkBindingRule.USE_PERSONAL_SELECTED,
+                            onClick = { personalBlacklistRule = NetworkBindingRule.USE_PERSONAL_SELECTED }
+                        )
+                        SettingsChip(
+                            label = strings.personalRulePublic,
+                            selected = personalBlacklistRule == NetworkBindingRule.USE_PUBLIC_SUBS,
+                            onClick = { personalBlacklistRule = NetworkBindingRule.USE_PUBLIC_SUBS }
+                        )
+                        SettingsChip(
+                            label = strings.personalRuleDirect,
+                            selected = personalBlacklistRule == NetworkBindingRule.DIRECT_NO_VPN,
+                            onClick = { personalBlacklistRule = NetworkBindingRule.DIRECT_NO_VPN }
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    // Правило для БС
+                    Text(
+                        text = strings.personalWhitelistRuleTitle,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = strings.personalWhitelistRuleDesc,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsChip(
+                            label = strings.personalRulePublic,
+                            selected = personalWhitelistRule == NetworkBindingRule.USE_PUBLIC_SUBS,
+                            onClick = { personalWhitelistRule = NetworkBindingRule.USE_PUBLIC_SUBS }
+                        )
+                        SettingsChip(
+                            label = strings.personalRuleAuto,
+                            selected = personalWhitelistRule == NetworkBindingRule.USE_PERSONAL_AUTO,
+                            onClick = { personalWhitelistRule = NetworkBindingRule.USE_PERSONAL_AUTO }
+                        )
+                        SettingsChip(
+                            label = strings.personalRuleSelected,
+                            selected = personalWhitelistRule == NetworkBindingRule.USE_PERSONAL_SELECTED,
+                            onClick = { personalWhitelistRule = NetworkBindingRule.USE_PERSONAL_SELECTED }
+                        )
+                        SettingsChip(
+                            label = strings.personalRuleDirect,
+                            selected = personalWhitelistRule == NetworkBindingRule.DIRECT_NO_VPN,
+                            onClick = { personalWhitelistRule = NetworkBindingRule.DIRECT_NO_VPN }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -1193,16 +1298,22 @@ fun SettingsScreen(
                     description = "Выберите сервер для прямого подключения или оставьте автовыбор"
                 ) {
                     // Опция автовыбора
+                    val selectAuto = {
+                        personalSelectedGuid = ""
+                        if (personalBlacklistRule == NetworkBindingRule.USE_PERSONAL_SELECTED) {
+                            personalBlacklistRule = NetworkBindingRule.USE_PERSONAL_AUTO
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { personalSelectedGuid = "" }
+                            .clickable { selectAuto() }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = personalSelectedGuid.isBlank(),
-                            onClick = { personalSelectedGuid = "" }
+                            onClick = { selectAuto() }
                         )
                         Spacer(Modifier.width(8.dp))
                         Column {
@@ -1250,7 +1361,7 @@ fun SettingsScreen(
                                         Text("${subServers.size} серв.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     IconButton(
-                                        onClick = { state.updateAllActiveSubscriptions() },
+                                        onClick = { state.updateSingleSubscription(sub.id) },
                                         modifier = Modifier.size(30.dp)
                                     ) {
                                         Icon(Icons.Default.Refresh, contentDescription = "Обновить подписку", modifier = Modifier.size(16.dp))
@@ -1275,17 +1386,23 @@ fun SettingsScreen(
                                     val isSel = personalSelectedGuid == guid
                                     val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
                                     val serverPing = state.pingMap.collectAsState().value[guid]
+                                    val onSelectThis = {
+                                        personalSelectedGuid = guid
+                                        if (personalBlacklistRule == NetworkBindingRule.USE_PERSONAL_AUTO) {
+                                            personalBlacklistRule = NetworkBindingRule.USE_PERSONAL_SELECTED
+                                        }
+                                    }
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(start = 16.dp)
-                                            .clickable { personalSelectedGuid = guid }
+                                            .clickable { onSelectThis() }
                                             .padding(vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         RadioButton(
                                             selected = isSel,
-                                            onClick = { personalSelectedGuid = guid }
+                                            onClick = { onSelectThis() }
                                         )
                                         Spacer(Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
@@ -1349,16 +1466,22 @@ fun SettingsScreen(
                                 val isSel = personalSelectedGuid == guid
                                 val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
                                 val serverPing = state.pingMap.collectAsState().value[guid]
+                                val onSelectDirect = {
+                                    personalSelectedGuid = guid
+                                    if (personalBlacklistRule == NetworkBindingRule.USE_PERSONAL_AUTO) {
+                                        personalBlacklistRule = NetworkBindingRule.USE_PERSONAL_SELECTED
+                                    }
+                                }
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { personalSelectedGuid = guid }
+                                        .clickable { onSelectDirect() }
                                         .padding(vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(
                                         selected = isSel,
-                                        onClick = { personalSelectedGuid = guid }
+                                        onClick = { onSelectDirect() }
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {

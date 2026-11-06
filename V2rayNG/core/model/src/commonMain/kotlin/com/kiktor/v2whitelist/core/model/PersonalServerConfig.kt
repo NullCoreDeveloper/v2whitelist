@@ -26,6 +26,8 @@ data class PersonalServersConfig(
     val fallbackToPublicOnFailure: Boolean = true,       // 3. Фоллбек на сторонние подписки при неудаче
     val wifiRule: NetworkBindingRule = NetworkBindingRule.USE_PERSONAL_AUTO,
     val cellularRule: NetworkBindingRule = NetworkBindingRule.USE_PUBLIC_SUBS,
+    val blacklistRule: NetworkBindingRule = NetworkBindingRule.USE_PERSONAL_AUTO,
+    val whitelistRule: NetworkBindingRule = NetworkBindingRule.USE_PUBLIC_SUBS,
     val exitNodeServerGuid: String? = null,              // Доверенный сервер в роли конечного узла (Exit Node)
     val exitNodeEnabled: Boolean = false                 // Включен ли Proxy Chaining через доверенный узел
 ) {

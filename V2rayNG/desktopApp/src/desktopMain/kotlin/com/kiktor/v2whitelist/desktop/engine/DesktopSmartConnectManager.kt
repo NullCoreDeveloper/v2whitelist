@@ -1,14 +1,18 @@
 package com.kiktor.v2whitelist.desktop.engine
 
+import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
+import com.kiktor.v2whitelist.core.domain.personal.PersonalConnectDecision
+import com.kiktor.v2whitelist.core.domain.personal.PersonalServerEvaluator
 import com.kiktor.v2whitelist.core.domain.ping.NodePingTester
 import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.EConfigType
+import com.kiktor.v2whitelist.core.model.NetworkBindingRule
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
-import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.core.repository.ServerRepository
 import com.kiktor.v2whitelist.core.repository.SettingsRepository
@@ -106,6 +110,27 @@ class DesktopSmartConnectManager(
         DesktopProfileVerifier.stop()
     }
 
+    suspend fun resolveEffectiveScenario(scenario: AppScenario): AppScenario {
+        if (scenario != AppScenario.AUTO) {
+            return when (scenario) {
+                AppScenario.WHITELIST -> AppScenario.WHITELIST
+                else -> AppScenario.VPN_BLACKLIST
+            }
+        }
+        val status = try {
+            withTimeoutOrNull(1200L) {
+                NetworkStatusChecker.checkTcpInternetStatus()
+            } ?: networkStatusProvider()
+        } catch (_: Exception) {
+            networkStatusProvider()
+        }
+        return if (status == NetworkStatusChecker.STATUS_WHITELIST_ONLY) {
+            AppScenario.WHITELIST
+        } else {
+            AppScenario.VPN_BLACKLIST
+        }
+    }
+
     suspend fun startSmartConnect(
         scenario: AppScenario = settingsRepo.getAppScenario(),
         minSpeedMbps: Double = 1.0,
@@ -120,21 +145,8 @@ class DesktopSmartConnectManager(
         DesktopProfileVerifier.stop()
 
         try {
-            val allServers = serverRepo.serversFlow.value
-            if (allServers.isEmpty()) {
-                GeekModeLogger.log("SmartConnect", "Нет доступных серверов для поиска.")
-                onStageChanged?.invoke(SmartConnectStage.FAILED, "Список серверов пуст")
-                return@withContext false
-            }
-
-            // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто) + фильтр локаций 1-в-1 как на Android
-            val filterConfig = loadLocationFilterConfig(scenario = scenario)
-            val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig).shuffled()
-            if (candidates.isEmpty()) {
-                GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario с учетом фильтра стран.")
-                onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет серверов под сценарий $scenario")
-                return@withContext false
-            }
+            val effectiveScenario = resolveEffectiveScenario(scenario)
+            GeekModeLogger.log("SmartConnect", "SmartConnect: выбранный сценарий: $scenario, эффективный: $effectiveScenario")
 
             val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
             val v2wPath = settingsRepo.getString("v2w_scan_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
@@ -146,6 +158,198 @@ class DesktopSmartConnectManager(
             val servicesList = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.parseList(
                 settingsRepo.getString("pref_service_check_items", "")
             )
+
+            // ══════════════════════════════════════════════════════════════════════════════
+            // ЭТАП 0: Проверка и применение доверенных серверов (Personal Servers)
+            // ══════════════════════════════════════════════════════════════════════════════
+            val personalEnabled = settingsRepo.getBoolean("pref_personal_servers_enabled", false)
+            if (personalEnabled) {
+                val personalConfig = PersonalServersConfig(
+                    enabled = true,
+                    selectedServerGuid = settingsRepo.getString("pref_personal_selected_guid", "").takeIf { it.isNotBlank() },
+                    ignoreExitNodeForPersonal = settingsRepo.getBoolean("pref_personal_ignore_exit_node", true),
+                    autoConnectOnStartup = settingsRepo.getBoolean("pref_personal_auto_connect", true),
+                    fallbackToPublicOnFailure = settingsRepo.getBoolean("pref_personal_fallback_public", true),
+                    blacklistRule = try {
+                        NetworkBindingRule.valueOf(settingsRepo.getString("pref_personal_blacklist_rule", NetworkBindingRule.USE_PERSONAL_AUTO.name))
+                    } catch (_: Exception) {
+                        NetworkBindingRule.USE_PERSONAL_AUTO
+                    },
+                    whitelistRule = try {
+                        NetworkBindingRule.valueOf(settingsRepo.getString("pref_personal_whitelist_rule", NetworkBindingRule.USE_PUBLIC_SUBS.name))
+                    } catch (_: Exception) {
+                        NetworkBindingRule.USE_PUBLIC_SUBS
+                    }
+                )
+
+                val allPersonalCandidates = serverRepo.serversFlow.value.filter {
+                    PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+                }
+
+                val decision = PersonalServerEvaluator.evaluateScenario(
+                    config = personalConfig,
+                    effectiveScenario = effectiveScenario,
+                    allPersonalCandidates = allPersonalCandidates
+                )
+                GeekModeLogger.log("SmartConnect", "PersonalServers: решение для $effectiveScenario -> $decision")
+
+                when (decision) {
+                    is PersonalConnectDecision.DirectNoVpn -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: правило сценария DirectNoVpn")
+                        onStageChanged?.invoke(SmartConnectStage.FAILED, "Правило сценария: Прямой интернет без VPN")
+                        return@withContext false
+                    }
+                    is PersonalConnectDecision.ConnectPersonalDirect -> {
+                        val sName = decision.profile.remarks.ifBlank { decision.profile.server }
+                        onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверка личного сервера: $sName…")
+                        GeekModeLogger.log("SmartConnect", "Прямое подключение к личному серверу $sName (${decision.guid})")
+                        val res = DesktopProfileVerifier.verifyProfile(
+                            profile = decision.profile,
+                            xrayBinaryPath = xrayPath,
+                            speedCheckEnabled = false,
+                            customEndpointUrl = customEndpointUrl,
+                            endpointE2eCheckEnabled = endpointE2eCheck,
+                            serviceCheckEnabled = serviceCheckEnabled,
+                            servicesToCheck = servicesList,
+                            onStatusUpdate = { text -> onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text) }
+                        )
+                        if (res.success) {
+                            if (res.latencyMs > 0) {
+                                onNodeVerified?.invoke(decision.guid, res.latencyMs)
+                            }
+                            onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено к личному серверу: $sName")
+                            delay(250)
+                            connectAndFinish(decision.guid, decision.profile)
+                            return@withContext true
+                        } else {
+                            GeekModeLogger.log("SmartConnect", "Выбранный личный сервер $sName не отвечает.")
+                            if (!personalConfig.fallbackToPublicOnFailure) {
+                                onStageChanged?.invoke(SmartConnectStage.FAILED, "Выбранный личный сервер не отвечает")
+                                return@withContext false
+                            }
+                            onStageChanged?.invoke(SmartConnectStage.V2W_SCANNING, "Личный сервер недоступен, переключение на сторонние подписки…")
+                        }
+                    }
+                    is PersonalConnectDecision.ScanPersonalPool -> {
+                        onStageChanged?.invoke(SmartConnectStage.V2W_SCANNING, "Поиск лучшего доверенного сервера (${decision.candidates.size} узлов)…")
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: сканирование пула из ${decision.candidates.size} узлов...")
+
+                        var personalWinner: Pair<String, ProfileItem>? = null
+                        val personalChannel = Channel<Triple<String, ProfileItem, Long>>(Channel.UNLIMITED)
+
+                        val pScanJob = launch(Dispatchers.IO) {
+                            try {
+                                V2WCoreScanner.runStreamingScan(
+                                    servers = decision.candidates,
+                                    customBinaryPath = v2wPath,
+                                    firstOnly = false,
+                                    onNodeSuccess = { guid, profile, delayMs ->
+                                        personalChannel.trySend(Triple(guid, profile, delayMs))
+                                        personalWinner != null
+                                    }
+                                )
+                            } finally {
+                                personalChannel.close()
+                            }
+                        }
+
+                        try {
+                            for (candidate in personalChannel) {
+                                if (!isActive) break
+                                val pName = candidate.second.remarks.ifBlank { candidate.second.server }
+                                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем личный сервер: $pName…")
+                                val vRes = DesktopProfileVerifier.verifyProfile(
+                                    profile = candidate.second,
+                                    xrayBinaryPath = xrayPath,
+                                    speedCheckEnabled = speedCheckEnabled,
+                                    minSpeedMbps = minSpeedMbps,
+                                    customEndpointUrl = customEndpointUrl,
+                                    endpointE2eCheckEnabled = endpointE2eCheck,
+                                    serviceCheckEnabled = serviceCheckEnabled,
+                                    servicesToCheck = servicesList,
+                                    onStatusUpdate = { text -> onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text) }
+                                )
+                                if (vRes.success) {
+                                    personalWinner = candidate.first to candidate.second
+                                    if (vRes.latencyMs > 0) {
+                                        onNodeVerified?.invoke(candidate.first, vRes.latencyMs)
+                                    }
+                                    pScanJob.cancel()
+                                    V2WCoreScanner.stop()
+                                    onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено к личному серверу: $pName")
+                                    delay(250)
+                                    connectAndFinish(candidate.first, candidate.second)
+                                    return@withContext true
+                                }
+                            }
+                        } finally {
+                            pScanJob.cancel()
+                            V2WCoreScanner.stop()
+                        }
+
+                        // Fallback на классический TCP пинг для личных узлов
+                        GeekModeLogger.log("SmartConnect", "v2w-core не нашел рабочих личных узлов, пробуем TCP пинг...")
+                        val pTcpResults = NodePingTester.testBatchTcp(decision.candidates, timeoutMs = 1500L)
+                        for ((guid, profile, _) in pTcpResults) {
+                            if (!isActive) return@withContext false
+                            val pName = profile.remarks.ifBlank { profile.server }
+                            onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем скорость личного сервера: $pName…")
+                            val vRes = DesktopProfileVerifier.verifyProfile(
+                                profile = profile,
+                                xrayBinaryPath = xrayPath,
+                                speedCheckEnabled = speedCheckEnabled,
+                                minSpeedMbps = minSpeedMbps,
+                                customEndpointUrl = customEndpointUrl,
+                                endpointE2eCheckEnabled = endpointE2eCheck,
+                                serviceCheckEnabled = serviceCheckEnabled,
+                                servicesToCheck = servicesList,
+                                onStatusUpdate = { text -> onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, text) }
+                            )
+                            if (vRes.success) {
+                                if (vRes.latencyMs > 0) {
+                                    onNodeVerified?.invoke(guid, vRes.latencyMs)
+                                }
+                                onStageChanged?.invoke(SmartConnectStage.SUCCESS, "Подключено к личному серверу: $pName")
+                                delay(250)
+                                connectAndFinish(guid, profile)
+                                return@withContext true
+                            }
+                        }
+
+                        GeekModeLogger.log("SmartConnect", "Все личные серверы не прошли проверку.")
+                        if (!personalConfig.fallbackToPublicOnFailure) {
+                            onStageChanged?.invoke(SmartConnectStage.FAILED, "Все доверенные серверы недоступны")
+                            return@withContext false
+                        }
+                        onStageChanged?.invoke(SmartConnectStage.V2W_SCANNING, "Доверенные серверы недоступны, переключение на сторонние подписки…")
+                    }
+                    is PersonalConnectDecision.UsePublicSubscriptions -> {
+                        GeekModeLogger.log("SmartConnect", "PersonalServers: ${decision.reason}")
+                    }
+                }
+            }
+
+            // ══════════════════════════════════════════════════════════════════════════════
+            // Поиск по сторонним подпискам ПроБел (Public Subscriptions)
+            // ══════════════════════════════════════════════════════════════════════════════
+            val allServers = serverRepo.serversFlow.value
+            val allPublicServers = allServers.filter {
+                !PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+            }
+            if (allPublicServers.isEmpty()) {
+                GeekModeLogger.log("SmartConnect", "Нет доступных сторонних серверов для поиска.")
+                onStageChanged?.invoke(SmartConnectStage.FAILED, "Список сторонних серверов пуст")
+                return@withContext false
+            }
+
+            // Фильтрация кандидатов по сценарию (БС / ЧС / YouTube / Авто) + фильтр локаций 1-в-1 как на Android
+            val filterConfig = loadLocationFilterConfig(scenario = scenario)
+            val candidates = SmartServerSelector.filterServerPairs(allPublicServers, filterConfig).shuffled()
+            if (candidates.isEmpty()) {
+                GeekModeLogger.log("SmartConnect", "Нет серверов, соответствующих сценарию $scenario с учетом фильтра стран.")
+                onStageChanged?.invoke(SmartConnectStage.FAILED, "Нет серверов под сценарий $scenario")
+                return@withContext false
+            }
 
             // ══════════════════════════════════════════════════════════════════════════════
             // ЭТАП 1: Проверка VIP-серверов (Fast Path)
@@ -386,9 +590,12 @@ class DesktopSmartConnectManager(
 
         try {
             val allServers = serverRepo.serversFlow.value
-            if (allServers.isEmpty()) return@withContext false
+            val allPublicServers = allServers.filter {
+                !PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+            }
+            if (allPublicServers.isEmpty()) return@withContext false
             val filterConfig = loadLocationFilterConfig(excludeGuid = currentGuid, scenario = settingsRepo.getAppScenario())
-            val candidates = SmartServerSelector.filterServerPairs(allServers, filterConfig)
+            val candidates = SmartServerSelector.filterServerPairs(allPublicServers, filterConfig)
             if (candidates.isEmpty()) return@withContext false
 
             val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }

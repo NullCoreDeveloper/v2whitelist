@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.core.domain.personal
 
+import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.NetworkBindingRule
 import com.kiktor.v2whitelist.core.model.PersonalServersConfig
@@ -141,6 +142,96 @@ class PersonalServerEvaluatorTest {
         assertTrue(!PersonalServersConfig.isPersonalServer("custom_sub_99"))
         assertTrue(!PersonalServersConfig.isPersonalServer(null))
         assertTrue(!PersonalServersConfig.isPersonalServer(""))
+    }
+
+    @Test
+    fun testEvaluateScenarioBlacklistPersonalAutoAndWhitelistPublic() {
+        val config = PersonalServersConfig(
+            enabled = true,
+            blacklistRule = NetworkBindingRule.USE_PERSONAL_AUTO,
+            whitelistRule = NetworkBindingRule.USE_PUBLIC_SUBS
+        )
+
+        // При сценарии ЧС / YouTube -> сканирование пула доверенных
+        val decisionBlacklist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.VPN_BLACKLIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionBlacklist is PersonalConnectDecision.ScanPersonalPool)
+        assertEquals(2, decisionBlacklist.candidates.size)
+
+        // При сценарии БС -> переключение на сторонние подписки ПроБел
+        val decisionWhitelist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.WHITELIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionWhitelist is PersonalConnectDecision.UsePublicSubscriptions)
+    }
+
+    @Test
+    fun testEvaluateScenarioBothPersonal() {
+        val config = PersonalServersConfig(
+            enabled = true,
+            blacklistRule = NetworkBindingRule.USE_PERSONAL_AUTO,
+            whitelistRule = NetworkBindingRule.USE_PERSONAL_AUTO
+        )
+
+        val decisionBlacklist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.VPN_BLACKLIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionBlacklist is PersonalConnectDecision.ScanPersonalPool)
+
+        val decisionWhitelist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.WHITELIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionWhitelist is PersonalConnectDecision.ScanPersonalPool)
+    }
+
+    @Test
+    fun testEvaluateScenarioOnlyWhitelistPersonal() {
+        val config = PersonalServersConfig(
+            enabled = true,
+            blacklistRule = NetworkBindingRule.USE_PUBLIC_SUBS,
+            whitelistRule = NetworkBindingRule.USE_PERSONAL_AUTO
+        )
+
+        val decisionBlacklist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.VPN_BLACKLIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionBlacklist is PersonalConnectDecision.UsePublicSubscriptions)
+
+        val decisionWhitelist = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.WHITELIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decisionWhitelist is PersonalConnectDecision.ScanPersonalPool)
+    }
+
+    @Test
+    fun testEvaluateScenarioDirectSelected() {
+        val config = PersonalServersConfig(
+            enabled = true,
+            selectedServerGuid = "guid-2",
+            blacklistRule = NetworkBindingRule.USE_PERSONAL_SELECTED,
+            whitelistRule = NetworkBindingRule.USE_PUBLIC_SUBS
+        )
+
+        val decision = PersonalServerEvaluator.evaluateScenario(
+            config = config,
+            effectiveScenario = AppScenario.VPN_BLACKLIST,
+            allPersonalCandidates = candidates
+        )
+        assertTrue(decision is PersonalConnectDecision.ConnectPersonalDirect)
+        assertEquals("guid-2", decision.guid)
     }
 }
 

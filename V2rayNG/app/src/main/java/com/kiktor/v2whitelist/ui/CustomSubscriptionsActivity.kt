@@ -24,6 +24,7 @@ import com.kiktor.v2whitelist.dto.SubscriptionItem
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class CustomSubscriptionsActivity : BaseActivity() {
 
@@ -310,6 +311,9 @@ class CustomSubscriptionsActivity : BaseActivity() {
             onEdit = { position ->
                 showAddDialog(customSubs[position])
             },
+            onUpdate = { position ->
+                updateSingleSubscription(position)
+            },
             onMoveCompleted = {
                 saveCustomSubs()
             }
@@ -322,6 +326,65 @@ class CustomSubscriptionsActivity : BaseActivity() {
         itemTouchHelper.attachToRecyclerView(rvSubscriptions)
         
         updateEmptyState()
+    }
+
+    private fun updateSingleSubscription(position: Int) {
+        if (position !in customSubs.indices) return
+        val sub = customSubs[position]
+        if (adapter.updatingIds.contains(sub.id)) return
+
+        adapter.updatingIds.add(sub.id)
+        adapter.notifyItemChanged(position)
+
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                try {
+                    val subId = "custom_sub_${sub.id}"
+                    val allSubscriptions = MmkvManager.decodeSubscriptions()
+                    val existing = allSubscriptions.find { it.guid == subId || it.guid == sub.id }
+                    val cache = if (existing != null) {
+                        existing.subscription.remarks = sub.name
+                        existing.subscription.url = sub.url
+                        existing.subscription.filter = sub.filter
+                        existing.subscription.sharePercent = sub.sharePercent
+                        existing.subscription.enabled = true
+                        MmkvManager.encodeSubscription(subId, existing.subscription)
+                        existing
+                    } else {
+                        val subItem = SubscriptionItem().apply {
+                            remarks = sub.name
+                            url = sub.url
+                            filter = sub.filter
+                            sharePercent = sub.sharePercent
+                            enabled = true
+                        }
+                        MmkvManager.encodeSubscription(subId, subItem)
+                        com.kiktor.v2whitelist.dto.SubscriptionCache(subId, subItem)
+                    }
+
+                    val candidateSocksPort = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
+                    val socksPort = if (com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()) candidateSocksPort else 0
+                    com.kiktor.v2whitelist.handler.AngConfigManager.updateConfigViaSub(cache, socksPort = socksPort, sequential = false)
+                } catch (e: Exception) {
+                    0
+                }
+            }
+
+            adapter.updatingIds.remove(sub.id)
+            val allSubs = MmkvManager.decodeSubscriptions()
+            val realSub = allSubs.find { it.guid == "custom_sub_${sub.id}" || it.guid == sub.id }
+            sub.lastUpdated = realSub?.subscription?.lastUpdated ?: System.currentTimeMillis()
+            sub.lastUpdateFailed = realSub?.subscription?.lastUpdateFailed ?: (count == 0)
+            saveCustomSubs()
+            adapter.notifyItemChanged(position)
+
+            MessageUtil.sendMsg2UI(this@CustomSubscriptionsActivity, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+            if (count > 0) {
+                toast(getString(R.string.personal_sub_single_updated, sub.name, count))
+            } else {
+                toast(R.string.sub_update_failed)
+            }
+        }
     }
 
     private fun updateEmptyState() {

@@ -149,6 +149,17 @@ interface AppStrings {
     val subManageSubtitle: String
     val subAddBtn: String
     val subUpdateAllBtn: String
+    val subUpdateSingleBtn: String
+    val personalRulesHeader: String
+    val personalRulesHeaderDesc: String
+    val personalBlacklistRuleTitle: String
+    val personalBlacklistRuleDesc: String
+    val personalWhitelistRuleTitle: String
+    val personalWhitelistRuleDesc: String
+    val personalRuleAuto: String
+    val personalRuleSelected: String
+    val personalRulePublic: String
+    val personalRuleDirect: String
     val subUpdatingBtn: String
     val subFailBannerTitle: String
     val subRetryBtn: String
@@ -553,6 +564,17 @@ object StringsRu : AppStrings {
     override val subManageSubtitle: String = "Единая система подписок, зеркал и категорий маршрутизации"
     override val subAddBtn: String = "Добавить"
     override val subUpdateAllBtn: String = "Обновить все"
+    override val subUpdateSingleBtn: String = "Обновить подписку"
+    override val personalRulesHeader: String = "Правила сценариев для доверенных узлов"
+    override val personalRulesHeaderDesc: String = "Настройте правила использования личных узлов или публичных подписок под разные сценарии"
+    override val personalBlacklistRuleTitle: String = "При сценарии ЧС / YouTube (обычный интернет)"
+    override val personalBlacklistRuleDesc: String = "Поведение подключения при доступном обычном интернете"
+    override val personalWhitelistRuleTitle: String = "При сценарии БС (Белый список / глушение)"
+    override val personalWhitelistRuleDesc: String = "Поведение подключения при активных белых списках / глушении"
+    override val personalRuleAuto: String = "⚡ Автовыбор (Личные)"
+    override val personalRuleSelected: String = "🎯 Выбранный сервер"
+    override val personalRulePublic: String = "🌐 Подписки ПроБел"
+    override val personalRuleDirect: String = "🚫 Без VPN (Прямой)"
     override val subUpdatingBtn: String = "Обновление…"
     override val subFailBannerTitle: String = "Не удалось обновить подписки"
     override val subRetryBtn: String = "Повторить"
@@ -947,6 +969,17 @@ object StringsEn : AppStrings {
     override val subManageSubtitle: String = "Unified subscription system, mirror nodes, and scenario categorization"
     override val subAddBtn: String = "Add"
     override val subUpdateAllBtn: String = "Update All"
+    override val subUpdateSingleBtn: String = "Update subscription"
+    override val personalRulesHeader: String = "Scenario Rules for Trusted Servers"
+    override val personalRulesHeaderDesc: String = "Configure usage of personal nodes vs public subscriptions per scenario"
+    override val personalBlacklistRuleTitle: String = "In Blacklist / YouTube scenario (open internet)"
+    override val personalBlacklistRuleDesc: String = "Connection behavior when open internet is available"
+    override val personalWhitelistRuleTitle: String = "In Whitelist scenario (jamming mode)"
+    override val personalWhitelistRuleDesc: String = "Connection behavior when whitelists or jamming are detected"
+    override val personalRuleAuto: String = "⚡ Auto (Personal)"
+    override val personalRuleSelected: String = "🎯 Selected server"
+    override val personalRulePublic: String = "🌐 ProBel subscriptions"
+    override val personalRuleDirect: String = "🚫 Direct (No VPN)"
     override val subUpdatingBtn: String = "Updating…"
     override val subFailBannerTitle: String = "Failed to update subscriptions"
     override val subRetryBtn: String = "Retry"
@@ -1341,6 +1374,17 @@ object StringsZh : AppStrings {
     override val subManageSubtitle: String = "集中管理订阅源、备用镜像及场景分流规则"
     override val subAddBtn: String = "添加"
     override val subUpdateAllBtn: String = "更新全部"
+    override val subUpdateSingleBtn: String = "更新订阅"
+    override val personalRulesHeader: String = "专属服务器场景规则"
+    override val personalRulesHeaderDesc: String = "配置在不同场景下使用专属节点还是公共订阅"
+    override val personalBlacklistRuleTitle: String = "黑名单 / YouTube 模式 (开放网络)"
+    override val personalBlacklistRuleDesc: String = "开放网络可用时的连接策略"
+    override val personalWhitelistRuleTitle: String = "白名单模式 (白名单限制 / 干扰)"
+    override val personalWhitelistRuleDesc: String = "检测到白名单或网络干扰时的连接策略"
+    override val personalRuleAuto: String = "⚡ 自动选择 (专属)"
+    override val personalRuleSelected: String = "🎯 已选服务器"
+    override val personalRulePublic: String = "🌐 ProBel 公共订阅"
+    override val personalRuleDirect: String = "🚫 直连 (无 VPN)"
     override val subUpdatingBtn: String = "更新中…"
     override val subFailBannerTitle: String = "部分订阅更新失败"
     override val subRetryBtn: String = "重试"
@@ -1735,6 +1779,17 @@ object StringsFa : AppStrings {
     override val subManageSubtitle: String = "سیستم یکپارچه اشتراک‌ها، سرورهای آیینه و دسته‌بندی سناریوها"
     override val subAddBtn: String = "افزودن"
     override val subUpdateAllBtn: String = "به‌روزرسانی همه"
+    override val subUpdateSingleBtn: String = "به‌روزرسانی اشتراک"
+    override val personalRulesHeader: String = "قوانین سناریو برای سرورهای مورد اعتماد"
+    override val personalRulesHeaderDesc: String = "پیکربندی استفاده از گره‌های شخصی یا اشتراک‌های عمومی بر اساس سناریو"
+    override val personalBlacklistRuleTitle: String = "در سناریوی لیست سیاه / یوتیوب (اینترنت آزاد)"
+    override val personalBlacklistRuleDesc: String = "رفتار اتصال در زمان در دسترس بودن اینترنت آزاد"
+    override val personalWhitelistRuleTitle: String = "در سناریوی لیست سفید (حالت فیلترینگ شدید)"
+    override val personalWhitelistRuleDesc: String = "رفتار اتصال هنگام شناسایی لیست سفید یا اختلال شبکه"
+    override val personalRuleAuto: String = "⚡ انتخاب خودکار (شخصی)"
+    override val personalRuleSelected: String = "🎯 سرور انتخابی"
+    override val personalRulePublic: String = "🌐 اشتراک‌های عمومی ProBel"
+    override val personalRuleDirect: String = "🚫 مستقیم (بدون VPN)"
     override val subUpdatingBtn: String = "در حال به‌روزرسانی…"
     override val subFailBannerTitle: String = "خطا در به‌روزرسانی اشتراک‌ها"
     override val subRetryBtn: String = "تلاش مجدد"

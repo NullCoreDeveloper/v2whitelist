@@ -115,6 +115,7 @@ class DesktopAppState(
 
     private val _isUpdatingSub = MutableStateFlow(false)
     val isUpdatingSub: StateFlow<Boolean> = _isUpdatingSub.asStateFlow()
+    val updatingSubIds = MutableStateFlow<Set<String>>(emptySet())
 
     private val _isV2WScanning = MutableStateFlow(false)
     val isV2WScanning: StateFlow<Boolean> = _isV2WScanning.asStateFlow()
@@ -238,6 +239,24 @@ class DesktopAppState(
     val personalIgnoreExitNode = MutableStateFlow(settingsRepo.getBoolean("pref_personal_ignore_exit_node", true))
     val personalAutoConnectOnStartup = MutableStateFlow(settingsRepo.getBoolean("pref_personal_auto_connect", true))
     val personalFallbackPublic = MutableStateFlow(settingsRepo.getBoolean("pref_personal_fallback_public", true))
+    val personalBlacklistRule = MutableStateFlow(
+        try {
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.valueOf(
+                settingsRepo.getString("pref_personal_blacklist_rule", com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PERSONAL_AUTO.name)
+            )
+        } catch (_: Exception) {
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PERSONAL_AUTO
+        }
+    )
+    val personalWhitelistRule = MutableStateFlow(
+        try {
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.valueOf(
+                settingsRepo.getString("pref_personal_whitelist_rule", com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PUBLIC_SUBS.name)
+            )
+        } catch (_: Exception) {
+            com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PUBLIC_SUBS
+        }
+    )
 
     // Ручной выбор сервера vs сценарий (Авто, БС, ЧС, YouTube)
     val isManualSelection = MutableStateFlow(settingsRepo.getBoolean("pref_manual_server_selected", false))
@@ -432,6 +451,17 @@ class DesktopAppState(
             scope.launch(Dispatchers.Default) {
                 delay(3000L)
                 checkAppUpdate(manual = false)
+            }
+        }
+
+        // Автоподключение доверенных серверов при старте (если включено в настройках)
+        if (personalServersEnabled.value && personalAutoConnectOnStartup.value) {
+            scope.launch {
+                delay(1500L)
+                if (coreState.value == DesktopCoreState.STOPPED) {
+                    GeekModeLogger.log("DesktopApp", "Автоподключение доверенных серверов при запуске...")
+                    startSmartConnect()
+                }
             }
         }
 
@@ -1179,6 +1209,114 @@ class DesktopAppState(
         }
     }
 
+    fun updateSingleSubscription(subId: String, onComplete: ((Boolean, Int) -> Unit)? = null) {
+        if (updatingSubIds.value.contains(subId)) return
+        val targetSub = _subscriptions.value.find { it.id == subId } ?: return
+
+        updatingSubIds.value = updatingSubIds.value + subId
+        scope.launch {
+            GeekModeLogger.log("Subscriptions", "Обновление подписки: ${targetSub.name}...")
+            try {
+                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                    GeekModeLogger.log(
+                        "Subscriptions",
+                        "Обновление ${targetSub.name} отменено: включена опция «Обновлять подписки только через VPN», но VPN сейчас не запущен."
+                    )
+                    updatingSubIds.value = updatingSubIds.value - subId
+                    onComplete?.invoke(false, 0)
+                    return@launch
+                }
+
+                val proxyP = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else 0
+                val ua = subscriptionUserAgent.value.takeIf { it.isNotBlank() } ?: "v2rayNG/1.10.x"
+                val isBsMode = networkStatus.value == NetworkStatusChecker.STATUS_WHITELIST_ONLY
+                val useYandex = yandexTranslateUpdateEnabled.value && isBsMode && coreState.value != DesktopCoreState.RUNNING
+
+                val mirrors = SubscriptionFetcher.parseMirrors(targetSub.url)
+                if (mirrors.isEmpty()) {
+                    updatingSubIds.value = updatingSubIds.value - subId
+                    onComplete?.invoke(false, 0)
+                    return@launch
+                }
+
+                var result = if (useYandex) {
+                    fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                } else {
+                    SubscriptionFetcher.fetchParallel(
+                        urls = mirrors,
+                        userAgent = ua,
+                        httpProxyHost = "127.0.0.1",
+                        httpProxyPort = proxyP,
+                        timeoutMs = 12000L
+                    )
+                }
+
+                if (result.isFailure && yandexTranslateUpdateEnabled.value && !useYandex && coreState.value != DesktopCoreState.RUNNING) {
+                    GeekModeLogger.log("Subscriptions", "${targetSub.name}: прямой запрос не удался, попытка через Яндекс.Переводчик...")
+                    result = fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                }
+
+                val updatedSubsList = _subscriptions.value.toMutableList()
+                val subIdx = updatedSubsList.indexOfFirst { it.id == subId }
+
+                if (result.isSuccess) {
+                    val content = result.getOrNull().orEmpty()
+                    var parsed = SubscriptionParser.parse(content)
+
+                    if (targetSub.filter.isNotBlank()) {
+                        try {
+                            val filterRegex = Regex(targetSub.filter)
+                            parsed = parsed.filter { !filterRegex.containsMatchIn(it.remarks) }
+                        } catch (_: Exception) {}
+                    }
+
+                    for (p in parsed) {
+                        p.subscriptionId = targetSub.id
+                    }
+
+                    if (parsed.isNotEmpty()) {
+                        val currentServers = serverRepo.serversFlow.value
+                        val oldForSub = currentServers.filter {
+                            it.second.subscriptionId == targetSub.id || it.second.subscriptionId == targetSub.name
+                        }.map { it.first }
+
+                        val batch = parsed.map { generateStableServerGuid(it) to it }
+                        serverRepo.replaceSubscriptionServers(oldForSub, batch)
+                        serverRepo.removeDuplicates()
+                        _selectedGuid.value = serverRepo.getSelectedServerGuid()
+                    }
+
+                    if (subIdx >= 0) {
+                        updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                            lastUpdated = System.currentTimeMillis(),
+                            lastUpdateFailed = false
+                        )
+                    }
+                    _subscriptions.value = updatedSubsList
+                    saveSubscriptionsToStorage(updatedSubsList)
+                    GeekModeLogger.log("Subscriptions", "${targetSub.name}: успешно обновлена, получено +${parsed.size} узлов")
+                    onComplete?.invoke(true, parsed.size)
+                } else {
+                    val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
+                    if (subIdx >= 0) {
+                        updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                            lastUpdateFailed = true
+                        )
+                    }
+                    _subscriptions.value = updatedSubsList
+                    saveSubscriptionsToStorage(updatedSubsList)
+                    GeekModeLogger.log("Subscriptions", "${targetSub.name}: сбой ($err)")
+                    onComplete?.invoke(false, 0)
+                }
+            } catch (e: Exception) {
+                GeekModeLogger.log("Subscriptions", "Сбой обновления ${targetSub.name}: ${e.message}")
+                onComplete?.invoke(false, 0)
+            } finally {
+                updatingSubIds.value = updatingSubIds.value - subId
+            }
+        }
+    }
+
     fun checkNetworkStatus() {
         if (isCheckingNetwork.value) return
         scope.launch {
@@ -1252,20 +1390,6 @@ class DesktopAppState(
     private var smartConnectJob: Job? = null
 
     fun startSmartConnect() {
-        if (personalServersEnabled.value) {
-            val allPersonal = servers.value.filter { com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId) }
-            val selGuid = personalSelectedGuid.value
-            val targetPersonal = if (selGuid.isNotBlank()) allPersonal.find { it.first == selGuid } else null
-
-            if (targetPersonal != null) {
-                GeekModeLogger.log("AppState", "Подключение к выбранному личному серверу: ${targetPersonal.second.remarks}")
-                _smartConnectStatus.value = "Подключение к личному серверу: ${targetPersonal.second.remarks}"
-                selectServer(targetPersonal.first)
-                connectCurrent()
-                return
-            }
-        }
-
         smartConnectJob?.cancel()
         smartConnectManager.stop()
         V2WCoreScanner.stop()

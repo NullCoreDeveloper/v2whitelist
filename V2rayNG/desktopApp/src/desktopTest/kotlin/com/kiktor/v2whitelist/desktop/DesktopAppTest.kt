@@ -1,7 +1,10 @@
 package com.kiktor.v2whitelist.desktop
 
+import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
 import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.EConfigType
+import com.kiktor.v2whitelist.core.model.NetworkBindingRule
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.repository.InMemoryServerRepository
 import com.kiktor.v2whitelist.core.repository.InMemorySettingsRepository
@@ -188,6 +191,55 @@ class DesktopAppTest {
 
         manager.startSmartConnect(minSpeedMbps = 0.0, speedCheckEnabled = false)
         assertNotNull(lastStage)
+    }
+
+    @Test
+    fun testDesktopSmartConnectManagerPersonalServersScenarioFlow() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val runner = XrayDesktopRunner()
+
+        val personalNode = ProfileItem(
+            configType = EConfigType.VLESS,
+            remarks = "My-Personal-VPS",
+            server = "10.0.0.1",
+            serverPort = "443",
+            subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
+        )
+        val publicNode = ProfileItem(
+            configType = EConfigType.VLESS,
+            remarks = "Public-Whitelist-Node",
+            server = "10.0.0.2",
+            serverPort = "443",
+            subscriptionId = "public_sub_1"
+        )
+        serverRepo.saveServerConfig("pers-1", personalNode)
+        serverRepo.saveServerConfig("pub-1", publicNode)
+
+        settingsRepo.setBoolean("pref_personal_servers_enabled", true)
+        settingsRepo.setString("pref_personal_blacklist_rule", NetworkBindingRule.USE_PERSONAL_AUTO.name)
+        settingsRepo.setString("pref_personal_whitelist_rule", NetworkBindingRule.USE_PUBLIC_SUBS.name)
+        settingsRepo.setBoolean("pref_personal_fallback_public", true)
+
+        var simulatedNetStatus = NetworkStatusChecker.STATUS_FULL_INTERNET
+
+        val manager = com.kiktor.v2whitelist.desktop.engine.DesktopSmartConnectManager(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = runner,
+            networkStatusProvider = { simulatedNetStatus },
+            scope = this
+        )
+
+        // В сценарии VPN_BLACKLIST (ЧС) эффективный сценарий — VPN_BLACKLIST
+        assertEquals(AppScenario.VPN_BLACKLIST, manager.resolveEffectiveScenario(AppScenario.VPN_BLACKLIST))
+
+        // В сценарии WHITELIST (БС) эффективный сценарий — WHITELIST
+        assertEquals(AppScenario.WHITELIST, manager.resolveEffectiveScenario(AppScenario.WHITELIST))
+
+        // В сценарии AUTO при нормальном интернете -> VPN_BLACKLIST
+        simulatedNetStatus = NetworkStatusChecker.STATUS_FULL_INTERNET
+        assertEquals(AppScenario.VPN_BLACKLIST, manager.resolveEffectiveScenario(AppScenario.AUTO))
     }
 
     @Test

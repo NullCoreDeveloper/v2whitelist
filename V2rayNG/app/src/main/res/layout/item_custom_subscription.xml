@@ -59,6 +59,22 @@
 
         </LinearLayout>
 
+        <ProgressBar
+            android:id="@+id/pb_updating"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_margin="8dp"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btn_update_sub"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/personal_refresh_subs"
+            android:src="@drawable/ic_check_update_24dp"
+            app:tint="?attr/colorPrimary" />
+
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/switch_sub_enabled"
             android:layout_width="wrap_content"

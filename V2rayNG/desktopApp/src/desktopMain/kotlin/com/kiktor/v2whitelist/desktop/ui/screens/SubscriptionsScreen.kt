@@ -200,11 +200,15 @@ fun SubscriptionsScreen(
             ) {
                 items(subscriptions, key = { it.id }) { sub ->
                     val serverCount = serverCountBySubId[sub.id] ?: serverCountBySubId[sub.name] ?: 0
+                    val updatingSubs by state.updatingSubIds.collectAsState()
+                    val isUpdatingThis = updatingSubs.contains(sub.id)
                     SubscriptionCard(
                         sub = sub,
                         serverCount = serverCount,
+                        isUpdating = isUpdatingThis,
                         onToggle = { state.toggleSubscriptionEnabled(sub.id) },
                         onEdit = { editingSub = sub },
+                        onUpdate = { state.updateSingleSubscription(sub.id) },
                         onDelete = { state.deleteSubscription(sub.id) }
                     )
                 }
@@ -217,8 +221,10 @@ fun SubscriptionsScreen(
 private fun SubscriptionCard(
     sub: CustomSubData,
     serverCount: Int,
+    isUpdating: Boolean = false,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
+    onUpdate: () -> Unit,
     onDelete: () -> Unit
 ) {
     val strings = LocalAppStrings.current
@@ -353,7 +359,31 @@ private fun SubscriptionCard(
                 }
             }
 
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(8.dp))
+
+            // Кнопка одиночного обновления подписки
+            IconButton(
+                onClick = onUpdate,
+                enabled = !isUpdating,
+                modifier = Modifier.size(36.dp)
+            ) {
+                if (isUpdating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = strings.subUpdateSingleBtn,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(4.dp))
 
             // Иконка корзины справа
             IconButton(
