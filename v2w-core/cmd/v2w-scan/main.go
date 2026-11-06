@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -28,6 +29,8 @@ import (
 	"github.com/kiktor/v2w-core/proxy/trojan"
 	"github.com/kiktor/v2w-core/proxy/vless"
 	vless_outbound "github.com/kiktor/v2w-core/proxy/vless/outbound"
+	"github.com/kiktor/v2w-core/proxy/vmess"
+	vmess_outbound "github.com/kiktor/v2w-core/proxy/vmess/outbound"
 	"github.com/kiktor/v2w-core/transport/internet"
 	"github.com/kiktor/v2w-core/transport/internet/grpc"
 	hysteria_transport "github.com/kiktor/v2w-core/transport/internet/hysteria"
@@ -177,7 +180,198 @@ func parseShadowsocksURL(rawURL string) (any, *internet.MemoryStreamConfig, net.
 	return config, streamSettings, dest, nil
 }
 
+func tagLinkWithFragment(linkStr string, mode string) string {
+	if strings.HasPrefix(linkStr, "vmess://") {
+		trimmed := strings.TrimPrefix(linkStr, "vmess://")
+		decoded := decodeBase64Safe(trimmed)
+		var m map[string]any
+		if err := json.Unmarshal([]byte(decoded), &m); err == nil {
+			m["v2w_fragment"] = mode
+			ps, _ := m["ps"].(string)
+			m["ps"] = ps + " ⚡[FRAG:" + strings.ToUpper(mode) + "]"
+			if b, err := json.Marshal(m); err == nil {
+				return "vmess://" + base64.StdEncoding.EncodeToString(b)
+			}
+		}
+		return linkStr
+	}
+
+	u, err := url.Parse(linkStr)
+	if err != nil {
+		if strings.Contains(linkStr, "#") {
+			parts := strings.SplitN(linkStr, "#", 2)
+			return fmt.Sprintf("%s&v2w_fragment=%s#%s ⚡[FRAG:%s]", parts[0], mode, parts[1], strings.ToUpper(mode))
+		}
+		return linkStr + "&v2w_fragment=" + mode
+	}
+
+	q := u.Query()
+	q.Set("v2w_fragment", mode)
+	u.RawQuery = q.Encode()
+
+	fragTag := "⚡[FRAG:" + strings.ToUpper(mode) + "]"
+	if u.Fragment != "" {
+		u.Fragment = u.Fragment + " " + fragTag
+	} else {
+		u.Fragment = fragTag
+	}
+	return u.String()
+}
+
+type vmessRawJson struct {
+	V    any    `json:"v"`
+	Ps   string `json:"ps"`
+	Add  string `json:"add"`
+	Port any    `json:"port"`
+	Id   string `json:"id"`
+	Aid  any    `json:"aid"`
+	Scy  string `json:"scy"`
+	Net  string `json:"net"`
+	Type string `json:"type"`
+	Host string `json:"host"`
+	Path string `json:"path"`
+	Tls  string `json:"tls"`
+	Sni  string `json:"sni"`
+	Alpn string `json:"alpn"`
+	Fp   string `json:"fp"`
+}
+
+func parseVmessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	trimmed := strings.TrimPrefix(rawURL, "vmess://")
+	decoded := decodeBase64Safe(trimmed)
+	var vj vmessRawJson
+	if err := json.Unmarshal([]byte(decoded), &vj); err != nil {
+		return nil, nil, net.Destination{}, fmt.Errorf("invalid vmess json: %w", err)
+	}
+
+	serverIP := strings.TrimSpace(vj.Add)
+	port := 443
+	switch p := vj.Port.(type) {
+	case float64:
+		port = int(p)
+	case string:
+		if pi, err := strconv.Atoi(p); err == nil {
+			port = pi
+		}
+	case int:
+		port = p
+	}
+
+	dest := net.TCPDestination(net.ParseAddress(serverIP), net.Port(port))
+
+	netType := strings.ToLower(strings.TrimSpace(vj.Net))
+	if netType == "" || netType == "raw" || netType == "none" {
+		netType = "tcp"
+	}
+
+	security := strings.ToLower(strings.TrimSpace(vj.Tls))
+	if security == "" {
+		security = "none"
+	}
+
+	streamSettings := &internet.MemoryStreamConfig{
+		ProtocolName: netType,
+		SecurityType: security,
+	}
+
+	host := strings.TrimSpace(vj.Host)
+	if host == "" {
+		host = strings.TrimSpace(vj.Sni)
+	}
+
+	switch netType {
+	case "tcp":
+		streamSettings.ProtocolName = "tcp"
+		streamSettings.ProtocolSettings = &tcp.Config{}
+	case "ws", "websocket":
+		streamSettings.ProtocolName = "websocket"
+		streamSettings.ProtocolSettings = &websocket.Config{
+			Path: vj.Path,
+			Host: host,
+			Header: map[string]string{
+				"Host": host,
+			},
+		}
+	case "grpc":
+		streamSettings.ProtocolName = "grpc"
+		streamSettings.ProtocolSettings = &grpc.Config{
+			ServiceName: vj.Path,
+		}
+	case "httpupgrade":
+		streamSettings.ProtocolName = "httpupgrade"
+		streamSettings.ProtocolSettings = &httpupgrade.Config{
+			Path: vj.Path,
+			Host: host,
+			Header: map[string]string{
+				"Host": host,
+			},
+		}
+	case "xhttp", "splithttp":
+		streamSettings.ProtocolName = "splithttp"
+		streamSettings.ProtocolSettings = &splithttp.Config{
+			Path: vj.Path,
+			Host: host,
+			Mode: "auto",
+		}
+	default:
+		return nil, nil, net.Destination{}, fmt.Errorf("unsupported network type: %s", netType)
+	}
+
+	streamSettings.SocketSettings = &internet.SocketConfig{
+		DomainStrategy: internet.DomainStrategy_USE_IP4,
+	}
+
+	if security == "tls" {
+		streamSettings.SecurityType = "tls"
+		var nextProtocol []string
+		if vj.Alpn != "" {
+			for _, p := range strings.Split(vj.Alpn, ",") {
+				nextProtocol = append(nextProtocol, strings.TrimSpace(p))
+			}
+		}
+		if netType == "ws" || netType == "websocket" {
+			nextProtocol = []string{"http/1.1"}
+		}
+		sni := vj.Sni
+		if sni == "" {
+			sni = vj.Host
+		}
+		if sni == "" {
+			sni = serverIP
+		}
+		streamSettings.SecuritySettings = &tls.Config{
+			ServerName:   sni,
+			NextProtocol: nextProtocol,
+		}
+		if vj.Fp != "" {
+			streamSettings.SecuritySettings.(*tls.Config).Fingerprint = vj.Fp
+		}
+	}
+
+	account := &vmess.Account{
+		Id: vj.Id,
+		SecuritySettings: &protocol.SecurityConfig{
+			Type: protocol.SecurityType_AUTO,
+		},
+	}
+
+	config := &vmess_outbound.Config{
+		Receiver: &protocol.ServerEndpoint{
+			Address: net.NewIPOrDomain(net.ParseAddress(serverIP)),
+			Port:    uint32(port),
+			User: &protocol.User{
+				Account: serial.ToTypedMessage(account),
+			},
+		},
+	}
+
+	return config, streamSettings, dest, nil
+}
+
 func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+	if strings.HasPrefix(rawURL, "vmess://") {
+		return parseVmessURL(rawURL)
+	}
 	if strings.HasPrefix(rawURL, "ss://") {
 		return parseShadowsocksURL(rawURL)
 	}
@@ -589,9 +783,30 @@ func main() {
 	fromStdin := flag.Bool("stdin", false, "Read configuration links directly from stdin")
 	streamMode := flag.Bool("stream", false, "Stream successful nodes line-by-line as they respond")
 	firstOnly := flag.Bool("first", false, "Exit immediately upon finding the first working node (stateless fast mode)")
-	concurrency := flag.Int("concurrency", 35, "Maximum concurrent scan jobs")
-	timeoutSec := flag.Int("timeout", 10, "Per-node scan timeout in seconds")
+	concurrency := flag.Int("concurrency", 50, "Maximum concurrent scan jobs")
+	timeoutSec := flag.Int("timeout", 5, "Per-node scan timeout in seconds")
+	fragTimeoutSec := flag.Int("frag-timeout", 4, "Timeout in seconds for TLS fragmentation retry")
+	destUrl := flag.String("dest", "http://cp.cloudflare.com/generate_204", "Destination URL to test connectivity (e.g. http://cp.cloudflare.com/generate_204 or https://www.google.com/generate_204)")
 	flag.Parse()
+
+	var targetDest net.Destination
+	destHost := "cp.cloudflare.com"
+	destPort := 80
+	if parsedDest, err := url.Parse(*destUrl); err == nil {
+		if h := parsedDest.Hostname(); h != "" {
+			destHost = h
+		}
+		if parsedDest.Port() != "" {
+			if p, err := strconv.Atoi(parsedDest.Port()); err == nil {
+				destPort = p
+			}
+		} else if parsedDest.Scheme == "https" {
+			destPort = 443
+		} else {
+			destPort = 80
+		}
+	}
+	targetDest = net.TCPDestination(net.DomainAddress(destHost), net.Port(destPort))
 
 	var subData string
 	if *fromStdin {
@@ -624,7 +839,7 @@ func main() {
 	var links []string
 	for _, line := range rawLines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
+		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "vmess://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
 			links = append(links, line)
 		}
 	}
@@ -633,6 +848,10 @@ func main() {
 	coreScanner := core.NewScanner()
 
 	var successCount int32
+	var directSuccessCount int32
+	var fragRevivedCount int32
+	var fragTcpCount int32
+	var fragRecCount int32
 	var failCount int32
 
 	var successfulLinks []string
@@ -640,7 +859,7 @@ func main() {
 
 	maxConc := *concurrency
 	if maxConc <= 0 {
-		maxConc = 35
+		maxConc = 50
 	}
 	sem := make(chan struct{}, maxConc)
 
@@ -661,7 +880,7 @@ func main() {
 			// before heavy Xray in-memory initialization and TLS handshake.
 			if dest.Network == net.Network_TCP {
 				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
-				tcpDialer := stdnet.Dialer{Timeout: 2500 * time.Millisecond}
+				tcpDialer := stdnet.Dialer{Timeout: 2000 * time.Millisecond}
 				network := "tcp"
 				if dest.Address.Family().IsDomain() {
 					network = "tcp4"
@@ -677,6 +896,13 @@ func main() {
 			var handler core.ProxyHandler
 			if outboundConfig, ok := config.(*vless_outbound.Config); ok {
 				h, err := vless_outbound.New(context.Background(), outboundConfig)
+				if err != nil || h == nil {
+					atomic.AddInt32(&failCount, 1)
+					return
+				}
+				handler = h
+			} else if outboundConfig, ok := config.(*vmess_outbound.Config); ok {
+				h, err := vmess_outbound.New(context.Background(), outboundConfig)
 				if err != nil || h == nil {
 					atomic.AddInt32(&failCount, 1)
 					return
@@ -717,7 +943,6 @@ func main() {
 				name, _ = url.QueryUnescape(linkStr[idx+1:])
 			}
 
-			targetDest := net.TCPDestination(net.DomainAddress("www.google.com"), 443)
 			startT := time.Now()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSec)*time.Second)
 			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
@@ -726,6 +951,7 @@ func main() {
 
 			if res.Error == nil {
 				atomic.AddInt32(&successCount, 1)
+				atomic.AddInt32(&directSuccessCount, 1)
 				if *streamMode || *firstOnly {
 					stdoutMu.Lock()
 					fmt.Printf("SUCCESS\t%d\t%s\n", delayMs, linkStr)
@@ -738,11 +964,72 @@ func main() {
 				linksMu.Lock()
 				successfulLinks = append(successfulLinks, linkStr)
 				linksMu.Unlock()
-			} else {
-				atomic.AddInt32(&failCount, 1)
-				if !*streamMode {
-					fmt.Fprintf(os.Stderr, "[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
+				return
+			}
+
+			// Fallback: If node failed and uses TLS/Reality, try ClientHello fragmentation
+			isTLS := stream.SecurityType == "tls" || stream.SecurityType == "reality"
+			if isTLS && dest.Network == net.Network_TCP {
+				// Retry 1: TCP segmentation (FragmentTCP)
+				fragCtx, fragCancel := context.WithTimeout(context.Background(), time.Duration(*fragTimeoutSec)*time.Second)
+				fragCtx = internet.ContextWithFragment(fragCtx, internet.FragmentTCP)
+				fragStart := time.Now()
+				fragRes := coreScanner.TestNode(fragCtx, handler, dialer, targetDest)
+				fragDelay := time.Since(fragStart).Milliseconds()
+				fragCancel()
+
+				if fragRes.Error == nil {
+					atomic.AddInt32(&successCount, 1)
+					atomic.AddInt32(&fragRevivedCount, 1)
+					atomic.AddInt32(&fragTcpCount, 1)
+					fragLink := tagLinkWithFragment(linkStr, "tcp")
+					if *streamMode || *firstOnly {
+						stdoutMu.Lock()
+						fmt.Printf("SUCCESS\t%d\t%s\n", fragDelay, fragLink)
+						_ = os.Stdout.Sync()
+						stdoutMu.Unlock()
+						if *firstOnly {
+							os.Exit(0)
+						}
+					}
+					linksMu.Lock()
+					successfulLinks = append(successfulLinks, fragLink)
+					linksMu.Unlock()
+					return
 				}
+
+				// Retry 2: TLS record-layer splitting (FragmentRecord)
+				recCtx, recCancel := context.WithTimeout(context.Background(), time.Duration(*fragTimeoutSec)*time.Second)
+				recCtx = internet.ContextWithFragment(recCtx, internet.FragmentRecord)
+				recStart := time.Now()
+				recRes := coreScanner.TestNode(recCtx, handler, dialer, targetDest)
+				recDelay := time.Since(recStart).Milliseconds()
+				recCancel()
+
+				if recRes.Error == nil {
+					atomic.AddInt32(&successCount, 1)
+					atomic.AddInt32(&fragRevivedCount, 1)
+					atomic.AddInt32(&fragRecCount, 1)
+					fragLink := tagLinkWithFragment(linkStr, "record")
+					if *streamMode || *firstOnly {
+						stdoutMu.Lock()
+						fmt.Printf("SUCCESS\t%d\t%s\n", recDelay, fragLink)
+						_ = os.Stdout.Sync()
+						stdoutMu.Unlock()
+						if *firstOnly {
+							os.Exit(0)
+						}
+					}
+					linksMu.Lock()
+					successfulLinks = append(successfulLinks, fragLink)
+					linksMu.Unlock()
+					return
+				}
+			}
+
+			atomic.AddInt32(&failCount, 1)
+			if !*streamMode {
+				fmt.Fprintf(os.Stderr, "[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
 			}
 		}(l)
 	}
@@ -750,11 +1037,12 @@ func main() {
 	wg.Wait()
 	if *streamMode {
 		stdoutMu.Lock()
-		fmt.Printf("COMPLETE\t%d\t%d\n", successCount, failCount)
+		fmt.Printf("COMPLETE\t%d\t%d\t%d\n", successCount, failCount, fragRevivedCount)
 		_ = os.Stdout.Sync()
 		stdoutMu.Unlock()
 	} else {
-		fmt.Printf("\n--- Scan Complete ---\nSuccess: %d\nFailed/Timeout/Unsupported: %d\n", successCount, failCount)
+		fmt.Printf("\n--- Scan Complete ---\nTotal: %d | Success: %d (Direct: %d, Revived via Fragment: %d [TCP:%d, Record:%d]) | Failed: %d\n",
+			successCount+failCount, successCount, directSuccessCount, fragRevivedCount, fragTcpCount, fragRecCount, failCount)
 		if len(successfulLinks) > 0 {
 			fmt.Printf("\n--- Working Configs ---\n")
 			for _, sl := range successfulLinks {

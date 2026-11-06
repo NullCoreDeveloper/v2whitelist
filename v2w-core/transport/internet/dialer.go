@@ -189,6 +189,18 @@ func checkAddressPortStrategy(ctx context.Context, dest net.Destination, sockopt
 
 // DialSystem calls system dialer to create a network connection.
 func DialSystem(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (net.Conn, error) {
+	conn, err := dialSystemInternal(ctx, dest, sockopt)
+	if err != nil {
+		return nil, err
+	}
+	mode := FragmentModeFromContext(ctx)
+	if mode != FragmentNone && dest.Network == net.Network_TCP {
+		return NewFragmentConn(conn, mode), nil
+	}
+	return conn, nil
+}
+
+func dialSystemInternal(ctx context.Context, dest net.Destination, sockopt *SocketConfig) (net.Conn, error) {
 	if sockopt == nil {
 		return effectiveSystemDialer.Dial(ctx, nil, dest, sockopt)
 	}
