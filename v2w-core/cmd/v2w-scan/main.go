@@ -1028,7 +1028,17 @@ func main() {
 			}
 
 			atomic.AddInt32(&failCount, 1)
-			if !*streamMode {
+			if *streamMode {
+				errStr := "unknown"
+				if res.Error != nil {
+					errStr = strings.ReplaceAll(res.Error.Error(), "\n", " ")
+					errStr = strings.ReplaceAll(errStr, "\t", " ")
+				}
+				stdoutMu.Lock()
+				fmt.Printf("FAILED\t%s\t%s\n", errStr, linkStr)
+				_ = os.Stdout.Sync()
+				stdoutMu.Unlock()
+			} else {
 				fmt.Fprintf(os.Stderr, "[FAILED] %s (%s): %v\n", name, dest.String(), res.Error)
 			}
 		}(l)
