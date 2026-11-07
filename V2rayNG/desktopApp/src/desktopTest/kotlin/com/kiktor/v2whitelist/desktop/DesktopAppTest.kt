@@ -297,7 +297,7 @@ class DesktopAppTest {
 
         val subs = state.subscriptions.value
         assertTrue(subs.isNotEmpty(), "Subscriptions must not be empty")
-        assertTrue(subs.size >= 20, "Should have all prepopulated subscriptions")
+        assertTrue(subs.size >= 18, "Should have all prepopulated subscriptions")
         assertTrue(subs.all { it.enabled }, "All default subscriptions must be enabled in Auto mode like on Android")
     }
 }

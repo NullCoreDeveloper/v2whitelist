@@ -67,13 +67,14 @@ object SubscriptionHelper {
 
         // Версионированная миграция предустановленных подписок:
         // Полное очищение устаревших def_* подписок и серверов при 100% сохранении пользовательских кастомных подписок
-        val CURRENT_DEFAULTS_VERSION = 2
+        val CURRENT_DEFAULTS_VERSION = 3
         val currentDefaultsVersion = MmkvManager.decodeSettingsInt("pref_defaults_version_v2", 1)
 
         if (currentDefaultsVersion < CURRENT_DEFAULTS_VERSION) {
             val newDefaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
             val obsoleteDefIds = customSubs.filter { it.id.startsWith("def_") && !newDefaultIds.contains(it.id) }.map { it.id }.toSet()
             val allDeprecated = obsoleteDefIds + setOf(
+                "def_cid_white", "def_bywarm_rser", "def_vsevj_obwl",
                 "def_zieng2", "def_kizyak_white", "def_kizyak_white_v6", "def_kizyak_black",
                 "def_hiztin_gribi", "def_cyberportal_cp002", "def_cyberportal_cp035",
                 "def_cyberportal_cp006", "def_cyberportal_cp008", "def_airlink_whitelist",
@@ -291,58 +292,37 @@ object SubscriptionHelper {
             return@withContext
         }
 
+        val targetScenarioKey = when (scenario) {
+            AppScenario.AUTO -> null
+            AppScenario.WHITELIST -> CustomSubData.SCENARIO_WHITELIST
+            AppScenario.VPN_BLACKLIST -> CustomSubData.SCENARIO_BLACKLIST
+            AppScenario.YOUTUBE -> CustomSubData.SCENARIO_YOUTUBE
+            AppScenario.KEEP_CURRENT -> return@withContext
+        }
+
         val targetSubIds = when (scenario) {
-            AppScenario.AUTO -> setOf(
-                // Белые списки (БС)
-                "def_zieng2",
-                "def_kizyak_white",
-                "def_kizyak_white_v6",
-                "def_cyberportal_cp035",
-                "def_cyberportal_cp006",
-                "def_cyberportal_cp008",
-                "def_cyberportal_cp042",
-                "def_etoneya_whitelist",
-                "def_airlink_whitelist",
-                "def_rkp_whitelist",
-                "def_rjsxrd_bypass_all",
-                // Черные списки (ЧС)
-                "def_igareck_black",
-                "def_cyberportal_cp001",
-                "def_cyberportal_cp002",
-                "def_kizyak_black",
-                "def_rkp_blacklist",
-                "def_etoneya_blacklist",
-                // YouTube и Музыка
-                "def_etoneya_youtube",
-                "def_etoneya_ytm",
-                "def_aetris"
-            )
-            AppScenario.VPN_BLACKLIST -> setOf(
-                "def_igareck_black",
-                "def_cyberportal_cp001",
-                "def_cyberportal_cp002",
-                "def_kizyak_black",
-                "def_rkp_blacklist",
-                "def_etoneya_blacklist"
-            )
-            AppScenario.WHITELIST -> setOf(
-                "def_zieng2",
-                "def_kizyak_white",
-                "def_kizyak_white_v6",
-                "def_cyberportal_cp035",
-                "def_cyberportal_cp006",
-                "def_cyberportal_cp008",
-                "def_cyberportal_cp042",
-                "def_etoneya_whitelist",
-                "def_airlink_whitelist",
-                "def_rkp_whitelist",
-                "def_rjsxrd_bypass_all"
-            )
-            AppScenario.YOUTUBE -> setOf(
-                "def_etoneya_youtube",
-                "def_etoneya_ytm",
-                "def_aetris"
-            )
+            AppScenario.AUTO -> {
+                // В режиме АВТО включаются ВСЕ предустановленные подписки
+                DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+            }
+            AppScenario.WHITELIST -> {
+                DefaultSubscriptions.PREPOPULATED_SUBS
+                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST) }
+                    .map { it.id }
+                    .toSet()
+            }
+            AppScenario.VPN_BLACKLIST -> {
+                DefaultSubscriptions.PREPOPULATED_SUBS
+                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST) }
+                    .map { it.id }
+                    .toSet()
+            }
+            AppScenario.YOUTUBE -> {
+                DefaultSubscriptions.PREPOPULATED_SUBS
+                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE) }
+                    .map { it.id }
+                    .toSet()
+            }
             AppScenario.KEEP_CURRENT -> emptySet()
         }
 
@@ -372,10 +352,26 @@ object SubscriptionHelper {
         val disabledSubIdsToPurge = mutableSetOf<String>()
 
         for (sub in customSubs) {
-            // Если подписка из предустановленных — управляем её статусом согласно сценарию.
-            // Если кастомная добавленная пользователем — не отключаем её принудительно.
             val isDefault = defaultSubIds.contains(sub.id)
-            val shouldEnable = if (isDefault) targetSubIds.contains(sub.id) else sub.enabled
+            val shouldEnable = when {
+                scenario == AppScenario.AUTO -> true // АВТО включает абсолютно все подписки
+                isDefault -> targetSubIds.contains(sub.id)
+                else -> {
+                    // Кастомная подписка пользователя: проверяем висящие на ней теги/сценарии
+                    val scenarios = if (sub.targetScenarios.isNotEmpty()) {
+                        sub.targetScenarios
+                    } else {
+                        DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }?.targetScenarios ?: emptyList()
+                    }
+                    if (targetScenarioKey == null) {
+                        true
+                    } else if (scenarios.isNotEmpty()) {
+                        scenarios.contains(targetScenarioKey)
+                    } else {
+                        sub.enabled
+                    }
+                }
+            }
             sub.enabled = shouldEnable
             val guid = "custom_sub_${sub.id}"
             val matchingSubs = allSubs.filter {

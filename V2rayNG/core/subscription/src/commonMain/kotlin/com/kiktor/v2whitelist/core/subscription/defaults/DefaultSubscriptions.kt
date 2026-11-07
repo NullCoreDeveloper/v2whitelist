@@ -146,25 +146,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST, CustomSubData.SCENARIO_BLACKLIST)
         ),
 
-        // --- 12. CID Ускоритель ---
-        CustomSubData(
-            id = "def_cid_white",
-            name = "CID Ускоритель (Белые списки) [@cid_white]",
-            url = "https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelist.txt",
-            enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
-        ),
-
-        // --- 13. bywarm rser ---
-        CustomSubData(
-            id = "def_bywarm_rser",
-            name = "bywarm rser (Selected) [@wlrustg]",
-            url = "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt",
-            enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
-        ),
-
-        // --- 14. Бункер Черные списки ---
+        // --- 12. Бункер Черные списки ---
         CustomSubData(
             id = "def_bunker_bl",
             name = "Бункер (Черные списки) [@akelladejavu]",
@@ -173,7 +155,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
-        // --- 15. Generation-Liberty ---
+        // --- 13. Generation-Liberty ---
         CustomSubData(
             id = "def_generation_lib",
             name = "Generation-Liberty (Best) [@GenerationLiberty]",
@@ -185,16 +167,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
-        // --- 16. Vsevj OBwl ---
-        CustomSubData(
-            id = "def_vsevj_obwl",
-            name = "Vsevj OBwl (Белые списки) [@obwhitel]",
-            url = "https://gitverse.ru/api/repos/Vsevj/OBwl/raw/branch/master/wwh",
-            enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
-        ),
-
-        // --- 17. PizdukVPN Main Sub ---
+        // --- 14. PizdukVPN Main Sub ---
         CustomSubData(
             id = "def_pizduk_sub",
             name = "PizdukVPN (Main Sub) [@PizMod]",
@@ -206,7 +179,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
-        // --- 18. PizdukVPN Whitelist ---
+        // --- 15. PizdukVPN Whitelist ---
         CustomSubData(
             id = "def_pizduk_wl",
             name = "PizdukVPN (Белые списки) [@PizMod]",
@@ -218,7 +191,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
 
-        // --- 19. Vlesstrojan kort0881 ---
+        // --- 16. Vlesstrojan kort0881 ---
         CustomSubData(
             id = "def_kort_white",
             name = "Vlesstrojan (kort0881 White) [@vlesstrojan]",
@@ -230,7 +203,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
 
-        // --- 20. FreeCFGHub ---
+        // --- 17. FreeCFGHub ---
         CustomSubData(
             id = "def_freecfghub",
             name = "FreeCFGHub (Hysteria2 & SS) [@FreeCFGHub]",
@@ -242,7 +215,7 @@ object DefaultSubscriptions {
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
-        // --- 21. Luxxuria Non-RU ---
+        // --- 18. Luxxuria Non-RU ---
         CustomSubData(
             id = "def_luxxuria_nonru",
             name = "Luxxuria (Non-RU Harvest) [github/luxxuria]",

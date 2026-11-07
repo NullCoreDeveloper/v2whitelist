@@ -518,7 +518,7 @@ class DesktopAppState(
             emptyList()
         }
 
-        val CURRENT_DEFAULTS_VERSION = 2
+        val CURRENT_DEFAULTS_VERSION = 3
         val currentDefaultsVersion = settingsRepo.getInt("pref_defaults_version_v2", 1)
         val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
 
@@ -526,6 +526,7 @@ class DesktopAppState(
         if (currentDefaultsVersion < CURRENT_DEFAULTS_VERSION) {
             val obsoleteDefIds = currentList.filter { it.id.startsWith("def_") && !defaultIds.contains(it.id) }.map { it.id }.toSet()
             val allDeprecated = obsoleteDefIds + setOf(
+                "def_cid_white", "def_bywarm_rser", "def_vsevj_obwl",
                 "def_zieng2", "def_kizyak_white", "def_kizyak_white_v6", "def_kizyak_black",
                 "def_hiztin_gribi", "def_cyberportal_cp002", "def_cyberportal_cp035",
                 "def_cyberportal_cp006", "def_cyberportal_cp008", "def_airlink_whitelist",
