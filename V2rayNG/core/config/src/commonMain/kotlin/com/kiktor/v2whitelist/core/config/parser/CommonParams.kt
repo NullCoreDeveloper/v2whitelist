@@ -42,5 +42,40 @@ object CommonParams {
         config.spiderX = query["spx"]
         config.mldsa65Verify = query["pqv"]
         config.flow = query["flow"]
+
+        val fragMode = query["v2w_fragment"]?.lowercase()
+        if (fragMode != null) {
+            config.fragmentEnabled = true
+            when (fragMode) {
+                "tcp" -> {
+                    config.fragmentPackets = "1-3"
+                    config.fragmentLength = "50-100"
+                    config.fragmentInterval = "10-20"
+                }
+                "record" -> {
+                    config.fragmentPackets = "tlshello"
+                    config.fragmentLength = "50-100"
+                    config.fragmentInterval = "10-20"
+                }
+                else -> {
+                    config.fragmentPackets = query["v2w_frag_packets"] ?: "tlshello"
+                    config.fragmentLength = query["v2w_frag_length"] ?: "50-100"
+                    config.fragmentInterval = query["v2w_frag_interval"] ?: "10-20"
+                }
+            }
+        } else {
+            val rem = config.remarks
+            if (rem.contains("⚡[FRAG:TCP]") || rem.contains("[⚡FRAG:TCP]") || rem.contains("[FRAG:TCP]")) {
+                config.fragmentEnabled = true
+                config.fragmentPackets = "1-3"
+                config.fragmentLength = "50-100"
+                config.fragmentInterval = "10-20"
+            } else if (rem.contains("⚡[FRAG:RECORD]") || rem.contains("[⚡FRAG:RECORD]") || rem.contains("[FRAG:RECORD]")) {
+                config.fragmentEnabled = true
+                config.fragmentPackets = "tlshello"
+                config.fragmentLength = "50-100"
+                config.fragmentInterval = "10-20"
+            }
+        }
     }
 }

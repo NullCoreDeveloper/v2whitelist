@@ -192,7 +192,20 @@ object V2WCoreScanner {
                             val delayMs = parts[1].toLongOrNull() ?: 0L
                             val configUrl = parts[2].trim()
 
+                            val isFragTcp = configUrl.contains("v2w_fragment=tcp") || configUrl.contains("⚡[FRAG:TCP]") || configUrl.contains("[FRAG:TCP]")
+                            val isFragRecord = configUrl.contains("v2w_fragment=record") || configUrl.contains("⚡[FRAG:RECORD]") || configUrl.contains("[FRAG:RECORD]")
+
+                            val baseWithoutFragParam = configUrl
+                                .replace("&v2w_fragment=tcp", "")
+                                .replace("&v2w_fragment=record", "")
+                                .replace("?v2w_fragment=tcp&", "?")
+                                .replace("?v2w_fragment=record&", "?")
+                                .replace("?v2w_fragment=tcp", "")
+                                .replace("?v2w_fragment=record", "")
+
                             val matched = urlToNode[configUrl]
+                                ?: urlToNode[baseWithoutFragParam]
+                                ?: urlToNode[baseWithoutFragParam.substringBefore('#')]
                                 ?: urlToNode[configUrl.substringBefore('#')]
                                 ?: run {
                                     runCatching {
@@ -203,6 +216,23 @@ object V2WCoreScanner {
                                 }
 
                             if (matched != null) {
+                                if (isFragTcp) {
+                                    matched.second.fragmentEnabled = true
+                                    matched.second.fragmentPackets = "1-3"
+                                    matched.second.fragmentLength = "50-100"
+                                    matched.second.fragmentInterval = "10-20"
+                                    if (!matched.second.remarks.contains("[FRAG:")) {
+                                        matched.second.remarks = "${matched.second.remarks} ⚡[FRAG:TCP]"
+                                    }
+                                } else if (isFragRecord) {
+                                    matched.second.fragmentEnabled = true
+                                    matched.second.fragmentPackets = "tlshello"
+                                    matched.second.fragmentLength = "50-100"
+                                    matched.second.fragmentInterval = "10-20"
+                                    if (!matched.second.remarks.contains("[FRAG:")) {
+                                        matched.second.remarks = "${matched.second.remarks} ⚡[FRAG:RECORD]"
+                                    }
+                                }
                                 GeekModeLogger.log("v2w-core", "Node responded: ${matched.second.remarks} (${delayMs}ms)")
                                 val shouldAbort = onNodeSuccess(matched.first, matched.second, delayMs)
                                 if (shouldAbort) {

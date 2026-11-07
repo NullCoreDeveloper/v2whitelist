@@ -191,6 +191,7 @@ class DesktopAppTest {
 
         manager.startSmartConnect(minSpeedMbps = 0.0, speedCheckEnabled = false)
         assertNotNull(lastStage)
+        manager.stop()
     }
 
     @Test

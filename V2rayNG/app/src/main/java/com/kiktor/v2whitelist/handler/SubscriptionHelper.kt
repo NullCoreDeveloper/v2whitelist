@@ -63,30 +63,35 @@ object SubscriptionHelper {
 
         val customSubs = loadCustomSubs().toMutableList()
         val removedSubIds = getRemovedSubIds()
-        val isAlreadyInitialized = MmkvManager.decodeSettingsBool("pref_defaults_added_v1", false)
         var changed = false
 
-        // Очистка устаревших и неактуальных подписок (mifa.world, igareck БС и др.)
-        val deprecatedSubIds = setOf("def_mifa_bobrik", "def_igareck_white")
-        val removedDeprecatedFromList = customSubs.removeAll { deprecatedSubIds.contains(it.id) }
-        if (removedDeprecatedFromList) {
-            changed = true
-            Log.i(AppConfig.TAG, "Purged deprecated subscriptions from customSubs: $deprecatedSubIds")
-        }
-        for (depId in deprecatedSubIds) {
-            val subGuid = "custom_sub_$depId"
-            MmkvManager.removeSubscription(subGuid)
-            MmkvManager.removeServerViaSubid(subGuid)
-        }
-        val removedSet = removedSubIds.toMutableSet()
-        var removedModified = false
-        for (depId in deprecatedSubIds) {
-            if (removedSet.add(depId)) {
-                removedModified = true
+        // Версионированная миграция предустановленных подписок:
+        // Полное очищение устаревших def_* подписок и серверов при 100% сохранении пользовательских кастомных подписок
+        val CURRENT_DEFAULTS_VERSION = 2
+        val currentDefaultsVersion = MmkvManager.decodeSettingsInt("pref_defaults_version_v2", 1)
+
+        if (currentDefaultsVersion < CURRENT_DEFAULTS_VERSION) {
+            val newDefaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+            val obsoleteDefIds = customSubs.filter { it.id.startsWith("def_") && !newDefaultIds.contains(it.id) }.map { it.id }.toSet()
+            val allDeprecated = obsoleteDefIds + setOf(
+                "def_zieng2", "def_kizyak_white", "def_kizyak_white_v6", "def_kizyak_black",
+                "def_hiztin_gribi", "def_cyberportal_cp002", "def_cyberportal_cp035",
+                "def_cyberportal_cp006", "def_cyberportal_cp008", "def_airlink_whitelist",
+                "def_etoneya_gemini", "def_etoneya_ytm", "def_mifa_bobrik", "def_igareck_white"
+            )
+
+            val removedDeprecatedFromList = customSubs.removeAll { allDeprecated.contains(it.id) }
+            if (removedDeprecatedFromList) {
+                changed = true
+                Log.i(AppConfig.TAG, "Purged deprecated subscriptions from customSubs: $allDeprecated")
             }
-        }
-        if (removedModified) {
-            MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(removedSet.toList()))
+            for (depId in allDeprecated) {
+                val subGuid = "custom_sub_$depId"
+                MmkvManager.removeSubscription(subGuid)
+                MmkvManager.removeServerViaSubid(subGuid)
+                MmkvManager.removeServerViaSubid(depId)
+            }
+            MmkvManager.encodeSettings("pref_defaults_version_v2", CURRENT_DEFAULTS_VERSION)
         }
 
         for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
@@ -96,13 +101,12 @@ object SubscriptionHelper {
             }
 
             val existing = customSubs.find { it.id == defaultSub.id }
-                ?: customSubs.find { it.name == defaultSub.name }
             if (existing == null) {
                 Log.d(AppConfig.TAG, "Pre-populating subscription: ${defaultSub.name}")
                 customSubs.add(defaultSub)
                 changed = true
             } else {
-                if (existing.id == defaultSub.id && existing.name != defaultSub.name) {
+                if (existing.name != defaultSub.name) {
                     existing.name = defaultSub.name
                     changed = true
                 }
@@ -123,6 +127,7 @@ object SubscriptionHelper {
         }
         if (changed) {
             MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
         }
         MmkvManager.encodeSettings("pref_defaults_added_v1", true)
 

@@ -91,10 +91,14 @@ data class OutboundSettings(
     val fragment: FragmentSettings? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class FragmentSettings(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val packets: String = "tlshello",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val length: String = "50-100",
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val interval: String = "10-20"
 )
 

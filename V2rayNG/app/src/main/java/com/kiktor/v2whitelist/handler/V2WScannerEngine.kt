@@ -51,10 +51,61 @@ object V2WScannerEngine {
                 if (cont?.isActive != true) return // Жесткий игнор после отмены
                 
                 if (configUrl != null) {
-                    val item = urlToGuid[configUrl]
+                    val cleanUrl = configUrl.trim()
+                    val isFragTcp = cleanUrl.contains("v2w_fragment=tcp") || cleanUrl.contains("⚡[FRAG:TCP]") || cleanUrl.contains("[FRAG:TCP]")
+                    val isFragRecord = cleanUrl.contains("v2w_fragment=record") || cleanUrl.contains("⚡[FRAG:RECORD]") || cleanUrl.contains("[FRAG:RECORD]")
+
+                    // Ищем сопоставление: точное, без параметров v2w_fragment и без хэша remarks
+                    var item = urlToGuid[cleanUrl]
+                    if (item == null) {
+                        val baseWithoutFragParam = cleanUrl
+                            .replace("&v2w_fragment=tcp", "")
+                            .replace("&v2w_fragment=record", "")
+                            .replace("?v2w_fragment=tcp&", "?")
+                            .replace("?v2w_fragment=record&", "?")
+                            .replace("?v2w_fragment=tcp", "")
+                            .replace("?v2w_fragment=record", "")
+                        item = urlToGuid[baseWithoutFragParam]
+                            ?: urlToGuid[baseWithoutFragParam.substringBefore('#')]
+                            ?: urlToGuid[cleanUrl.substringBefore('#')]
+                    }
+                    if (item == null) {
+                        try {
+                            val uri = android.net.Uri.parse(cleanUrl)
+                            val host = uri.host?.lowercase()
+                            val port = uri.port.toString()
+                            if (!host.isNullOrEmpty() && port != "-1") {
+                                item = servers.find {
+                                    it.second.server?.lowercase() == host && it.second.serverPort == port
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
                     if (item != null) {
-                        GeekModeLogger.log("v2w-core", "Node responded: ${item.second.remarks} (${delay}ms)")
-                        channel.trySend(Triple(item.first, item.second, delay))
+                        val profile = item.second
+                        if (isFragTcp) {
+                            profile.fragmentEnabled = true
+                            profile.fragmentPackets = "1-3"
+                            profile.fragmentLength = "50-100"
+                            profile.fragmentInterval = "10-20"
+                            if (!profile.remarks.contains("[FRAG:")) {
+                                profile.remarks = "${profile.remarks} ⚡[FRAG:TCP]"
+                            }
+                            MmkvManager.encodeServerConfig(item.first, profile)
+                        } else if (isFragRecord) {
+                            profile.fragmentEnabled = true
+                            profile.fragmentPackets = "tlshello"
+                            profile.fragmentLength = "50-100"
+                            profile.fragmentInterval = "10-20"
+                            if (!profile.remarks.contains("[FRAG:")) {
+                                profile.remarks = "${profile.remarks} ⚡[FRAG:RECORD]"
+                            }
+                            MmkvManager.encodeServerConfig(item.first, profile)
+                        }
+
+                        GeekModeLogger.log("v2w-core", "Node responded: ${profile.remarks} (${delay}ms)")
+                        channel.trySend(Triple(item.first, profile, delay))
                     }
                 }
             }

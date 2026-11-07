@@ -892,7 +892,7 @@ object V2rayConfigManager {
             v2rayConfig.outbounds.add(outbound)
         }
 
-        updateOutboundFragment(v2rayConfig)
+        updateOutboundFragment(v2rayConfig, config)
         return true
     }
 
@@ -1206,14 +1206,17 @@ object V2rayConfigManager {
      * @param v2rayConfig The V2ray configuration object to be modified
      * @return true if fragment configuration was successful, false otherwise
      */
-    private fun updateOutboundFragment(v2rayConfig: V2rayConfig): Boolean {
+    private fun updateOutboundFragment(v2rayConfig: V2rayConfig, config: ProfileItem? = null): Boolean {
         try {
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_FRAGMENT_ENABLED, false) == false) {
+            val globalFragment = MmkvManager.decodeSettingsBool(AppConfig.PREF_FRAGMENT_ENABLED, false) == true
+            val perProfileFragment = config?.fragmentEnabled == true
+            if (!globalFragment && !perProfileFragment) {
                 return true
             }
-            if (v2rayConfig.outbounds[0].streamSettings?.security != AppConfig.TLS
+            if (v2rayConfig.outbounds.isEmpty() || (
+                v2rayConfig.outbounds[0].streamSettings?.security != AppConfig.TLS
                 && v2rayConfig.outbounds[0].streamSettings?.security != AppConfig.REALITY
-            ) {
+            )) {
                 return true
             }
 
@@ -1224,14 +1227,23 @@ object V2rayConfigManager {
                     mux = null
                 )
 
-            var packets =
-                MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_PACKETS) ?: "tlshello"
+            var packets = config?.takeIf { perProfileFragment }?.fragmentPackets?.takeIf { it.isNotBlank() }
+                ?: MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_PACKETS)
+                ?: "tlshello"
+            val length = config?.takeIf { perProfileFragment }?.fragmentLength?.takeIf { it.isNotBlank() }
+                ?: MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_LENGTH)
+                ?: "50-100"
+            val interval = config?.takeIf { perProfileFragment }?.fragmentInterval?.takeIf { it.isNotBlank() }
+                ?: MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_INTERVAL)
+                ?: "10-20"
+
             if (v2rayConfig.outbounds[0].streamSettings?.security == AppConfig.REALITY
                 && packets == "tlshello"
             ) {
                 packets = "1-3"
             } else if (v2rayConfig.outbounds[0].streamSettings?.security == AppConfig.TLS
                 && packets != "tlshello"
+                && !perProfileFragment
             ) {
                 packets = "tlshello"
             }
@@ -1239,10 +1251,8 @@ object V2rayConfigManager {
             fragmentOutbound.settings = OutSettingsBean(
                 fragment = OutSettingsBean.FragmentBean(
                     packets = packets,
-                    length = MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_LENGTH)
-                        ?: "50-100",
-                    interval = MmkvManager.decodeSettingsString(AppConfig.PREF_FRAGMENT_INTERVAL)
-                        ?: "10-20"
+                    length = length,
+                    interval = interval
                 ),
                 noises = if (v2rayConfig.outbounds[0].streamSettings?.security == AppConfig.REALITY) {
                     null

@@ -107,7 +107,8 @@ object XrayConfigGenerator {
         val outbounds = mutableListOf<XrayOutbound>()
 
         val isTlsOrReality = profile.security?.lowercase().let { it == "tls" || it == "reality" }
-        val useFragment = options.fragmentEnabled && isTlsOrReality
+        val perProfileFrag = profile.fragmentEnabled == true
+        val useFragment = (options.fragmentEnabled || perProfileFrag) && isTlsOrReality
         val fragmentTag = "fragment"
         val hasUpstream = !options.upstreamProxyHost.isNullOrBlank() && (options.upstreamProxyPort ?: 0) > 0
         val upstreamTag = "upstream-proxy"
@@ -199,10 +200,22 @@ object XrayConfigGenerator {
         }
 
         if (useFragment) {
-            var packets = options.fragmentPackets.ifBlank { "tlshello" }
+            var packets = when {
+                perProfileFrag && !profile.fragmentPackets.isNullOrBlank() -> profile.fragmentPackets!!
+                else -> options.fragmentPackets.ifBlank { "tlshello" }
+            }
+            val length = when {
+                perProfileFrag && !profile.fragmentLength.isNullOrBlank() -> profile.fragmentLength!!
+                else -> options.fragmentLength.ifBlank { "50-100" }
+            }
+            val interval = when {
+                perProfileFrag && !profile.fragmentInterval.isNullOrBlank() -> profile.fragmentInterval!!
+                else -> options.fragmentInterval.ifBlank { "10-20" }
+            }
+
             if (profile.security?.lowercase() == "reality" && packets == "tlshello") {
                 packets = "1-3"
-            } else if (profile.security?.lowercase() == "tls" && packets != "tlshello") {
+            } else if (profile.security?.lowercase() == "tls" && packets != "tlshello" && !perProfileFrag) {
                 packets = "tlshello"
             }
             val fragmentOutbound = XrayOutbound(
@@ -212,8 +225,8 @@ object XrayConfigGenerator {
                     domainStrategy = "AsIs",
                     fragment = FragmentSettings(
                         packets = packets,
-                        length = options.fragmentLength.ifBlank { "50-100" },
-                        interval = options.fragmentInterval.ifBlank { "10-20" }
+                        length = length,
+                        interval = interval
                     )
                 ),
                 streamSettings = XrayStreamSettings(

@@ -72,6 +72,12 @@ data class ProfileItem(
     var policyGroupType: String? = null,
     var policyGroupSubscriptionId: String? = null,
     var policyGroupFilter: String? = null,
+
+    // Точечная ClientHello-фрагментация для профиля (Xray dialerProxy -> freedom fragment)
+    var fragmentEnabled: Boolean? = null,
+    var fragmentPackets: String? = null,    // "1-3" (TCP Split) или "tlshello" (TLS Record)
+    var fragmentLength: String? = null,     // "50-100"
+    var fragmentInterval: String? = null,   // "10-20"
 ) {
     companion object {
         fun create(configType: EConfigType): ProfileItem {

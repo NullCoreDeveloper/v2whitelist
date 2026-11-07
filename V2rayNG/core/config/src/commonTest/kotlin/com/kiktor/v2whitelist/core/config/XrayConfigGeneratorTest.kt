@@ -125,4 +125,37 @@ class XrayConfigGeneratorTest {
         assertTrue(jsonStr.contains("\"path\": \"/media/videos\""))
         assertTrue(jsonStr.contains("\"host\": \"media.kali9124123s.space\""))
     }
+
+    @Test
+    fun testGeneratePerProfileFragmentationTcp() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=reality&sni=dl.google.com&fp=chrome&pbk=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789&sid=1234abcd&type=tcp&v2w_fragment=tcp#Node [⚡FRAG:TCP]"
+        val profile = UniversalConfigParser.parse(uri)!!
+
+        assertTrue(profile.fragmentEnabled == true, "Profile must have fragmentEnabled = true")
+        assertEquals("1-3", profile.fragmentPackets)
+
+        // Глобальная фрагментация выключена в options
+        val options = XrayGeneratorOptions(fragmentEnabled = false)
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+
+        assertTrue(jsonStr.contains("\"tag\": \"fragment\""), "Config must contain fragment outbound")
+        assertTrue(jsonStr.contains("\"dialerProxy\": \"fragment\""), "Proxy streamSettings must have dialerProxy = fragment")
+        assertTrue(jsonStr.contains("\"packets\": \"1-3\""), "Fragment must have packets 1-3 for TCP Split")
+    }
+
+    @Test
+    fun testGeneratePerProfileFragmentationRecord() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=tls&sni=dl.google.com&type=tcp&v2w_fragment=record#Node [⚡FRAG:RECORD]"
+        val profile = UniversalConfigParser.parse(uri)!!
+
+        assertTrue(profile.fragmentEnabled == true, "Profile must have fragmentEnabled = true")
+        assertEquals("tlshello", profile.fragmentPackets)
+
+        val options = XrayGeneratorOptions(fragmentEnabled = false)
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+
+        assertTrue(jsonStr.contains("\"tag\": \"fragment\""))
+        assertTrue(jsonStr.contains("\"dialerProxy\": \"fragment\""))
+        assertTrue(jsonStr.contains("\"packets\": \"tlshello\""))
+    }
 }

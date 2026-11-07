@@ -42,6 +42,10 @@ object VlessParser {
         config.shortId?.let { query.add("sid=$it") }
         config.spiderX?.let { query.add("spx=${UriParser.encodeUrlComponent(it)}") }
         if (config.insecure == true) query.add("insecure=1")
+        if (config.fragmentEnabled == true) {
+            val mode = if (config.fragmentPackets == "1-3") "tcp" else "record"
+            query.add("v2w_fragment=$mode")
+        }
 
         val queryStr = if (query.isNotEmpty()) "?" + query.joinToString("&") else ""
         val fragmentStr = if (config.remarks.isNotEmpty()) "#" + UriParser.encodeUrlComponent(config.remarks) else ""

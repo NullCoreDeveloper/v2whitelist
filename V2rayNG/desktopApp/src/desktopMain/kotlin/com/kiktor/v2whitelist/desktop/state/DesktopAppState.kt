@@ -518,35 +518,47 @@ class DesktopAppState(
             emptyList()
         }
 
-        val autoSubsSynced = settingsRepo.getBoolean("pref_auto_subs_synced_v3", false)
+        val CURRENT_DEFAULTS_VERSION = 2
+        val currentDefaultsVersion = settingsRepo.getInt("pref_defaults_version_v2", 1)
         val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
 
+        var currentList = loadedList
+        if (currentDefaultsVersion < CURRENT_DEFAULTS_VERSION) {
+            val obsoleteDefIds = currentList.filter { it.id.startsWith("def_") && !defaultIds.contains(it.id) }.map { it.id }.toSet()
+            val allDeprecated = obsoleteDefIds + setOf(
+                "def_zieng2", "def_kizyak_white", "def_kizyak_white_v6", "def_kizyak_black",
+                "def_hiztin_gribi", "def_cyberportal_cp002", "def_cyberportal_cp035",
+                "def_cyberportal_cp006", "def_cyberportal_cp008", "def_airlink_whitelist",
+                "def_etoneya_gemini", "def_etoneya_ytm", "def_mifa_bobrik", "def_igareck_white"
+            )
+            // Пользовательские кастомные подписки (!id.startsWith("def_")) гарантированно сохраняются
+            currentList = currentList.filter { !allDeprecated.contains(it.id) }
+            settingsRepo.setInt("pref_defaults_version_v2", CURRENT_DEFAULTS_VERSION)
+        }
+
         // Если список пуст, наполняем встроенными (за исключением тех, что пользователь явно удалял)
-        val initialSubs = if (loadedList.isEmpty()) {
+        val initialSubs = if (currentList.isEmpty()) {
             val defaults = DefaultSubscriptions.PREPOPULATED_SUBS.filter { !removedSet.contains(it.id) }
             saveSubscriptionsToStorage(defaults)
             settingsRepo.setBoolean("pref_auto_subs_synced_v3", true)
             defaults
         } else {
-            // Добавляем новые предустановленные, если появились
-            val existingIds = loadedList.map { it.id }.toSet()
-            val missingDefaults = DefaultSubscriptions.PREPOPULATED_SUBS.filter {
-                !existingIds.contains(it.id) && !removedSet.contains(it.id)
-            }
-            var merged = loadedList + missingDefaults
-
-            // Миграция: в авто-режиме (как на Android) все готовые подписки должны быть активны
-            if (!autoSubsSynced) {
-                merged = merged.map { sub ->
-                    if (defaultIds.contains(sub.id) && !removedSet.contains(sub.id)) {
-                        sub.copy(enabled = true)
-                    } else {
-                        sub
-                    }
+            val existingMap = currentList.associateBy { it.id }.toMutableMap()
+            // Обновляем имена (с TG-тегами) и свойства для существующих дефолтных
+            for (defSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+                if (removedSet.contains(defSub.id)) continue
+                val existing = existingMap[defSub.id]
+                if (existing != null) {
+                    existingMap[defSub.id] = defSub.copy(
+                        enabled = existing.enabled,
+                        lastUpdated = existing.lastUpdated,
+                        lastUpdateFailed = existing.lastUpdateFailed
+                    )
+                } else {
+                    existingMap[defSub.id] = defSub
                 }
-                settingsRepo.setBoolean("pref_auto_subs_synced_v3", true)
             }
-
+            val merged = existingMap.values.toList()
             saveSubscriptionsToStorage(merged)
             merged
         }
