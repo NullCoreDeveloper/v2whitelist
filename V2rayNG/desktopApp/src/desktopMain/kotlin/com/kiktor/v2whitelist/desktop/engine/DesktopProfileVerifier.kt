@@ -132,7 +132,7 @@ object DesktopProfileVerifier {
                     services = enabledServices,
                     socksPort = testPort,
                     httpPort = testHttpPort,
-                    timeoutMs = minOf(timeoutMs, 3500L)
+                    timeoutMs = maxOf(timeoutMs, 5000L)
                 )
                 val failed = results.filter { !it.success }
                 if (failed.isNotEmpty()) {

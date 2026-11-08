@@ -437,24 +437,15 @@ private fun checkDiscordSmart(
             httpCode = probe.statusCode
         )
     }
-    // Если ошибка сетевая/таймаут — не тратим время на повторный таймаут
-    if (probe.statusCode <= 0) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = -1,
-            errorMessage = probe.errorMessage ?: "Read timed out"
-        )
-    }
     val fallback = executeProbe(service.url, proxy, timeoutMs)
     val success = (fallback.statusCode in 200..399) || (fallback.statusCode in listOf(401, 403, 404, 429))
+    val bestCode = if (fallback.statusCode > 0) fallback.statusCode else probe.statusCode
     return ServiceCheckResult(
         service = service,
         success = success,
         latencyMs = if (success) fallback.latencyMs else -1L,
-        httpCode = fallback.statusCode,
-        errorMessage = if (!success) (fallback.errorMessage ?: "HTTP ${fallback.statusCode}") else null
+        httpCode = bestCode,
+        errorMessage = if (!success) (fallback.errorMessage ?: probe.errorMessage ?: "HTTP $bestCode") else null
     )
 }
 
@@ -463,33 +454,41 @@ private fun checkTelegramSmart(
     proxy: Proxy,
     timeoutMs: Long
 ): ServiceCheckResult {
-    val probe = executeProbe(service.url, proxy, timeoutMs)
-    if (probe.statusCode in 200..399) {
-        return ServiceCheckResult(
-            service = service,
-            success = true,
-            latencyMs = probe.latencyMs,
-            httpCode = probe.statusCode
-        )
+    val candidates = mutableListOf<String>()
+    if (service.url.isNotBlank() && service.url != "https://web.telegram.org") {
+        candidates.add(service.url)
     }
-    // Если соединение оборвалось или упало по таймауту — возвращаем ошибку сразу
-    if (probe.statusCode <= 0) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = -1,
-            errorMessage = probe.errorMessage ?: "Read timed out"
-        )
+    candidates.add("https://telegram.org")
+    candidates.add("https://api.telegram.org")
+    candidates.add("https://t.me")
+    if (!candidates.contains(service.url) && service.url.isNotBlank()) {
+        candidates.add(service.url)
     }
-    val fallback = executeProbe("https://telegram.org", proxy, timeoutMs)
-    val success = fallback.statusCode in 200..399
+
+    val perProbeTimeout = minOf(timeoutMs, 3000L).coerceAtLeast(2000L)
+    var lastProbe: RawProbeResult? = null
+
+    for (url in candidates) {
+        val probe = executeProbe(url, proxy, perProbeTimeout)
+        lastProbe = probe
+        val isSuccess = (probe.statusCode in 200..399) || probe.statusCode == 403 || probe.statusCode == 429
+        if (isSuccess) {
+            return ServiceCheckResult(
+                service = service,
+                success = true,
+                latencyMs = probe.latencyMs,
+                httpCode = probe.statusCode
+            )
+        }
+    }
+
+    val code = lastProbe?.statusCode ?: -1
     return ServiceCheckResult(
         service = service,
-        success = success,
-        latencyMs = if (success) fallback.latencyMs else -1L,
-        httpCode = fallback.statusCode,
-        errorMessage = if (!success) (fallback.errorMessage ?: "HTTP ${fallback.statusCode}") else null
+        success = false,
+        latencyMs = -1L,
+        httpCode = code,
+        errorMessage = lastProbe?.errorMessage ?: "HTTP $code"
     )
 }
 
@@ -539,7 +538,7 @@ private fun checkInstagramSmart(
     timeoutMs: Long
 ): ServiceCheckResult {
     val probe = executeProbe(service.url, proxy, timeoutMs)
-    if (probe.statusCode in 200..399) {
+    if (probe.statusCode in 200..399 || probe.statusCode == 403) {
         return ServiceCheckResult(
             service = service,
             success = true,
@@ -547,22 +546,15 @@ private fun checkInstagramSmart(
             httpCode = probe.statusCode
         )
     }
-    if (probe.statusCode <= 0) {
-        return ServiceCheckResult(
-            service = service,
-            success = false,
-            latencyMs = -1L,
-            httpCode = -1,
-            errorMessage = probe.errorMessage ?: "Read timed out"
-        )
-    }
-    val success = probe.statusCode in 200..399 || probe.statusCode == 403
+    val fallback = executeProbe("https://www.instagram.com", proxy, timeoutMs)
+    val success = (fallback.statusCode in 200..399) || fallback.statusCode == 403
+    val bestCode = if (fallback.statusCode > 0) fallback.statusCode else probe.statusCode
     return ServiceCheckResult(
         service = service,
         success = success,
-        latencyMs = if (success) probe.latencyMs else -1L,
-        httpCode = probe.statusCode,
-        errorMessage = if (!success) (probe.errorMessage ?: "HTTP ${probe.statusCode}") else null
+        latencyMs = if (success) fallback.latencyMs else -1L,
+        httpCode = bestCode,
+        errorMessage = if (!success) (fallback.errorMessage ?: probe.errorMessage ?: "HTTP $bestCode") else null
     )
 }
 

@@ -252,6 +252,19 @@ object MmkvManager {
         val toDelete = mutableListOf<String>()
         val newList = mutableListOf<String>()
 
+        // 1. Сначала регистрируем ВСЕ личные (доверенные) серверы.
+        // Личные серверы обладают абсолютным приоритетом и НИКОГДА не удаляются фоновой дедупликацией!
+        for (guid in serverList) {
+            val profile = decodeServerConfig(guid)
+            if (profile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                val sniOrHost = profile.sni.orEmpty().ifEmpty { profile.host.orEmpty() }
+                val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
+                uniqueServers.add(key)
+                newList.add(guid)
+            }
+        }
+
+        // 2. Дедуплицируем остальные серверы (из сторонних/публичных подписок)
         for (guid in serverList) {
             val profile = decodeServerConfig(guid)
             if (profile == null) {
@@ -271,6 +284,11 @@ object MmkvManager {
                     )
                     toDelete.add(guid)
                 }
+                continue
+            }
+
+            // Личные серверы уже добавлены, пропускаем
+            if (com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
                 continue
             }
 
@@ -428,6 +446,10 @@ object MmkvManager {
     fun removeInvalidServer(guid: String): Int {
         var count = 0
         if (guid.isNotEmpty()) {
+            val profile = decodeServerConfig(guid)
+            if (profile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                return 0 // Защита: личные/доверенные серверы пользователя никогда не удаляются как нерабочие!
+            }
             decodeServerAffiliationInfo(guid)?.let { aff ->
                 if (aff.testDelayMillis < 0L) {
                     removeServer(guid)
@@ -436,10 +458,13 @@ object MmkvManager {
             }
         } else {
             serverAffStorage.allKeys()?.forEach { key ->
-                decodeServerAffiliationInfo(key)?.let { aff ->
-                    if (aff.testDelayMillis < 0L) {
-                        removeServer(key)
-                        count++
+                val profile = decodeServerConfig(key)
+                if (profile == null || !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                    decodeServerAffiliationInfo(key)?.let { aff ->
+                        if (aff.testDelayMillis < 0L) {
+                            removeServer(key)
+                            count++
+                        }
                     }
                 }
             }

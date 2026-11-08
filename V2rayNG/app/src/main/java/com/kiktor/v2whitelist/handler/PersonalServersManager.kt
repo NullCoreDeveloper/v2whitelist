@@ -67,12 +67,7 @@ object PersonalServersManager {
         profile.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
 
         val guid = UUID.randomUUID().toString()
-        val allGuids = MmkvManager.decodeServerList().toMutableList()
-        if (!allGuids.contains(guid)) {
-            allGuids.add(0, guid) // Добавляем наверх списка
-        }
         MmkvManager.encodeServerConfig(guid, profile)
-        MmkvManager.encodeServerList(allGuids)
         Log.i(AppConfig.TAG, "Personal server added: ${profile.remarks} ($guid)")
         return guid
     }
@@ -83,12 +78,7 @@ object PersonalServersManager {
     fun addPersonalServer(profile: ProfileItem): String {
         profile.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
         val guid = UUID.randomUUID().toString()
-        val allGuids = MmkvManager.decodeServerList().toMutableList()
-        if (!allGuids.contains(guid)) {
-            allGuids.add(0, guid)
-        }
         MmkvManager.encodeServerConfig(guid, profile)
-        MmkvManager.encodeServerList(allGuids)
         return guid
     }
 
@@ -357,12 +347,23 @@ object PersonalServersManager {
         val decoded = com.kiktor.v2whitelist.util.Utils.decode(text)
         val raw = if (!decoded.isNullOrBlank()) decoded else text
         val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
-        var count = 0
+        if (lines.isEmpty()) return 0
+
+        val newProfiles = mutableListOf<ProfileItem>()
         for (line in lines) {
-            if (addPersonalServerFromUri(line) != null) {
-                count++
-            }
+            val profile = UniversalConfigParser.parse(line) ?: continue
+            profile.subscriptionId = PersonalServersConfig.SUB_ID_PERSONAL_DIRECT
+            newProfiles.add(profile)
         }
+        if (newProfiles.isEmpty()) return 0
+
+        var count = 0
+        for (profile in newProfiles) {
+            val guid = UUID.randomUUID().toString()
+            MmkvManager.encodeServerConfig(guid, profile)
+            count++
+        }
+        Log.i(AppConfig.TAG, "Batch imported $count personal servers")
         return count
     }
 }

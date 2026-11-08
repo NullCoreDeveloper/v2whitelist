@@ -227,6 +227,7 @@ object NodeTesterManager {
 
             val serviceCheckEnabled = ServiceCheckManager.isServiceCheckEnabled()
             val services = ServiceCheckManager.loadServices().filter { it.enabled }
+            val effectiveTimeout = if (serviceCheckEnabled && services.isNotEmpty()) maxOf(timeout, 5000) else timeout
 
             // Реальная проверка: проверка доступности сервисов либо HTTP 204
             val (elapsed, isSuccess) = if (serviceCheckEnabled && services.isNotEmpty()) {
@@ -236,7 +237,7 @@ object NodeTesterManager {
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = services,
                     socksPort = port,
-                    timeoutMs = timeout.toLong()
+                    timeoutMs = effectiveTimeout.toLong()
                 )
                 val allOk = results.all { it.success }
                 val avgLatency = if (allOk && results.isNotEmpty()) results.map { it.latencyMs }.average().toLong() else -1L

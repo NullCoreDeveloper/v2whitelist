@@ -613,13 +613,13 @@ object SmartConnectManager {
             val isWifi = NetworkManager.isWifiActive(context)
             val currentRule = if (isWifi) personalConfig.wifiRule else personalConfig.cellularRule
 
-            // Переключаемся среди личных серверов только если:
+            // Переключаемся среди личных серверов если:
             // 1) Личные сервера включены
-            // 2) Правило сети НЕ требует использовать сторонние подписки (USE_PUBLIC_SUBS)
-            // 3) Текущий сервер является личным, ЛИБО правило требует личные серверы
+            // 2) Текущий сервер является личным (пользователь хочет следующий личный узел!),
+            //    ЛИБО правило сети разрешает/требует использовать личные серверы
             val shouldSwitchPersonal = personalConfig.enabled &&
-                currentRule != NetworkBindingRule.USE_PUBLIC_SUBS &&
-                (isCurrentPersonal || currentRule == NetworkBindingRule.USE_PERSONAL_AUTO || currentRule == NetworkBindingRule.USE_PERSONAL_SELECTED)
+                (isCurrentPersonal || (currentRule != NetworkBindingRule.USE_PUBLIC_SUBS &&
+                    (currentRule == NetworkBindingRule.USE_PERSONAL_AUTO || currentRule == NetworkBindingRule.USE_PERSONAL_SELECTED)))
 
             if (shouldSwitchPersonal) {
                 val personalCandidates = PersonalServersManager.getPersonalServers()

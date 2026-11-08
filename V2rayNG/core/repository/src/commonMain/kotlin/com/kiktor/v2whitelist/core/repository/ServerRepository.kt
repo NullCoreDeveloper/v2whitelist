@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.core.repository
 
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -154,7 +155,20 @@ class InMemoryServerRepository(
         val uniqueKeys = mutableSetOf<String>()
         val guidsToDelete = mutableListOf<String>()
 
+        // 1. Сначала регистрируем ключи всех личных серверов (они никогда не удаляются)
         for ((guid, profile) in serverMap) {
+            if (PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                val sniOrHost = profile.sni?.takeIf { it.isNotBlank() } ?: profile.host.orEmpty()
+                val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
+                uniqueKeys.add(key)
+            }
+        }
+
+        // 2. Дедуплицируем сторонние/публичные серверы
+        for ((guid, profile) in serverMap) {
+            if (PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
+                continue
+            }
             val sniOrHost = profile.sni?.takeIf { it.isNotBlank() } ?: profile.host.orEmpty()
             val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
             if (uniqueKeys.contains(key)) {
