@@ -336,7 +336,7 @@ class DesktopAppState(
     val sniffingEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_sniffing_enabled", true))
     val routeOnly = MutableStateFlow(settingsRepo.getBoolean("pref_route_only", false))
     val allowInsecure = MutableStateFlow(settingsRepo.getBoolean("pref_allow_insecure", false))
-    val localProxyPort = MutableStateFlow(settingsRepo.getInt("pref_local_proxy_port", 35255))
+    val localProxyPort = MutableStateFlow(settingsRepo.getInt("pref_local_proxy_port", settingsRepo.getSocksPort()))
     val localProxyLogin = MutableStateFlow(settingsRepo.getString("pref_local_proxy_login", "v2w_${UUID.randomUUID().toString().take(6)}"))
     val localProxyPassword = MutableStateFlow(settingsRepo.getString("pref_local_proxy_pass", UUID.randomUUID().toString().take(10)))
     val remoteDns = MutableStateFlow(settingsRepo.getString("pref_remote_dns", "1.1.1.1"))
@@ -1293,10 +1293,41 @@ class DesktopAppState(
                             it.second.subscriptionId == targetSub.id || it.second.subscriptionId == targetSub.name
                         }.map { it.first }
 
+                        val prevExitUrl = customEndpointUrl.value.trim()
+                        val prevExitParsed = if (prevExitUrl.isNotBlank()) com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(prevExitUrl) else null
+                        val prevPersonalSelected = personalSelectedGuid.value
+
                         val batch = parsed.map { generateStableServerGuid(it) to it }
                         serverRepo.replaceSubscriptionServers(oldForSub, batch)
                         serverRepo.removeDuplicates()
                         _selectedGuid.value = serverRepo.getSelectedServerGuid()
+
+                        // Восстановление выбранного личного сервера при обновлении подписки
+                        if (prevPersonalSelected.isNotBlank() && oldForSub.contains(prevPersonalSelected)) {
+                            val oldProfile = currentServers.firstOrNull { it.first == prevPersonalSelected }?.second
+                            val matchedInBatch = batch.firstOrNull { (_, p) ->
+                                (oldProfile != null && p.server.equals(oldProfile.server, ignoreCase = true) && p.serverPort == oldProfile.serverPort && p.remarks == oldProfile.remarks) ||
+                                (oldProfile != null && p.server.equals(oldProfile.server, ignoreCase = true) && p.serverPort == oldProfile.serverPort)
+                            }
+                            if (matchedInBatch != null) {
+                                personalSelectedGuid.value = matchedInBatch.first
+                                settingsRepo.setString("pref_personal_selected_guid", matchedInBatch.first)
+                            }
+                        }
+
+                        // Восстановление выходного узла при обновлении доверенной подписки
+                        if (useCustomEndpoint.value && prevExitUrl.isNotBlank()) {
+                            val matchedExitInBatch = batch.firstOrNull { (_, p) ->
+                                com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(p) == prevExitUrl ||
+                                (prevExitParsed != null && !p.server.isNullOrBlank() && p.server.equals(prevExitParsed.server, ignoreCase = true) && p.serverPort == prevExitParsed.serverPort)
+                            }
+                            if (matchedExitInBatch != null) {
+                                val newUri = com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(matchedExitInBatch.second) ?: prevExitUrl
+                                customEndpointUrl.value = newUri
+                                settingsRepo.setString("pref_custom_endpoint_url", newUri)
+                                settingsRepo.setBoolean("pref_custom_endpoint_enabled", true)
+                            }
+                        }
                     }
 
                     if (subIdx >= 0) {
@@ -1742,7 +1773,7 @@ class DesktopAppState(
             } else null
 
             val currentSocksPort = socksPort.value
-            val currentHttpPort = currentSocksPort + 1
+            val currentHttpPort = if (httpPort.value > 0 && httpPort.value != currentSocksPort) httpPort.value else currentSocksPort + 1
 
             _smartConnectStatus.value = "Запуск сетевого ядра Xray…"
             val started = xrayRunner.start(
@@ -1784,7 +1815,7 @@ class DesktopAppState(
                     if (DesktopTunManager.isTunActive) {
                         DesktopTunManager.stop(sessionSudoPassword)
                     }
-                    if (autoEnableSystemProxy.value) {
+                    if (autoEnableSystemProxy.value || isSystemProxyActive.value) {
                         DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
                         isSystemProxyActive.value = true
                     }
@@ -2087,11 +2118,17 @@ class DesktopAppState(
         val personalServers = servers.value.filter {
             com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
         }
-        val isPersonalMatch = personalServers.any { (_, p) ->
+        val matchedProfile = personalServers.firstOrNull { (_, p) ->
             com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(p) == epUrl ||
-                (epParsed != null && !p.server.isNullOrBlank() && p.server == epParsed.server && p.serverPort == epParsed.serverPort)
+                (epParsed != null && !p.server.isNullOrBlank() && p.server.equals(epParsed.server, ignoreCase = true) && p.serverPort == epParsed.serverPort)
         }
-        if (!isPersonalMatch) {
+        if (matchedProfile != null) {
+            val latestUri = com.kiktor.v2whitelist.core.config.UniversalConfigParser.toUri(matchedProfile.second)
+            if (!latestUri.isNullOrBlank() && latestUri != epUrl) {
+                customEndpointUrl.value = latestUri
+                settingsRepo.setString("pref_custom_endpoint_url", latestUri)
+            }
+        } else {
             GeekModeLogger.log("AppState", "Автоочистка некорректного/публичного конечного узла")
             useCustomEndpoint.value = false
             customEndpointUrl.value = ""
@@ -2247,7 +2284,7 @@ class DesktopAppState(
         sniffingVal: Boolean = sniffingEnabled.value,
         routeOnlyVal: Boolean = routeOnly.value,
         allowInsecureVal: Boolean = allowInsecure.value,
-        localPortVal: Int = localProxyPort.value,
+        localPortVal: Int = socksP,
         localLoginVal: String = localProxyLogin.value,
         localPassVal: String = localProxyPassword.value,
         remoteDnsVal: String = remoteDns.value,
@@ -2268,8 +2305,6 @@ class DesktopAppState(
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
         v2wScanPath.value = v2wPath
-        httpPort.value = httpP
-        socksPort.value = socksP
         autoEnableSystemProxy.value = autoSystemProxy
         allowLan.value = lan
         customDirectDomains.value = directDomains
@@ -2319,8 +2354,21 @@ class DesktopAppState(
         sniffingEnabled.value = sniffingVal
         routeOnly.value = routeOnlyVal
         allowInsecure.value = allowInsecureVal
-        val effectiveSocks = if (socksP > 0) socksP else localPortVal
-        val effectiveHttp = if (httpP > 0 && httpP != effectiveSocks) httpP else effectiveSocks + 1
+        val targetSocks = if (localPortVal in 1024..65534 && localPortVal != socksPort.value) {
+            localPortVal
+        } else if (socksP in 1024..65534) {
+            socksP
+        } else if (localPortVal in 1024..65534) {
+            localPortVal
+        } else {
+            10808
+        }
+        val effectiveSocks = targetSocks
+        val effectiveHttp = if (httpP in 1024..65535 && httpP != effectiveSocks) {
+            httpP
+        } else {
+            if (effectiveSocks < 65535) effectiveSocks + 1 else effectiveSocks - 1
+        }
         localProxyPort.value = effectiveSocks
         socksPort.value = effectiveSocks
         httpPort.value = effectiveHttp
@@ -2419,6 +2467,9 @@ class DesktopAppState(
         restartPeriodicSubscriptionUpdates()
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
+        if (isSystemProxyActive.value) {
+            DesktopProxyManager.enableSystemProxy(effectiveSocks, effectiveHttp)
+        }
         if (coreState.value == DesktopCoreState.RUNNING) {
             connectCurrent()
         }

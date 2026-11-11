@@ -157,33 +157,68 @@ object PersonalServersManager {
         val config = getConfig()
         val mmkvEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
         val mmkvUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+        val savedName = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME)
 
         val exitGuid = config.exitNodeServerGuid
         if (!exitGuid.isNullOrBlank()) {
             val exitProfile = MmkvManager.decodeServerConfig(exitGuid)
-            if (exitProfile == null || !PersonalServersConfig.isPersonalServer(exitProfile.subscriptionId)) {
-                Log.w(AppConfig.TAG, "sanitizeExitNode: clearing invalid or non-personal exitNodeServerGuid=$exitGuid")
-                saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
-                MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
-                return
-            }
-
-            // Синхронизируем MMKV с флагом exitNodeEnabled из PersonalServersConfig
-            if (config.exitNodeEnabled) {
-                val uri = UniversalConfigParser.toUri(exitProfile)
-                if (!uri.isNullOrBlank()) {
-                    if (!mmkvEnabled) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, true)
-                    if (mmkvUrl != uri) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
-                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, exitProfile.remarks)
-                }
-            } else {
-                if (mmkvEnabled) {
+            if (exitProfile != null) {
+                if (!PersonalServersConfig.isPersonalServer(exitProfile.subscriptionId)) {
+                    Log.w(AppConfig.TAG, "sanitizeExitNode: clearing non-personal exitNodeServerGuid=$exitGuid")
+                    saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
                     MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+                    return
+                }
+
+                // Синхронизируем MMKV с флагом exitNodeEnabled из PersonalServersConfig
+                if (config.exitNodeEnabled) {
+                    val uri = UniversalConfigParser.toUri(exitProfile)
+                    if (!uri.isNullOrBlank()) {
+                        if (!mmkvEnabled) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, true)
+                        if (mmkvUrl != uri) MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, uri)
+                        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, exitProfile.remarks)
+                    }
+                } else {
+                    if (mmkvEnabled) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                    }
+                }
+                return
+            } else {
+                // exitProfile == null: GUID изменился или устарел (например, при обновлении подписки).
+                // Ищем соответствующий сервер среди актуальных доверенных серверов по URL, адресу/порту или названию.
+                val personalServers = getPersonalServers()
+                val parsed = if (!mmkvUrl.isNullOrBlank()) AngConfigManager.identifyConfigType(mmkvUrl) else null
+
+                val matchedPersonal = personalServers.firstOrNull { (_, p) ->
+                    (!mmkvUrl.isNullOrBlank() && UniversalConfigParser.toUri(p) == mmkvUrl) ||
+                        (parsed != null && !p.server.isNullOrBlank() && p.server.equals(parsed.server, ignoreCase = true) && p.serverPort == parsed.serverPort)
+                } ?: personalServers.firstOrNull { (_, p) ->
+                    !savedName.isNullOrBlank() && p.remarks == savedName
+                }
+
+                if (matchedPersonal != null) {
+                    val newUri = UniversalConfigParser.toUri(matchedPersonal.second) ?: mmkvUrl
+                    val effectiveEnabled = config.exitNodeEnabled || mmkvEnabled
+                    saveConfig(config.copy(exitNodeServerGuid = matchedPersonal.first, exitNodeEnabled = effectiveEnabled))
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, effectiveEnabled)
+                    if (!newUri.isNullOrBlank()) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, newUri)
+                    }
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, matchedPersonal.second.remarks)
+                    Log.i(AppConfig.TAG, "sanitizeExitNode: remapped exit node to ${matchedPersonal.second.remarks} (${matchedPersonal.first})")
+                    return
+                } else {
+                    Log.w(AppConfig.TAG, "sanitizeExitNode: clearing orphan exitNodeServerGuid=$exitGuid (not found in personal servers)")
+                    saveConfig(config.copy(exitNodeServerGuid = null, exitNodeEnabled = false))
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, "")
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, "")
+                    return
                 }
             }
-            return
         }
 
         // Если exitNodeServerGuid не задан, но в MMKV остался старый URL или включен флаг
@@ -193,12 +228,18 @@ object PersonalServersManager {
                 val parsed = AngConfigManager.identifyConfigType(mmkvUrl)
                 personalServers.firstOrNull { (_, p) ->
                     UniversalConfigParser.toUri(p) == mmkvUrl ||
-                        (parsed != null && !p.server.isNullOrBlank() && p.server == parsed.server && p.serverPort == parsed.serverPort)
+                        (parsed != null && !p.server.isNullOrBlank() && p.server.equals(parsed.server, ignoreCase = true) && p.serverPort == parsed.serverPort)
+                } ?: personalServers.firstOrNull { (_, p) ->
+                    !savedName.isNullOrBlank() && p.remarks == savedName
                 }
             } else null
 
             if (matchedPersonal != null) {
+                val newUri = UniversalConfigParser.toUri(matchedPersonal.second) ?: mmkvUrl
                 saveConfig(config.copy(exitNodeServerGuid = matchedPersonal.first, exitNodeEnabled = mmkvEnabled))
+                if (!newUri.isNullOrBlank()) {
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, newUri)
+                }
                 MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, matchedPersonal.second.remarks)
             } else {
                 Log.w(AppConfig.TAG, "sanitizeExitNode: clearing orphan/public custom endpoint from MMKV")

@@ -284,6 +284,31 @@ object AngConfigManager {
                     null
                 }
 
+            val personalConfig = PersonalServersManager.getConfig()
+            val removedPersonalSelectedServer =
+                if (!TextUtils.isEmpty(subid) && !append) {
+                    personalConfig.selectedServerGuid?.let { guid ->
+                        MmkvManager.decodeServerConfig(guid)?.let {
+                            if (it.subscriptionId == subid) it else null
+                        }
+                    }
+                } else {
+                    null
+                }
+
+            val removedExitNodeServer =
+                if (!TextUtils.isEmpty(subid) && !append) {
+                    personalConfig.exitNodeServerGuid?.let { guid ->
+                        MmkvManager.decodeServerConfig(guid)?.let {
+                            if (it.subscriptionId == subid) it else null
+                        }
+                    }
+                } else {
+                    null
+                }
+            val previousExitNodeUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+            val previousExitNodeName = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME)
+
             if (!append) {
                 MmkvManager.removeServerViaSubid(subid)
             }
@@ -330,6 +355,86 @@ object AngConfigManager {
                 if (V2RayServiceManager.isRunning()) {
                     val restoredConfig = processedConfigs[guids.indexOf(restoredGuid)]
                     MmkvManager.encodeRunningServerConfig(restoredConfig)
+                }
+            }
+
+            // Восстановление выбранного личного сервера при обновлении доверенной подписки
+            var restoredPersonalSelectedGuid: String? = null
+            if (removedPersonalSelectedServer != null) {
+                for (i in processedConfigs.indices) {
+                    val config = processedConfigs[i]
+                    if (config.server.equals(removedPersonalSelectedServer.server, ignoreCase = true) &&
+                        config.serverPort == removedPersonalSelectedServer.serverPort &&
+                        config.remarks == removedPersonalSelectedServer.remarks
+                    ) {
+                        restoredPersonalSelectedGuid = guids[i]
+                        break
+                    }
+                }
+                if (restoredPersonalSelectedGuid == null) {
+                    for (i in processedConfigs.indices) {
+                        val config = processedConfigs[i]
+                        if (config.server.equals(removedPersonalSelectedServer.server, ignoreCase = true) &&
+                            config.serverPort == removedPersonalSelectedServer.serverPort
+                        ) {
+                            restoredPersonalSelectedGuid = guids[i]
+                            break
+                        }
+                    }
+                }
+            }
+
+            // Восстановление конечного узла (Exit Node) при обновлении доверенной подписки
+            var restoredExitNodeGuid: String? = null
+            var restoredExitConfig: ProfileItem? = null
+            if (removedExitNodeServer != null || (personalConfig.exitNodeEnabled && !previousExitNodeUrl.isNullOrBlank())) {
+                val parsedPrevExit = if (!previousExitNodeUrl.isNullOrBlank()) identifyConfigType(previousExitNodeUrl) else null
+                val targetServer = removedExitNodeServer?.server ?: parsedPrevExit?.server
+                val targetPort = removedExitNodeServer?.serverPort ?: parsedPrevExit?.serverPort
+                val targetRemarks = removedExitNodeServer?.remarks ?: previousExitNodeName
+
+                if (!targetServer.isNullOrBlank() && targetPort != null) {
+                    for (i in processedConfigs.indices) {
+                        val config = processedConfigs[i]
+                        if (config.server.equals(targetServer, ignoreCase = true) &&
+                            config.serverPort == targetPort &&
+                            !targetRemarks.isNullOrBlank() && config.remarks == targetRemarks
+                        ) {
+                            restoredExitNodeGuid = guids[i]
+                            restoredExitConfig = config
+                            break
+                        }
+                    }
+                    if (restoredExitNodeGuid == null) {
+                        for (i in processedConfigs.indices) {
+                            val config = processedConfigs[i]
+                            if (config.server.equals(targetServer, ignoreCase = true) &&
+                                config.serverPort == targetPort
+                            ) {
+                                restoredExitNodeGuid = guids[i]
+                                restoredExitConfig = config
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (restoredPersonalSelectedGuid != null || restoredExitNodeGuid != null) {
+                val currentPersonal = PersonalServersManager.getConfig()
+                val updatedPersonal = currentPersonal.copy(
+                    selectedServerGuid = restoredPersonalSelectedGuid ?: currentPersonal.selectedServerGuid,
+                    exitNodeServerGuid = restoredExitNodeGuid ?: currentPersonal.exitNodeServerGuid
+                )
+                PersonalServersManager.saveConfig(updatedPersonal)
+
+                if (restoredExitNodeGuid != null && restoredExitConfig != null) {
+                    val newUri = shareConfig(restoredExitConfig)
+                    if (newUri.isNotBlank()) {
+                        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_URL, newUri)
+                    }
+                    MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME, restoredExitConfig.remarks)
+                    Log.i(AppConfig.TAG, "parseBatchConfig: restored exit node ${restoredExitConfig.remarks} ($restoredExitNodeGuid)")
                 }
             }
             count = processedConfigs.size

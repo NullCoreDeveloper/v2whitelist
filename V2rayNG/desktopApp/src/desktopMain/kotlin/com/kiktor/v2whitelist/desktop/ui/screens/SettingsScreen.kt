@@ -208,12 +208,14 @@ fun SettingsScreen(
     var isSavedNotice by remember { mutableStateOf(false) }
 
     val doSave = {
+        val parsedLocalPort = localPort.toIntOrNull()?.coerceIn(1024, 65534) ?: 10808
+        val parsedHttpPort = parsedLocalPort + 1
         state.saveSettings(
             subUrl = state.subscriptionUrl.value,
             xrayPath = xrayPathInput,
             v2wPath = v2wPathInput,
-            httpP = state.httpPort.value,
-            socksP = state.socksPort.value,
+            httpP = parsedHttpPort,
+            socksP = parsedLocalPort,
             autoSystemProxy = state.autoEnableSystemProxy.value,
             lan = allowLan,
             directDomains = customDirect,
@@ -262,7 +264,7 @@ fun SettingsScreen(
             sniffingVal = sniffing,
             routeOnlyVal = routeOnly,
             allowInsecureVal = allowInsecure,
-            localPortVal = localPort.toIntOrNull() ?: 35255,
+            localPortVal = parsedLocalPort,
             localLoginVal = localLogin,
             localPassVal = localPass,
             remoteDnsVal = remoteDns,
@@ -1384,7 +1386,12 @@ fun SettingsScreen(
                             if (isExpanded) {
                                 subServers.forEach { (guid, profile) ->
                                     val isSel = personalSelectedGuid == guid
-                                    val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
+                                    val isExitNode = currentEpEnabled && (
+                                        currentEpUrl == UniversalConfigParser.toUri(profile) ||
+                                        (assignedEpProfile != null && !profile.server.isNullOrBlank() &&
+                                         profile.server.equals(assignedEpProfile.server, ignoreCase = true) &&
+                                         profile.serverPort == assignedEpProfile.serverPort)
+                                    )
                                     val serverPing = state.pingMap.collectAsState().value[guid]
                                     val onSelectThis = {
                                         personalSelectedGuid = guid
@@ -1464,7 +1471,12 @@ fun SettingsScreen(
                             }
                             directServers.forEach { (guid, profile) ->
                                 val isSel = personalSelectedGuid == guid
-                                val isExitNode = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value == UniversalConfigParser.toUri(profile)
+                                val isExitNode = currentEpEnabled && (
+                                    currentEpUrl == UniversalConfigParser.toUri(profile) ||
+                                    (assignedEpProfile != null && !profile.server.isNullOrBlank() &&
+                                     profile.server.equals(assignedEpProfile.server, ignoreCase = true) &&
+                                     profile.serverPort == assignedEpProfile.serverPort)
+                                )
                                 val serverPing = state.pingMap.collectAsState().value[guid]
                                 val onSelectDirect = {
                                     personalSelectedGuid = guid
