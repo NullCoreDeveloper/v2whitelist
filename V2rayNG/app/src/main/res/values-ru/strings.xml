@@ -934,4 +934,7 @@
     <string name="pref_min_speed_summary">%1$s Мбит/с</string>
     <string name="pref_chunk_size_summary">%1$d узлов</string>
     <string name="pref_concurrency_summary">%1$d потоков</string>
+    <string name="title_notifications_category">Уведомления и индикаторы</string>
+    <string name="title_pref_start_services_notification">Уведомление «Службы успешно запущены»</string>
+    <string name="summary_pref_start_services_notification">Уведомление «Службы успешно запущены» служит индикатором, перекочевавшим из v2rayNG в ПроБел, возможно сделаю в следующем обновлении</string>
 </resources>

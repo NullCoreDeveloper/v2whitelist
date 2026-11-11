@@ -941,4 +941,7 @@
     <string name="pref_min_speed_summary">%1$s Mbps</string>
     <string name="pref_chunk_size_summary">%1$d servers</string>
     <string name="pref_concurrency_summary">%1$d threads</string>
+    <string name="title_notifications_category">Notifications &amp; Indicators</string>
+    <string name="title_pref_start_services_notification">\"Start Services Success\" Notification</string>
+    <string name="summary_pref_start_services_notification">The \"Services started successfully\" notification serves as an indicator migrated from v2rayNG to ProBel, might do it in the next update</string>
 </resources>

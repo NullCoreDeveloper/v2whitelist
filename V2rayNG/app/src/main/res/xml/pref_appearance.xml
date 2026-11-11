@@ -80,6 +80,14 @@
             android:title="@string/title_pref_premium_haptic" />
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/title_notifications_category">
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_start_services_notification"
+            android:summary="@string/summary_pref_start_services_notification"
+            android:title="@string/title_pref_start_services_notification" />
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/title_pref_add_qs_tile">
         <Preference
             android:key="pref_add_qs_tile"

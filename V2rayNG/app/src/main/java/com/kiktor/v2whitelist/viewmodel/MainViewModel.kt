@@ -423,7 +423,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 AppConfig.MSG_STATE_START_SUCCESS -> {
-                    getApplication<AngApplication>().toastSuccess(R.string.toast_services_success)
+                    if (MmkvManager.decodeSettingsBool(AppConfig.PREF_START_SERVICES_NOTIFICATION, true)) {
+                        getApplication<AngApplication>().toastSuccess(R.string.toast_services_success)
+                    }
                     isRunning.value = true
                 }
 
