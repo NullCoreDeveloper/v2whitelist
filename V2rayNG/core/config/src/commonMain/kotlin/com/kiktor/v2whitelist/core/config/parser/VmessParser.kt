@@ -32,8 +32,16 @@ object VmessParser {
         val decodedJson = Base64Util.decode(base64)
         if (decodedJson.isBlank()) return null
 
+        val firstBrace = decodedJson.indexOf('{')
+        val lastBrace = decodedJson.lastIndexOf('}')
+        val cleanJson = if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            decodedJson.substring(firstBrace, lastBrace + 1)
+        } else {
+            decodedJson
+        }
+
         val vmessData = try {
-            jsonHelper.decodeFromString<VmessJson>(decodedJson)
+            jsonHelper.decodeFromString<VmessJson>(cleanJson)
         } catch (_: Exception) {
             return null
         }

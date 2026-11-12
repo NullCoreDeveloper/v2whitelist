@@ -18,6 +18,7 @@ object DefaultSubscriptions {
                 "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/wl",
                 "https://raw.githubusercontent.com/rkp-community/sub/main/wl"
             ).joinToString("|"),
+            groupRegex = "(?i)#([A-Za-zА-Яа-я0-9]+)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
@@ -30,6 +31,7 @@ object DefaultSubscriptions {
                 "https://hub.mos.ru/rkp/sub-roskompozor/raw/main/bl",
                 "https://raw.githubusercontent.com/rkp-community/sub/main/bl"
             ).joinToString("|"),
+            groupRegex = "(?i)#([A-Za-zА-Яа-я0-9]+)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
@@ -55,6 +57,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-042.txt",
                 "https://warp-gen.cyb-portal.org/CP-042"
             ).joinToString("|"),
+            groupRegex = "(?i)(White\\s*Keys)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
@@ -92,6 +95,7 @@ object DefaultSubscriptions {
                 "https://bitbucket.org/igareck/vpn-configs-for-russia/raw/main/WHITE-CIDR-RU-all.txt",
                 "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt"
             ).joinToString("|"),
+            groupRegex = "(?i)\\*([A-Z0-9_-]+)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
@@ -106,6 +110,7 @@ object DefaultSubscriptions {
                 "https://alley.serv00.net/whitelist",
                 "https://etoskam.ru/whitelist"
             ).joinToString("|"),
+            groupRegex = "(?i)(CIDR-[A-Za-z0-9_-]+|SNI-[A-Za-z0-9_-]+|YoutubeUnBlockRu)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
@@ -133,6 +138,7 @@ object DefaultSubscriptions {
                 "https://fastly.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt",
                 "https://cdn.jsdelivr.net/gh/whoahaow/rjsxrd@main/githubmirror/bypass/bypass-all.txt"
             ).joinToString("|"),
+            groupRegex = "(?i)(rjsxrd)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST, CustomSubData.SCENARIO_BLACKLIST)
         ),
@@ -199,6 +205,7 @@ object DefaultSubscriptions {
                 "https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_WHITE.txt",
                 "https://fastly.jsdelivr.net/gh/kort0881/vpn-checker-backend@main/checked/RU_Best/ru_white_all_WHITE.txt"
             ).joinToString("|"),
+            groupRegex = "(?i)\\[\\d+ms\\s+([A-Z]{2})\\b",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         ),
@@ -225,6 +232,117 @@ object DefaultSubscriptions {
             ).joinToString("|"),
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 19. AkresVPN All ---
+        CustomSubData(
+            id = "def_theakres_all",
+            name = "AkresVPN (All) [@AkresMC]",
+            url = "https://raw.githubusercontent.com/theakres/VPN/refs/heads/main/all",
+            groupRegex = "(?i)\\b([A-Z]{2})\\b",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 20. Scarlet Devil Whitelist ---
+        CustomSubData(
+            id = "def_scarlet_bs",
+            name = "Scarlet Devil (Белые списки) [@ScDevNetwork]",
+            url = listOf(
+                "https://scarlet-devil.vercel.app/sub1",
+                "https://raw.githubusercontent.com/Areral/ScarletDevil/main/sub_bs.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\|\\s*([A-Z]{2})\\s*\\|",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 21. Scarlet Devil Blacklist ---
+        CustomSubData(
+            id = "def_scarlet_chs",
+            name = "Scarlet Devil (Черные списки) [@ScDevNetwork]",
+            url = listOf(
+                "https://scarlet-devil.vercel.app/sub2",
+                "https://raw.githubusercontent.com/Areral/ScarletDevil/main/sub_chs.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\|\\s*([A-Z]{2})\\s*\\|",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 22. zieng2 Universal WL ---
+        CustomSubData(
+            id = "def_zieng_universal",
+            name = "zieng2 (Universal WL) [github/zieng2]",
+            url = listOf(
+                "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt",
+                "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
+                "https://fastly.jsdelivr.net/gh/zieng2/wl@main/vless_universal.txt",
+                "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+                "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
+                "https://gitlab.com/zieng2/wl/raw/main/vless_universal.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\b([A-Z]{2})\\b",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 23. КIЗЯК VPN v7 ---
+        CustomSubData(
+            id = "def_kizyak_v7",
+            name = "КIЗЯК VPN v7 (Белые списки) [@kizyak_vpn]",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta7.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta7.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\[(.*?)\\]",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 24. КIЗЯК VPN v6 ---
+        CustomSubData(
+            id = "def_kizyak_v6",
+            name = "КIЗЯК VPN v6 (LTE БС) [@kizyak_vpn]",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt",
+                "https://cdn.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\[(.*?)\\]",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 25. КIЗЯК VPN v6BL ---
+        CustomSubData(
+            id = "def_kizyak_v6_bl",
+            name = "КIЗЯК VPN v6 (Черные списки) [@kizyak_vpn]",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta6BL.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta6BL.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)\\[(.*?)\\]",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 26. КIЗЯК VPN v8 ---
+        CustomSubData(
+            id = "def_kizyak_v8",
+            name = "КIЗЯК VPN v8 (Best) [@kizyak_vpn]",
+            url = listOf(
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/main/kizyakbeta8.txt",
+                "https://fastly.jsdelivr.net/gh/Maskkost93/kizyak-vpn-4.0@main/kizyakbeta8.txt",
+                "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta8.txt"
+            ).joinToString("|"),
+            groupRegex = "(?i)(LTE|BL|КIЗЯК)",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST, CustomSubData.SCENARIO_BLACKLIST)
         )
     )
 }

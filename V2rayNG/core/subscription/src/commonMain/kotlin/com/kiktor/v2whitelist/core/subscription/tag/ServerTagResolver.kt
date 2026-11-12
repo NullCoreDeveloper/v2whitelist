@@ -84,7 +84,19 @@ object ServerTagResolver {
         Regex("(?i)\\b(Литва|Lithuania|LT)\\b|立陶宛") to "🇱🇹",
         Regex("(?i)\\b(Маршалловы Острова|MH)\\b|马绍尔群岛") to "🇲🇭",
         Regex("(?i)\\b(Дания|Denmark|DK)\\b|丹麦") to "🇩🇰",
-        Regex("(?i)\\b(Иран|Iran|IR)\\b|伊朗") to "🇮🇷"
+        Regex("(?i)\\b(Иран|Iran|IR)\\b|伊朗") to "🇮🇷",
+        Regex("(?i)\\b(Мексика|Mexico|MEX|MX)\\b|墨西哥") to "🇲🇽",
+        Regex("(?i)\\b(Словакия|Slovakia|Slovak|SVK|SK|Bratislava)\\b|斯洛伐克") to "🇸🇰",
+        Regex("(?i)\\b(Албания|Albania|ALB|AL|Tirana)\\b|阿尔巴尼亚") to "🇦🇱",
+        Regex("(?i)\\b(ЮАР|Южная Африка|South Africa|ZAF|ZA|Johannesburg)\\b|南非") to "🇿🇦",
+        Regex("(?i)\\b(Азербайджан|Azerbaijan|AZE|AZ|Baku)\\b|阿塞拜疆") to "🇦🇿",
+        Regex("(?i)\\b(Чили|Chile|CHL|CL|Santiago)\\b|智利") to "🇨🇱",
+        Regex("(?i)\\b(Кипр|Cyprus|CYP|CY)\\b|塞浦路斯") to "🇨🇾",
+        Regex("(?i)\\b(Бразилия|Brazil|BRA|BR|Sao Paulo)\\b|巴西") to "🇧🇷",
+        Regex("(?i)\\b(Израиль|Israel|ISR|IL|Tel Aviv)\\b|以色列") to "🇮🇱",
+        Regex("(?i)\\b(Греция|Greece|GRC|GR|Athens)\\b|希腊") to "🇬🇷",
+        Regex("(?i)\\b(Нигер|Niger|NER|NE)\\b|尼日尔") to "🇳🇪",
+        Regex("(?i)\\b(Камбоджа|Cambodia|KHM|KH)\\b|柬埔寨") to "🇰🇭"
     )
 
     fun extractTextCountryTag(text: String): String? {

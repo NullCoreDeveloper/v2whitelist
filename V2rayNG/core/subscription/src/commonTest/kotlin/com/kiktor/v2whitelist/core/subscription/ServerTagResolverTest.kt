@@ -31,6 +31,10 @@ class ServerTagResolverTest {
         assertEquals("🇩🇪", ServerTagResolver.extractTextCountryTag("Trojan Germany Berlin"))
         assertEquals("🇳🇱", ServerTagResolver.extractTextCountryTag("Amsterdam Netherlands 01"))
         assertEquals("🇺🇸", ServerTagResolver.extractTextCountryTag("USA California Fast"))
+        assertEquals("🇲🇽", ServerTagResolver.extractTextCountryTag("VLESS Mexico City"))
+        assertEquals("🇸🇰", ServerTagResolver.extractTextCountryTag("Bratislava Slovakia Node"))
+        assertEquals("🇦🇱", ServerTagResolver.extractTextCountryTag("Tirana Albania Fast"))
+        assertEquals("🇿🇦", ServerTagResolver.extractTextCountryTag("Johannesburg South Africa"))
     }
 
     @Test
