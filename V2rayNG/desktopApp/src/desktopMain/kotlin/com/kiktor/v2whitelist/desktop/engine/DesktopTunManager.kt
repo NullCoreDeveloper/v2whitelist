@@ -38,7 +38,8 @@ data class ConfiguredServerRoute(
 object DesktopTunManager {
 
     private const val SERVICE_IPC_URL = "http://127.0.0.1:53729"
-    private const val DEFAULT_TUN_IP = "198.18.0.1"
+    private const val DEFAULT_TUN_IP = "198.18.0.2"
+    private const val DEFAULT_TUN_GW = "198.18.0.1"
     private const val DEFAULT_TUN_MASK = "255.255.0.0"
 
     private val osName = System.getProperty("os.name")?.lowercase().orEmpty()
@@ -453,17 +454,40 @@ object DesktopTunManager {
                 }
 
                 isWindows -> {
-                    // 1. Присваиваем статический IP 198.18.0.1 интерфейсу wintun
-                    val netshAddrRes = runCommand("netsh", "interface", "ipv4", "set", "address", "name=wintun", "source=static", "addr=198.18.0.1", "mask=255.255.0.0", "gateway=none")
+                    // Ожидаем появления интерфейса wintun в системе (до 3 сек)
+                    var wintunIdx: Int? = null
+                    for (i in 1..20) {
+                        wintunIdx = getWindowsInterfaceIndex("wintun")
+                        if (wintunIdx != null) break
+                        Thread.sleep(150)
+                    }
+
+                    if (wintunIdx != null) {
+                        GeekModeLogger.log("TUN", "Windows: Обнаружен интерфейс wintun с индексом $wintunIdx")
+                    } else {
+                        GeekModeLogger.log("TUN", "Windows: Предупреждение: не удалось определить индекс интерфейса wintun")
+                    }
+
+                    // 1. Присваиваем статический IP 198.18.0.2 и шлюз 198.18.0.1 интерфейсу wintun (для NCSI/NLA)
+                    val netshAddrRes = runCommand(
+                        "netsh", "interface", "ipv4", "set", "address",
+                        "name=wintun", "source=static",
+                        "addr=$DEFAULT_TUN_IP", "mask=$DEFAULT_TUN_MASK",
+                        "gateway=$DEFAULT_TUN_GW", "gwmetric=1"
+                    )
                     if (netshAddrRes.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: netsh set address: ${netshAddrRes.second}")
                     }
 
-                    // 2. Назначаем DNS Cloudflare и Google на wintun адаптер для предотвращения DNS Leak
+                    // 2. Устанавливаем наивысший приоритет метрики интерфейса Wintun (Metric = 1)
+                    runCommand("netsh", "interface", "ipv4", "set", "interface", "name=wintun", "metric=1")
+                    runCommand("netsh", "interface", "ipv4", "set", "subinterface", "name=wintun", "mtu=1500", "metric=1")
+
+                    // 3. Назначаем DNS Cloudflare и Google на wintun адаптер для предотвращения DNS Leak
                     runCommand("netsh", "interface", "ipv4", "set", "dnsservers", "name=wintun", "source=static", "address=1.1.1.1", "validate=no")
                     runCommand("netsh", "interface", "ipv4", "add", "dnsservers", "name=wintun", "address=8.8.8.8", "validate=no")
 
-                    // 3. Прямой маршрут до сервера через физический шлюз
+                    // 4. Прямой маршрут до сервера через физический шлюз (защита от зацикливания трафика)
                     if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
                         val routeRes = runCommand("cmd", "/c", "route add $serverIp mask 255.255.255.255 $gateway metric 1")
                         if (routeRes.first == 0) {
@@ -474,14 +498,26 @@ object DesktopTunManager {
                         }
                     }
 
-                    // 4. Направляем весь IPv4 интернет в wintun
-                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 198.18.0.1 metric 1")
-                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 198.18.0.1 metric 1")
+                    // 5. Очищаем возможные старые маршруты во избежание коллизий
+                    runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                    runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+
+                    // 6. Направляем весь IPv4 интернет в wintun с обязательным указанием if <wintunIdx>
+                    val ifPart = if (wintunIdx != null) "if $wintunIdx" else ""
+                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW metric 1 $ifPart".trim())
+                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW metric 1 $ifPart".trim())
                     if (r1.first != 0 || r2.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: Сбой установки маршрутов TUN (требуются права Администратора): ${r1.second} / ${r2.second}")
                         stopSync(null)
                         return false
                     }
+
+                    // 7. Защита от утечки IPv6: перенаправляем весь IPv6 трафик в Wintun
+                    runCommand("netsh", "interface", "ipv6", "add", "route", "::/1", "interface=wintun", "metric=1", "store=active")
+                    runCommand("netsh", "interface", "ipv6", "add", "route", "8000::/1", "interface=wintun", "metric=1", "store=active")
+
+                    // 8. Сброс DNS кэша Windows
+                    runCommand("ipconfig", "/flushdns")
                 }
 
                 isMac -> {
@@ -536,12 +572,15 @@ object DesktopTunManager {
             }
 
             isWindows -> {
-                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 198.18.0.1")
-                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 198.18.0.1")
+                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                runCommand("netsh", "interface", "ipv6", "delete", "route", "::/1", "interface=wintun")
+                runCommand("netsh", "interface", "ipv6", "delete", "route", "8000::/1", "interface=wintun")
                 configuredRoute?.let { route ->
                     runCommand("cmd", "/c", "route delete ${route.ip} mask 255.255.255.255 ${route.gateway}")
                     configuredRoute = null
                 }
+                runCommand("ipconfig", "/flushdns")
             }
 
             isMac -> {
@@ -698,6 +737,27 @@ object DesktopTunManager {
         } catch (e: Exception) {
             -1 to (e.message ?: "Execution error")
         }
+    }
+
+    /**
+     * Возвращает индекс сетевого интерфейса Windows (Idx) по его имени (например, "wintun").
+     */
+    fun getWindowsInterfaceIndex(name: String = "wintun"): Int? {
+        val (code, output) = runCommand("netsh", "interface", "ipv4", "show", "interfaces")
+        if (code != 0 || output.isBlank()) return null
+        for (line in output.lines()) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("---") || trimmed.startsWith("Idx")) continue
+            val parts = trimmed.split(Regex("""\s+"""), limit = 5)
+            if (parts.size >= 5) {
+                val idx = parts[0].toIntOrNull()
+                val ifName = parts[4].trim().trim('"')
+                if (idx != null && (ifName.equals(name, ignoreCase = true) || ifName.contains(name, ignoreCase = true))) {
+                    return idx
+                }
+            }
+        }
+        return null
     }
 
     /**

@@ -16,7 +16,8 @@ import (
 
 const (
 	DefaultListenAddr = "127.0.0.1:53729"
-	DefaultTunIP      = "198.18.0.1"
+	DefaultTunIP      = "198.18.0.2"
+	DefaultTunGW      = "198.18.0.1"
 	DefaultTunMask    = "255.255.0.0"
 	DefaultDeviceName = "wintun"
 )
@@ -197,21 +198,52 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	}
 	s.tunCmd = cmd
 
-	// Ожидаем появления интерфейса wintun в системе
-	time.Sleep(500 * time.Millisecond)
+	// Ожидаем появления интерфейса wintun в системе (до 3 секунд)
+	var wintunIdx int = -1
+	for i := 0; i < 20; i++ {
+		wintunIdx = getWindowsInterfaceIndex(DefaultDeviceName)
+		if wintunIdx > 0 {
+			break
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	if wintunIdx <= 0 {
+		log.Printf("[v2w-service] Warning: could not determine interface index for %s, will try without ifIndex", DefaultDeviceName)
+	} else {
+		log.Printf("[v2w-service] Detected %s with interface index %d", DefaultDeviceName, wintunIdx)
+	}
 
-	// Назначаем статический IP и маску на интерфейс wintun через netsh
+	tunIP := req.TunIP
+	if tunIP == "" {
+		tunIP = DefaultTunIP
+	}
+	tunGW := DefaultTunGW
+	if tunIP == tunGW {
+		tunIP = "198.18.0.2"
+		tunGW = "198.18.0.1"
+	}
+	tunMask := req.TunMask
+	if tunMask == "" {
+		tunMask = DefaultTunMask
+	}
+
+	// Назначаем статический IP, маску и шлюз на интерфейс wintun через netsh (для NCSI / NLA)
 	netshAddrArgs := []string{
 		"interface", "ipv4", "set", "address",
 		fmt.Sprintf("name=%s", DefaultDeviceName),
 		"source=static",
-		fmt.Sprintf("addr=%s", req.TunIP),
-		fmt.Sprintf("mask=%s", req.TunMask),
-		"gateway=none",
+		fmt.Sprintf("addr=%s", tunIP),
+		fmt.Sprintf("mask=%s", tunMask),
+		fmt.Sprintf("gateway=%s", tunGW),
+		"gwmetric=1",
 	}
 	if out, err := exec.Command("netsh", netshAddrArgs...).CombinedOutput(); err != nil {
 		log.Printf("[v2w-service] netsh set address warning: %s (%v)", string(out), err)
 	}
+
+	// Устанавливаем наивысший приоритет метрики интерфейса Wintun (Metric = 1)
+	exec.Command("netsh", "interface", "ipv4", "set", "interface", fmt.Sprintf("name=%s", DefaultDeviceName), "metric=1").Run()
+	exec.Command("netsh", "interface", "ipv4", "set", "subinterface", fmt.Sprintf("name=%s", DefaultDeviceName), "mtu=1500", "metric=1").Run()
 
 	// Назначаем DNS серверы на интерфейс wintun
 	dnsServers := req.DnsServers
@@ -253,29 +285,54 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		}
 	}
 
-	// Маршрутизируем весь входящий IPv4 трафик в wintun (0.0.0.0/1 и 128.0.0.0/1)
-	out1, err1 := exec.Command("route", "add", "0.0.0.0", "mask", "128.0.0.0", req.TunIP, "metric", "1").CombinedOutput()
-	out2, err2 := exec.Command("route", "add", "128.0.0.0", "mask", "128.0.0.0", req.TunIP, "metric", "1").CombinedOutput()
+	// Очищаем старые маршруты во избежание коллизий
+	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()
+	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunGW).Run()
+
+	// Маршрутизируем весь входящий IPv4 трафик в wintun (0.0.0.0/1 и 128.0.0.0/1) с указанием ifIndex
+	var r1Args, r2Args []string
+	if wintunIdx > 0 {
+		r1Args = []string{"add", "0.0.0.0", "mask", "128.0.0.0", tunGW, "metric", "1", "if", fmt.Sprintf("%d", wintunIdx)}
+		r2Args = []string{"add", "128.0.0.0", "mask", "128.0.0.0", tunGW, "metric", "1", "if", fmt.Sprintf("%d", wintunIdx)}
+	} else {
+		r1Args = []string{"add", "0.0.0.0", "mask", "128.0.0.0", tunGW, "metric", "1"}
+		r2Args = []string{"add", "128.0.0.0", "mask", "128.0.0.0", tunGW, "metric", "1"}
+	}
+
+	out1, err1 := exec.Command("route", r1Args...).CombinedOutput()
+	out2, err2 := exec.Command("route", r2Args...).CombinedOutput()
 	if err1 != nil || err2 != nil {
 		log.Printf("[v2w-service] route add 0/1 warning: %s (%v) / %s (%v)", string(out1), err1, string(out2), err2)
+		return fmt.Errorf("failed to add IPv4 routes into wintun: %s %s", string(out1), string(out2))
 	}
+
+	// Блокировка утечки IPv6 трафика мимо туннеля (перенаправление IPv6 в Wintun)
+	exec.Command("netsh", "interface", "ipv6", "add", "route", "::/1", fmt.Sprintf("interface=%s", DefaultDeviceName), "metric=1", "store=active").Run()
+	exec.Command("netsh", "interface", "ipv6", "add", "route", "8000::/1", fmt.Sprintf("interface=%s", DefaultDeviceName), "metric=1", "store=active").Run()
+
+	// Сброс DNS кэша Windows
+	exec.Command("ipconfig", "/flushdns").Run()
 
 	return nil
 }
 
 func (s *TunServer) stopTunLocked() {
-	tunIP := s.activeConfig.TunIP
-	if tunIP == "" {
-		tunIP = DefaultTunIP
-	}
+	tunGW := DefaultTunGW
 
 	// Удаляем маршруты из таблицы
-	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunIP).Run()
-	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunIP).Run()
+	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()
+	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunGW).Run()
+
+	// Удаляем IPv6 маршруты
+	exec.Command("netsh", "interface", "ipv6", "delete", "route", "::/1", fmt.Sprintf("interface=%s", DefaultDeviceName)).Run()
+	exec.Command("netsh", "interface", "ipv6", "delete", "route", "8000::/1", fmt.Sprintf("interface=%s", DefaultDeviceName)).Run()
 
 	if s.activeConfig.ServerIP != "" && s.activeConfig.Gateway != "" {
 		exec.Command("route", "delete", s.activeConfig.ServerIP, "mask", "255.255.255.255", s.activeConfig.Gateway).Run()
 	}
+
+	// Сброс DNS кэша Windows
+	exec.Command("ipconfig", "/flushdns").Run()
 
 	// Завершаем процесс tun2socks
 	if s.tunCmd != nil && s.tunCmd.Process != nil {
@@ -326,4 +383,30 @@ func isLocalIP(ipStr string) bool {
 	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified()
 }
+
+func getWindowsInterfaceIndex(name string) int {
+	out, err := exec.Command("netsh", "interface", "ipv4", "show", "interfaces").Output()
+	if err != nil {
+		return -1
+	}
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "Idx") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 5 {
+			var idx int
+			if _, err := fmt.Sscanf(fields[0], "%d", &idx); err == nil {
+				ifName := strings.Trim(fields[4], "\"")
+				if strings.EqualFold(ifName, name) || strings.Contains(strings.ToLower(line), strings.ToLower(name)) {
+					return idx
+				}
+			}
+		}
+	}
+	return -1
+}
+
 
