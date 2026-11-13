@@ -468,8 +468,19 @@ class DesktopAppState(
         // Проверка и тихая регистрация службы Windows (если приложение запущено от администратора)
         if (DesktopTunManager.isWindows) {
             scope.launch(Dispatchers.IO) {
-                if (DesktopTunManager.isWindowsAdmin() && !DesktopTunManager.isServiceAvailable()) {
-                    DesktopTunManager.runSilentServiceInstall()
+                if (!DesktopTunManager.isServiceAvailable()) {
+                    val state = DesktopTunManager.queryServiceState()
+                    if (state != null) {
+                        // Уже зарегистрирована (ставили заранее) — только дожидаемся/запускаем
+                        DesktopTunManager.installOrStartService()
+                    } else if (DesktopTunManager.isWindowsAdmin()) {
+                        DesktopTunManager.runSilentServiceInstall()
+                    } else if (DesktopTunManager.isInstalledDistribution() &&
+                        !settingsRepo.getBoolean("pref_service_auto_prompted", false)) {
+                        // Установленная (не portable) версия: один раз сами регистрируем службу (один UAC)
+                        settingsRepo.setBoolean("pref_service_auto_prompted", true)
+                        DesktopTunManager.installServiceViaUac()
+                    }
                 }
                 isWindowsServiceAvailable.value = DesktopTunManager.isServiceAvailable()
             }
@@ -1776,6 +1787,11 @@ class DesktopAppState(
             val currentHttpPort = if (httpPort.value > 0 && httpPort.value != currentSocksPort) httpPort.value else currentSocksPort + 1
 
             _smartConnectStatus.value = "Запуск сетевого ядра Xray…"
+            // В TUN-режиме на Windows привязываем исходящие сокеты Xray к физическому адаптеру,
+            // иначе трафик ядра (прямой/до сервера) заворачивается обратно в TUN и ломает интернет.
+            val tunBindInterface = if (routingMode.value != "PROXY" && DesktopTunManager.isWindows)
+                DesktopTunManager.detectPhysicalInterfaceNameForBind() else null
+            if (tunBindInterface != null) GeekModeLogger.log("TUN", "Xray привязан к интерфейсу: $tunBindInterface")
             val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
@@ -1807,7 +1823,8 @@ class DesktopAppState(
                 fragmentEnabled = fragmentEnabled.value,
                 fragmentPackets = fragmentPackets.value,
                 fragmentLength = fragmentLength.value,
-                fragmentInterval = fragmentInterval.value
+                fragmentInterval = fragmentInterval.value,
+                bindInterface = tunBindInterface
             )
             if (started) {
                 _smartConnectStatus.value = "Настройка маршрутизации (${routingMode.value})…"

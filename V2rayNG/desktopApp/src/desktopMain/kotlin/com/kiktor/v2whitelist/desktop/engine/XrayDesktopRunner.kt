@@ -105,7 +105,8 @@ class XrayDesktopRunner(
         fragmentEnabled: Boolean = false,
         fragmentPackets: String = "tlshello",
         fragmentLength: String = "50-100",
-        fragmentInterval: String = "10-20"
+        fragmentInterval: String = "10-20",
+        bindInterface: String? = null
     ): Boolean {
         if (_coreState.value == DesktopCoreState.RUNNING || _coreState.value == DesktopCoreState.STARTING) {
             stop()
@@ -160,7 +161,8 @@ class XrayDesktopRunner(
                 fragmentEnabled = fragmentEnabled,
                 fragmentPackets = fragmentPackets,
                 fragmentLength = fragmentLength,
-                fragmentInterval = fragmentInterval
+                fragmentInterval = fragmentInterval,
+                bindInterface = bindInterface
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
 

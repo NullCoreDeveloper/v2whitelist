@@ -108,6 +108,32 @@ object DesktopTunManager {
         }
     }
 
+    /** Ждёт ответа службы (она может стартовать несколько секунд после sc start / install). */
+    fun waitForService(timeoutMs: Long = 6000): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (isServiceAvailable()) return true
+            Thread.sleep(300)
+        }
+        return isServiceAvailable()
+    }
+
+    /** Состояние службы в SCM: null — не зарегистрирована, иначе RUNNING / STOPPED / START_PENDING ... */
+    fun queryServiceState(): String? {
+        if (!isWindows) return null
+        val (code, out) = runCommand("sc", "query", "v2w-service")
+        if (code != 0 && !out.contains("STATE")) return null
+        val m = Regex("""STATE\s*:\s*\d+\s+(\w+)""").find(out) ?: return null
+        return m.groupValues[1]
+    }
+
+    /** Служба установлена в portable-режиме или из MSI: в Program Files считаем «установленной» версией. */
+    fun isInstalledDistribution(): Boolean {
+        if (!isWindows) return false
+        val path = System.getProperty("user.dir").orEmpty() + ";" + (System.getProperty("compose.application.resources.dir") ?: "") + ";" + (System.getProperty("java.home") ?: "")
+        return path.contains("Program Files", ignoreCase = true)
+    }
+
     /**
      * Запуск TUN через системную службу Windows (Service Mode).
      */
@@ -187,10 +213,9 @@ object DesktopTunManager {
         return try {
             val pb = ProcessBuilder(bin.absolutePath, "-install").redirectErrorStream(true)
             val proc = pb.start()
-            val finished = proc.waitFor(4, TimeUnit.SECONDS)
+            val finished = proc.waitFor(8, TimeUnit.SECONDS)
             if (finished && proc.exitValue() == 0) {
-                Thread.sleep(500)
-                isServiceAvailable()
+                waitForService(6000)
             } else {
                 false
             }
@@ -208,8 +233,7 @@ object DesktopTunManager {
             GeekModeLogger.log("TUN", "Запрос прав администратора для установки службы: ${srvBin.absolutePath}")
             val psCmd = "Start-Process '${srvBin.absolutePath}' -ArgumentList '-install' -Verb RunAs -Wait"
             runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd)
-            Thread.sleep(1000)
-            val available = isServiceAvailable()
+            val available = waitForService(8000)
             if (available) {
                 GeekModeLogger.log("TUN", "Служба v2w-service успешно установлена и запущена!")
             }
@@ -243,24 +267,50 @@ object DesktopTunManager {
     fun installOrStartService() {
         val srvBin = findServiceExecutable() ?: return
         try {
-            GeekModeLogger.log("TUN", "Служба v2w-service не активна. Попытка фонового старта...")
-            // Сначала пробуем запустить сервис, если он уже зарегистрирован в системе
-            val startRes = runCommand("cmd", "/c", "net start v2w-service")
-            if (startRes.first == 0) {
-                Thread.sleep(800)
-                if (isServiceAvailable()) return
+            val state = queryServiceState()
+            // 1. Служба уже зарегистрирована (например, ставили заранее) — НЕ ставим повторно
+            if (state != null) {
+                GeekModeLogger.log("TUN", "Служба v2w-service уже установлена (состояние: $state).")
+                if (state == "RUNNING" || state == "START_PENDING") {
+                    if (waitForService(6000)) return
+                } else {
+                    runCommand("sc", "start", "v2w-service")
+                    if (waitForService(6000)) return
+                    // sc start без прав — одна попытка через UAC (только запуск, без переустановки)
+                    runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                        "Start-Process sc.exe -ArgumentList 'start','v2w-service' -Verb RunAs -Wait -WindowStyle Hidden")
+                    if (waitForService(6000)) return
+                }
+                GeekModeLogger.log("TUN", "Служба зарегистрирована, но не отвечает. Переустановка не выполняется автоматически.")
+                return
             }
 
-            // Если запущены от администратора — ставим тихо
+            // 2. Не установлена: тихо, если мы админ, иначе один UAC
             if (isWindowsAdmin()) {
                 if (runSilentServiceInstall(srvBin)) return
             }
-
-            // Иначе запрашиваем UAC разово для регистрации службы
             installServiceViaUac()
         } catch (e: Exception) {
             GeekModeLogger.log("TUN", "Не удалось автоматически установить/запустить службу: ${e.message}")
         }
+    }
+
+    /**
+     * Имя (FriendlyName) физического адаптера по его IPv4 — для привязки сокетов Xray (sockopt.interface).
+     */
+    fun resolvePhysicalInterfaceName(physicalIp: String?): String? {
+        if (!isWindows || physicalIp.isNullOrBlank()) return null
+        val (code, out) = runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "(Get-NetIPAddress -AddressFamily IPv4 -IPAddress '$physicalIp' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceAlias")
+        val name = out.lines().firstOrNull { it.isNotBlank() }?.trim()
+        return if (code == 0 && !name.isNullOrBlank()) name else null
+    }
+
+    /** Определяет (IP-адрес физического интерфейса) для привязки Xray; вызывать ДО start() TUN. */
+    fun detectPhysicalInterfaceNameForBind(): String? {
+        if (!isWindows) return null
+        val (_, iface) = detectDefaultGateway()
+        return resolvePhysicalInterfaceName(iface)
     }
 
     /**

@@ -39,7 +39,10 @@ data class XrayGeneratorOptions(
     val fragmentEnabled: Boolean = false,
     val fragmentPackets: String = "tlshello",
     val fragmentLength: String = "50-100",
-    val fragmentInterval: String = "10-20"
+    val fragmentInterval: String = "10-20",
+    // Имя физического адаптера: исходящие сокеты Xray привязываются к нему (IP_UNICAST_IF),
+    // чтобы трафик ядра не заворачивался обратно в TUN (петля маршрутизации).
+    val bindInterface: String? = null
 )
 
 object XrayConfigGenerator {
@@ -251,6 +254,16 @@ object XrayConfigGenerator {
 
         outbounds.add(directOutbound)
         outbounds.add(blockOutbound)
+
+        if (!options.bindInterface.isNullOrBlank()) {
+            for (i in outbounds.indices) {
+                val ob = outbounds[i]
+                if (ob.protocol == "blackhole" || ob.protocol == "dns") continue
+                val ss = ob.streamSettings ?: XrayStreamSettings()
+                val sk = (ss.sockopt ?: SockoptSettings()).copy(bindInterface = options.bindInterface)
+                outbounds[i] = ob.copy(streamSettings = ss.copy(sockopt = sk))
+            }
+        }
 
         // Routing rules
         val rules = mutableListOf<XrayRule>()

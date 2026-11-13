@@ -138,7 +138,8 @@ data class ServerEntry(
 data class SockoptSettings(
     val dialerProxy: String? = null,
     val tcpKeepAliveInterval: Int? = null,
-    val mark: Int? = null
+    val mark: Int? = null,
+    @SerialName("interface") val bindInterface: String? = null
 )
 
 @Serializable
