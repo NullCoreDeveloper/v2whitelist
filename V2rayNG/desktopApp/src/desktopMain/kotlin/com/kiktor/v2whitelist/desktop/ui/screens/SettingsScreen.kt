@@ -223,7 +223,7 @@ fun SettingsScreen(
             subUserAgent = userAgent,
             subThreads = subThreads.toIntOrNull() ?: 3,
             subAutoUpdate = subAutoUpdate,
-            subIntervalMins = subIntervalMins.toIntOrNull() ?: 60,
+            subIntervalMins = subIntervalMins.toIntOrNull() ?: 30,
             subUpdateOnStart = subUpdateOnStart,
             subOnlyViaProxy = subOnlyProxy,
             customEndpoint = useCustomEp,

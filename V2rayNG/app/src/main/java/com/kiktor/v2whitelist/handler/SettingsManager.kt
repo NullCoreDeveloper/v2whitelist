@@ -454,17 +454,20 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_MODE, AppConfig.VPN)
         ensureDefaultValue(AppConfig.PREF_VPN_DNS, AppConfig.DNS_VPN)
         ensureDefaultValue(AppConfig.PREF_VPN_MTU, AppConfig.VPN_MTU.toString())
-        // Migrate SUBSCRIPTION_AUTO_UPDATE from String to Boolean if needed
-        try {
-            val isString = MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE) != null
-            if (isString) {
-                val strVal = MmkvManager.decodeSettingsString(AppConfig.SUBSCRIPTION_AUTO_UPDATE)
-                MmkvManager.encodeSettings(AppConfig.SUBSCRIPTION_AUTO_UPDATE, strVal == "true")
-            }
-        } catch (e: Exception) {
-            // Already a boolean or missing
+        // ВАЖНО: раньше тут была "миграция String -> Boolean": decodeSettingsString() для bool-ключа
+        // через fallback decodeInt() возвращал "1" и перезаписывал ключ как false при КАЖДОМ запуске,
+        // из-за чего автообновление подписок молча выключалось. Миграция удалена.
+        // Разовая починка: возвращаем значения по умолчанию (автообновление ВКЛ, 30 мин, failover ВКЛ).
+        if (!MmkvManager.decodeSettingsBool("pref_defaults_migration_v2", false)) {
+            MmkvManager.encodeSettings(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
+            MmkvManager.encodeSettings(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
+            MmkvManager.encodeSettings(AppConfig.PREF_AUTO_FAILOVER, true)
+            MmkvManager.encodeSettings(AppConfig.PREF_SMART_FAILOVER_ENABLED, true)
+            MmkvManager.encodeSettings("pref_defaults_migration_v2", true)
         }
         ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
+        ensureDefaultValue(AppConfig.PREF_AUTO_FAILOVER, true)
+        ensureDefaultValue(AppConfig.PREF_SMART_FAILOVER_ENABLED, true)
         ensureDefaultValue(AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL, AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL)
         
         // Randomize SOCKS port once per installation/update to protect against local proxy scanning

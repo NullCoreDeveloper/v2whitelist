@@ -119,10 +119,10 @@ class SubscriptionUpdaterWorker(
             // Задача пересоздаётся только при первом запуске или после смерти.
             workManager.enqueueUniquePeriodicWork(
                 AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
-            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: schedule() called (KEEP policy)")
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: schedule() called (UPDATE policy)")
         }
 
         /**
@@ -155,7 +155,7 @@ class SubscriptionUpdaterWorker(
                 AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL,
                 AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL
             )
-            val intervalMinutes = intervalStr?.toLongOrNull() ?: 60L
+            val intervalMinutes = intervalStr?.toLongOrNull() ?: 30L
             val finalInterval = if (intervalMinutes < 15) 15L else intervalMinutes
 
             val constraints = androidx.work.Constraints.Builder()

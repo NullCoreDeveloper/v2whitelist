@@ -216,7 +216,7 @@ class DesktopAppState(
     val subscriptionUpdateOnlyViaProxy = MutableStateFlow(settingsRepo.getBoolean("subscription_update_only_via_proxy", false))
     val subscriptionThreads = MutableStateFlow(settingsRepo.getInt("subscription_threads", 3))
     val subscriptionAutoUpdate = MutableStateFlow(settingsRepo.getBoolean("subscription_auto_update", true))
-    val subscriptionUpdateIntervalMinutes = MutableStateFlow(settingsRepo.getInt("subscription_update_interval_minutes", 60))
+    val subscriptionUpdateIntervalMinutes = MutableStateFlow(settingsRepo.getInt("subscription_update_interval_minutes", 30))
     val subscriptionUpdateOnStartup = MutableStateFlow(settingsRepo.getBoolean("subscription_update_on_startup", true))
     val yandexTranslateUpdateEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_yandex_translate_update", false))
 

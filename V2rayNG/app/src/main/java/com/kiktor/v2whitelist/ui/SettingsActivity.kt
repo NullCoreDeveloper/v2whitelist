@@ -576,7 +576,7 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             updateFragment(MmkvManager.decodeSettingsBool(AppConfig.PREF_FRAGMENT_ENABLED, false))
 
             // Initialize auto-update interval state
-            autoUpdateInterval?.isEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, false)
+            autoUpdateInterval?.isEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
 
             // Initialize Yandex update preferences state
             val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)

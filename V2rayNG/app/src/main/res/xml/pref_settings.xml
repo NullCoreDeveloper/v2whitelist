@@ -145,7 +145,7 @@
             android:summary="@string/summary_category_failover">
         <CheckBoxPreference
             android:key="pref_auto_failover"
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:summary="@string/summary_pref_auto_failover"
             android:title="@string/title_pref_auto_failover" />
 
@@ -160,7 +160,7 @@
         <CheckBoxPreference
             android:dependency="pref_auto_failover"
             android:key="pref_smart_failover_enabled"
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:summary="@string/summary_pref_smart_failover"
             android:title="@string/title_pref_smart_failover" />
 
@@ -208,13 +208,15 @@
             android:summary="@string/summary_category_updates">
         <CheckBoxPreference
             android:key="pref_auto_update_subscription"
+            android:defaultValue="true"
             android:summary="@string/summary_pref_auto_update_subscription"
             android:title="@string/title_pref_auto_update_subscription" />
 
         <EditTextPreference
             android:inputType="number"
             android:key="pref_auto_update_interval"
-            android:summary="60"
+            android:defaultValue="30"
+            android:summary="30"
             android:title="@string/title_pref_auto_update_interval" />
 
         <CheckBoxPreference

@@ -57,7 +57,7 @@ object AppConfig {
     const val PREF_NETWORK_CHECK_URL_2 = "pref_network_check_url_2"
     const val PREF_CHUNK_SIZE = "pref_chunk_size"
     const val PREF_CHUNK_PRESET = "pref_chunk_preset"
-    const val SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL = "60" // Default is 1 hour
+    const val SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL = "30" // По умолчанию 30 минут
     const val SUBSCRIPTION_UPDATE_TASK_NAME = "subscription_updater"
     const val PREF_SPEED_ENABLED = "pref_speed_enabled"
     const val PREF_CONFIRM_REMOVE = "pref_confirm_remove"

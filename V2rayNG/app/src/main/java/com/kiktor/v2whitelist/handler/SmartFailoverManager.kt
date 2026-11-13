@@ -49,7 +49,7 @@ object SmartFailoverManager {
      * Запускает фоновый мониторинг доступности сервера.
      */
     fun startFailoverMonitor(service: Service) {
-        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, false)) {
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, true)) {
             Log.d(AppConfig.TAG, "Failover: disabled in preferences")
             return
         }
@@ -102,7 +102,7 @@ object SmartFailoverManager {
      */
     fun onTrafficSample(service: Service?, proxyUpRate: Double, proxyDownRate: Double) {
         if (!isMonitoring || service == null || !V2RayServiceManager.isRunning()) return
-        val smartEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, false)
+        val smartEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, true)
         if (!smartEnabled) return
         if (isProbing.get()) return
 

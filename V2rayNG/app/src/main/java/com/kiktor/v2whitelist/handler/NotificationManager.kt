@@ -50,15 +50,15 @@ object NotificationManager {
     fun startSpeedNotification(currentConfig: ProfileItem?) {
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) {
             // Если уведомление скорости выключено, но Smart Failover активен — всё равно запускаем сборщик
-            val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, false) &&
-                    MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, false)
+            val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, true) &&
+                    MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, true)
             if (!smartFailoverActive) return
         }
         if (speedNotificationJob != null || V2RayServiceManager.isRunning() == false) return
 
         val showSpeedNotification = MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED, false)
-        val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, false) &&
-                MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, false)
+        val smartFailoverActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_FAILOVER, true) &&
+                MmkvManager.decodeSettingsBool(AppConfig.PREF_SMART_FAILOVER_ENABLED, true)
         val loopIntervalMs = if (smartFailoverActive) 1000L else 3000L
 
         lastQueryTime = System.currentTimeMillis()
