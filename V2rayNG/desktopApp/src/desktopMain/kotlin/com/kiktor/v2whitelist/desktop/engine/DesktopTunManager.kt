@@ -692,21 +692,21 @@ object DesktopTunManager {
                 }
             }
         } else if (isWindows) {
-            val (code, output) = runCommand("cmd", "/c", "route print 0.0.0.0")
+            val (code, output) = runCommand("cmd", "/c", "route print -4 0.0.0.0")
             if (code == 0 && output.isNotBlank()) {
+                // Только активные маршруты (5 колонок: сеть, маска, шлюз, интерфейс, метрика);
+                // выбираем с минимальной метрикой, игнорируя persistent-секцию и наш TUN.
+                var best: Triple<String, String, Int>? = null
                 for (line in output.lines()) {
-                    val trimmed = line.trim()
-                    if (trimmed.startsWith("0.0.0.0")) {
-                        val tokens = trimmed.split(Regex("""\s+"""))
-                        if (tokens.size >= 4) {
-                            val gw = tokens[2]
-                            val iface = tokens[3]
-                            if (gw != "0.0.0.0" && gw != "On-link" && !gw.startsWith("198.18.")) {
-                                return gw to iface
-                            }
-                        }
-                    }
+                    val tokens = line.trim().split(Regex("""\s+"""))
+                    if (tokens.size < 5 || tokens[0] != "0.0.0.0" || tokens[1] != "0.0.0.0") continue
+                    val gw = tokens[2]
+                    val iface = tokens[3]
+                    val metric = tokens[4].toIntOrNull() ?: continue
+                    if (!gw.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) || gw == "0.0.0.0" || gw.startsWith("198.18.")) continue
+                    if (best == null || metric < best.third) best = Triple(gw, iface, metric)
                 }
+                if (best != null) return best.first to best.second
             }
         } else if (isMac) {
             val (code, output) = runCommand("route", "-n", "get", "default")

@@ -54,6 +54,7 @@ type TunServer struct {
 	mu           sync.Mutex
 	tunActive    bool
 	tunCmd       *exec.Cmd
+	tunDone      chan struct{}
 	startedAt    time.Time
 	activeConfig StartTunRequest
 }
@@ -157,6 +158,7 @@ func (s *TunServer) handleStartTun(w http.ResponseWriter, r *http.Request) {
 	s.tunActive = true
 	s.startedAt = time.Now()
 	s.activeConfig = req
+	go s.watchSocks(req.SocksPort, s.startedAt)
 
 	log.Printf("[v2w-service] TUN successfully started (socks5://127.0.0.1:%d, tun=%s)", req.SocksPort, req.TunIP)
 	writeJSON(w, http.StatusOK, ApiResponse{Success: true, Message: "TUN started successfully"})
@@ -202,6 +204,19 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		return fmt.Errorf("failed to launch tun2socks: %w", err)
 	}
 	s.tunCmd = cmd
+	done := make(chan struct{})
+	s.tunDone = done
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+		// tun2socks упал сам — снимаем маршруты, иначе весь трафик уходит в «чёрную дыру»
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.tunCmd == cmd {
+			log.Printf("[v2w-service] tun2socks неожиданно завершился — откат маршрутов")
+			s.stopTunLocked()
+		}
+	}()
 
 	// Ожидаем появления интерфейса wintun в системе (до 3 секунд)
 	var wintunIdx int = -1
@@ -342,8 +357,14 @@ func (s *TunServer) stopTunLocked() {
 	// Завершаем процесс tun2socks
 	if s.tunCmd != nil && s.tunCmd.Process != nil {
 		_ = s.tunCmd.Process.Kill()
-		_ = s.tunCmd.Wait()
+		if s.tunDone != nil {
+			select {
+			case <-s.tunDone:
+			case <-time.After(3 * time.Second):
+			}
+		}
 		s.tunCmd = nil
+		s.tunDone = nil
 	}
 
 	s.tunActive = false
@@ -416,3 +437,34 @@ func getWindowsInterfaceIndex(name string) int {
 
 
 
+
+// watchSocks: если SOCKS-порт Xray пропал (приложение закрыто/упало), а TUN остался —
+// интернет полностью ломается. Через ~15 сек без ответа снимаем TUN автоматически.
+func (s *TunServer) watchSocks(port int, started time.Time) {
+	fails := 0
+	for {
+		time.Sleep(5 * time.Second)
+		s.mu.Lock()
+		current := s.tunActive && s.startedAt.Equal(started)
+		s.mu.Unlock()
+		if !current {
+			return
+		}
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 1500*time.Millisecond)
+		if err == nil {
+			c.Close()
+			fails = 0
+			continue
+		}
+		fails++
+		if fails >= 3 {
+			s.mu.Lock()
+			if s.tunActive && s.startedAt.Equal(started) {
+				log.Printf("[v2w-service] SOCKS 127.0.0.1:%d недоступен — автоотключение TUN", port)
+				s.stopTunLocked()
+			}
+			s.mu.Unlock()
+			return
+		}
+	}
+}
