@@ -210,75 +210,9 @@ jobs:
             mkdir -p "$APP_DIR/app/resources/assets"
             touch "$APP_DIR/.portable"
 
-            # Генерация скриптов установки и удаления службы Windows для портативной версии
-            cat << 'EOF' > "$APP_DIR/install_service.bat"
-            @echo off
-            chcp 65001 >nul
-            echo ========================================================
-            echo   Установка системной службы ProBel (v2w-service)
-            echo ========================================================
-            echo.
-            net session >nul 2>&1
-            if %errorLevel% neq 0 (
-                echo [i] Требуются права администратора для регистрации службы Windows.
-                echo [i] Запрашиваем повышение привилегий UAC...
-                powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
-                exit /b
-            )
-            set "BIN=%~dp0bin\v2w-service.exe"
-            if not exist "%BIN%" set "BIN=%~dp0app\resources\bin\v2w-service.exe"
-            if not exist "%BIN%" set "BIN=%~dp0v2w-service.exe"
-            if not exist "%BIN%" (
-                echo [!] Ошибка: v2w-service.exe не найден.
-                pause
-                exit /b 1
-            )
-            echo [*] Установка и запуск службы: "%BIN%"
-            "%BIN%" -install
-            if %errorLevel% equ 0 (
-                echo.
-                echo [+] Служба ProBel VPN Service успешно установлена и запущена!
-                echo [+] Теперь приложение можно запускать без прав администратора.
-            ) else (
-                echo.
-                echo [!] Ошибка установки службы (код: %errorLevel%).
-            )
-            echo.
-            pause
-            EOF
-
-            cat << 'EOF' > "$APP_DIR/uninstall_service.bat"
-            @echo off
-            chcp 65001 >nul
-            echo ========================================================
-            echo   Удаление системной службы ProBel (v2w-service)
-            echo ========================================================
-            echo.
-            net session >nul 2>&1
-            if %errorLevel% neq 0 (
-                echo [i] Требуются права администратора для удаления службы Windows.
-                echo [i] Запрашиваем повышение привилегий UAC...
-                powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
-                exit /b
-            )
-            set "BIN=%~dp0bin\v2w-service.exe"
-            if not exist "%BIN%" set "BIN=%~dp0app\resources\bin\v2w-service.exe"
-            if not exist "%BIN%" set "BIN=%~dp0v2w-service.exe"
-            if not exist "%BIN%" (
-                echo [*] Попытка остановить и удалить через sc.exe...
-                sc stop v2w-service >nul 2>&1
-                sc delete v2w-service >nul 2>&1
-                echo [+] Служба удалена из системы.
-                pause
-                exit /b 0
-            )
-            echo [*] Остановка и удаление службы...
-            "%BIN%" -uninstall
-            echo.
-            echo [+] Служба ProBel VPN Service успешно удалена из системы.
-            echo.
-            pause
-            EOF
+            # Скрипты установки и удаления службы Windows для портативной версии
+            cp "$GITHUB_WORKSPACE/V2rayNG/desktopApp/src/desktopMain/resources/windows/install_service.bat" "$APP_DIR/" || true
+            cp "$GITHUB_WORKSPACE/V2rayNG/desktopApp/src/desktopMain/resources/windows/uninstall_service.bat" "$APP_DIR/" || true
 
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/bin"/* "$APP_DIR/bin/" || true
             cp -a "$GITHUB_WORKSPACE/V2rayNG/desktopApp/assets"/* "$APP_DIR/assets/" || true
