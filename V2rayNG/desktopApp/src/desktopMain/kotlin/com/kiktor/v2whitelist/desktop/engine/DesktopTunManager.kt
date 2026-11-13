@@ -59,6 +59,9 @@ object DesktopTunManager {
     var isServiceMode: Boolean = false
         private set
 
+    /** Служба отработала, но самопроверка интернета через TUN провалилась — резервный режим не нужен. */
+    private var serviceSelfTestFailed = false
+
     init {
         Runtime.getRuntime().addShutdownHook(Thread {
             try {
@@ -148,6 +151,7 @@ object DesktopTunManager {
             val client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(1500))
                 .build()
+            serviceSelfTestFailed = false
 
             val jsonBody = StringBuilder()
                 .append("{")
@@ -165,7 +169,7 @@ object DesktopTunManager {
             val request = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/tun/start"))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(6))
+                .timeout(Duration.ofSeconds(40))
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build()
 
@@ -175,6 +179,7 @@ object DesktopTunManager {
                 true
             } else {
                 GeekModeLogger.log("TUN", "Ошибка ответа службы v2w-service (${response.statusCode()}): ${response.body()}")
+                if (response.body().contains("SELFTEST_FAILED")) serviceSelfTestFailed = true
                 false
             }
         } catch (e: Exception) {
@@ -365,6 +370,10 @@ object DesktopTunManager {
                     isTunActive = true
                     isServiceMode = true
                     return true
+                }
+                if (serviceSelfTestFailed) {
+                    GeekModeLogger.log("TUN", "TUN поднят, но через него нет интернета — откат. Логи: C:\\ProgramData\\v2whitelist\\logs")
+                    return false
                 }
                 GeekModeLogger.log("TUN", "Служба v2w-service не смогла запустить TUN. Переход в резервный прямой режим...")
             }
@@ -563,8 +572,7 @@ object DesktopTunManager {
                     }
 
                     // 7. Защита от утечки IPv6: перенаправляем весь IPv6 трафик в Wintun
-                    runCommand("netsh", "interface", "ipv6", "add", "route", "::/1", "interface=wintun", "metric=1", "store=active")
-                    runCommand("netsh", "interface", "ipv6", "add", "route", "8000::/1", "interface=wintun", "metric=1", "store=active")
+                    // (IPv6 не перехватываем: tun2socks принимает TCP локально и ломает Happy Eyeballs)
 
                     // 8. Сброс DNS кэша Windows
                     runCommand("ipconfig", "/flushdns")

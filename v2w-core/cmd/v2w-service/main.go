@@ -48,6 +48,9 @@ func main() {
 		return
 	}
 
+	if lf := openLogFile("v2w-service.log"); lf != nil {
+		log.SetOutput(lf)
+	}
 	server := NewTunServer()
 
 	// Если запущен как системная служба Windows (SCM)

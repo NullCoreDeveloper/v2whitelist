@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -75,7 +76,7 @@ func (s *TunServer) Start(addr string) error {
 		Addr:         addr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 45 * time.Second,
 	}
 
 	log.Printf("[v2w-service] HTTP IPC server listening on http://%s", addr)
@@ -186,7 +187,7 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	args := []string{
 		"-device", DefaultDeviceName,
 		"-proxy", fmt.Sprintf("socks5://127.0.0.1:%d", req.SocksPort),
-		"-loglevel", "warning",
+		"-loglevel", "info",
 	}
 
 	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск
@@ -197,8 +198,10 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 
 	cmd := exec.Command(tun2socksBin, args...)
 	cmd.Dir = binDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if lf := openLogFile("tun2socks.log"); lf != nil {
+		cmd.Stdout = lf
+		cmd.Stderr = lf
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to launch tun2socks: %w", err)
@@ -326,14 +329,77 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		return fmt.Errorf("failed to add IPv4 routes into wintun: %s %s", string(out1), string(out2))
 	}
 
-	// Блокировка утечки IPv6 трафика мимо туннеля (перенаправление IPv6 в Wintun)
-	exec.Command("netsh", "interface", "ipv6", "add", "route", "::/1", fmt.Sprintf("interface=%s", DefaultDeviceName), "metric=1", "store=active").Run()
-	exec.Command("netsh", "interface", "ipv6", "add", "route", "8000::/1", fmt.Sprintf("interface=%s", DefaultDeviceName), "metric=1", "store=active").Run()
+	// IPv6 НЕ перехватываем: tun2socks принимает TCP-подключения локально, даже если дальше
+	// IPv6 недоступен, из-за чего Happy Eyeballs не переключается на IPv4 и сайты зависают.
 
 	// Сброс DNS кэша Windows
 	exec.Command("ipconfig", "/flushdns").Run()
 
+	// Самопроверка: если через туннель реально нет интернета — не оставляем систему «без соединения»
+	if err := selfTest(); err != nil {
+		dumpDiagnostics()
+		return fmt.Errorf("SELFTEST_FAILED: через TUN нет интернета (%v). Подробности: %s", err, logDir())
+	}
 	return nil
+}
+
+func logDir() string {
+	base := os.Getenv("ProgramData")
+	if base == "" {
+		base = os.TempDir()
+	}
+	return filepath.Join(base, "v2whitelist", "logs")
+}
+
+func openLogFile(name string) *os.File {
+	dir := logDir()
+	_ = os.MkdirAll(dir, 0o755)
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return nil
+	}
+	return f
+}
+
+// selfTest: HTTP-запрос через системную маршрутизацию (т.е. через wintun -> tun2socks -> Xray).
+// Проверяет и DNS (домен), и реальную передачу данных (TCP-handshake в tun2socks успешен всегда).
+func selfTest() error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	var lastErr error
+	for round := 0; round < 2; round++ {
+		time.Sleep(700 * time.Millisecond)
+		for _, u := range []string{"http://www.msftconnecttest.com/connecttest.txt", "http://1.1.1.1/"} {
+			resp, err := client.Get(u)
+			if err != nil {
+				lastErr = fmt.Errorf("%s: %v", u, err)
+				log.Printf("[v2w-service] selftest %s: %v", u, err)
+				continue
+			}
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			log.Printf("[v2w-service] selftest %s: HTTP %d — OK", u, resp.StatusCode)
+			return nil
+		}
+	}
+	return lastErr
+}
+
+func dumpDiagnostics() {
+	f := openLogFile("diagnostics.log")
+	if f == nil {
+		return
+	}
+	defer f.Close()
+	for _, c := range [][]string{
+		{"route", "print", "-4"},
+		{"netsh", "interface", "ipv4", "show", "interfaces"},
+		{"netsh", "interface", "ipv4", "show", "dnsservers"},
+		{"ipconfig", "/all"},
+	} {
+		fmt.Fprintf(f, "\n===== %s =====\n", strings.Join(c, " "))
+		out, _ := exec.Command(c[0], c[1:]...).CombinedOutput()
+		f.Write(out)
+	}
 }
 
 func (s *TunServer) stopTunLocked() {
