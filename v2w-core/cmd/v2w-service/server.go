@@ -190,9 +190,12 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		"-loglevel", "info",
 	}
 
-	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск
+	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск.
+	// Также удаляем персистентный маршрут если он остался в реестре.
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
+	// Удалить persistent-маршрут из реестра (добавляется если gateway прописан через netsh)
+	exec.Command("route", "-p", "delete", "0.0.0.0").Run()
 	exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
 	time.Sleep(300 * time.Millisecond)
 
@@ -250,15 +253,16 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		tunMask = DefaultTunMask
 	}
 
-	// Назначаем статический IP, маску и шлюз на интерфейс wintun через netsh (для NCSI / NLA)
+	// Назначаем статический IP и маску на интерфейс wintun (БЕЗ gateway в netsh — иначе
+	// Windows создаёт персистентный маршрут 0.0.0.0/0 в реестре, который остаётся после остановки TUN
+	// и при следующем старте ломает интернет ещё до запуска tun2socks).
 	netshAddrArgs := []string{
 		"interface", "ipv4", "set", "address",
 		fmt.Sprintf("name=%s", DefaultDeviceName),
 		"source=static",
 		fmt.Sprintf("addr=%s", tunIP),
 		fmt.Sprintf("mask=%s", tunMask),
-		fmt.Sprintf("gateway=%s", tunGW),
-		"gwmetric=1",
+		"gateway=none",
 	}
 	if out, err := exec.Command("netsh", netshAddrArgs...).CombinedOutput(); err != nil {
 		log.Printf("[v2w-service] netsh set address warning: %s (%v)", string(out), err)
@@ -308,6 +312,12 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		}
 	}
 
+	// Маршрут для loopback: tun2socks работает как SYSTEM и подключается к Xray по 127.0.0.1.
+	// Без явного маршрута 127.0.0.0/8 трафик к loopback может уходить через wintun (метрика 1 < loopback 331),
+	// что приводит к "unsupported method" — tun2socks не может достучаться до Xray SOCKS5.
+	exec.Command("route", "add", "127.0.0.0", "mask", "255.0.0.0", "127.0.0.1", "metric", "1", "if", "1").Run()
+	log.Printf("[v2w-service] Loopback route locked to if=1 (127.0.0.0/8 -> 127.0.0.1)")
+
 	// Очищаем старые маршруты во избежание коллизий
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunGW).Run()
@@ -344,6 +354,15 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 }
 
 func logDir() string {
+	// Portable-сборка: рядом со службой лежит файл ".portable" — логи кладём в папку приложения.
+	// Установленная версия (MSI/NSIS): логи в C:\ProgramData\v2whitelist\logs\
+	exe, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(exe)
+		if fileExists(filepath.Join(dir, ".portable")) {
+			return filepath.Join(dir, "logs")
+		}
+	}
 	base := os.Getenv("ProgramData")
 	if base == "" {
 		base = os.TempDir()
