@@ -304,7 +304,11 @@ jobs:
 
           cd release-desktop
           ls -la
-          sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          else
+            shasum -a 256 * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+          fi
 
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
