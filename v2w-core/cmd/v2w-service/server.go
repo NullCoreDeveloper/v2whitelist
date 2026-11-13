@@ -172,10 +172,9 @@ func (s *TunServer) handleStopTun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TunServer) startTunLocked(req StartTunRequest) error {
-	tun2socksBin := req.Tun2Socks
-	if tun2socksBin == "" || !fileExists(tun2socksBin) {
-		tun2socksBin = findTun2SocksBin()
-	}
+	// Служба работает от SYSTEM: путь из запроса НЕ используется (иначе любой локальный процесс
+	// мог бы запустить произвольный exe). Берём только tun2socks рядом с v2w-service.exe.
+	tun2socksBin := findTun2SocksBin()
 	if tun2socksBin == "" || !fileExists(tun2socksBin) {
 		return fmt.Errorf("tun2socks executable not found (provided: %s)", req.Tun2Socks)
 	}
@@ -187,6 +186,12 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		"-proxy", fmt.Sprintf("socks5://127.0.0.1:%d", req.SocksPort),
 		"-loglevel", "warning",
 	}
+
+	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск
+	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
+	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
+	exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
+	time.Sleep(300 * time.Millisecond)
 
 	cmd := exec.Command(tun2socksBin, args...)
 	cmd.Dir = binDir
@@ -208,7 +213,7 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		time.Sleep(150 * time.Millisecond)
 	}
 	if wintunIdx <= 0 {
-		log.Printf("[v2w-service] Warning: could not determine interface index for %s, will try without ifIndex", DefaultDeviceName)
+		return fmt.Errorf("адаптер %s не появился за 3 сек — TUN не поднят, маршруты не изменены", DefaultDeviceName)
 	} else {
 		log.Printf("[v2w-service] Detected %s with interface index %d", DefaultDeviceName, wintunIdx)
 	}
@@ -408,5 +413,6 @@ func getWindowsInterfaceIndex(name string) int {
 	}
 	return -1
 }
+
 
 

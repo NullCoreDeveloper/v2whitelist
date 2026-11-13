@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"time"
 
 	"golang.org/x/sys/windows/svc"
@@ -65,6 +66,15 @@ func runWindowsService(server *TunServer) error {
 	return svc.Run(ServiceName, &windowsService{server: server})
 }
 
+// Разрешаем обычным (интерактивным) пользователям запускать/останавливать службу,
+// чтобы GUI без UAC мог поднять её, если она остановлена.
+func grantUserStartStop() {
+	sddl := "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;RPWPLCLOCRRC;;;IU)"
+	if out, err := exec.Command("sc.exe", "sdset", ServiceName, sddl).CombinedOutput(); err != nil {
+		log.Printf("[v2w-service] sc sdset warning: %s (%v)", string(out), err)
+	}
+}
+
 func installService() error {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -82,14 +92,16 @@ func installService() error {
 		defer s.Close()
 		// Служба уже зарегистрирована в системе. Проверяем путь исполняемого файла
 		cfg, errCfg := s.Config()
-		if errCfg == nil && cfg.BinaryPathName != exePath {
-			cfg.BinaryPathName = exePath
+		wantPath := `"` + exePath + `"`
+		if errCfg == nil && cfg.BinaryPathName != exePath && cfg.BinaryPathName != wantPath {
+			cfg.BinaryPathName = wantPath
 			if errUpd := s.UpdateConfig(cfg); errUpd != nil {
 				log.Printf("[v2w-service] Warning: failed to update service binary path: %v", errUpd)
 			} else {
 				log.Printf("[v2w-service] Successfully updated service binary path to: %s", exePath)
 			}
 		}
+		grantUserStartStop()
 		// Запускаем службу, если она была остановлена
 		if startErr := s.Start(); startErr != nil {
 			log.Printf("[v2w-service] Service already running or failed to start: %v", startErr)
@@ -107,6 +119,7 @@ func installService() error {
 	}
 	defer s.Close()
 
+	grantUserStartStop()
 	if err = s.Start(); err != nil {
 		log.Printf("[v2w-service] Service installed, but could not start immediately: %v", err)
 	} else {
