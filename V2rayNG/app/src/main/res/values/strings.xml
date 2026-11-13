@@ -606,8 +606,8 @@
     <string name="summary_category_failover">Automatic switch to best server on failures and drops</string>
     <string name="title_category_updates">📦 Background Updates</string>
     <string name="summary_category_updates">Auto-update interval for subscriptions, Yandex proxy on BS</string>
-    <string name="title_category_routing">🌐 Routing &amp; Proxy Chaining</string>
-    <string name="summary_category_routing">Tunnel mode, custom endpoint cascade and domain lists</string>
+    <string name="title_category_routing">🌐 Routing &amp; Split Tunneling</string>
+    <string name="summary_category_routing">Per-app and per-domain bypass rules, domain lists and geo files</string>
     <string name="title_category_vpn_core">⚙️ VPN &amp; Core Parameters</string>
     <string name="summary_category_vpn_core">LAN bypass, DNS, packet fragmentation, Mux, MTU and core parameters</string>
     <string name="title_category_backup_system">💾 Backup &amp; System</string>

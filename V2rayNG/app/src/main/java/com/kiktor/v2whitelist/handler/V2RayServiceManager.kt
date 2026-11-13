@@ -344,6 +344,9 @@ object V2RayServiceManager {
             coreController.startLoop(result.content, tunFd)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "startCoreLoop: Failed to start Core loop", e)
+            MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
+            MessageUtil.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, "")
+            NotificationManager.cancelNotification()
             return false
         }
 

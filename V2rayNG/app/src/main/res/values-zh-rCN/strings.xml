@@ -749,8 +749,8 @@
     <string name="summary_category_failover">连接中断或失败时自动切换至最优节点</string>
     <string name="title_category_profile_check">🛡️ 节点与服务验证</string>
     <string name="summary_category_profile_check">互联网连通性检查、延迟、测速及服务检测</string>
-    <string name="title_category_routing">🌐 路由与代理链</string>
-    <string name="summary_category_routing">分流模式、终节点链式代理及域名列表</string>
+    <string name="title_category_routing">🌐 路由与分流</string>
+    <string name="summary_category_routing">按应用和域名分流、域名列表及 geo 文件</string>
     <string name="title_category_scanner_and_core">⚡ 扫描器与 v2w-core 核心</string>
     <string name="summary_category_scanner_and_core">并发扫描设置、安全过滤器及 v2w-core</string>
     <string name="title_category_updates">📦 后台更新</string>

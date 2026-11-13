@@ -223,7 +223,12 @@ class V2RayVpnService : VpnService(), ServiceControl {
                 Log.i(AppConfig.TAG, "startService: tun2socks started successfully")
             } catch (t: Throwable) {
                 Log.e(AppConfig.TAG, "startService: runTun2socks() crashed", t)
-                // Не останавливаем сервис: V2Ray core уже работает, tun2socks опционален
+                // При hev-tun без tun2socks трафик не идёт: нельзя показывать «подключено»
+                if (SettingsManager.isUsingHevTun()) {
+                    MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, "")
+                    stopAllService()
+                    return
+                }
             }
 
             Log.i(AppConfig.TAG, "startService: fully started")
@@ -493,7 +498,12 @@ class V2RayVpnService : VpnService(), ServiceControl {
                     context = applicationContext,
                     vpnInterface = vpnInterface,
                     isRunningProvider = { isRunning },
-                    restartCallback = { runTun2socks() }
+                    restartCallback = { runTun2socks() },
+                    onFailure = {
+                        Log.e(AppConfig.TAG, "tun2socks failed — stopping VPN service")
+                        MessageUtil.sendMsg2UI(this@V2RayVpnService, AppConfig.MSG_STATE_START_FAILURE, "")
+                        stopAllService()
+                    }
                 )
             } else {
                 Log.v(AppConfig.TAG, "VPN interface is null, cannot start tun2socks")

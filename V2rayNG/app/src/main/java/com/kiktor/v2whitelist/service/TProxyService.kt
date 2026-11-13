@@ -16,7 +16,9 @@ class TProxyService(
     private val context: Context,
     private val vpnInterface: ParcelFileDescriptor,
     private val isRunningProvider: () -> Boolean,
-    private val restartCallback: () -> Unit
+    private val restartCallback: () -> Unit,
+    // Вызывается, если hev-socks5-tunnel не запустился или неожиданно завершился при работающем VPN
+    private val onFailure: (() -> Unit)? = null
 ) : Tun2SocksControl {
     companion object {
         @JvmStatic
@@ -49,10 +51,17 @@ class TProxyService(
 
         Thread {
             try {
-//                Log.i(AppConfig.TAG, "TProxyStartService...")
+                // Блокируется, пока туннель работает; возврат при isRunning==true = туннель упал
                 TProxyStartService(configFile.absolutePath, vpnInterface.fd)
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "HevSocks5Tunnel exception: ${e.message}")
+                if (isRunningProvider()) {
+                    Log.e(AppConfig.TAG, "HevSocks5Tunnel неожиданно завершился при работающем VPN")
+                    onFailure?.invoke()
+                }
+            } catch (t: Throwable) {
+                // Throwable (а не Exception): UnsatisfiedLinkError и т.п. раньше глотались молча,
+                // и UI показывал «подключено» без рабочего туннеля
+                Log.e(AppConfig.TAG, "HevSocks5Tunnel exception: ${t.message}", t)
+                onFailure?.invoke()
             }
         }.start()
     }

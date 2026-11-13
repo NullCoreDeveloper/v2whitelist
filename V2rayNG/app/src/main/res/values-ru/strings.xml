@@ -646,8 +646,8 @@
     <string name="summary_category_failover">Автоматический выбор наилучшего сервера при сбоях и обрывах</string>
     <string name="title_category_updates">📦 Фоновое обновление</string>
     <string name="summary_category_updates">Интервал автообновления подписок, обновление через Яндекс на БС</string>
-    <string name="title_category_routing">🌐 Маршрутизация и Proxy-каскад</string>
-    <string name="summary_category_routing">Режим туннеля, каскад конечного узла и списки доменов</string>
+    <string name="title_category_routing">🌐 Маршрутизация и обход</string>
+    <string name="summary_category_routing">Раздельное туннелирование по приложениям и доменам, списки доменов, geo-файлы</string>
     <string name="title_category_vpn_core">⚙️ Параметры VPN и ядра</string>
     <string name="summary_category_vpn_core">Обход LAN, DNS, фрагментация пакетов, Mux, MTU и параметры ядра</string>
     <string name="title_category_backup_system">💾 Резервное копирование и система</string>

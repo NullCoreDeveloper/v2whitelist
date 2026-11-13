@@ -749,8 +749,8 @@
     <string name="summary_category_failover">سوئیچ خودکار به بهترین سرور هنگام قطعی یا افت کیفیت</string>
     <string name="title_category_profile_check">🛡️ اعتبارسنجی سرورها و سرویس‌ها</string>
     <string name="summary_category_profile_check">بررسی اتصال اینترنت، پینگ، آزمایش سرعت و سرویس‌ها</string>
-    <string name="title_category_routing">🌐 مسیریابی و زنجیره پروکسی</string>
-    <string name="summary_category_routing">حالت تونل، گره انتهایی آبشاری و لیست دامنه‌ها</string>
+    <string name="title_category_routing">🌐 مسیریابی و تونل‌سازی تفکیکی</string>
+    <string name="summary_category_routing">قوانین عبور برنامه‌ها و دامنه‌ها، لیست دامنه‌ها و فایل‌های geo</string>
     <string name="title_category_scanner_and_core">⚡ اسکنر و هسته v2w-core</string>
     <string name="summary_category_scanner_and_core">تنظیمات اسکن همزمان، فیلتر امنیتی و v2w-core</string>
     <string name="title_category_updates">📦 به‌روزرسانی پس‌زمینه</string>

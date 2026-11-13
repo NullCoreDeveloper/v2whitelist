@@ -271,7 +271,7 @@
             android:title="@string/title_pref_custom_user_agent" />
         </PreferenceScreen>
 
-        <!-- 5. 🌐 Маршрутизация и Proxy-каскад -->
+        <!-- 5. 🌐 Маршрутизация и обход -->
         <PreferenceScreen
             android:key="screen_routing"
             android:title="@string/title_category_routing"
