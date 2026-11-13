@@ -181,15 +181,51 @@ jobs:
 
           ./gradlew :desktopApp:packageDistributionForCurrentOS -PVERSION_NAME=$VERSION --no-daemon --stacktrace
 
+      - name: Package Linux AppImage & tar.gz
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          APP_DIR="V2rayNG/desktopApp/build/compose/binaries/main/app/v2whitelist"
+          mkdir -p "$APP_DIR/bin" "$APP_DIR/lib/app/resources/bin" "$APP_DIR/lib/app/resources/assets"
+          cp -a V2rayNG/desktopApp/bin/* "$APP_DIR/bin/"
+          cp -a V2rayNG/desktopApp/bin/* "$APP_DIR/lib/app/resources/bin/"
+          cp -a V2rayNG/desktopApp/assets/*.dat "$APP_DIR/lib/app/resources/assets/"
+          cp -a V2rayNG/desktopApp/assets/*.dat "$APP_DIR/lib/app/resources/"
+          cp -a V2rayNG/desktopApp/src/desktopMain/resources/icon.png "$APP_DIR/lib/app/resources/"
+          chmod +x "$APP_DIR/bin"/* "$APP_DIR/lib/app/resources/bin"/* || true
+          
+          BUILD_DIR="/tmp/appdir-build"
+          rm -rf "$BUILD_DIR"
+          mkdir -p "$BUILD_DIR"
+          cp -a "$APP_DIR"/* "$BUILD_DIR"/
+          
+          cp V2rayNG/desktopApp/src/desktopMain/resources/linux/AppRun "$BUILD_DIR/AppRun"
+          chmod +x "$BUILD_DIR/AppRun"
+          cp V2rayNG/desktopApp/src/desktopMain/resources/linux/v2whitelist.desktop "$BUILD_DIR/v2whitelist.desktop"
+          cp V2rayNG/desktopApp/src/desktopMain/resources/icon.png "$BUILD_DIR/v2whitelist.png"
+          ln -sf v2whitelist.png "$BUILD_DIR/.DirIcon"
+          
+          curl -sSL -o /tmp/appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool.AppImage
+          cd /tmp && /tmp/appimagetool.AppImage --appimage-extract
+          
+          curl -sSL -o /tmp/runtime-x86_64 "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+          
+          ARCH=x86_64 /tmp/squashfs-root/AppRun --no-appstream --runtime-file /tmp/runtime-x86_64 "$BUILD_DIR" "$GITHUB_WORKSPACE/V2rayNG/desktopApp/build/compose/binaries/main/v2whitelist-${VERSION}-linux-x86_64.AppImage"
+          
+          cd "$GITHUB_WORKSPACE/V2rayNG/desktopApp/build/compose/binaries/main"
+          tar -czf v2whitelist-${VERSION}-linux-x86_64.tar.gz app/v2whitelist
+
       - name: Prepare Release Artifacts
         shell: bash
         run: |
           mkdir -p release-desktop
           
-          # Linux: AppImage и DEB
+          # Linux: AppImage, DEB и tar.gz
           if [ "${{ matrix.platform }}" == "linux" ]; then
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.AppImage" -exec cp {} release-desktop/ \;
             find V2rayNG/desktopApp/build/compose/binaries/main -name "*.deb" -exec cp {} release-desktop/ \;
+            find V2rayNG/desktopApp/build/compose/binaries/main -name "*.tar.gz" -exec cp {} release-desktop/ \;
           fi
           
           # Windows: MSI и Portable ZIP

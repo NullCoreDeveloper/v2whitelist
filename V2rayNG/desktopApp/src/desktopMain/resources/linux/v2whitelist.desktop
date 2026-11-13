@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=v2whitelist
+Exec=v2whitelist %u
+Icon=v2whitelist
+Categories=Network;
+Comment=ПроБел — v2whitelist Desktop
+Terminal=false
+
