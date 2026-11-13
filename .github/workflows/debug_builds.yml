@@ -2,8 +2,8 @@ name: Debug Multiplatform Builds (v0.0.1)
 
 on:
   push:
-    tags-ignore:
-      - 'v*'
+    branches:
+      - '**'
     paths-ignore:
       - '**.md'
   workflow_dispatch:
