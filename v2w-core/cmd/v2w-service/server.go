@@ -194,8 +194,6 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	// Также удаляем персистентный маршрут если он остался в реестре.
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
-	// Удалить persistent-маршрут из реестра (добавляется если gateway прописан через netsh)
-	exec.Command("route", "-p", "delete", "0.0.0.0").Run()
 	exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
 	time.Sleep(300 * time.Millisecond)
 
@@ -315,8 +313,6 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	// Маршрут для loopback: tun2socks работает как SYSTEM и подключается к Xray по 127.0.0.1.
 	// Без явного маршрута 127.0.0.0/8 трафик к loopback может уходить через wintun (метрика 1 < loopback 331),
 	// что приводит к "unsupported method" — tun2socks не может достучаться до Xray SOCKS5.
-	exec.Command("route", "add", "127.0.0.0", "mask", "255.0.0.0", "127.0.0.1", "metric", "1", "if", "1").Run()
-	log.Printf("[v2w-service] Loopback route locked to if=1 (127.0.0.0/8 -> 127.0.0.1)")
 
 	// Очищаем старые маршруты во избежание коллизий
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()

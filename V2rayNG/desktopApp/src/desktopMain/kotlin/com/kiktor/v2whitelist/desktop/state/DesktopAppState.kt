@@ -1806,8 +1806,8 @@ class DesktopAppState(
                 upstreamProxyPort = null,
                 upstreamProxyType = null,
                 sudoPassword = null,
-                socksUsername = localProxyLogin.value.ifBlank { null },
-                socksPassword = localProxyPassword.value.ifBlank { null },
+                socksUsername = if (routingMode.value != "PROXY") null else localProxyLogin.value.ifBlank { null }, // TUN: tun2socks без авторизации
+                socksPassword = if (routingMode.value != "PROXY") null else localProxyPassword.value.ifBlank { null },
                 remoteDns = remoteDns.value.ifBlank { null },
                 internalDns = internalDns.value.ifBlank { null },
                 dnsHosts = dnsHosts.value.ifBlank { null },
