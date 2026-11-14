@@ -525,12 +525,12 @@
             </div>
             <h1>Свободный интернет в <br><span class="gradient-text">одно нажатие</span></h1>
             <p class="hero-desc">
-                Android-клиент на базе ядра Xray с честной проверкой узлов по HTTP 204 и горячим VIP-кэшем. Автоматически находит живые серверы в подписках, отсекает заблокированные ТСПУ узлы и пускает российские сервисы напрямую.
+                Кроссплатформенный клиент для Android и ПК (Windows, Linux, macOS) на базе ядра Xray с честной проверкой узлов по HTTP 204 и горячим VIP-кэшем. Автоматически находит живые серверы в подписках, отсекает заблокированные ТСПУ узлы и пускает российские сервисы напрямую.
             </p>
 
             <div class="cta-group">
                 <a href="#downloads" class="btn-primary" id="download-btn">
-                    <span id="hero-download-text">⚡ Скачать APK (<span class="version-tag">v1.2.1</span>)</span>
+                    <span id="hero-download-text">⚡ Скачать (<span class="version-tag">v1.2.8</span>)</span>
                 </a>
                 <a href="https://t.me/NullCoreDeveloper" class="btn-telegram" target="_blank">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.99 1.27-5.63 3.72-.53.36-1.02.54-1.45.53-.48-.01-1.4-.27-2.09-.49-.84-.27-1.51-.42-1.45-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.89 8.01-3.46 3.82-1.61 4.62-1.89 5.14-1.9.11 0 .37.03.54.17.14.12.18.28.2.45-.02.07-.02.13-.03.22z"/></svg>
@@ -542,7 +542,7 @@
             </div>
 
             <div class="version-info">
-                <span>Последняя версия: <strong class="version-tag">v1.2.1</strong></span>
+                <span>Последняя версия: <strong class="version-tag">v1.2.8</strong></span>
                 <span>•</span>
                 <span>Лицензия: <strong>GPL-3.0</strong></span>
                 <span>•</span>
@@ -625,43 +625,91 @@
 
         <section class="download-box" id="downloads">
             <h2 class="download-title">Прямые ссылки на установку</h2>
-            <p class="download-subtitle">Выберите подходящую сборку для вашего Android-устройства:</p>
+            <p class="download-subtitle">Выберите подходящую сборку для вашего устройства (Android или ПК):</p>
 
             <div class="download-notice">
                 <span>💡</span>
-                <span><strong>Обычная и F-Droid версии полностью идентичны</strong> по коду и функциям: в обеих сборках на 100% отсутствуют сервисы Google Play, трекеры и аналитика. Различие заключается исключительно в названии файла и техническом идентификаторе пакета (<code>applicationId</code>) для совместимости с каталогами.</span>
+                <span><strong>Android-сборки (Обычная и F-Droid) полностью идентичны</strong> по коду и функциям: на 100% отсутствуют сервисы Google Play, трекеры и аналитика. Также доступны нативные клиенты для <strong>Windows</strong>, <strong>Linux</strong> и <strong>macOS</strong>.</span>
             </div>
 
+            <h3 style="font-size: 1.2rem; font-weight: 700; margin: 24px 0 12px; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                <span>📱 Android</span>
+            </h3>
             <div class="apk-list">
-                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1_arm64-v8a.apk" class="apk-item" id="apk-arm64">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist_1.2.8_arm64-v8a.apk" class="apk-item" id="apk-arm64">
                     <div class="apk-arch">
                         <span>arm64-v8a.apk</span>
                         <span class="apk-badge">Рекомендуется</span>
                     </div>
-                    <span class="apk-desc" id="apk-arm64-desc">Для 95% современных смартфонов (~30 МБ)</span>
+                    <span class="apk-desc" id="apk-arm64-desc">Для 95% современных смартфонов (~35 МБ)</span>
                 </a>
 
-                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1_universal.apk" class="apk-item" id="apk-universal">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist_1.2.8_universal.apk" class="apk-item" id="apk-universal">
                     <div class="apk-arch">
                         <span>universal.apk</span>
                     </div>
-                    <span class="apk-desc" id="apk-universal-desc">Универсальная сборка под все архитектуры (~68 МБ)</span>
+                    <span class="apk-desc" id="apk-universal-desc">Универсальная сборка под все архитектуры (~106 МБ)</span>
                 </a>
 
-                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_arm64-v8a.apk" class="apk-item" id="apk-fdroid-arm64">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist_1.2.8-fdroid_arm64-v8a.apk" class="apk-item" id="apk-fdroid-arm64">
                     <div class="apk-arch">
                         <span>fdroid_arm64.apk</span>
-                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Идентична</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">F-Droid</span>
                     </div>
-                    <span class="apk-desc" id="apk-fdroid-arm64-desc">То же самое, что arm64-v8a (другое имя пакета) (~30 МБ)</span>
+                    <span class="apk-desc" id="apk-fdroid-arm64-desc">То же самое, что arm64-v8a (другой id пакета) (~35 МБ)</span>
                 </a>
 
-                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/latest/download/v2whitelist_1.2.1-fdroid_universal.apk" class="apk-item" id="apk-fdroid-universal">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist_1.2.8-fdroid_universal.apk" class="apk-item" id="apk-fdroid-universal">
                     <div class="apk-arch">
                         <span>fdroid_universal.apk</span>
-                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Идентична</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">F-Droid</span>
                     </div>
-                    <span class="apk-desc" id="apk-fdroid-universal-desc">То же самое, что universal (другое имя пакета) (~68 МБ)</span>
+                    <span class="apk-desc" id="apk-fdroid-universal-desc">То же самое, что universal (другой id пакета) (~106 МБ)</span>
+                </a>
+            </div>
+
+            <h3 style="font-size: 1.2rem; font-weight: 700; margin: 32px 0 12px; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                <span>💻 ПК (Windows, Linux, macOS)</span>
+            </h3>
+            <div class="apk-list">
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist-1.2.8.msi" class="apk-item" id="pc-win-msi">
+                    <div class="apk-arch">
+                        <span>Windows MSI</span>
+                        <span class="apk-badge">Установщик</span>
+                    </div>
+                    <span class="apk-desc" id="pc-win-msi-desc">Установщик со встроенной службой TUN (~128 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist-1.2.8-windows-x64-portable.zip" class="apk-item" id="pc-win-zip">
+                    <div class="apk-arch">
+                        <span>Windows Portable</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">ZIP</span>
+                    </div>
+                    <span class="apk-desc" id="pc-win-zip-desc">Портативная версия без установки (~190 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist-1.2.8-linux-x86_64.AppImage" class="apk-item" id="pc-linux-appimage">
+                    <div class="apk-arch">
+                        <span>Linux AppImage</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Любой Linux</span>
+                    </div>
+                    <span class="apk-desc" id="pc-linux-appimage-desc">Универсальный запуск без установки (~124 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist_1.2.8-1_amd64.deb" class="apk-item" id="pc-linux-deb">
+                    <div class="apk-arch">
+                        <span>Linux DEB</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Debian / Ubuntu</span>
+                    </div>
+                    <span class="apk-desc" id="pc-linux-deb-desc">Пакет для Ubuntu, Debian, Mint (~112 МБ)</span>
+                </a>
+
+                <a href="https://github.com/NullCoreDeveloper/v2whitelist/releases/download/v1.2.8/v2whitelist-1.2.8.dmg" class="apk-item" id="pc-macos-dmg">
+                    <div class="apk-arch">
+                        <span>macOS Apple Silicon</span>
+                        <span class="apk-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">DMG</span>
+                    </div>
+                    <span class="apk-desc" id="pc-macos-dmg-desc">Образ для macOS (M1/M2/M3/M4) (~262 МБ)</span>
                 </a>
             </div>
             <div style="margin-top: 24px; text-align: center;">
@@ -684,7 +732,7 @@
                         <span class="faq-arrow">▼</span>
                     </summary>
                     <div class="faq-answer">
-                        <p><strong>ПроБел (v2whitelist)</strong> — это бесплатный Open-Source VPN-клиент для Android на базе ядра Xray. В отличие от обычных сервисов, приложение изначально оптимизировано для работы в условиях жестких сетевых ограничений и блокировок, включая доступ только к доверенным адресам («белые списки» / БС). Клиент автоматически отбирает проверенные конфигурации, обходящие фильтрацию мобильных операторов и провайдеров.</p>
+                        <p><strong>ПроБел (v2whitelist)</strong> — это бесплатный Open-Source VPN-клиент для Android и ПК (Windows, Linux, macOS) на базе актуального ядра Xray и сканирующего движка v2w-core. В отличие от обычных сервисов, приложение изначально оптимизировано для работы в условиях жестких сетевых ограничений и блокировок, включая доступ только к доверенным адресам («белые списки» / БС). Клиент автоматически отбирает проверенные конфигурации, обходящие фильтрацию мобильных операторов и провайдеров.</p>
                     </div>
                 </details>
 
@@ -704,7 +752,7 @@
                         <span class="faq-arrow">▼</span>
                     </summary>
                     <div class="faq-answer">
-                        <p>Приложение использует актуальное ядро <strong>Xray</strong> и передовые протоколы маскировки (VLESS Reality, Vision, XTLS, Shadowsocks), которые маскируют трафик под обычные разрешенные HTTPS-соединения. Собственный механизм <strong>SmartConnect</strong> проверяет каждый сервер реальным запросом с кодом HTTP 204: если DPI или ТСПУ оператора отсекает узел, приложение сразу отбрасывает его и переключает вас на рабочий маршрут.</p>
+                        <p>Приложение использует актуальное ядро <strong>Xray</strong> и передовые протоколы маскировки (VLESS Reality, Vision, Hysteria 2, Shadowsocks 2022, фрагментацию TLS ClientHello). Собственный нативный механизм <strong>SmartConnect</strong> на Go проверяет каждый сервер реальным HTTP 204 запросом, а системы <strong>Auto Failover</strong> и <strong>Smart Failover</strong> реагируют на DPI-глушение и мгновенно переключают вас на рабочий узел из горячего VIP-кэша.</p>
                     </div>
                 </details>
 
@@ -720,12 +768,22 @@
 
                 <details class="faq-item">
                     <summary class="faq-question">
+                        <span>Доступен ли ПроБел на ПК (Windows, Linux, macOS)?</span>
+                        <span class="faq-arrow">▼</span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p>Да! Начиная с версии 1.2.x выпущен нативный мультиплатформенный клиент. На <strong>Windows</strong> используется прозрачный TUN-режим (Wintun) с системной фоновой службой v2w-service без постоянных всплывающих окон UAC (есть установщик MSI и Portable ZIP). На <strong>Linux</strong> доступен универсальный AppImage и .deb, а на <strong>macOS</strong> — образ DMG под процессоры Apple Silicon.</p>
+                    </div>
+                </details>
+
+                <details class="faq-item">
+                    <summary class="faq-question">
                         <span>Чем ПроБел VPN отличается от стандартного v2rayNG?</span>
                         <span class="faq-arrow">▼</span>
                     </summary>
                     <div class="faq-answer">
                         <p>В обычном v2rayNG пользователю нужно вручную искать ключи, вставлять подписки, пинговать сотни неработающих узлов и терпеть частые обрывы. <strong>ПроБел</strong> автоматизирует всю рутину: он сам забирает свежие конфигурации из пулов зеркал (даже если GitHub заблокирован), отсекает нерабочие серверы, кэширует лучшие узлы в «горячий» VIP-кэш и переключается за 1 секунду при сбоях.</p>
-                        <p style="margin-top: 10px;">Подробную техническую документацию по настройке регулярных выражений и серверов можно прочитать в <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" target="_blank" style="color: #a5b4fc; text-decoration: underline;">полной базе знаний FAQ на GitHub</a>.</p>
+                        <p style="margin-top: 10px;">Подробную техническую документацию по настройке регулярных выражений, каскадного проксирования и серверов можно прочитать в <a href="https://github.com/NullCoreDeveloper/v2whitelist/blob/master/FAQ.md" target="_blank" style="color: #a5b4fc; text-decoration: underline;">полной базе знаний FAQ на GitHub</a>.</p>
                     </div>
                 </details>
             </div>
@@ -756,17 +814,29 @@
         // Динамическое получение данных о последнем релизе через GitHub API
         async function fetchLatestRelease() {
             try {
-                const res = await fetch('https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases/latest');
-                if (!res.ok) return;
-                const data = await res.json();
+                let res = await fetch('https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases/latest');
+                let data = null;
+                if (res.ok) {
+                    data = await res.json();
+                } else {
+                    const fallbackRes = await fetch('https://api.github.com/repos/NullCoreDeveloper/v2whitelist/releases?per_page=1');
+                    if (fallbackRes.ok) {
+                        const list = await fallbackRes.json();
+                        if (Array.isArray(list) && list.length > 0) {
+                            data = list[0];
+                        }
+                    }
+                }
+                if (!data) return;
+
                 const tagName = data.tag_name;
-                if (!tagName) return;
+                if (tagName) {
+                    // Обновление бейджей с версией
+                    const versionTags = document.querySelectorAll('.version-tag');
+                    versionTags.forEach(el => el.textContent = tagName);
+                }
 
-                // Обновление бейджей с версией
-                const versionTags = document.querySelectorAll('.version-tag');
-                versionTags.forEach(el => el.textContent = tagName);
-
-                // Обновление прямых ссылок на APK при наличии ассетов
+                // Обновление прямых ссылок при наличии ассетов
                 if (Array.isArray(data.assets) && data.assets.length > 0) {
                     const formatSize = (bytes) => {
                         if (!bytes) return '';
@@ -778,18 +848,19 @@
                         const url = asset.browser_download_url;
                         const sizeStr = formatSize(asset.size);
 
+                        // Android APK
                         if (name.endsWith('.apk')) {
                             if (name.includes('fdroid')) {
                                 if (name.includes('arm64')) {
                                     const el = document.getElementById('apk-fdroid-arm64');
                                     const desc = document.getElementById('apk-fdroid-arm64-desc');
                                     if (el) el.href = url;
-                                    if (desc && sizeStr) desc.textContent = `То же самое, что arm64-v8a (другое имя пакета)${sizeStr}`;
+                                    if (desc && sizeStr) desc.textContent = `То же самое, что arm64-v8a (другой id пакета)${sizeStr}`;
                                 } else if (name.includes('universal')) {
                                     const el = document.getElementById('apk-fdroid-universal');
                                     const desc = document.getElementById('apk-fdroid-universal-desc');
                                     if (el) el.href = url;
-                                    if (desc && sizeStr) desc.textContent = `То же самое, что universal (другое имя пакета)${sizeStr}`;
+                                    if (desc && sizeStr) desc.textContent = `То же самое, что universal (другой id пакета)${sizeStr}`;
                                 }
                             } else {
                                 if (name.includes('arm64')) {
@@ -804,6 +875,40 @@
                                     if (desc && sizeStr) desc.textContent = `Универсальная сборка под все архитектуры${sizeStr}`;
                                 }
                             }
+                        }
+
+                        // Windows
+                        if (name.endsWith('.msi')) {
+                            const el = document.getElementById('pc-win-msi');
+                            const desc = document.getElementById('pc-win-msi-desc');
+                            if (el) el.href = url;
+                            if (desc && sizeStr) desc.textContent = `Установщик со встроенной службой TUN${sizeStr}`;
+                        } else if (name.endsWith('.zip') && name.includes('windows')) {
+                            const el = document.getElementById('pc-win-zip');
+                            const desc = document.getElementById('pc-win-zip-desc');
+                            if (el) el.href = url;
+                            if (desc && sizeStr) desc.textContent = `Портативная версия без установки${sizeStr}`;
+                        }
+
+                        // Linux
+                        if (name.endsWith('.appimage')) {
+                            const el = document.getElementById('pc-linux-appimage');
+                            const desc = document.getElementById('pc-linux-appimage-desc');
+                            if (el) el.href = url;
+                            if (desc && sizeStr) desc.textContent = `Универсальный запуск без установки${sizeStr}`;
+                        } else if (name.endsWith('.deb')) {
+                            const el = document.getElementById('pc-linux-deb');
+                            const desc = document.getElementById('pc-linux-deb-desc');
+                            if (el) el.href = url;
+                            if (desc && sizeStr) desc.textContent = `Пакет для Ubuntu, Debian, Linux Mint${sizeStr}`;
+                        }
+
+                        // macOS
+                        if (name.endsWith('.dmg')) {
+                            const el = document.getElementById('pc-macos-dmg');
+                            const desc = document.getElementById('pc-macos-dmg-desc');
+                            if (el) el.href = url;
+                            if (desc && sizeStr) desc.textContent = `Образ для macOS (M1/M2/M3/M4)${sizeStr}`;
                         }
                     });
                 }
