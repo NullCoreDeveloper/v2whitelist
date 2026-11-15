@@ -1841,7 +1841,8 @@ class DesktopAppState(
                     val tunStarted = DesktopTunManager.start(
                         socksPort = currentSocksPort,
                         serverAddress = profile.server,
-                        sudoPassword = sessionSudoPassword
+                        sudoPassword = sessionSudoPassword,
+                        tunIp = vpnInterfaceAddress.value.ifBlank { null }
                     )
                     if (tunStarted) {
                         GeekModeLogger.log("TUN", "Сетевой интерфейс v2w-tun успешно поднят. Весь трафик ОС направлен через TUN.")
@@ -1850,16 +1851,22 @@ class DesktopAppState(
                             isSystemProxyActive.value = false
                         }
                     } else {
-                        val reason = if (DesktopTunManager.isWindows) {
-                            "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
-                        } else {
-                            "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав sudo)."
+                        val reason = when {
+                            DesktopTunManager.isWindows && DesktopTunManager.lastStartSelfTestFailed ->
+                                "TUN интерфейс поднят, но самопроверка интернета через туннель не прошла (подробности в логах службы)."
+                            DesktopTunManager.isWindows ->
+                                "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
+                            else ->
+                                "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав sudo)."
                         }
                         GeekModeLogger.log("TUN", "$reason Включен системный прокси как резерв.")
-                        clipboardNotice.value = if (DesktopTunManager.isWindows) {
-                            "Для режима TUN запустите приложение от имени администратора. Включен системный прокси."
-                        } else {
-                            "Для режима TUN требуются root права. Включен системный прокси."
+                        clipboardNotice.value = when {
+                            DesktopTunManager.isWindows && DesktopTunManager.lastStartSelfTestFailed ->
+                                "Самопроверка TUN не прошла — включён системный прокси."
+                            DesktopTunManager.isWindows ->
+                                "Для режима TUN запустите приложение от имени администратора. Включен системный прокси."
+                            else ->
+                                "Для режима TUN требуются root права. Включен системный прокси."
                         }
                         routingMode.value = "PROXY"
                         if (autoEnableSystemProxy.value) {

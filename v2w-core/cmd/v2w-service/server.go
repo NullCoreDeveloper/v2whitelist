@@ -24,14 +24,15 @@ const (
 )
 
 type StartTunRequest struct {
-	SocksPort    int      `json:"socks_port"`
-	ServerIP     string   `json:"server_ip"`
-	Gateway      string   `json:"gateway"`
-	PhysicalDev  string   `json:"physical_dev"`
-	Tun2Socks    string   `json:"tun2socks_path"`
-	TunIP        string   `json:"tun_ip"`
-	TunMask      string   `json:"tun_mask"`
-	DnsServers   []string `json:"dns_servers"`
+	SocksPort   int      `json:"socks_port"`
+	ServerIP    string   `json:"server_ip"`
+	Gateway     string   `json:"gateway"`
+	PhysicalDev string   `json:"physical_dev"`
+	Tun2Socks   string   `json:"tun2socks_path"`
+	TunIP       string   `json:"tun_ip"`
+	TunMask     string   `json:"tun_mask"`
+	TunGateway  string   `json:"tun_gateway"`
+	DnsServers  []string `json:"dns_servers"`
 }
 
 type ApiResponse struct {
@@ -58,6 +59,7 @@ type TunServer struct {
 	tunDone      chan struct{}
 	startedAt    time.Time
 	activeConfig StartTunRequest
+	activeTunGW  string
 }
 
 func NewTunServer() *TunServer {
@@ -222,34 +224,32 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		}
 	}()
 
-	// Ожидаем появления интерфейса wintun в системе (до 3 секунд)
+	// Ожидаем появления активного (connected) интерфейса wintun в системе (до 5 секунд)
 	var wintunIdx int = -1
-	for i := 0; i < 20; i++ {
-		wintunIdx = getWindowsInterfaceIndex(DefaultDeviceName)
-		if wintunIdx > 0 {
-			break
+	var wintunConnected bool
+	for i := 0; i < 34; i++ {
+		idx, connected := getWindowsInterfaceInfo(DefaultDeviceName)
+		if idx > 0 {
+			wintunIdx = idx
+			wintunConnected = connected
+			if connected {
+				break
+			}
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
 	if wintunIdx <= 0 {
-		return fmt.Errorf("адаптер %s не появился за 3 сек — TUN не поднят, маршруты не изменены", DefaultDeviceName)
+		return fmt.Errorf("адаптер %s не появился за 5 сек — TUN не поднят, маршруты не изменены", DefaultDeviceName)
+	}
+	if !wintunConnected {
+		log.Printf("[v2w-service] Warning: %s (index %d) ещё не в состоянии connected после 5 сек, продолжаем настройку", DefaultDeviceName, wintunIdx)
 	} else {
-		log.Printf("[v2w-service] Detected %s with interface index %d", DefaultDeviceName, wintunIdx)
+		log.Printf("[v2w-service] Detected %s with interface index %d (connected)", DefaultDeviceName, wintunIdx)
 	}
 
-	tunIP := req.TunIP
-	if tunIP == "" {
-		tunIP = DefaultTunIP
-	}
-	tunGW := DefaultTunGW
-	if tunIP == tunGW {
-		tunIP = "198.18.0.2"
-		tunGW = "198.18.0.1"
-	}
-	tunMask := req.TunMask
-	if tunMask == "" {
-		tunMask = DefaultTunMask
-	}
+	tunIP, tunMask, tunGW := normalizeTunNetwork(req.TunIP, req.TunMask, req.TunGateway)
+	s.activeTunGW = tunGW
+	log.Printf("[v2w-service] Configuring %s: ip=%s mask=%s gw=%s", DefaultDeviceName, tunIP, tunMask, tunGW)
 
 	// Назначаем статический IP и маску на интерфейс wintun (БЕЗ gateway в netsh — иначе
 	// Windows создаёт персистентный маршрут 0.0.0.0/0 в реестре, который остаётся после остановки TUN
@@ -314,7 +314,19 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	// Без явного маршрута 127.0.0.0/8 трафик к loopback может уходить через wintun (метрика 1 < loopback 331),
 	// что приводит к "unsupported method" — tun2socks не может достучаться до Xray SOCKS5.
 
-	// Очищаем старые маршруты во избежание коллизий
+	// Ожидаем завершения DAD и перехода IPv4-адреса интерфейса в состояние Preferred,
+	// иначе исходящие соединения сразу после route add падают с WSAEHOSTUNREACH.
+	waitForIPAddressReady(wintunIdx, tunIP, 4*time.Second)
+
+	// Перепроверяем актуальный ifIndex непосредственно перед добавлением маршрутов
+	if actualIdx, _ := getWindowsInterfaceInfo(DefaultDeviceName); actualIdx > 0 && actualIdx != wintunIdx {
+		log.Printf("[v2w-service] %s interface index changed %d -> %d", DefaultDeviceName, wintunIdx, actualIdx)
+		wintunIdx = actualIdx
+	}
+
+	// Очищаем старые маршруты во избежание коллизий (включая возможный предыдущий шлюз)
+	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0").Run()
+	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0").Run()
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunGW).Run()
 
@@ -379,15 +391,28 @@ func openLogFile(name string) *os.File {
 // selfTest: HTTP-запрос через системную маршрутизацию (т.е. через wintun -> tun2socks -> Xray).
 // Проверяет и DNS (домен), и реальную передачу данных (TCP-handshake в tun2socks успешен всегда).
 func selfTest() error {
-	client := &http.Client{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: (&net.Dialer{
+			Timeout: 3 * time.Second,
+		}).DialContext,
+	}
+	client := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: transport,
+	}
 	var lastErr error
-	for round := 0; round < 2; round++ {
-		time.Sleep(700 * time.Millisecond)
+	for round := 0; round < 5; round++ {
+		if round == 0 {
+			time.Sleep(400 * time.Millisecond)
+		} else {
+			time.Sleep(800 * time.Millisecond)
+		}
 		for _, u := range []string{"http://www.msftconnecttest.com/connecttest.txt", "http://1.1.1.1/"} {
 			resp, err := client.Get(u)
 			if err != nil {
 				lastErr = fmt.Errorf("%s: %v", u, err)
-				log.Printf("[v2w-service] selftest %s: %v", u, err)
+				log.Printf("[v2w-service] selftest (round %d) %s: %v", round+1, u, err)
 				continue
 			}
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
@@ -418,11 +443,18 @@ func dumpDiagnostics() {
 }
 
 func (s *TunServer) stopTunLocked() {
-	tunGW := DefaultTunGW
+	tunGW := s.activeTunGW
+	if tunGW == "" {
+		tunGW = DefaultTunGW
+	}
 
 	// Удаляем маршруты из таблицы
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", tunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", tunGW).Run()
+	if tunGW != DefaultTunGW {
+		exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
+		exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
+	}
 
 	// Удаляем IPv6 маршруты
 	exec.Command("netsh", "interface", "ipv6", "delete", "route", "::/1", fmt.Sprintf("interface=%s", DefaultDeviceName)).Run()
@@ -451,6 +483,7 @@ func (s *TunServer) stopTunLocked() {
 	s.tunActive = false
 	s.startedAt = time.Time{}
 	s.activeConfig = StartTunRequest{}
+	s.activeTunGW = ""
 }
 
 func writeJSON(w http.ResponseWriter, code int, data interface{}) {
@@ -491,10 +524,57 @@ func isLocalIP(ipStr string) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified()
 }
 
+func normalizeTunNetwork(rawIP, rawMask, rawGW string) (string, string, string) {
+	ipStr := strings.TrimSpace(rawIP)
+	if idx := strings.IndexByte(ipStr, '/'); idx != -1 {
+		ipStr = strings.TrimSpace(ipStr[:idx])
+	}
+	parsedIP := net.ParseIP(ipStr).To4()
+	if parsedIP == nil {
+		ipStr = DefaultTunIP
+		parsedIP = net.ParseIP(ipStr).To4()
+	}
+
+	maskStr := strings.TrimSpace(rawMask)
+	if net.ParseIP(maskStr).To4() == nil {
+		if strings.HasPrefix(ipStr, "198.18.") {
+			maskStr = DefaultTunMask
+		} else {
+			maskStr = "255.255.255.0"
+		}
+	}
+
+	gwStr := strings.TrimSpace(rawGW)
+	if net.ParseIP(gwStr).To4() == nil || gwStr == ipStr {
+		gwStr = deriveTunGateway(parsedIP)
+	}
+	return ipStr, maskStr, gwStr
+}
+
+func deriveTunGateway(ip net.IP) string {
+	v4 := ip.To4()
+	if v4 == nil {
+		return DefaultTunGW
+	}
+	gw := make(net.IP, 4)
+	copy(gw, v4)
+	if gw[3] == 1 {
+		gw[3] = 2
+	} else {
+		gw[3] = 1
+	}
+	return gw.String()
+}
+
 func getWindowsInterfaceIndex(name string) int {
+	idx, _ := getWindowsInterfaceInfo(name)
+	return idx
+}
+
+func getWindowsInterfaceInfo(name string) (int, bool) {
 	out, err := exec.Command("netsh", "interface", "ipv4", "show", "interfaces").Output()
 	if err != nil {
-		return -1
+		return -1, false
 	}
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
@@ -506,14 +586,41 @@ func getWindowsInterfaceIndex(name string) int {
 		if len(fields) >= 5 {
 			var idx int
 			if _, err := fmt.Sscanf(fields[0], "%d", &idx); err == nil {
-				ifName := strings.Trim(fields[4], "\"")
-				if strings.EqualFold(ifName, name) || strings.Contains(strings.ToLower(line), strings.ToLower(name)) {
-					return idx
+				ifName := strings.Trim(strings.Join(fields[4:], " "), "\"")
+				if strings.EqualFold(ifName, name) {
+					return idx, strings.EqualFold(fields[3], "connected")
 				}
 			}
 		}
 	}
-	return -1
+	return -1, false
+}
+
+// waitForIPAddressReady ждёт завершения DAD и перехода IPv4-адреса в состояние Preferred.
+func waitForIPAddressReady(ifIdx int, ip string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	psCmd := fmt.Sprintf(
+		"(Get-NetIPAddress -InterfaceIndex %d -AddressFamily IPv4 -IPAddress '%s' -ErrorAction SilentlyContinue | Select-Object -First 1).AddressState",
+		ifIdx, ip,
+	)
+	for time.Now().Before(deadline) {
+		out, err := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd).Output()
+		state := strings.TrimSpace(string(out))
+		if err == nil && strings.EqualFold(state, "Preferred") {
+			log.Printf("[v2w-service] IPv4 %s on ifIndex %d is Preferred", ip, ifIdx)
+			return
+		}
+		if err != nil {
+			// Fallback если PowerShell недоступен
+			netshOut, _ := exec.Command("netsh", "interface", "ipv4", "show", "addresses", fmt.Sprintf("name=%d", ifIdx)).Output()
+			if strings.Contains(string(netshOut), ip) {
+				time.Sleep(500 * time.Millisecond)
+				return
+			}
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	log.Printf("[v2w-service] Warning: timed out waiting for IPv4 %s on ifIndex %d to become Preferred", ip, ifIdx)
 }
 
 

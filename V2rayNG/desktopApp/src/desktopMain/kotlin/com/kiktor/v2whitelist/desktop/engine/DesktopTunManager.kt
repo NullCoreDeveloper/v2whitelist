@@ -52,6 +52,7 @@ object DesktopTunManager {
     private var logJob: Job? = null
     private var currentSudoPassword: String? = null
     private var configuredRoute: ConfiguredServerRoute? = null
+    private var activeTunGw: String = DEFAULT_TUN_GW
 
     var isTunActive: Boolean = false
         private set
@@ -61,6 +62,8 @@ object DesktopTunManager {
 
     /** Служба отработала, но самопроверка интернета через TUN провалилась — резервный режим не нужен. */
     private var serviceSelfTestFailed = false
+    val lastStartSelfTestFailed: Boolean
+        get() = serviceSelfTestFailed
 
     init {
         Runtime.getRuntime().addShutdownHook(Thread {
@@ -137,6 +140,24 @@ object DesktopTunManager {
         return path.contains("Program Files", ignoreCase = true)
     }
 
+    private fun resolveTunNetworkConfig(rawTunIp: String?): Triple<String, String, String> {
+        val cleaned = rawTunIp?.substringBefore('/')?.trim().orEmpty()
+        val octets = cleaned.split('.').mapNotNull { it.toIntOrNull() }
+        val isValidIpv4 = octets.size == 4 && octets.all { it in 0..255 }
+        val ip = if (isValidIpv4) cleaned else DEFAULT_TUN_IP
+        val isFakeDnsRange = ip.startsWith("198.18.")
+        val mask = if (isFakeDnsRange) DEFAULT_TUN_MASK else "255.255.255.0"
+        val gw = if (isFakeDnsRange) {
+            if (ip == DEFAULT_TUN_GW) DEFAULT_TUN_IP else DEFAULT_TUN_GW
+        } else {
+            val parts = ip.split('.')
+            val last = parts[3].toInt()
+            val gwLast = if (last == 1) 2 else 1
+            "${parts[0]}.${parts[1]}.${parts[2]}.$gwLast"
+        }
+        return Triple(ip, mask, gw)
+    }
+
     /**
      * Запуск TUN через системную службу Windows (Service Mode).
      */
@@ -145,7 +166,10 @@ object DesktopTunManager {
         serverIp: String?,
         gateway: String,
         physicalDev: String,
-        tun2socksPath: String?
+        tun2socksPath: String?,
+        tunIp: String,
+        tunMask: String,
+        tunGateway: String
     ): Boolean {
         return try {
             val client = HttpClient.newBuilder()
@@ -160,8 +184,9 @@ object DesktopTunManager {
                 .append("\"gateway\":\"").append(gateway).append("\",")
                 .append("\"physical_dev\":\"").append(physicalDev).append("\",")
                 .append("\"tun2socks_path\":\"").append((tun2socksPath.orEmpty()).replace("\\", "\\\\")).append("\",")
-                .append("\"tun_ip\":\"").append(DEFAULT_TUN_IP).append("\",")
-                .append("\"tun_mask\":\"").append(DEFAULT_TUN_MASK).append("\",")
+                .append("\"tun_ip\":\"").append(tunIp).append("\",")
+                .append("\"tun_mask\":\"").append(tunMask).append("\",")
+                .append("\"tun_gateway\":\"").append(tunGateway).append("\",")
                 .append("\"dns_servers\":[\"1.1.1.1\",\"8.8.8.8\"]")
                 .append("}")
                 .toString()
@@ -330,13 +355,17 @@ object DesktopTunManager {
         socksPort: Int,
         serverAddress: String?,
         sudoPassword: String?,
-        customPath: String? = null
+        customPath: String? = null,
+        tunIp: String? = null
     ): Boolean {
         if (isTunActive) {
             stop(sudoPassword)
         }
 
         currentSudoPassword = sudoPassword
+        serviceSelfTestFailed = false
+        val (resolvedTunIp, resolvedTunMask, resolvedTunGw) = resolveTunNetworkConfig(tunIp)
+        activeTunGw = resolvedTunGw
 
         // 1. Определение шлюза и сетевого интерфейса по умолчанию
         val (gateway, physicalDev) = detectDefaultGateway()
@@ -364,7 +393,10 @@ object DesktopTunManager {
                     serverIp = serverIp,
                     gateway = gateway,
                     physicalDev = physicalDev,
-                    tun2socksPath = findTun2SocksExecutable(customPath)?.absolutePath
+                    tun2socksPath = findTun2SocksExecutable(customPath)?.absolutePath,
+                    tunIp = resolvedTunIp,
+                    tunMask = resolvedTunMask,
+                    tunGateway = resolvedTunGw
                 )
                 if (started) {
                     isTunActive = true
@@ -527,12 +559,12 @@ object DesktopTunManager {
                         GeekModeLogger.log("TUN", "Windows: Предупреждение: не удалось определить индекс интерфейса wintun")
                     }
 
-                    // 1. Присваиваем статический IP 198.18.0.2 и шлюз 198.18.0.1 интерфейсу wintun (для NCSI/NLA)
+                    // 1. Присваиваем статический IP и шлюз интерфейсу wintun (для NCSI/NLA)
                     val netshAddrRes = runCommand(
                         "netsh", "interface", "ipv4", "set", "address",
                         "name=wintun", "source=static",
-                        "addr=$DEFAULT_TUN_IP", "mask=$DEFAULT_TUN_MASK",
-                        "gateway=$DEFAULT_TUN_GW", "gwmetric=1"
+                        "addr=$resolvedTunIp", "mask=$resolvedTunMask",
+                        "gateway=$resolvedTunGw", "gwmetric=1"
                     )
                     if (netshAddrRes.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: netsh set address: ${netshAddrRes.second}")
@@ -558,13 +590,13 @@ object DesktopTunManager {
                     }
 
                     // 5. Очищаем возможные старые маршруты во избежание коллизий
-                    runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
-                    runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                    runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0")
+                    runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0")
 
                     // 6. Направляем весь IPv4 интернет в wintun с обязательным указанием if <wintunIdx>
                     val ifPart = if (wintunIdx != null) "if $wintunIdx" else ""
-                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW metric 1 $ifPart".trim())
-                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW metric 1 $ifPart".trim())
+                    val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 $resolvedTunGw metric 1 $ifPart".trim())
+                    val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 $resolvedTunGw metric 1 $ifPart".trim())
                     if (r1.first != 0 || r2.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: Сбой установки маршрутов TUN (требуются права Администратора): ${r1.second} / ${r2.second}")
                         stopSync(null)
@@ -630,8 +662,12 @@ object DesktopTunManager {
             }
 
             isWindows -> {
-                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
-                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $activeTunGw")
+                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $activeTunGw")
+                if (activeTunGw != DEFAULT_TUN_GW) {
+                    runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                    runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0 $DEFAULT_TUN_GW")
+                }
                 runCommand("netsh", "interface", "ipv6", "delete", "route", "::/1", "interface=wintun")
                 runCommand("netsh", "interface", "ipv6", "delete", "route", "8000::/1", "interface=wintun")
                 configuredRoute?.let { route ->
@@ -810,7 +846,7 @@ object DesktopTunManager {
             if (parts.size >= 5) {
                 val idx = parts[0].toIntOrNull()
                 val ifName = parts[4].trim().trim('"')
-                if (idx != null && (ifName.equals(name, ignoreCase = true) || ifName.contains(name, ignoreCase = true))) {
+                if (idx != null && ifName.equals(name, ignoreCase = true)) {
                     return idx
                 }
             }
