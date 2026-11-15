@@ -286,6 +286,10 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun showUpdateNotification(result: com.kiktor.v2whitelist.dto.CheckUpdateResult) {
+        if (isUpdateInteractionActive || isFinishing || isDestroyed) return
+        isUpdateInteractionActive = true
+        binding.btnBigConnect.isEnabled = false
+
         val dialogView = layoutInflater.inflate(R.layout.layout_update_dialog, null)
         val tvTitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_title)
         val tvToggle = dialogView.findViewById<android.widget.TextView>(R.id.tv_update_changelog_toggle)
@@ -302,18 +306,31 @@ class MainActivity : HelperBaseActivity() {
             tvToggle.text = if (isExpanded) getString(R.string.changelog_hide) else getString(R.string.changelog_show)
         }
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        var startingDownload = false
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(dialogView)
+            .setCancelable(false)
             .setPositiveButton(R.string.update_now) { _, _ ->
                 if (result.downloadUrl != null) {
+                    startingDownload = true
                     downloadAndInstall(result)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnDismissListener {
+            if (!startingDownload) {
+                isUpdateInteractionActive = false
+                binding.btnBigConnect.isEnabled = true
+            }
+        }
+        dialog.show()
     }
 
     private fun downloadAndInstall(result: com.kiktor.v2whitelist.dto.CheckUpdateResult) {
+        isUpdateInteractionActive = true
+        binding.btnBigConnect.isEnabled = false
         val progressBar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             val pad = (24 * resources.displayMetrics.density).toInt()
@@ -354,6 +371,9 @@ class MainActivity : HelperBaseActivity() {
                 progressDialog.dismiss()
                 Log.e(AppConfig.TAG, "Update failed: ${e.message}")
                 toast(e.message ?: getString(R.string.toast_failure))
+            } finally {
+                isUpdateInteractionActive = false
+                binding.btnBigConnect.isEnabled = true
             }
         }
     }
@@ -501,7 +521,10 @@ class MainActivity : HelperBaseActivity() {
         mainViewModel.initAssets(assets)
     }
 
+    private var isUpdateInteractionActive = false
+
     private fun handleConnectAction() {
+        if (isUpdateInteractionActive) return
         if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, true)) {
             binding.btnBigConnect.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
         }

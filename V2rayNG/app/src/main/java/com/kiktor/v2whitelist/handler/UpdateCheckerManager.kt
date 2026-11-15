@@ -41,6 +41,9 @@ object UpdateCheckerManager {
 
     private fun getGithubConnectionPorts(preferProxy: Boolean = false): List<Int> {
         if (!com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()) return listOf(0)
+        if (SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()) {
+            return listOf(0)
+        }
         val httpPort = SettingsManager.getHttpPort()
         return if (preferProxy) listOf(httpPort, 0).distinct() else listOf(0, httpPort).distinct()
     }
@@ -79,6 +82,10 @@ object UpdateCheckerManager {
                 Log.i(AppConfig.TAG, "Range not satisfiable; file already fully downloaded.")
                 return apkFile
             }
+            if (responseCode != HttpURLConnection.HTTP_OK && responseCode != HttpURLConnection.HTTP_PARTIAL) {
+                Log.w(AppConfig.TAG, "Unexpected APK response code: $responseCode (port=$port)")
+                return null
+            }
 
             val append = responseCode == HttpURLConnection.HTTP_PARTIAL
             if (!append) {
@@ -92,12 +99,12 @@ object UpdateCheckerManager {
             val fileLength = if (append) downloadedBytes + contentLength else contentLength.toLong()
 
             var lastProgress = 0
+            var totalRead = downloadedBytes
 
             FileOutputStream(apkFile, append).use { outputStream ->
                 connection.inputStream.use { inputStream ->
                     val buffer = ByteArray(8 * 1024)
                     var bytesRead: Int
-                    var totalRead = downloadedBytes
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         outputStream.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
@@ -110,6 +117,11 @@ object UpdateCheckerManager {
                         }
                     }
                 }
+            }
+            if (fileLength > 0 && totalRead < fileLength) {
+                Log.w(AppConfig.TAG, "Incomplete APK download: $totalRead / $fileLength bytes")
+                apkFile.delete()
+                return null
             }
             Log.i(AppConfig.TAG, "APK download completed")
             return apkFile
