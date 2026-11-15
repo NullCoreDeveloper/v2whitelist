@@ -330,10 +330,12 @@ object DesktopTunManager {
      */
     fun resolvePhysicalInterfaceName(physicalIp: String?): String? {
         if (!isWindows || physicalIp.isNullOrBlank()) return null
-        val (code, out) = runCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "(Get-NetIPAddress -AddressFamily IPv4 -IPAddress '$physicalIp' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceAlias")
+        val (code, out) = runCommand(
+            "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Get-NetIPAddress -AddressFamily IPv4 -IPAddress '$physicalIp' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceAlias"
+        )
         val name = out.lines().firstOrNull { it.isNotBlank() }?.trim()
-        return if (code == 0 && !name.isNullOrBlank()) name else null
+        return if (code == 0 && !name.isNullOrBlank() && !name.contains('\uFFFD')) name else null
     }
 
     /** Определяет (IP-адрес физического интерфейса) для привязки Xray; вызывать ДО start() TUN. */
@@ -341,6 +343,12 @@ object DesktopTunManager {
         if (!isWindows) return null
         val (_, iface) = detectDefaultGateway()
         return resolvePhysicalInterfaceName(iface)
+    }
+
+    /** Проверяет наличие физического шлюза по умолчанию (без TUN-интерфейса). */
+    fun hasPhysicalDefaultGateway(): Boolean {
+        val (gw, iface) = detectDefaultGateway()
+        return !gw.isNullOrBlank() && !iface.isNullOrBlank()
     }
 
     /**
@@ -640,6 +648,26 @@ object DesktopTunManager {
         return stopSync(sudoPassword ?: currentSudoPassword)
     }
 
+    /**
+     * Гарантирует, что TUN остановлен и в системе (в т.ч. в службе v2w-service) не осталось активных TUN-маршрутов.
+     */
+    @Synchronized
+    fun ensureStopped(sudoPassword: String? = null) {
+        if (isTunActive) {
+            stop(sudoPassword)
+            return
+        }
+        if (isWindows) {
+            if (isServiceAvailable()) {
+                stopViaService()
+            }
+            if (isWindowsAdmin()) {
+                runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0")
+                runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0")
+            }
+        }
+    }
+
     private fun stopSync(sudoPassword: String?): Boolean {
         GeekModeLogger.log("TUN", "Остановка TUN адаптера и снятие маршрутов...")
         isTunActive = false
@@ -747,7 +775,7 @@ object DesktopTunManager {
                     val gw = tokens[2]
                     val iface = tokens[3]
                     val metric = tokens[4].toIntOrNull() ?: continue
-                    if (!gw.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) || gw == "0.0.0.0" || gw.startsWith("198.18.")) continue
+                    if (!gw.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) || gw == "0.0.0.0" || gw.startsWith("198.18.") || gw.startsWith("10.10.14.") || gw == activeTunGw) continue
                     if (best == null || metric < best.third) best = Triple(gw, iface, metric)
                 }
                 if (best != null) return best.first to best.second
@@ -789,7 +817,7 @@ object DesktopTunManager {
     private fun runCommand(vararg cmd: String): Pair<Int, String> {
         return try {
             val proc = ProcessBuilder(*cmd).redirectErrorStream(true).start()
-            val output = BufferedReader(InputStreamReader(proc.inputStream)).use { it.readText() }
+            val output = BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8)).use { it.readText() }
             val finished = proc.waitFor(3, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()
@@ -819,7 +847,7 @@ object DesktopTunManager {
                     }
                 } catch (_: Exception) {}
             }
-            val output = BufferedReader(InputStreamReader(proc.inputStream)).use { it.readText() }
+            val output = BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8)).use { it.readText() }
             val finished = proc.waitFor(3, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()

@@ -1453,6 +1453,10 @@ class DesktopAppState(
         xrayRunner.markStarting()
         smartConnectJob = scope.launch {
             try {
+                // Снимаем старый/зависший TUN перед поиском серверов, чтобы сканер и верификатор шли по физической сети
+                withContext(Dispatchers.IO) {
+                    DesktopTunManager.ensureStopped(sessionSudoPassword)
+                }
                 val ok = smartConnectManager.startSmartConnect(
                     scenario = _scenario.value,
                     minSpeedMbps = minSpeedThresholdMbps.value,
@@ -1491,6 +1495,10 @@ class DesktopAppState(
             xrayRunner.markStarting()
             _smartConnectStatus.value = "Переключение на следующий сервер…"
             try {
+                // Снимаем активный TUN, чтобы проверка кандидатов при переключении шла по физической сети
+                withContext(Dispatchers.IO) {
+                    DesktopTunManager.ensureStopped(sessionSudoPassword)
+                }
                 val currentGuid = _selectedGuid.value
                 val currentProfile = currentGuid?.let { serverRepo.getServerConfig(it) }
                 val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
@@ -1787,6 +1795,12 @@ class DesktopAppState(
             val currentHttpPort = if (httpPort.value > 0 && httpPort.value != currentSocksPort) httpPort.value else currentSocksPort + 1
 
             _smartConnectStatus.value = "Запуск сетевого ядра Xray…"
+            // Снимаем предыдущий TUN до определения физического интерфейса и запуска нового Xray/TUN
+            if (DesktopTunManager.isTunActive || (DesktopTunManager.isWindows && routingMode.value != "PROXY")) {
+                withContext(Dispatchers.IO) {
+                    DesktopTunManager.ensureStopped(sessionSudoPassword)
+                }
+            }
             // В TUN-режиме на Windows привязываем исходящие сокеты Xray к физическому адаптеру,
             // иначе трафик ядра (прямой/до сервера) заворачивается обратно в TUN и ломает интернет.
             val tunBindInterface = if (routingMode.value != "PROXY" && DesktopTunManager.isWindows)
@@ -1837,23 +1851,54 @@ class DesktopAppState(
                         isSystemProxyActive.value = true
                     }
                 } else {
+                    // Перед поднятием системного TUN убеждаемся, что выбранный сервер реально работает через локальный SOCKS5
+                    val proxyReady = withContext(Dispatchers.IO) {
+                        verifyLocalProxyBeforeTun(currentSocksPort)
+                    }
+                    if (!proxyReady) {
+                        val srvName = profile.remarks.ifBlank { profile.server }
+                        GeekModeLogger.log("TUN", "Сервер $srvName не отвечает через локальный прокси — отмена поднятия TUN.")
+                        stopFailoverWatchdog()
+                        if (autoFailover.value && !isSwitchingServer.value) {
+                            GeekModeLogger.log("TUN", "Запуск переключения на рабочий сервер (режим TUN сохранён)...")
+                            switchToNextServer()
+                        } else {
+                            xrayRunner.stop()
+                            xrayRunner.setError("Сервер $srvName не отвечает (таймаут соединения)")
+                            _smartConnectStatus.value = null
+                        }
+                        return@launch
+                    }
+
                     // Режим TUN: запуск сетевого адаптера v2w-tun через tun2socks
-                    val tunStarted = DesktopTunManager.start(
-                        socksPort = currentSocksPort,
-                        serverAddress = profile.server,
-                        sudoPassword = sessionSudoPassword,
-                        tunIp = vpnInterfaceAddress.value.ifBlank { null }
-                    )
+                    val tunStarted = withContext(Dispatchers.IO) {
+                        DesktopTunManager.start(
+                            socksPort = currentSocksPort,
+                            serverAddress = profile.server,
+                            sudoPassword = sessionSudoPassword,
+                            tunIp = vpnInterfaceAddress.value.ifBlank { null }
+                        )
+                    }
                     if (tunStarted) {
                         GeekModeLogger.log("TUN", "Сетевой интерфейс v2w-tun успешно поднят. Весь трафик ОС направлен через TUN.")
                         if (isSystemProxyActive.value) {
                             DesktopProxyManager.disableSystemProxy()
                             isSystemProxyActive.value = false
                         }
+                    } else if (DesktopTunManager.isWindows && DesktopTunManager.lastStartSelfTestFailed) {
+                        GeekModeLogger.log("TUN", "TUN интерфейс поднят, но самопроверка интернета через туннель не прошла (режим TUN сохранён).")
+                        stopFailoverWatchdog()
+                        if (autoFailover.value && !isSwitchingServer.value) {
+                            clipboardNotice.value = "Самопроверка TUN не прошла — подбираем другой сервер…"
+                            switchToNextServer()
+                        } else {
+                            xrayRunner.stop()
+                            xrayRunner.setError("Самопроверка TUN не прошла. Подробности в логах службы v2w-service.")
+                            _smartConnectStatus.value = null
+                        }
+                        return@launch
                     } else {
                         val reason = when {
-                            DesktopTunManager.isWindows && DesktopTunManager.lastStartSelfTestFailed ->
-                                "TUN интерфейс поднят, но самопроверка интернета через туннель не прошла (подробности в логах службы)."
                             DesktopTunManager.isWindows ->
                                 "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
                             else ->
@@ -1861,8 +1906,6 @@ class DesktopAppState(
                         }
                         GeekModeLogger.log("TUN", "$reason Включен системный прокси как резерв.")
                         clipboardNotice.value = when {
-                            DesktopTunManager.isWindows && DesktopTunManager.lastStartSelfTestFailed ->
-                                "Самопроверка TUN не прошла — включён системный прокси."
                             DesktopTunManager.isWindows ->
                                 "Для режима TUN запустите приложение от имени администратора. Включен системный прокси."
                             else ->
@@ -1933,9 +1976,17 @@ class DesktopAppState(
         failoverJob = null
     }
 
-    private fun testTunnelConnectivity(): Boolean {
+    private suspend fun verifyLocalProxyBeforeTun(port: Int): Boolean {
+        for (attempt in 1..2) {
+            if (testTunnelConnectivity(port)) return true
+            if (attempt < 2) delay(400L)
+        }
+        return false
+    }
+
+    private fun testTunnelConnectivity(port: Int = socksPort.value): Boolean {
         return try {
-            val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", socksPort.value))
+            val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", port))
             val checkUrl = connectionCheckServiceUrl.value.ifBlank { "http://cp.cloudflare.com/generate_204" }
             val url = java.net.URL(checkUrl)
             val conn = url.openConnection(proxy) as java.net.HttpURLConnection
@@ -1952,6 +2003,9 @@ class DesktopAppState(
     }
 
     private fun isPhysicalNetworkAlive(): Boolean {
+        if (DesktopTunManager.isTunActive) {
+            return DesktopTunManager.hasPhysicalDefaultGateway()
+        }
         return try {
             java.net.Socket().use { socket ->
                 socket.connect(java.net.InetSocketAddress("1.1.1.1", 53), 2000)

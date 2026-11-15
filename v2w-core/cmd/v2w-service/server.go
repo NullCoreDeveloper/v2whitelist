@@ -194,10 +194,12 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 
 	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск.
 	// Также удаляем персистентный маршрут если он остался в реестре.
+	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0").Run()
+	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0").Run()
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
 	exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	cmd := exec.Command(tun2socksBin, args...)
 	cmd.Dir = binDir
@@ -408,7 +410,7 @@ func selfTest() error {
 		} else {
 			time.Sleep(800 * time.Millisecond)
 		}
-		for _, u := range []string{"http://www.msftconnecttest.com/connecttest.txt", "http://1.1.1.1/"} {
+		for _, u := range []string{"http://www.msftconnecttest.com/connecttest.txt", "http://cp.cloudflare.com/generate_204", "http://1.1.1.1/"} {
 			resp, err := client.Get(u)
 			if err != nil {
 				lastErr = fmt.Errorf("%s: %v", u, err)
