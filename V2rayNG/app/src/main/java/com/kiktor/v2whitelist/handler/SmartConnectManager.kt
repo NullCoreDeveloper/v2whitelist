@@ -370,19 +370,29 @@ object SmartConnectManager {
 
             val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
             if (isAutoUpdateEnabled) {
-                // Ищем самую старую подписку среди включенных (или 0, если еще не обновляли)
+                // Ищем самую старую обычную подписку среди включенных (исключая доверенные)
                 val allSubs = MmkvManager.decodeSubscriptions()
-                val oldestUpdate = allSubs.filter { it.subscription.enabled }
-                    .minOfOrNull { it.subscription.lastUpdated } ?: 0L
+                val regularEnabledSubs = allSubs.filter {
+                    it.subscription.enabled &&
+                        !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid)
+                }
+                if (regularEnabledSubs.isNotEmpty()) {
+                    val oldestUpdate = regularEnabledSubs.minOfOrNull { it.subscription.lastUpdated } ?: 0L
+                    val intervalMins = MmkvManager.decodeSettingsString(
+                        AppConfig.SUBSCRIPTION_AUTO_UPDATE_INTERVAL,
+                        AppConfig.SUBSCRIPTION_DEFAULT_UPDATE_INTERVAL
+                    )?.toLongOrNull()?.coerceAtLeast(15L) ?: 30L
+                    val intervalMs = intervalMins * 60_000L
 
-                if (System.currentTimeMillis() - oldestUpdate > UPDATE_INTERVAL_MS) {
-                    GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
-                    GlobalScope.launch(Dispatchers.IO) {
-                        try {
-                            // Быстрое параллельное обновление подписок с mirror racing
-                            SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = false)
-                        } catch (e: Exception) {
-                            GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
+                    if (System.currentTimeMillis() - oldestUpdate >= intervalMs) {
+                        GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
+                        GlobalScope.launch(Dispatchers.IO) {
+                            try {
+                                // Быстрое параллельное обновление подписок с mirror racing
+                                SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = false)
+                            } catch (e: Exception) {
+                                GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
+                            }
                         }
                     }
                 }

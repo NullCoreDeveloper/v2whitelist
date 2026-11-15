@@ -125,9 +125,12 @@ class MainActivity : HelperBaseActivity() {
                     handleConnectAction()
                 }
                 
-                // Умный догруз подписок: если серверов почти нет, обновляем их через новый туннель
-                val totalServers = MmkvManager.decodeServerList().size
-                if (totalServers <= count + 1) { // Если были пустыми или только этот сервер
+                // Умный догруз подписок: если обычных серверов почти нет, обновляем их через новый туннель
+                val regularServers = MmkvManager.decodeServerList().count { guid ->
+                    val profile = MmkvManager.decodeServerConfig(guid)
+                    profile != null && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)
+                }
+                if (regularServers <= count + 1) { // Если были пустыми или только этот сервер
                     lifecycleScope.launch {
                         delay(5000) // Ждем 5 сек, пока VPN поднимется
                         if (mainViewModel.isRunning.value == true) {
@@ -1016,9 +1019,12 @@ class MainActivity : HelperBaseActivity() {
     private fun updateSubscriptionStatusUI() {
         if (isSubscriptionUpdating) return
         val subs = MmkvManager.decodeSubscriptions()
-        // minOf только по подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
-        // Отключенные подписки не должны влиять на статус и время на главном экране.
-        val enabledSubs = subs.filter { it.subscription.enabled }
+        // minOf только по обычным подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
+        // Отключенные и доверенные подписки не должны влиять на статус и время на главном экране.
+        val enabledSubs = subs.filter {
+            it.subscription.enabled &&
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid)
+        }
         val lastUpdateTime = enabledSubs.filter { it.subscription.lastUpdated > 0 }
             .minOfOrNull { it.subscription.lastUpdated } ?: 0L
 

@@ -433,14 +433,24 @@ class DesktopAppState(
         // Наблюдатель за состоянием VPN: отложенное обновление через VPN при подключении
         scope.launch {
             coreState.collect { state ->
-                if (state == DesktopCoreState.RUNNING && subscriptionUpdateOnlyViaProxy.value && subscriptionAutoUpdate.value) {
-                    val enabledSubs = _subscriptions.value.filter { it.enabled }
+                if (state == DesktopCoreState.RUNNING && (subscriptionAutoUpdate.value || (subscriptionUpdateOnlyViaProxy.value && subscriptionUpdateOnStartup.value))) {
+                    val enabledSubs = _subscriptions.value.filter {
+                        it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
+                    }
+                    if (enabledSubs.isEmpty()) return@collect
                     val oldestUpdate = enabledSubs.minOfOrNull { it.lastUpdated } ?: 0L
                     val intervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
-                    if (oldestUpdate <= 0L || (System.currentTimeMillis() - oldestUpdate) >= intervalMs) {
+                    val hasFailed = enabledSubs.any { it.lastUpdateFailed }
+                    val noRegularServers = serverRepo.serversFlow.value.none {
+                        !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+                    }
+                    val isExpired = oldestUpdate <= 0L || (System.currentTimeMillis() - oldestUpdate) >= intervalMs
+                    if (isExpired || hasFailed || noRegularServers) {
                         delay(3000L)
-                        GeekModeLogger.log("Subscriptions", "VPN активен: запуск отложенного обновления подписок через защищённое соединение...")
-                        updateAllActiveSubscriptions()
+                        if (coreState.value == DesktopCoreState.RUNNING) {
+                            GeekModeLogger.log("Subscriptions", "VPN активен: запуск отложенного обновления подписок через защищённое соединение...")
+                            updateAllActiveSubscriptions()
+                        }
                     }
                 }
             }
@@ -598,7 +608,9 @@ class DesktopAppState(
             )
         }
 
-        val enabledSubs = subs.filter { it.enabled }
+        val enabledSubs = subs.filter {
+            it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
+        }
         val failedCount = enabledSubs.count { it.lastUpdateFailed }
         val lastUpdateTime = enabledSubs.filter { it.lastUpdated > 0 }
             .minOfOrNull { it.lastUpdated } ?: 0L
@@ -986,20 +998,38 @@ class DesktopAppState(
         GeekModeLogger.log("Subscriptions", "Служба фонового автообновления активна (интервал: $intervalMins мин).")
 
         periodicSubUpdateJob = scope.launch(Dispatchers.Default) {
+            var skippedLogged = false
             while (isActive) {
-                val currentIntervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
-                delay(currentIntervalMs)
+                delay(60_000L)
 
                 if (!subscriptionAutoUpdate.value) break
 
-                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
-                    GeekModeLogger.log(
-                        "Subscriptions",
-                        "Плановое фоновое обновление пропущено: в настройках включено «Только через VPN», но VPN сейчас не запущен."
-                    )
+                val enabledSubs = _subscriptions.value.filter {
+                    it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
+                }
+                if (enabledSubs.isEmpty()) continue
+
+                val currentIntervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
+                val oldestUpdate = enabledSubs.minOfOrNull { it.lastUpdated } ?: 0L
+                val now = System.currentTimeMillis()
+
+                if (oldestUpdate > 0L && (now - oldestUpdate) < currentIntervalMs) {
+                    skippedLogged = false
                     continue
                 }
 
+                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                    if (!skippedLogged) {
+                        GeekModeLogger.log(
+                            "Subscriptions",
+                            "Плановое фоновое обновление пропущено: в настройках включено «Только через VPN», но VPN сейчас не запущен."
+                        )
+                        skippedLogged = true
+                    }
+                    continue
+                }
+
+                skippedLogged = false
                 GeekModeLogger.log(
                     "Subscriptions",
                     "Плановое фоновое обновление подписок по расписанию (${subscriptionUpdateIntervalMinutes.value} мин)..."
@@ -1018,14 +1048,18 @@ class DesktopAppState(
         scope.launch(Dispatchers.Default) {
             delay(1500L)
 
-            val enabledSubs = _subscriptions.value.filter { it.enabled }
+            val enabledSubs = _subscriptions.value.filter {
+                it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
+            }
             if (enabledSubs.isEmpty()) return@launch
 
             val oldestUpdate = enabledSubs.minOfOrNull { it.lastUpdated } ?: 0L
             val intervalMs = subscriptionUpdateIntervalMinutes.value.coerceAtLeast(15) * 60 * 1000L
             val now = System.currentTimeMillis()
             val isExpired = oldestUpdate <= 0L || (now - oldestUpdate) >= intervalMs
-            val noServers = serverRepo.serversFlow.value.isEmpty()
+            val noServers = serverRepo.serversFlow.value.none {
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.second.subscriptionId)
+            }
 
             if (isExpired || noServers) {
                 if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
@@ -1110,7 +1144,9 @@ class DesktopAppState(
                 }
 
                 val proxyP = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else 0
-                val enabledSubs = _subscriptions.value.filter { it.enabled }
+                val enabledSubs = _subscriptions.value.filter {
+                    it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
+                }
 
                 if (enabledSubs.isEmpty()) {
                     GeekModeLogger.log("Subscriptions", "Нет включенных подписок для обновления.")

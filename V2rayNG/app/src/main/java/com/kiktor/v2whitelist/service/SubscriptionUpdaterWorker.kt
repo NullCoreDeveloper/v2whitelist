@@ -13,11 +13,17 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
+import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.NetworkManager
+import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
-import java.util.concurrent.TimeUnit
 import com.kiktor.v2whitelist.handler.SubscriptionHelper
+import com.kiktor.v2whitelist.handler.V2RayServiceManager
+import java.util.concurrent.TimeUnit
 
 /**
  * WorkManager задание для автообновления подписки раз в час.
@@ -34,15 +40,50 @@ class SubscriptionUpdaterWorker(
 
     @SuppressLint("MissingPermission")
     override suspend fun doWork(): Result {
+        val isManual = inputData.getBoolean(KEY_IS_MANUAL, false)
+        if (!isManual && !MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)) {
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: skipped (auto-update disabled in settings)")
+            return Result.success()
+        }
+
+        val hasCustomSubs = SubscriptionHelper.loadCustomSubs().any { it.enabled }
+        val hasRegularSubs = MmkvManager.decodeSubscriptions().any {
+            !it.guid.startsWith("custom_sub_") &&
+                !PersonalServersConfig.isPersonalServer(it.guid) &&
+                it.subscription.enabled
+        }
+        if (!hasCustomSubs && !hasRegularSubs) {
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: skipped (no enabled non-personal subscriptions)")
+            return Result.success()
+        }
+
+        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+        if (onlyViaVpn) {
+            val isVpnActive = NetworkManager.isVpnActive(applicationContext)
+            val socksPort = SettingsManager.getSocksPort()
+            val hasActiveProxy = socksPort > 0 && SmartConnectManager.isProxyRunning(socksPort)
+            val hasSystemVpn = NetworkManager.isSystemVpnTransport(applicationContext)
+            val isVpnRunning = V2RayServiceManager.isRunning()
+            if (!isVpnActive || (!hasActiveProxy && !hasSystemVpn && !isVpnRunning)) {
+                Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: skipped (only-via-VPN enabled, no active VPN)")
+                return Result.success()
+            }
+        }
+
         Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: starting background subscription update (sequential mode)")
         showNotification()
         return try {
             // sequential=true: перебираем зеркала по одному, без параллельных GlobalScope-корутин.
             // Ограничиваем таймаутом 2 минуты, чтобы воркер не зависал в фоне бесконечно
-            kotlinx.coroutines.withTimeoutOrNull(120_000L) {
+            val completed = kotlinx.coroutines.withTimeoutOrNull(120_000L) {
                 SubscriptionHelper.updateSubscription(applicationContext, sequential = true)
+                true
             }
-            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
+            if (completed == true) {
+                Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: subscription updated successfully")
+            } else {
+                Log.w(AppConfig.TAG, "SubscriptionUpdaterWorker: update timed out after 120s")
+            }
             Result.success()
         } catch (e: Exception) {
             // ВАЖНО: используем success() а не retry()!
@@ -98,6 +139,8 @@ class SubscriptionUpdaterWorker(
     }
 
     companion object {
+        private const val KEY_IS_MANUAL = "is_manual"
+
         /**
          * Регистрирует периодическое задание при старте приложения.
          * Использует KEEP: не трогает уже живую задачу, чтобы не сбивать таймер.
@@ -119,10 +162,10 @@ class SubscriptionUpdaterWorker(
             // Задача пересоздаётся только при первом запуске или после смерти.
             workManager.enqueueUniquePeriodicWork(
                 AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 request
             )
-            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: schedule() called (UPDATE policy)")
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: schedule() called (KEEP policy)")
         }
 
         /**
@@ -173,7 +216,9 @@ class SubscriptionUpdaterWorker(
          * Запускает обновление подписки немедленно (один раз).
          */
         fun runOnce(context: Context) {
-            val request = androidx.work.OneTimeWorkRequestBuilder<SubscriptionUpdaterWorker>().build()
+            val request = androidx.work.OneTimeWorkRequestBuilder<SubscriptionUpdaterWorker>()
+                .setInputData(workDataOf(KEY_IS_MANUAL to true))
+                .build()
             WorkManager.getInstance(context).enqueue(request)
             Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: one-time update triggered manually")
         }

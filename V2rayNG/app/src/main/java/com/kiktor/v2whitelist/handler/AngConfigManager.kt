@@ -569,7 +569,10 @@ object AngConfigManager {
     fun updateConfigViaSubAll(): Int {
         var count = 0
         try {
-            val subs = MmkvManager.decodeSubscriptions().filter { it.subscription.enabled }
+            val subs = MmkvManager.decodeSubscriptions().filter {
+                it.subscription.enabled &&
+                    !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid)
+            }
             val concurrency = MmkvManager.getSubConcurrency()
             val semaphore = kotlinx.coroutines.sync.Semaphore(concurrency)
             count = kotlinx.coroutines.runBlocking {
@@ -621,6 +624,7 @@ object AngConfigManager {
                 // Первое успешное зеркало — останавливаемся. Дёшево по RAM и CPU.
                 kotlinx.coroutines.runBlocking {
                     for (singleUrl in urls) {
+                        if (Thread.currentThread().isInterrupted) return@runBlocking
                         try {
                             val urlFixed = HttpUtil.toIdnUrl(singleUrl)
                             if (!Utils.isValidUrl(urlFixed)) {

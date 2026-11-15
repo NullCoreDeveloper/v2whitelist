@@ -694,7 +694,11 @@ object SubscriptionHelper {
         val customSubs = loadCustomSubs()
         val enabledCustomSubs = customSubs.filter { it.enabled }
         val allSubscriptions = MmkvManager.decodeSubscriptions()
-        val regularSubs = allSubscriptions.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
+        val regularSubs = allSubscriptions.filter {
+            !it.guid.startsWith("custom_sub_") &&
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                it.subscription.enabled
+        }
         val totalSubs = enabledCustomSubs.size + regularSubs.size
         val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 10)
         val semaphore = Semaphore(concurrency)
@@ -816,7 +820,11 @@ object SubscriptionHelper {
         // (нет доступа одновременно к ya.ru и google.com), подавляем ошибки,
         // чтобы не тревожить пользователя ложными алертами при изоляции сети.
         val allSubs = MmkvManager.decodeSubscriptions()
-        val failedSubs = allSubs.filter { it.subscription.enabled && it.subscription.lastUpdateFailed }
+        val failedSubs = allSubs.filter {
+            it.subscription.enabled &&
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                it.subscription.lastUpdateFailed
+        }
         if (failedSubs.isNotEmpty()) {
             val shouldReport = NetworkManager.shouldReportSubscriptionFailure()
             if (!shouldReport) {

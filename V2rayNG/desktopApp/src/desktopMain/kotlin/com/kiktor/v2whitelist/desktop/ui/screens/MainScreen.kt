@@ -161,7 +161,11 @@ fun MainScreen(
                         color = statusColor
                     )
                     val failedNames = remember(subscriptions) {
-                        subscriptions.filter { it.enabled && it.lastUpdateFailed }.map { it.name.ifBlank { strings.unknown } }
+                        subscriptions.filter {
+                            it.enabled &&
+                                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id) &&
+                                it.lastUpdateFailed
+                        }.map { it.name.ifBlank { strings.unknown } }
                     }
                     if (failedNames.isNotEmpty()) {
                         Text(
