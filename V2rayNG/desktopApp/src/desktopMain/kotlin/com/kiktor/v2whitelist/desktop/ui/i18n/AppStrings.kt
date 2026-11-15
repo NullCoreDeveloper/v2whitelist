@@ -204,6 +204,10 @@ interface AppStrings {
     val geekCloudflareIpLabel: String
     val geekCustomUaLabel: String
     val geekLogFilterPlaceholder: String
+    val geekExportLogsBtn: String
+    val geekClearLogsBtn: String
+    val geekLogsSavedMsg: String
+    val geekLogsSaveFailedMsg: String
     val catScannerCore: String
     val catScannerCoreDesc: String
     val catProfileCheck: String
@@ -619,6 +623,10 @@ object StringsRu : AppStrings {
     override val geekCloudflareIpLabel: String = "Cloudflare Clean IP"
     override val geekCustomUaLabel: String = "Кастомный User-Agent"
     override val geekLogFilterPlaceholder: String = "Фильтр логов ядра (поиск по ключевым словам)…"
+    override val geekExportLogsBtn: String = "Сохранить логи (ZIP)"
+    override val geekClearLogsBtn: String = "Очистить"
+    override val geekLogsSavedMsg: String = "Диагностический архив сохранён: "
+    override val geekLogsSaveFailedMsg: String = "Ошибка сохранения логов: "
     override val catScannerCore: String = "Сканер и ядро"
     override val catScannerCoreDesc: String = "Настройки распределения серверов SmartConnect и параметры ядра v2w-core"
     override val catProfileCheck: String = "Проверка"
@@ -1024,6 +1032,10 @@ object StringsEn : AppStrings {
     override val geekCloudflareIpLabel: String = "Cloudflare Clean IP"
     override val geekCustomUaLabel: String = "Custom User-Agent"
     override val geekLogFilterPlaceholder: String = "Core log filter (search by keyword)…"
+    override val geekExportLogsBtn: String = "Export Logs (ZIP)"
+    override val geekClearLogsBtn: String = "Clear"
+    override val geekLogsSavedMsg: String = "Diagnostics archive saved: "
+    override val geekLogsSaveFailedMsg: String = "Failed to export logs: "
     override val catScannerCore: String = "Scanner & Core"
     override val catScannerCoreDesc: String = "SmartConnect distribution settings and native v2w-core scanner parameters"
     override val catProfileCheck: String = "Verification"
@@ -1429,6 +1441,10 @@ object StringsZh : AppStrings {
     override val geekCloudflareIpLabel: String = "Cloudflare 优选 IP"
     override val geekCustomUaLabel: String = "自定义 User-Agent"
     override val geekLogFilterPlaceholder: String = "核心日志过滤 (按关键词搜索)…"
+    override val geekExportLogsBtn: String = "导出日志 (ZIP)"
+    override val geekClearLogsBtn: String = "清空"
+    override val geekLogsSavedMsg: String = "诊断日志包已保存: "
+    override val geekLogsSaveFailedMsg: String = "导出日志失败: "
     override val catScannerCore: String = "扫描器与核心"
     override val catScannerCoreDesc: String = "SmartConnect 节点分流设置及 v2w-core 原生核心扫描参数"
     override val catProfileCheck: String = "节点验证"
@@ -1834,6 +1850,10 @@ object StringsFa : AppStrings {
     override val geekCloudflareIpLabel: String = "آی‌پی تمیز کلودفلر"
     override val geekCustomUaLabel: String = "User-Agent سفارشی"
     override val geekLogFilterPlaceholder: String = "فیلتر گزارش‌های هسته (جستجو با کلمه کلیدی)…"
+    override val geekExportLogsBtn: String = "ذخیره گزارش‌ها (ZIP)"
+    override val geekClearLogsBtn: String = "پاک کردن"
+    override val geekLogsSavedMsg: String = "بایگانی گزارش‌ها ذخیره شد: "
+    override val geekLogsSaveFailedMsg: String = "خطا در ذخیره گزارش‌ها: "
     override val catScannerCore: String = "اسکنر و هسته"
     override val catScannerCoreDesc: String = "تنظیمات توزیع سرورهای SmartConnect و هسته v2w-core"
     override val catProfileCheck: String = "اعتبارسنجی"

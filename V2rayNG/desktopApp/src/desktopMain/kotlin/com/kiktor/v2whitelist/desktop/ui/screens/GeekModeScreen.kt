@@ -28,6 +28,13 @@ import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
+import com.kiktor.v2whitelist.desktop.util.DesktopLogExporter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.awt.FileDialog
+import java.awt.Frame
+import java.io.File
 
 private val USER_AGENTS = listOf(
     "Auto (Default)",
@@ -68,6 +75,9 @@ fun GeekModeScreen(
     var cfIpInput by remember(currentCfIp) { mutableStateOf(currentCfIp) }
     var uaExpanded by remember { mutableStateOf(false) }
     var logFilter by remember { mutableStateOf("") }
+    var isExportingLogs by remember { mutableStateOf(false) }
+    var exportStatusMsg by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val listState = rememberLazyListState()
 
@@ -616,10 +626,11 @@ fun GeekModeScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        // 4. Логи ядра в реалтайме
+        // 4. Логи ядра в реалтайме + экспорт диагностики
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 value = logFilter,
@@ -635,7 +646,75 @@ fun GeekModeScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().height(40.dp)
+                modifier = Modifier.weight(1f).height(44.dp)
+            )
+
+            FilledTonalButton(
+                enabled = !isExportingLogs,
+                onClick = {
+                    if (isExportingLogs) return@FilledTonalButton
+                    coroutineScope.launch {
+                        isExportingLogs = true
+                        exportStatusMsg = null
+                        try {
+                            val chosenFile = withContext(Dispatchers.IO) {
+                                val dialog = FileDialog(null as Frame?, strings.geekExportLogsBtn, FileDialog.SAVE)
+                                dialog.file = DesktopLogExporter.defaultZipFileName()
+                                dialog.isVisible = true
+                                val dir = dialog.directory
+                                val file = dialog.file
+                                if (dir != null && file != null) {
+                                    val finalName = if (file.endsWith(".zip", ignoreCase = true)) file else "$file.zip"
+                                    File(dir, finalName)
+                                } else {
+                                    null
+                                }
+                            }
+                            if (chosenFile != null) {
+                                val res = DesktopLogExporter.exportDiagnosticsZip(state, chosenFile)
+                                res.onSuccess { saved ->
+                                    GeekModeLogger.log("Diagnostics", "${strings.geekLogsSavedMsg}${saved.absolutePath}")
+                                    exportStatusMsg = true to "${strings.geekLogsSavedMsg}${saved.absolutePath}"
+                                }.onFailure { err ->
+                                    val msg = err.message ?: "unknown"
+                                    GeekModeLogger.log("Diagnostics", "${strings.geekLogsSaveFailedMsg}$msg")
+                                    exportStatusMsg = false to "${strings.geekLogsSaveFailedMsg}$msg"
+                                }
+                            }
+                        } finally {
+                            isExportingLogs = false
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(44.dp)
+            ) {
+                Icon(Icons.Default.Archive, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(strings.geekExportLogsBtn, fontSize = 12.sp)
+            }
+
+            OutlinedButton(
+                onClick = {
+                    GeekModeLogger.clear()
+                    exportStatusMsg = null
+                },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(44.dp)
+            ) {
+                Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(strings.geekClearLogsBtn, fontSize = 12.sp)
+            }
+        }
+
+        exportStatusMsg?.let { (ok, msg) ->
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = msg,
+                fontSize = 11.sp,
+                color = if (ok) AccentMint else AccentRed,
+                maxLines = 2
             )
         }
 

@@ -362,6 +362,9 @@ class DesktopAppState(
     )
 
     init {
+        com.kiktor.v2whitelist.desktop.util.DesktopLogExporter.initFileLogging(
+            java.io.File(DesktopStorageManager.baseDir, "logs")
+        )
         GeekModeLogger.log("DesktopApp", "v2whitelist Desktop инициализирован по спецификации UI ПроБел.")
 
         smartConnectManager.onStageChanged = { _, text ->

@@ -37,10 +37,23 @@ class GeekModeLoggerTest {
 
     @Test
     fun testMaxLogsLimit() {
-        for (i in 1..550) {
+        for (i in 1..2550) {
             GeekModeLogger.log("Tag", "Message $i")
         }
-        assertEquals(500, GeekModeLogger.logs.value.size)
-        assertTrue(GeekModeLogger.logs.value.last().contains("Message 550"))
+        assertEquals(2500, GeekModeLogger.logs.value.size)
+        assertTrue(GeekModeLogger.logs.value.last().contains("Message 2550"))
+    }
+
+    @Test
+    fun testSanitizeLogLine() {
+        val raw = "Importing vless://secret-uuid@example.com:443?type=ws&token=my_secret_123"
+        val sanitized = GeekModeLogger.sanitizeLogLine(raw)
+        assertTrue(!sanitized.contains("secret-uuid"))
+        assertTrue(!sanitized.contains("my_secret_123"))
+
+        val urlWithToken = "GET https://sub.example.com/api?token=abc123&flag=1"
+        val sanitizedUrl = GeekModeLogger.sanitizeLogLine(urlWithToken)
+        assertTrue(sanitizedUrl.contains("token=***"))
+        assertTrue(!sanitizedUrl.contains("abc123"))
     }
 }

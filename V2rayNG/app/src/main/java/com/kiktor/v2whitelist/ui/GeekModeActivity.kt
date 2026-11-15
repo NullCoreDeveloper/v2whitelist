@@ -65,6 +65,45 @@ class GeekModeActivity : BaseActivity() {
             viewModel.checkServicesAvailability()
         }
 
+        binding.btnClearLogs.setOnClickListener {
+            com.kiktor.v2whitelist.handler.GeekModeLogger.clear()
+        }
+
+        binding.btnShareLogs.setOnClickListener {
+            binding.btnShareLogs.isEnabled = false
+            lifecycleScope.launch {
+                try {
+                    val res = com.kiktor.v2whitelist.helper.LogExportHelper.exportDiagnosticsZip(this@GeekModeActivity)
+                    res.onSuccess { zipFile ->
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            this@GeekModeActivity,
+                            com.kiktor.v2whitelist.BuildConfig.APPLICATION_ID + ".cache",
+                            zipFile
+                        )
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "application/zip"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(
+                            android.content.Intent.createChooser(
+                                shareIntent,
+                                getString(R.string.geek_mode_share_logs_chooser)
+                            )
+                        )
+                    }.onFailure { err ->
+                        android.widget.Toast.makeText(
+                            this@GeekModeActivity,
+                            "${getString(R.string.geek_mode_share_logs_error)}: ${err.message}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } finally {
+                    binding.btnShareLogs.isEnabled = true
+                }
+            }
+        }
+
         updateNodeInfo()
 
         binding.etGlobalSni.setText(MmkvManager.decodeSettingsString(AppConfig.PREF_GLOBAL_SNI, ""))

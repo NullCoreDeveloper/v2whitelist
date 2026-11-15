@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.update
 
 /**
  * Кроссплатформенный реактивный логгер GeekMode.
- * Сохраняет последние 500 строк логов в StateFlow для UI и передаёт в platformLogHandler.
+ * Сохраняет последние 2500 строк логов в StateFlow для UI и передаёт в platformLogHandler / fileLogHandler.
  */
 object GeekModeLogger {
-    private const val MAX_LOGS = 500
+    private const val MAX_LOGS = 2500
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
@@ -21,12 +21,18 @@ object GeekModeLogger {
      */
     var platformLogHandler: ((tag: String, message: String) -> Unit)? = null
 
+    /**
+     * Дополнительный обработчик для записи форматированной строки в файл (например, на Desktop).
+     */
+    var fileLogHandler: ((formattedLine: String) -> Unit)? = null
+
     fun log(tag: String, message: String) {
         val now = currentTimeMillis()
         val timeStr = formatTime(now)
         val formattedMsg = "[$timeStr] [$tag] $message"
 
         platformLogHandler?.invoke(tag, message)
+        fileLogHandler?.invoke(formattedMsg)
 
         _logs.update { current ->
             if (current.size >= MAX_LOGS) {
@@ -37,8 +43,33 @@ object GeekModeLogger {
         }
     }
 
+    fun snapshot(): List<String> = _logs.value
+
     fun clear() {
         _logs.value = emptyList()
+    }
+
+    private val PROXY_URI_REGEX = Regex(
+        """\b(?:vless|vmess|trojan|ss|ssr|hysteria2|hy2|tuic|wireguard|wg)://[^\s"']+""",
+        RegexOption.IGNORE_CASE
+    )
+    private val SECRET_QUERY_REGEX = Regex(
+        """([?&](?:token|key|secret|password|pass|auth|uuid|sid|pbk)=)[^&\s"']+""",
+        RegexOption.IGNORE_CASE
+    )
+    private val AUTH_HEADER_REGEX = Regex(
+        """(Authorization\s*:\s*(?:Bearer|Basic)\s+)[^\s\r\n]+""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Маскирует приватные ключи, ссылки конфигураций и токены перед экспортом логов.
+     */
+    fun sanitizeLogLine(line: String): String {
+        return line
+            .replace(PROXY_URI_REGEX, "<redacted-proxy-uri>")
+            .replace(SECRET_QUERY_REGEX, "$1***")
+            .replace(AUTH_HEADER_REGEX, "$1***")
     }
 
     private fun formatTime(millis: Long): String {

@@ -546,6 +546,10 @@
     <string name="geek_mode_btn_ping_vip">Пинг VIP</string>
     <string name="geek_mode_vip_cache">VIP Кэш:</string>
     <string name="geek_mode_logs_title">Логи (Real-time):</string>
+    <string name="geek_mode_btn_share_logs">Отправить логи (ZIP)</string>
+    <string name="geek_mode_btn_clear_logs">Очистить</string>
+    <string name="geek_mode_share_logs_chooser">Отправить диагностику ПроБел</string>
+    <string name="geek_mode_share_logs_error">Не удалось собрать логи</string>
     <string name="geek_mode_no_server">Сервер не выбран</string>
     <string name="geek_mode_unknown_config">Неизвестный конфиг</string>
 

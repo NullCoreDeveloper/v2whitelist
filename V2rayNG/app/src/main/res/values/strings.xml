@@ -564,6 +564,10 @@
     <string name="geek_mode_btn_ping_vip">Ping VIP</string>
     <string name="geek_mode_vip_cache">VIP Cache:</string>
     <string name="geek_mode_logs_title">Logs (Real-time):</string>
+    <string name="geek_mode_btn_share_logs">Share Logs (ZIP)</string>
+    <string name="geek_mode_btn_clear_logs">Clear</string>
+    <string name="geek_mode_share_logs_chooser">Share ProBel Diagnostics</string>
+    <string name="geek_mode_share_logs_error">Failed to export logs</string>
     <string name="geek_mode_no_server">No server selected</string>
     <string name="geek_mode_unknown_config">Unknown config</string>
 
