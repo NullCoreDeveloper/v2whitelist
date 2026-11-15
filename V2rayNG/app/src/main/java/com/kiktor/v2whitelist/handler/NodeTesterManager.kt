@@ -237,7 +237,9 @@ object NodeTesterManager {
                 val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = services,
                     socksPort = port,
-                    timeoutMs = effectiveTimeout.toLong()
+                    timeoutMs = effectiveTimeout.toLong(),
+                    socksUser = SettingsManager.getSocksUser(),
+                    socksPass = SettingsManager.getSocksPass()
                 )
                 val allOk = results.all { it.success }
                 val avgLatency = if (allOk && results.isNotEmpty()) results.map { it.latencyMs }.average().toLong() else -1L

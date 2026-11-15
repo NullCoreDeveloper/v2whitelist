@@ -579,8 +579,17 @@ actual suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int?,
     httpPort: Int?,
-    timeoutMs: Long
+    timeoutMs: Long,
+    socksUser: String?,
+    socksPass: String?
 ): ServiceCheckResult = withContext(Dispatchers.IO) {
+    if (!socksUser.isNullOrEmpty() && !socksPass.isNullOrEmpty()) {
+        java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+            override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
+                return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
+            }
+        })
+    }
     val proxy = createProxy(socksPort, httpPort)
     if (!service.isCustom) {
         when (service.id.lowercase()) {

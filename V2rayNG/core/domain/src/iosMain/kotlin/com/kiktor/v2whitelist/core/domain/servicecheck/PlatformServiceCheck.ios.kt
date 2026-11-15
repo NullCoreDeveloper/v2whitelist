@@ -7,7 +7,9 @@ actual suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int?,
     httpPort: Int?,
-    timeoutMs: Long
+    timeoutMs: Long,
+    socksUser: String?,
+    socksPass: String?
 ): ServiceCheckResult {
     return ServiceCheckResult(
         service = service,

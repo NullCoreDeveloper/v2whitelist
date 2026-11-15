@@ -59,7 +59,8 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
             _serviceCheckState.value = ServiceCheckState(isChecking = true)
             GeekModeLogger.log("GeekMode", "Проверка доступности сервисов (${enabledServices.size} шт.)...")
 
-            val socksPort = if (V2RayServiceManager.isRunning() == true) {
+            val hideTunnel = SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()
+            val socksPort = if (V2RayServiceManager.isRunning() == true && !hideTunnel) {
                 SettingsManager.getSocksPort()
             } else {
                 null
@@ -69,7 +70,9 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                 com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                     services = enabledServices,
                     socksPort = socksPort,
-                    timeoutMs = 6000L
+                    timeoutMs = 6000L,
+                    socksUser = SettingsManager.getSocksUser(),
+                    socksPass = SettingsManager.getSocksPass()
                 )
             } else {
                 val serverGuid = MmkvManager.getSelectServer()
@@ -100,7 +103,9 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                         com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                             services = enabledServices,
                             socksPort = portToUse,
-                            timeoutMs = 6000L
+                            timeoutMs = 6000L,
+                            socksUser = SettingsManager.getSocksUser(),
+                            socksPass = SettingsManager.getSocksPass()
                         )
                     } finally {
                         try { coreController?.stopLoop() } catch (_: Exception) {}

@@ -13,7 +13,9 @@ expect suspend fun rawServiceHttpCheck(
     service: ServiceCheckItem,
     socksPort: Int? = null,
     httpPort: Int? = null,
-    timeoutMs: Long = 4000L
+    timeoutMs: Long = 4000L,
+    socksUser: String? = null,
+    socksPass: String? = null
 ): ServiceCheckResult
 
 /**
@@ -25,9 +27,11 @@ object ServiceAvailabilityChecker {
         service: ServiceCheckItem,
         socksPort: Int? = null,
         httpPort: Int? = null,
-        timeoutMs: Long = 4000L
+        timeoutMs: Long = 4000L,
+        socksUser: String? = null,
+        socksPass: String? = null
     ): ServiceCheckResult {
-        return rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs)
+        return rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs, socksUser, socksPass)
     }
 
     /**
@@ -38,14 +42,16 @@ object ServiceAvailabilityChecker {
         services: List<ServiceCheckItem>,
         socksPort: Int? = null,
         httpPort: Int? = null,
-        timeoutMs: Long = 4000L
+        timeoutMs: Long = 4000L,
+        socksUser: String? = null,
+        socksPass: String? = null
     ): List<ServiceCheckResult> = coroutineScope {
         val enabled = services.filter { it.enabled }
         if (enabled.isEmpty()) return@coroutineScope emptyList()
 
         enabled.map { service ->
             async {
-                rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs)
+                rawServiceHttpCheck(service, socksPort, httpPort, timeoutMs, socksUser, socksPass)
             }
         }.awaitAll()
     }
@@ -58,13 +64,17 @@ object ServiceAvailabilityChecker {
         services: List<ServiceCheckItem>,
         socksPort: Int? = null,
         httpPort: Int? = null,
-        timeoutMs: Long = 4000L
+        timeoutMs: Long = 4000L,
+        socksUser: String? = null,
+        socksPass: String? = null
     ): Boolean {
         val results = checkServicesParallel(
             services = services,
             socksPort = socksPort,
             httpPort = httpPort,
-            timeoutMs = timeoutMs
+            timeoutMs = timeoutMs,
+            socksUser = socksUser,
+            socksPass = socksPass
         )
         return results.isNotEmpty() && results.all { it.success }
     }
