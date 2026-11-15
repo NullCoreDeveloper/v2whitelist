@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.desktop.ui.theme
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -9,10 +10,16 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -112,6 +119,55 @@ fun buildLightScheme(palette: String): androidx.compose.material3.ColorScheme {
     )
 }
 
+/**
+ * Определяет тёмную тему на уровне ОС (Windows: реестр AppsUseLightTheme, macOS: AppleInterfaceStyle, Linux: gsettings).
+ * Возвращает null, если определить не удалось.
+ */
+private fun detectOsDarkTheme(): Boolean? {
+    val os = System.getProperty("os.name")?.lowercase().orEmpty()
+    return try {
+        when {
+            os.contains("windows") -> {
+                val proc = ProcessBuilder(
+                    "reg", "query",
+                    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                    "/v", "AppsUseLightTheme"
+                ).redirectErrorStream(true).start()
+                val out = proc.inputStream.bufferedReader().readText()
+                proc.waitFor(2, TimeUnit.SECONDS)
+                val match = Regex("""AppsUseLightTheme\s+REG_DWORD\s+0x([0-9a-fA-F]+)""").find(out)
+                val valInt = match?.groupValues?.getOrNull(1)?.toIntOrNull(16)
+                when (valInt) {
+                    0 -> true
+                    1 -> false
+                    else -> null
+                }
+            }
+            os.contains("mac") -> {
+                val proc = ProcessBuilder("defaults", "read", "-g", "AppleInterfaceStyle")
+                    .redirectErrorStream(true).start()
+                val out = proc.inputStream.bufferedReader().readText().trim()
+                val ok = proc.waitFor(2, TimeUnit.SECONDS) && proc.exitValue() == 0
+                if (ok && out.equals("Dark", ignoreCase = true)) true else false
+            }
+            else -> {
+                val proc = ProcessBuilder("gsettings", "get", "org.gnome.desktop.interface", "color-scheme")
+                    .redirectErrorStream(true).start()
+                val out = proc.inputStream.bufferedReader().readText().trim()
+                if (proc.waitFor(2, TimeUnit.SECONDS) && proc.exitValue() == 0) {
+                    when {
+                        out.contains("prefer-dark", ignoreCase = true) -> true
+                        out.contains("prefer-light", ignoreCase = true) || out.contains("default", ignoreCase = true) -> false
+                        else -> null
+                    }
+                } else null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @Composable
 fun DesktopTheme(
     themeMode: String = "DARK", // "SYSTEM", "LIGHT", "DARK"
@@ -119,7 +175,24 @@ fun DesktopTheme(
     isAmoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val isLight = themeMode.equals("LIGHT", ignoreCase = true)
+    val composeSystemDark = isSystemInDarkTheme()
+    val systemIsLight by produceState(initialValue = !composeSystemDark, themeMode, composeSystemDark) {
+        if (!themeMode.equals("SYSTEM", ignoreCase = true)) {
+            value = themeMode.equals("LIGHT", ignoreCase = true)
+            return@produceState
+        }
+        while (isActive) {
+            val osDark = withContext(Dispatchers.IO) { detectOsDarkTheme() }
+            value = !(osDark ?: composeSystemDark)
+            delay(3000L)
+        }
+    }
+
+    val isLight = when {
+        themeMode.equals("LIGHT", ignoreCase = true) -> true
+        themeMode.equals("SYSTEM", ignoreCase = true) -> systemIsLight
+        else -> false
+    }
     val colorScheme = if (isLight) {
         buildLightScheme(palette)
     } else {
