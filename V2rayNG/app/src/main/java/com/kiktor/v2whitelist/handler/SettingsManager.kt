@@ -438,6 +438,14 @@ object SettingsManager {
     }
 
     /**
+     * Скрывать локальные SOCKS/HTTP порты от приложений вне VPN (в режиме встроенного TUN без LAN sharing).
+     */
+    fun isHideTunnelEnabled(): Boolean {
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_HIDE_TUNNEL, true) &&
+            MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING, false) != true
+    }
+
+    /**
      * Check if VPN mode is enabled.
      * @return True if VPN mode is enabled, false otherwise.
      */
@@ -488,6 +496,7 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
+        ensureDefaultValue(AppConfig.PREF_HIDE_TUNNEL, true)
         sanitizeSpeedCheckSettings()
     }
 

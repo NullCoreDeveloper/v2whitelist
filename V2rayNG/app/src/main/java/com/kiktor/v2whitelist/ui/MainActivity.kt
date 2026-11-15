@@ -803,13 +803,18 @@ class MainActivity : HelperBaseActivity() {
                     if (!V2RayServiceManager.isRunning()) return@launch
 
                     val socksPort = SettingsManager.getSocksPort()
+                    val hideTunnel = SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()
                     var successfulDelay = -1L
 
                     // 1. Ретраи e2e проверки соединения через цепочку (до 3 попыток)
                     for (attempt in 1..3) {
                         if (!V2RayServiceManager.isRunning()) return@launch
                         val timeout = if (attempt == 1) 3500 else 4500
-                        val (delay, _) = SpeedtestManager.testConnection(this@MainActivity, socksPort, timeout)
+                        val delay = if (hideTunnel) {
+                            V2RayServiceManager.measureDelay()
+                        } else {
+                            SpeedtestManager.testConnection(this@MainActivity, socksPort, timeout).first
+                        }
                         if (delay > 0) {
                             successfulDelay = delay
                             break

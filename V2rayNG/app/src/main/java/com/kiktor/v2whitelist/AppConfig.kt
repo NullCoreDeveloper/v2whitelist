@@ -81,6 +81,7 @@ object AppConfig {
     const val PREF_START_SERVICES_NOTIFICATION = "pref_start_services_notification"
     const val PREF_PREFER_IPV6 = "pref_prefer_ipv6"
     const val PREF_PROXY_SHARING = "pref_proxy_sharing_enabled"
+    const val PREF_HIDE_TUNNEL = "pref_hide_tunnel"
     const val PREF_ALLOW_INSECURE = "pref_allow_insecure"
     const val PREF_SOCKS_PORT = "pref_socks_port"
     const val PREF_SOCKS_USER = "pref_socks_user"

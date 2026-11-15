@@ -944,4 +944,6 @@
     <string name="title_notifications_category">Notifications &amp; Indicators</string>
     <string name="title_pref_start_services_notification">\"Start Services Success\" Notification</string>
     <string name="summary_pref_start_services_notification">The \"Services started successfully\" notification serves as an indicator migrated from v2rayNG to ProBel, might do it in the next update</string>
+    <string name="title_pref_hide_tunnel">Hide tunnel from apps outside VPN</string>
+    <string name="summary_pref_hide_tunnel">Disable local SOCKS/HTTP proxy ports in TUN mode so bypassed apps cannot detect or use the VPN tunnel (ignored when LAN sharing is enabled)</string>
 </resources>

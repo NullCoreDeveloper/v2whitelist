@@ -140,24 +140,38 @@ object V2rayConfigManager {
             JsonArray()
         }
 
-        for (i in 0 until inboundsJson.size()) {
+        for (i in inboundsJson.size() - 1 downTo 0) {
             val elem = inboundsJson.get(i)
             if (elem.isJsonObject) {
                 val inb = elem.asJsonObject
                 val tag = if (inb.has("tag") && inb.get("tag")?.isJsonNull == false) inb.get("tag").asString else ""
-                if (tag == "tun") return result
+                val proto = if (inb.has("protocol") && inb.get("protocol")?.isJsonNull == false) inb.get("protocol").asString else ""
+                if (tag == "tun") {
+                    if (!SettingsManager.isHideTunnelEnabled()) return result
+                    continue
+                }
+                if (SettingsManager.isHideTunnelEnabled() && (proto == "socks" || proto == "http")) {
+                    inboundsJson.remove(i)
+                }
             }
         }
 
-        // add tun inbound from template
-        val templateConfig = initV2rayConfig(context) ?: return result
-        val inboundTun = templateConfig.inbounds.firstOrNull { it.tag == "tun" } ?: return result
-        inboundTun.settings?.mtu = SettingsManager.getVpnMtu()
+        val hasTunInbound = (0 until inboundsJson.size()).any { idx ->
+            val elem = inboundsJson.get(idx)
+            elem.isJsonObject && elem.asJsonObject.get("tag")?.asString == "tun"
+        }
 
-        // add to json
-        inboundsJson.add(JsonUtil.parseString(JsonUtil.toJson(inboundTun)))
-        if (inboundsJson.size() == 1) {
-            json.add("inbounds", inboundsJson)
+        if (!hasTunInbound) {
+            // add tun inbound from template
+            val templateConfig = initV2rayConfig(context) ?: return result
+            val inboundTun = templateConfig.inbounds.firstOrNull { it.tag == "tun" } ?: return result
+            inboundTun.settings?.mtu = SettingsManager.getVpnMtu()
+
+            // add to json
+            inboundsJson.add(JsonUtil.parseString(JsonUtil.toJson(inboundTun)))
+            if (inboundsJson.size() == 1) {
+                json.add("inbounds", inboundsJson)
+            }
         }
 
         val updatedRaw = JsonUtil.toJsonPretty(json) ?: return result
@@ -467,15 +481,6 @@ object V2rayConfigManager {
             val socksPort = SettingsManager.getSocksPort()
             val inbound1 = v2rayConfig.inbounds[0]
 
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING) != true) {
-                inbound1.listen = AppConfig.LOOPBACK
-            }
-            inbound1.port = socksPort
-            inbound1.settings?.auth = "password"
-            inbound1.settings?.accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
-                user = SettingsManager.getSocksUser(),
-                pass = SettingsManager.getSocksPass()
-            ))
             val fakedns = MmkvManager.decodeSettingsBool(AppConfig.PREF_FAKE_DNS_ENABLED) == true
             val sniffAllTlsAndHttp =
                 MmkvManager.decodeSettingsBool(AppConfig.PREF_SNIFFING_ENABLED, true) != false
@@ -489,16 +494,31 @@ object V2rayConfigManager {
                 inbound1.sniffing?.destOverride?.add("fakedns")
             }
 
-            val inbound2 = JsonUtil.fromJson(JsonUtil.toJson(inbound1), V2rayConfig.InboundBean::class.java) ?: return false
-            inbound2.tag = EConfigType.HTTP.name.lowercase()
-            inbound2.port = SettingsManager.getHttpPort()
-            inbound2.protocol = EConfigType.HTTP.name.lowercase()
-            v2rayConfig.inbounds.add(inbound2)
-
             if (needTun()) {
                 val inboundTun = v2rayConfig.inbounds.firstOrNull { e -> e.tag == "tun" }
                 inboundTun?.settings?.mtu = SettingsManager.getVpnMtu()
                 inboundTun?.sniffing = inbound1.sniffing
+            }
+
+            if (needTun() && SettingsManager.isHideTunnelEnabled()) {
+                // Скрываем локальные SOCKS/HTTP порты от приложений вне VPN (остаётся только TUN)
+                v2rayConfig.inbounds.removeAll { it.tag != "tun" }
+            } else {
+                if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PROXY_SHARING) != true) {
+                    inbound1.listen = AppConfig.LOOPBACK
+                }
+                inbound1.port = socksPort
+                inbound1.settings?.auth = "password"
+                inbound1.settings?.accounts = listOf(V2rayConfig.InboundBean.InSettingsBean.AccountsBean(
+                    user = SettingsManager.getSocksUser(),
+                    pass = SettingsManager.getSocksPass()
+                ))
+
+                val inbound2 = JsonUtil.fromJson(JsonUtil.toJson(inbound1), V2rayConfig.InboundBean::class.java) ?: return false
+                inbound2.tag = EConfigType.HTTP.name.lowercase()
+                inbound2.port = SettingsManager.getHttpPort()
+                inbound2.protocol = EConfigType.HTTP.name.lowercase()
+                v2rayConfig.inbounds.add(inbound2)
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to configure inbounds", e)

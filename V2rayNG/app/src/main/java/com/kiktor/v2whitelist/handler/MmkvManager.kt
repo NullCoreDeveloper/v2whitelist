@@ -873,6 +873,7 @@ object MmkvManager {
         AppConfig.PREF_DOUBLE_COLUMN_DISPLAY,
         AppConfig.PREF_PREFER_IPV6,
         AppConfig.PREF_PROXY_SHARING,
+        AppConfig.PREF_HIDE_TUNNEL,
         AppConfig.PREF_ALLOW_INSECURE,
         AppConfig.PREF_IS_BOOTED,
         AppConfig.PREF_AUTO_CHECK_UPDATE,

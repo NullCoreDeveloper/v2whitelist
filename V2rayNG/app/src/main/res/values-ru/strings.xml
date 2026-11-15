@@ -937,4 +937,6 @@
     <string name="title_notifications_category">Уведомления и индикаторы</string>
     <string name="title_pref_start_services_notification">Уведомление «Службы успешно запущены»</string>
     <string name="summary_pref_start_services_notification">Уведомление «Службы успешно запущены» служит индикатором, перекочевавшим из v2rayNG в ПроБел, возможно сделаю в следующем обновлении</string>
+    <string name="title_pref_hide_tunnel">Скрывать туннель от приложений вне VPN</string>
+    <string name="summary_pref_hide_tunnel">Отключает локальные порты SOCKS/HTTP в режиме TUN, чтобы приложения вне VPN не могли обнаружить или использовать туннель (не действует при включённой раздаче по LAN)</string>
 </resources>
