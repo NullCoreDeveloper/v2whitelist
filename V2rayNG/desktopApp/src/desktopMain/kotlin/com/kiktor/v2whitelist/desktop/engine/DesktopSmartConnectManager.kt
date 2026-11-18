@@ -466,7 +466,13 @@ class DesktopSmartConnectManager(
                             for (candidate in channel) {
                                 if (!isActive || winnerFound.get()) break
                                 val serverName = candidate.profile.remarks.ifBlank { candidate.profile.server }
-                                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, "Проверяем профиль: $serverName…")
+                                val isSpeedOnly = candidate.checkedByV2W && v2wFullVerifyMode
+                                val stageLabel = if (isSpeedOnly) {
+                                    "Замер скорости: $serverName…"
+                                } else {
+                                    "Проверяем профиль: $serverName…"
+                                }
+                                onStageChanged?.invoke(SmartConnectStage.VERIFYING_NODE, stageLabel)
                                 GeekModeLogger.log(
                                     "SmartConnect",
                                     "v2w-core нашел узел $serverName (${candidate.delayMs}ms, v2wChecked=${candidate.checkedByV2W}) -> Xray верификация..."

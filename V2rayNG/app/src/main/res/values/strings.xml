@@ -290,7 +290,7 @@
     <string name="title_pref_update_sub_only_via_vpn">Update Subscriptions Only via VPN</string>
     <string name="summary_pref_update_sub_only_via_vpn">If enabled, subscriptions will only update when a VPN connection is active, preventing leaks.</string>
     <string name="title_pref_sub_concurrency">Concurrent subscription updates</string>
-    <string name="summary_pref_sub_concurrency">Number of subscriptions to download simultaneously (default: 3)</string>
+    <string name="summary_pref_sub_concurrency">Number of subscriptions to download simultaneously (default: 15)</string>
     <string name="title_pref_auto_update_interval">Auto Update Interval (Minutes, Min value 15)</string>
 
     <string name="title_pref_custom_user_agent">Custom User-Agent</string>

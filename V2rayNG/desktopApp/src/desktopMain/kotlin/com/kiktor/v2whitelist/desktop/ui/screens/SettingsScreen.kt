@@ -224,7 +224,7 @@ fun SettingsScreen(
             directDomains = customDirect,
             proxyDomains = customProxy,
             subUserAgent = userAgent,
-            subThreads = subThreads.toIntOrNull() ?: 3,
+            subThreads = (subThreads.toIntOrNull() ?: 15).coerceIn(1, 20),
             subAutoUpdate = subAutoUpdate,
             subIntervalMins = subIntervalMins.toIntOrNull() ?: 30,
             subUpdateOnStart = subUpdateOnStart,

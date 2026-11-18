@@ -231,7 +231,7 @@ class DesktopAppState(
 
     val subscriptionUserAgent = MutableStateFlow(settingsRepo.getString("subscription_user_agent", "v2rayNG/1.10.x"))
     val subscriptionUpdateOnlyViaProxy = MutableStateFlow(settingsRepo.getBoolean("subscription_update_only_via_proxy", false))
-    val subscriptionThreads = MutableStateFlow(settingsRepo.getInt("subscription_threads", 3))
+    val subscriptionThreads = MutableStateFlow(settingsRepo.getInt("subscription_threads", 15).coerceIn(1, 20))
     val subscriptionAutoUpdate = MutableStateFlow(settingsRepo.getBoolean("subscription_auto_update", true))
     val subscriptionUpdateIntervalMinutes = MutableStateFlow(settingsRepo.getInt("subscription_update_interval_minutes", 30))
     val subscriptionUpdateOnStartup = MutableStateFlow(settingsRepo.getBoolean("subscription_update_on_startup", true))
@@ -469,7 +469,7 @@ class DesktopAppState(
                     }
                     val isExpired = oldestUpdate <= 0L || (System.currentTimeMillis() - oldestUpdate) >= intervalMs
                     if (isExpired || hasFailed || noRegularServers) {
-                        delay(3000L)
+                        delay(10_000L)
                         if (coreState.value == DesktopCoreState.RUNNING) {
                             GeekModeLogger.log("Subscriptions", "VPN активен: запуск отложенного обновления подписок через защищённое соединение...")
                             updateAllActiveSubscriptions()
@@ -1108,10 +1108,12 @@ class DesktopAppState(
             }
 
             if (isExpired || noServers) {
-                if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
+                val isBsBlocked = networkStatus.value == NetworkStatusChecker.STATUS_WHITELIST_ONLY &&
+                    coreState.value != DesktopCoreState.RUNNING
+                if ((subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) || isBsBlocked) {
                     GeekModeLogger.log(
                         "Subscriptions",
-                        "Автообновление подписок при старте отложено: включено «Только через VPN», ожидаем подключения."
+                        "Автообновление подписок при старте отложено до подключения VPN (режим БС / Только через VPN)."
                     )
                 } else {
                     val reason = if (noServers) "список серверов пуст" else "подписки устарели (> ${subscriptionUpdateIntervalMinutes.value} мин)"
@@ -1237,7 +1239,7 @@ class DesktopAppState(
                     return@launch
                 }
 
-                val concurrency = subscriptionThreads.value.coerceIn(1, 10)
+                val concurrency = subscriptionThreads.value.coerceIn(1, 20)
                 val semaphore = Semaphore(concurrency)
                 val ua = subscriptionUserAgent.value.takeIf { it.isNotBlank() } ?: "v2rayNG/1.10.x"
 

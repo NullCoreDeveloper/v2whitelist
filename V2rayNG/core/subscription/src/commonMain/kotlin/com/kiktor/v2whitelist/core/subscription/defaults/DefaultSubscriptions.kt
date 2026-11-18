@@ -343,6 +343,124 @@ object DefaultSubscriptions {
             groupRegex = "(?i)(LTE|BL|КIЗЯК)",
             enabled = true,
             targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST, CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 27. VLESS-PO-GRIBI (из прошлых версий ПроБел) ---
+        CustomSubData(
+            id = "def_hiztin_gribi",
+            name = "VLESS-PO-GRIBI (Альтернативные маршруты) [github/hiztin]",
+            url = listOf(
+                "https://raw.githubusercontent.com/hiztin/VLESS-PO-GRIBI/main/deploy/subscriptions/25.txt",
+                "https://fastly.jsdelivr.net/gh/hiztin/VLESS-PO-GRIBI@main/deploy/subscriptions/25.txt"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 28. CYBERPORTAL VLESS Black All RU ---
+        CustomSubData(
+            id = "def_cyberportal_cp002",
+            name = "CYBERPORTAL (VLESS Black All RU) [@cyb_portal]",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-002.txt",
+                "https://warp-gen.cyb-portal.org/CP-002"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 29. CYBERPORTAL VLESS White List ---
+        CustomSubData(
+            id = "def_cyberportal_cp035",
+            name = "CYBERPORTAL (VLESS White List) [@cyb_portal]",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-035.txt",
+                "https://warp-gen.cyb-portal.org/CP-035"
+            ).joinToString("|"),
+            groupRegex = "(?i)(White\\s*List|WL)",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 30. CYBERPORTAL CIDR White All RU ---
+        CustomSubData(
+            id = "def_cyberportal_cp006",
+            name = "CYBERPORTAL (CIDR White All RU) [@cyb_portal]",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-006.txt",
+                "https://warp-gen.cyb-portal.org/CP-006"
+            ).joinToString("|"),
+            groupRegex = "(?i)(CIDR)",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 31. CYBERPORTAL SNI White All RU ---
+        CustomSubData(
+            id = "def_cyberportal_cp008",
+            name = "CYBERPORTAL (SNI White All RU) [@cyb_portal]",
+            url = listOf(
+                "https://raw.githubusercontent.com/NullCoreDeveloper/cyberportal-mirror/master/cp-008.txt",
+                "https://warp-gen.cyb-portal.org/CP-008"
+            ).joinToString("|"),
+            groupRegex = "(?i)(SNI)",
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
+        ),
+
+        // --- 32. ЭтоНеЯ Черные списки ---
+        CustomSubData(
+            id = "def_etoneya_blacklist",
+            name = "ЭтоНеЯ (Черные списки) [@etoneya]",
+            url = listOf(
+                "https://etoneya.su/other",
+                "https://etoneya.best/other",
+                "https://alley.serv00.net/other",
+                "https://etoskam.ru/other"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 33. ЭтоНеЯ Gemini ---
+        CustomSubData(
+            id = "def_etoneya_gemini",
+            name = "ЭтоНеЯ (Работает Gemini) [@etoneya]",
+            url = listOf(
+                "https://etoneya.su/gemini",
+                "https://etoneya.best/gemini",
+                "https://alley.serv00.net/gemini",
+                "https://etoskam.ru/gemini"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 34. ЭтоНеЯ YouTube Music ---
+        CustomSubData(
+            id = "def_etoneya_ytm",
+            name = "ЭтоНеЯ (YouTube Music) [@etoneya]",
+            url = listOf(
+                "https://etoneya.su/ytm",
+                "https://etoneya.best/ytm",
+                "https://alley.serv00.net/ytm",
+                "https://etoskam.ru/ytm"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+        ),
+
+        // --- 35. AirLinkVPN (Белые списки РКН) ---
+        CustomSubData(
+            id = "def_airlink_whitelist",
+            name = "AirLinkVPN (Белые списки РКН) [github/AirLinkVPN1]",
+            url = listOf(
+                "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/main/rkn_white_list",
+                "https://fastly.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list",
+                "https://cdn.jsdelivr.net/gh/AirLinkVPN1/AirLinkVPN@main/rkn_white_list"
+            ).joinToString("|"),
+            enabled = true,
+            targetScenarios = listOf(CustomSubData.SCENARIO_WHITELIST)
         )
     )
 }

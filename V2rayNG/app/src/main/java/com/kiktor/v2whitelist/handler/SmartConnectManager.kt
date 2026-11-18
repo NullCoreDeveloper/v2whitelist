@@ -352,25 +352,8 @@ object SmartConnectManager {
         }
         
         if (isStartup) {
-            val internetStatus = NetworkManager.checkInternetStatus()
-            if (internetStatus == 1) { // JAMMED
-                // ВАЖНО: используем GlobalScope.launch, а НЕ coroutineScope!
-                // coroutineScope блокировал возврат из connectToBest на 5+ секунд,
-                // и если updateSubscription падал — убивал весь smartConnect → серая кнопка.
-                CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
-                    try {
-                        delay(5000) // Ждем пока VPN разгонится
-                        GeekModeLogger.log("SmartConnect", "Survival logic: Jamming detected, triggering background update via VPN")
-                        SubscriptionHelper.updateSubscription(context, sequential = false)
-                    } catch (e: Exception) {
-                        GeekModeLogger.log("SmartConnect", "Survival logic: background update failed" + ": " + e)
-                    }
-                }
-            }
-
             val isAutoUpdateEnabled = MmkvManager.decodeSettingsBool(AppConfig.SUBSCRIPTION_AUTO_UPDATE, true)
             if (isAutoUpdateEnabled) {
-                // Ищем самую старую обычную подписку среди включенных (исключая доверенные)
                 val allSubs = MmkvManager.decodeSubscriptions()
                 val regularEnabledSubs = allSubs.filter {
                     it.subscription.enabled &&
@@ -385,13 +368,21 @@ object SmartConnectManager {
                     val intervalMs = intervalMins * 60_000L
 
                     if (System.currentTimeMillis() - oldestUpdate >= intervalMs) {
-                        GeekModeLogger.log("SmartConnect", "smartConnect: triggering background subscription update")
-                        GlobalScope.launch(Dispatchers.IO) {
+                        // Не дёргаем обновление во время установки соединения (особенно на БС):
+                        // ждём стабилизации VPN-туннеля и запускаем тихий фоновый воркер WorkManager.
+                        CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
                             try {
-                                // Быстрое параллельное обновление подписок с mirror racing
-                                SubscriptionHelper.updateSubscription(context, isStartup = true, sequential = false)
+                                delay(12_000L)
+                                if (!V2RayServiceManager.isRunning()) {
+                                    return@launch
+                                }
+                                GeekModeLogger.log(
+                                    "SmartConnect",
+                                    "VPN активен: запуск отложенного фонового обновления подписок через SubscriptionUpdaterWorker"
+                                )
+                                com.kiktor.v2whitelist.service.SubscriptionUpdaterWorker.runOnce(context.applicationContext)
                             } catch (e: Exception) {
-                                GeekModeLogger.log("SmartConnect", "smartConnect: background update failed" + ": " + e)
+                                GeekModeLogger.log("SmartConnect", "smartConnect: deferred worker trigger failed: $e")
                             }
                         }
                     }

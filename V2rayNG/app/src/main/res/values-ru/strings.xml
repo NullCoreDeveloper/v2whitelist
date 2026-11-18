@@ -267,7 +267,7 @@
     <string name="title_pref_update_sub_only_via_vpn">Обновлять подписки только через VPN</string>
     <string name="summary_pref_update_sub_only_via_vpn">Если включено, подписки будут обновляться только при наличии активного VPN-соединения, чтобы избежать утечек IP-адреса.</string>
     <string name="title_pref_sub_concurrency">Параллельное обновление подписок</string>
-    <string name="summary_pref_sub_concurrency">Количество одновременно загружаемых подписок (по умолчанию: 3)</string>
+    <string name="summary_pref_sub_concurrency">Количество одновременно загружаемых подписок (по умолчанию: 15)</string>
     <string name="title_pref_auto_update_interval">Интервал автообновления (минут, не менее 15)</string>
 
     <string name="title_pref_custom_user_agent">Пользовательский User-Agent</string>

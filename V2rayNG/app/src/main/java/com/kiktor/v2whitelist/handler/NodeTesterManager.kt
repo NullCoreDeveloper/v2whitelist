@@ -216,7 +216,7 @@ object NodeTesterManager {
             return false
         }
 
-        if (showStatus) {
+        if (showStatus && !speedOnlyMode) {
             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_profile))
         }
 

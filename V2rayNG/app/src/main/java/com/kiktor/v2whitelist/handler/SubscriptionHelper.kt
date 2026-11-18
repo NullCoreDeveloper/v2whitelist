@@ -708,7 +708,7 @@ object SubscriptionHelper {
                 it.subscription.enabled
         }
         val totalSubs = enabledCustomSubs.size + regularSubs.size
-        val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 10)
+        val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 20)
         val semaphore = Semaphore(concurrency)
         val startedCount = AtomicInteger(0)
         val finishedCount = AtomicInteger(0)

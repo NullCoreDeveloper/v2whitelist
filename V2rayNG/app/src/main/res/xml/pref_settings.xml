@@ -249,7 +249,7 @@
         <EditTextPreference
             android:inputType="number"
             android:key="pref_sub_concurrency"
-            android:defaultValue="3"
+            android:defaultValue="15"
             android:summary="@string/summary_pref_sub_concurrency"
             android:title="@string/title_pref_sub_concurrency" />
 
