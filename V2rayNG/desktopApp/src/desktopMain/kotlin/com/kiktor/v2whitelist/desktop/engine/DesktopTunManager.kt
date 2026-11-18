@@ -52,6 +52,7 @@ object DesktopTunManager {
     private var logJob: Job? = null
     private var currentSudoPassword: String? = null
     private var configuredRoute: ConfiguredServerRoute? = null
+    private val configuredDnsRoutes = mutableListOf<Pair<String, String>>()
     private var activeTunGw: String = DEFAULT_TUN_GW
 
     var isTunActive: Boolean = false
@@ -597,6 +598,20 @@ object DesktopTunManager {
                         }
                     }
 
+                    // 4b. Прямые маршруты к DNS физического адаптера (защита от DNS-ловушки при route 0/1)
+                    configuredDnsRoutes.clear()
+                    val physDnsList = detectWindowsPhysicalDnsServers(
+                        tunDns = setOf("1.1.1.1", "8.8.8.8"),
+                        excludeIps = setOfNotNull(serverIp, gateway)
+                    )
+                    for (dnsIp in physDnsList) {
+                        val dnsRouteRes = runCommand("cmd", "/c", "route add $dnsIp mask 255.255.255.255 $gateway metric 1")
+                        if (dnsRouteRes.first == 0) {
+                            configuredDnsRoutes.add(dnsIp to gateway)
+                            GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к DNS провайдера: $dnsIp -> $gateway")
+                        }
+                    }
+
                     // 5. Очищаем возможные старые маршруты во избежание коллизий
                     runCommand("cmd", "/c", "route delete 0.0.0.0 mask 128.0.0.0")
                     runCommand("cmd", "/c", "route delete 128.0.0.0 mask 128.0.0.0")
@@ -702,6 +717,10 @@ object DesktopTunManager {
                     runCommand("cmd", "/c", "route delete ${route.ip} mask 255.255.255.255 ${route.gateway}")
                     configuredRoute = null
                 }
+                for ((dnsIp, gw) in configuredDnsRoutes) {
+                    runCommand("cmd", "/c", "route delete $dnsIp mask 255.255.255.255 $gw")
+                }
+                configuredDnsRoutes.clear()
                 runCommand("ipconfig", "/flushdns")
             }
 
@@ -880,6 +899,60 @@ object DesktopTunManager {
             }
         }
         return null
+    }
+
+    /**
+     * Извлекает публичные IPv4 DNS-серверы физических адаптеров Windows (исключая wintun/loopback),
+     * чтобы при добавлении маршрутов 0.0.0.0/1 системный DNS-клиент не зациклился.
+     */
+    internal fun detectWindowsPhysicalDnsServers(
+        tunDns: Set<String> = setOf("1.1.1.1", "8.8.8.8"),
+        excludeIps: Set<String> = emptySet()
+    ): List<String> {
+        val (code, output) = runCommand("netsh", "interface", "ipv4", "show", "dnsservers")
+        if (code != 0) return emptyList()
+        return parseNetshDnsServers(output, tunDns, excludeIps)
+    }
+
+    internal fun parseNetshDnsServers(
+        output: String,
+        tunDns: Set<String> = setOf("1.1.1.1", "8.8.8.8"),
+        excludeIps: Set<String> = emptySet()
+    ): List<String> {
+        val result = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        val excluded = tunDns + excludeIps
+        val ipv4Regex = Regex("""\b(\d{1,3}(?:\.\d{1,3}){3})\b""")
+        var skipSection = false
+
+        for (rawLine in output.lines()) {
+            val line = rawLine.trim()
+            if (line.isEmpty()) {
+                skipSection = false
+                continue
+            }
+            if (line.contains("\"")) {
+                val lower = line.lowercase()
+                skipSection = lower.contains("\"wintun\"") || lower.contains("loopback")
+            }
+            if (skipSection) continue
+
+            for (match in ipv4Regex.findAll(line)) {
+                val ip = match.groupValues[1]
+                val parts = ip.split(".").mapNotNull { it.toIntOrNull() }
+                if (parts.size != 4 || parts.any { it !in 0..255 }) continue
+                val a = parts[0]
+                val b = parts[1]
+                val isLocal = a == 0 || a == 127 || a == 10 ||
+                    (a == 169 && b == 254) ||
+                    (a == 172 && b in 16..31) ||
+                    (a == 192 && b == 168) ||
+                    a >= 224
+                if (isLocal || ip in excluded || !seen.add(ip)) continue
+                result.add(ip)
+            }
+        }
+        return result
     }
 
     /**

@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.desktop
 
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -28,5 +29,32 @@ class DesktopTunManagerTest {
     fun testInitialTunState() {
         assertFalse(DesktopTunManager.isTunActive)
         assertFalse(DesktopTunManager.isServiceMode)
+    }
+
+    @Test
+    fun testParseNetshDnsServersExtractsPhysicalPublicDns() {
+        val sample = """
+            Configuration for interface "Ethernet"
+                DNS servers configured through DHCP:  46.61.250.138
+                                                      46.61.250.139
+            
+            Настройка интерфейса "Wi-Fi"
+                Статически настроенные DNS-серверы:   192.168.1.1
+                                                      77.88.8.8
+            
+            Configuration for interface "wintun"
+                Statically Configured DNS Servers:    1.1.1.1
+                                                      8.8.8.8
+            
+            Configuration for interface "Loopback Pseudo-Interface 1"
+                Statically Configured DNS Servers:    127.0.0.1
+        """.trimIndent()
+
+        val parsed = DesktopTunManager.parseNetshDnsServers(
+            output = sample,
+            tunDns = setOf("1.1.1.1", "8.8.8.8"),
+            excludeIps = setOf("192.168.1.1")
+        )
+        assertEquals(listOf("46.61.250.138", "46.61.250.139", "77.88.8.8"), parsed)
     }
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,13 +54,15 @@ type StatusResponse struct {
 }
 
 type TunServer struct {
-	mu           sync.Mutex
-	tunActive    bool
-	tunCmd       *exec.Cmd
-	tunDone      chan struct{}
-	startedAt    time.Time
-	activeConfig StartTunRequest
-	activeTunGW  string
+	mu              sync.Mutex
+	tunActive       bool
+	tunCmd          *exec.Cmd
+	tunDone         chan struct{}
+	startedAt       time.Time
+	activeConfig    StartTunRequest
+	activeTunGW     string
+	addedDnsRoutes  []string
+	addedDnsGateway string
 }
 
 func NewTunServer() *TunServer {
@@ -312,6 +315,22 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		}
 	}
 
+	// Добавляем прямые маршруты к DNS-серверам физического адаптера (защита от DNS-ловушки провайдера при route 0/1)
+	s.addedDnsRoutes = nil
+	s.addedDnsGateway = req.Gateway
+	if req.Gateway != "" {
+		physDNS := detectWindowsPhysicalDNS(dnsServers, req.ServerIP, req.Gateway)
+		for _, dnsIP := range physDNS {
+			out, err := exec.Command("route", "add", dnsIP, "mask", "255.255.255.255", req.Gateway, "metric", "1").CombinedOutput()
+			if err != nil {
+				log.Printf("[v2w-service] route add physical DNS %s warning: %s (%v)", dnsIP, string(out), err)
+			} else {
+				s.addedDnsRoutes = append(s.addedDnsRoutes, dnsIP)
+				log.Printf("[v2w-service] Direct route added for physical DNS: %s -> %s", dnsIP, req.Gateway)
+			}
+		}
+	}
+
 	// Маршрут для loopback: tun2socks работает как SYSTEM и подключается к Xray по 127.0.0.1.
 	// Без явного маршрута 127.0.0.0/8 трафик к loopback может уходить через wintun (метрика 1 < loopback 331),
 	// что приводит к "unsupported method" — tun2socks не может достучаться до Xray SOCKS5.
@@ -356,7 +375,7 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	exec.Command("ipconfig", "/flushdns").Run()
 
 	// Самопроверка: если через туннель реально нет интернета — не оставляем систему «без соединения»
-	if err := selfTest(); err != nil {
+	if err := selfTest(dnsServers); err != nil {
 		dumpDiagnostics()
 		return fmt.Errorf("SELFTEST_FAILED: через TUN нет интернета (%v). Подробности: %s", err, logDir())
 	}
@@ -392,11 +411,100 @@ func openLogFile(name string) *os.File {
 
 // selfTest: HTTP-запрос через системную маршрутизацию (т.е. через wintun -> tun2socks -> Xray).
 // Проверяет и DNS (домен), и реальную передачу данных (TCP-handshake в tun2socks успешен всегда).
-func selfTest() error {
+func detectWindowsPhysicalDNS(tunDNS []string, excludeIPs ...string) []string {
+	out, err := exec.Command("netsh", "interface", "ipv4", "show", "dnsservers").CombinedOutput()
+	if err != nil {
+		return nil
+	}
+	return parseNetshDnsServers(string(out), tunDNS, excludeIPs...)
+}
+
+func parseNetshDnsServers(output string, tunDNS []string, excludeIPs ...string) []string {
+	excluded := make(map[string]bool)
+	for _, ip := range tunDNS {
+		if trimmed := strings.TrimSpace(ip); trimmed != "" {
+			excluded[trimmed] = true
+		}
+	}
+	for _, ip := range excludeIPs {
+		if trimmed := strings.TrimSpace(ip); trimmed != "" {
+			excluded[trimmed] = true
+		}
+	}
+
+	var result []string
+	seen := make(map[string]bool)
+	skipSection := false
+
+	for _, rawLine := range strings.Split(output, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			skipSection = false
+			continue
+		}
+		// Заголовок секции содержит имя интерфейса в кавычках, напр. Configuration for interface "wintun"
+		if strings.Contains(line, "\"") {
+			lower := strings.ToLower(line)
+			skipSection = strings.Contains(lower, "\"wintun\"") || strings.Contains(lower, "loopback")
+		}
+		if skipSection {
+			continue
+		}
+		for _, field := range strings.Fields(line) {
+			tok := strings.Trim(field, "(),;")
+			parsed := net.ParseIP(tok)
+			if parsed == nil {
+				continue
+			}
+			v4 := parsed.To4()
+			if v4 == nil {
+				continue
+			}
+			ipStr := v4.String()
+			if v4.IsLoopback() || v4.IsUnspecified() || v4.IsLinkLocalUnicast() || v4.IsMulticast() || isLocalIP(ipStr) {
+				continue
+			}
+			if excluded[ipStr] || seen[ipStr] {
+				continue
+			}
+			seen[ipStr] = true
+			result = append(result, ipStr)
+		}
+	}
+	return result
+}
+
+func selfTest(dnsServers []string) error {
+	var targetDNS []string
+	for _, d := range dnsServers {
+		d = strings.TrimSpace(d)
+		if d != "" {
+			targetDNS = append(targetDNS, d)
+		}
+	}
+	if len(targetDNS) == 0 {
+		targetDNS = []string{"1.1.1.1", "8.8.8.8"}
+	}
+	tunResolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			dialer := &net.Dialer{Timeout: 2 * time.Second}
+			var lastErr error
+			for _, dnsIP := range targetDNS {
+				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(dnsIP, "53"))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			return nil, lastErr
+		},
+	}
 	transport := &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: (&net.Dialer{
-			Timeout: 3 * time.Second,
+			Timeout:  3 * time.Second,
+			Resolver: tunResolver,
 		}).DialContext,
 	}
 	client := &http.Client{
@@ -465,6 +573,15 @@ func (s *TunServer) stopTunLocked() {
 	if s.activeConfig.ServerIP != "" && s.activeConfig.Gateway != "" {
 		exec.Command("route", "delete", s.activeConfig.ServerIP, "mask", "255.255.255.255", s.activeConfig.Gateway).Run()
 	}
+	for _, dnsIP := range s.addedDnsRoutes {
+		if s.addedDnsGateway != "" {
+			exec.Command("route", "delete", dnsIP, "mask", "255.255.255.255", s.addedDnsGateway).Run()
+		} else {
+			exec.Command("route", "delete", dnsIP, "mask", "255.255.255.255").Run()
+		}
+	}
+	s.addedDnsRoutes = nil
+	s.addedDnsGateway = ""
 
 	// Сброс DNS кэша Windows
 	exec.Command("ipconfig", "/flushdns").Run()
