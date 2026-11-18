@@ -25,7 +25,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.tabs.TabLayoutMediator
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
@@ -255,6 +257,16 @@ class MainActivity : HelperBaseActivity() {
         checkBatteryOptimization()
         checkAppUpdate()
         checkAndShowOnboardingPurpose()
+
+        // Периодически обновляем отображение прошедшего времени ("прошло X мин") пока экран активен
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    updateSubscriptionStatusUI()
+                    delay(30_000L)
+                }
+            }
+        }
     }
 
     private fun checkAndShowOnboardingPurpose() {
@@ -1019,11 +1031,13 @@ class MainActivity : HelperBaseActivity() {
     private fun updateSubscriptionStatusUI() {
         if (isSubscriptionUpdating) return
         val subs = MmkvManager.decodeSubscriptions()
-        // minOf только по обычным подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
-        // Отключенные и доверенные подписки не должны влиять на статус и время на главном экране.
+        val validCustomGuids = SubscriptionHelper.loadCustomSubs().map { "custom_sub_${it.id}" }.toSet()
+        // minOf только по актуальным подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
+        // Отключенные, доверенные и осиротевшие кастомные подписки не должны влиять на статус и время на главном экране.
         val enabledSubs = subs.filter {
             it.subscription.enabled &&
-                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid)
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                (!it.guid.startsWith("custom_sub_") || it.guid in validCustomGuids)
         }
         val lastUpdateTime = enabledSubs.filter { it.subscription.lastUpdated > 0 }
             .minOfOrNull { it.subscription.lastUpdated } ?: 0L

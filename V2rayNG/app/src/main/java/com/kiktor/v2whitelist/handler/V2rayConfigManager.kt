@@ -146,11 +146,11 @@ object V2rayConfigManager {
                 val inb = elem.asJsonObject
                 val tag = if (inb.has("tag") && inb.get("tag")?.isJsonNull == false) inb.get("tag").asString else ""
                 val proto = if (inb.has("protocol") && inb.get("protocol")?.isJsonNull == false) inb.get("protocol").asString else ""
-                if (tag == "tun") {
+                if (tag == "tun" || proto == "tun") {
                     if (!SettingsManager.isHideTunnelEnabled()) return result
                     continue
                 }
-                if (SettingsManager.isHideTunnelEnabled() && (proto == "socks" || proto == "http")) {
+                if (SettingsManager.isHideTunnelEnabled()) {
                     inboundsJson.remove(i)
                 }
             }
@@ -624,6 +624,46 @@ object V2rayConfigManager {
                 }
             }
 
+            // Гарантируем, что YouTube и GGC (googlevideo.com) идут через proxy раньше правил bypass RU IP/domains
+            val rulesList = v2rayConfig.routing.rules
+            val ruBypassIdx = rulesList.indexOfFirst { rule ->
+                rule.outboundTag == AppConfig.TAG_DIRECT &&
+                    (rule.ip?.any { it == "geoip:ru" } == true || rule.domain?.any { it == "geosite:category-ru" } == true)
+            }
+            if (ruBypassIdx >= 0) {
+                val youtubeDomains = listOf(
+                    "geosite:youtube",
+                    "domain:youtube.com",
+                    "domain:youtu.be",
+                    "domain:googlevideo.com",
+                    "domain:ytimg.com",
+                    "domain:ggpht.com",
+                    "domain:youtubei.googleapis.com",
+                    "domain:yt3.ggpht.com"
+                )
+                val alreadyProxied = rulesList.take(ruBypassIdx).any { rule ->
+                    rule.outboundTag == AppConfig.TAG_PROXY &&
+                        rule.domain?.contains("geosite:youtube") == true &&
+                        rule.domain?.contains("domain:googlevideo.com") == true
+                }
+                if (!alreadyProxied) {
+                    val userDirectDomains = rulesList
+                        .filter { it.outboundTag == AppConfig.TAG_DIRECT }
+                        .flatMap { it.domain ?: emptyList() }
+                        .toSet()
+                    val effectiveYtDomains = youtubeDomains.filterTo(ArrayList()) { it !in userDirectDomains }
+                    if (effectiveYtDomains.isNotEmpty()) {
+                        rulesList.add(
+                            ruBypassIdx,
+                            RulesBean(
+                                outboundTag = AppConfig.TAG_PROXY,
+                                domain = effectiveYtDomains
+                            )
+                        )
+                    }
+                }
+            }
+
             // Inject RU routing dynamically if Bypass RU apps is enabled
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_RU_APPS, true) == true) {
                 v2rayConfig.routing.rules.add(
@@ -812,13 +852,18 @@ object V2rayConfigManager {
             val directDomain = getUserRule2Domain(AppConfig.TAG_DIRECT)
             val isCnRoutingMode = directDomain.contains(AppConfig.GEOSITE_CN)
             val geoipCn = arrayListOf(AppConfig.GEOIP_CN)
+            val effectiveDomesticDns = if (!isCnRoutingMode && domesticDns.firstOrNull() == "223.5.5.5") {
+                AppConfig.DNS_DIRECT
+            } else {
+                domesticDns.first()
+            }
             if (directDomain.isNotEmpty()) {
                 servers.add(
                     V2rayConfig.DnsBean.ServersBean(
-                        address = domesticDns.first(),
+                        address = effectiveDomesticDns,
                         domains = directDomain,
                         expectIPs = if (isCnRoutingMode) geoipCn else null,
-                        skipFallback = true,
+                        skipFallback = isCnRoutingMode,
                         tag = AppConfig.TAG_DOMESTIC_DNS
                     )
                 )

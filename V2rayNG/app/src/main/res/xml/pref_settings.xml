@@ -28,6 +28,12 @@
     <!-- Разделы настроек (вложенные экраны) -->
     <PreferenceCategory android:title="@string/title_settings_sections">
 
+        <!-- 0. Оформление (внешний вид, тема, язык, логотипы) -->
+        <Preference
+            android:key="pref_appearance_settings"
+            android:summary="@string/summary_appearance_settings"
+            android:title="@string/title_appearance_settings" />
+
         <!-- 1. ⚡ Сканер и ядро v2w-core -->
         <PreferenceScreen
             android:key="screen_scanner_and_core"
@@ -343,11 +349,6 @@
             android:key="pref_mode"
             android:summary="%s"
             android:title="@string/title_mode" />
-
-        <Preference
-            android:key="pref_appearance_settings"
-            android:summary="@string/summary_appearance_settings"
-            android:title="@string/title_appearance_settings" />
 
         <CheckBoxPreference
             android:key="pref_speed_enabled"

@@ -132,7 +132,15 @@ object SubscriptionHelper {
         }
         MmkvManager.encodeSettings("pref_defaults_added_v1", true)
 
-        // Санитизация: для всех отключенных подписок сбрасываем lastUpdated и удаляем остаточные серверы
+        // Санитизация: для всех отключенных подписок сбрасываем lastUpdated и удаляем остаточные серверы,
+        // а также удаляем осиротевшие custom_sub_* записи, которых нет в списке кастомных подписок
+        val validCustomGuids = customSubs.map { "custom_sub_${it.id}" }.toSet()
+        for (subCache in MmkvManager.decodeSubscriptions()) {
+            if (subCache.guid.startsWith("custom_sub_") && subCache.guid !in validCustomGuids) {
+                MmkvManager.removeServerViaSubid(subCache.guid)
+                MmkvManager.removeSubscription(subCache.guid)
+            }
+        }
         val allSubsInStorage = MmkvManager.decodeSubscriptions()
         for (sub in customSubs.filter { !it.enabled }) {
             sub.lastUpdated = 0L

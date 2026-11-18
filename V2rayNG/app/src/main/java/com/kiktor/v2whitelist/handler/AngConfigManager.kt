@@ -674,15 +674,18 @@ object AngConfigManager {
 
                                 // Если VPN активен (socksPort > 0), сразу опрашиваем через локальный прокси
                                 if (socksPort > 0) {
-                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 3500, socksPort) } catch (_: Exception) {}
+                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 7000, socksPort) } catch (_: Exception) {}
                                 }
                                 if (result.isEmpty() && httpPort > 0) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500, httpPort) } catch (_: Exception) {}
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000, httpPort) } catch (_: Exception) {}
                                 }
 
                                 // Если через прокси не удалось или VPN не включен (socksPort == 0) — пробуем напрямую
                                 if (result.isEmpty() && !onlyViaVpn) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 3500) } catch (_: Exception) {}
+                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000) } catch (_: Exception) {}
+                                    if (result.isEmpty() && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)) {
+                                        try { result = YandexTranslateUpdater.fetchContentViaYandex(singleUrl, 8000).orEmpty() } catch (_: Exception) {}
+                                    }
                                 }
 
                                 if (result.isNotEmpty()) {
@@ -699,7 +702,7 @@ object AngConfigManager {
                         }
                     }
                     
-                    configText = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+                    configText = kotlinx.coroutines.withTimeoutOrNull(18_000L) {
                         channel.receive()
                     } ?: ""
                     

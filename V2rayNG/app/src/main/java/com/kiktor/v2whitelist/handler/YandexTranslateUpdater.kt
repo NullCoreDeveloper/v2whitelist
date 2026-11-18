@@ -20,9 +20,14 @@ import java.util.regex.Pattern
 
 object YandexTranslateUpdater {
 
-    private const val YANDEX_TRANSLATE_BASE_URL = "https://translate.yandex.ru/translate?url="
+    private const val YANDEX_TRANSLATE_BASE_URL = "https://translate.yandex.ru/translate?lang=en-ru&view=compact&url="
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
     private val PRE_TAG_PATTERN = Pattern.compile("<pre[^>]*>(.*?)</pre>", Pattern.DOTALL or Pattern.CASE_INSENSITIVE)
+    private val rateLimitLock = Any()
+    @Volatile
+    private var rateLimitUntilMs: Long = 0L
+    @Volatile
+    private var lastRequestAtMs: Long = 0L
 
     /**
      * Builds URL for fetching content through Yandex Translate proxy.
@@ -86,13 +91,52 @@ object YandexTranslateUpdater {
     data class FetchResult(
         val body: String?,
         val isCaptcha: Boolean,
-        val captchaUrl: String? = null
+        val captchaUrl: String? = null,
+        val isRateLimited: Boolean = false,
+        val retryAfterMs: Long = 0L
     )
 
+    private fun awaitRateLimitWindow(minGapMs: Long = 400L) {
+        val waitMs = synchronized(rateLimitLock) {
+            val now = System.currentTimeMillis()
+            val targetTime = maxOf(rateLimitUntilMs, lastRequestAtMs + minGapMs)
+            val delayNeeded = (targetTime - now).coerceAtLeast(0L)
+            lastRequestAtMs = maxOf(now, targetTime)
+            delayNeeded
+        }
+        if (waitMs > 0L) {
+            try {
+                Thread.sleep(waitMs.coerceAtMost(15_000L))
+            } catch (_: InterruptedException) {}
+        }
+    }
+
+    private fun registerRateLimitCooldown(retryAfterMs: Long) {
+        val cooldown = retryAfterMs.coerceIn(3000L, 15_000L)
+        synchronized(rateLimitLock) {
+            val until = System.currentTimeMillis() + cooldown
+            if (until > rateLimitUntilMs) {
+                rateLimitUntilMs = until
+            }
+        }
+    }
+
     /**
-     * Performs direct HTTP GET request to Yandex Translate with cookie persistence and captcha detection.
+     * Выполняет одиночный запрос через Яндекс.Переводчик для резервного получения подписки (без интерактивных UI-диалогов).
      */
-    fun fetchHttp(urlStr: String, timeoutMs: Int = 7000): FetchResult {
+    fun fetchContentViaYandex(targetUrl: String, timeoutMs: Int = 8000): String? {
+        val yandexUrl = buildYandexTranslateUrl(targetUrl)
+        val res = fetchHttp(yandexUrl, timeoutMs = timeoutMs)
+        if (res.isCaptcha || res.isRateLimited || res.body.isNullOrBlank()) return null
+        val extracted = extractSubscriptionContent(res.body)
+        return extracted.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Performs direct HTTP GET request to Yandex Translate with cookie persistence, rate-limit backoff and captcha detection.
+     */
+    fun fetchHttp(urlStr: String, timeoutMs: Int = 8000): FetchResult {
+        awaitRateLimitWindow()
         var connection: HttpURLConnection? = null
         return try {
             val url = URL(urlStr)
@@ -150,6 +194,13 @@ object YandexTranslateUpdater {
                     return FetchResult(body = body, isCaptcha = true, captchaUrl = finalUrl)
                 }
                 FetchResult(body = body, isCaptcha = false)
+            } else if (responseCode == 429) {
+                val retryAfterSec = connection.getHeaderField("Retry-After")?.trim()?.toLongOrNull() ?: 5L
+                val retryMs = (retryAfterSec * 1000L).coerceIn(3000L, 15_000L)
+                registerRateLimitCooldown(retryMs)
+                Log.w(AppConfig.TAG, "YandexTranslateUpdater: HTTP 429 rate-limit, backing off ${retryMs}ms")
+                GeekModeLogger.log("YandexTranslate", "⚠️ HTTP 429 (лимит запросов Яндекса), пауза ${retryMs / 1000}с")
+                FetchResult(body = null, isCaptcha = false, isRateLimited = true, retryAfterMs = retryMs)
             } else if (responseCode == 403) {
                 val errBody = try {
                     readStream(connection.errorStream)
@@ -202,7 +253,11 @@ object YandexTranslateUpdater {
                 GeekModeLogger.log("YandexTranslate", "  → $prefix Зеркало ${index + 1}/${target.urls.size}: $mirror")
                 MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix ${target.remarks} (${index + 1}/${target.urls.size})")
 
-                var result = fetchHttp(yandexUrl, timeoutMs = 7000)
+                var result = fetchHttp(yandexUrl, timeoutMs = 8000)
+                if (result.isRateLimited) {
+                    delay(result.retryAfterMs.coerceIn(2500L, 10_000L))
+                    result = fetchHttp(yandexUrl, timeoutMs = 8000)
+                }
 
                 if (result.isCaptcha) {
                     Log.w(AppConfig.TAG, "YandexTranslateUpdater: SmartCaptcha detected for '${target.remarks}', invoking solver...")
@@ -347,7 +402,11 @@ object YandexTranslateUpdater {
         }
 
         // Обычные подписки
-        val regularSubs = allSubsInStorage.filter { !it.guid.startsWith("custom_sub_") && it.subscription.enabled }
+        val regularSubs = allSubsInStorage.filter {
+            !it.guid.startsWith("custom_sub_") &&
+                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                it.subscription.enabled
+        }
         for (sub in regularSubs) {
             val mirrorUrls = sub.subscription.url.split("|").map { it.trim() }.filter { it.isNotEmpty() }
             if (mirrorUrls.isNotEmpty()) {

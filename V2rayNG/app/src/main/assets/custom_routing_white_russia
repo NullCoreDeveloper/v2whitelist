@@ -27,6 +27,20 @@
     ]
   },
   {
+    "remarks": "Proxy YouTube",
+    "outboundTag": "proxy",
+    "domain": [
+      "geosite:youtube",
+      "domain:youtube.com",
+      "domain:youtu.be",
+      "domain:googlevideo.com",
+      "domain:ytimg.com",
+      "domain:ggpht.com",
+      "domain:youtubei.googleapis.com",
+      "domain:yt3.ggpht.com"
+    ]
+  },
+  {
     "remarks": "Bypass Russia domains",
     "outboundTag": "direct",
     "domain": [

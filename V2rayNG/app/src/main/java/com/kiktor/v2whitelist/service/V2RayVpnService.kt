@@ -384,7 +384,8 @@ class V2RayVpnService : VpnService(), ServiceControl {
         // Android Q (API 29) and above: Configure metering and HTTP proxy
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
-            if (MmkvManager.decodeSettingsBool(AppConfig.PREF_APPEND_HTTP_PROXY)) {
+            val httpProxyHidden = SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()
+            if (!httpProxyHidden && MmkvManager.decodeSettingsBool(AppConfig.PREF_APPEND_HTTP_PROXY)) {
                 builder.setHttpProxy(ProxyInfo.buildDirectProxy(LOOPBACK, SettingsManager.getHttpPort()))
             }
         }
@@ -458,7 +459,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
                     val isBroadRuRule = if (isPerAppProxyEnabled) false else pName.startsWith("ru.")
 
                     if (isBroadRuRule || 
-                        pName.contains("yandex") || 
+                        (pName.contains("yandex") && !pName.contains("browser")) || 
                         pName.contains("tinkoff") || 
                         pName.contains("sberbank") || 
                         pName.contains("vkontakte") || 

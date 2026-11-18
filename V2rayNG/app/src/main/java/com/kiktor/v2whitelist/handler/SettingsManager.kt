@@ -497,6 +497,7 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
         ensureDefaultValue(AppConfig.PREF_HIDE_TUNNEL, true)
+        ensureDefaultValue(AppConfig.PREF_LOCAL_DNS_ENABLED, true)
         sanitizeSpeedCheckSettings()
     }
 
