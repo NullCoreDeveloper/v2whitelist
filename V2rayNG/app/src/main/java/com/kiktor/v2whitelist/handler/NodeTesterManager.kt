@@ -174,9 +174,23 @@ object NodeTesterManager {
         customMinMbps: Double? = null,
         customBytes: Long? = null,
         customTimeoutMs: Int? = null,
-        ignoreCustomEndpoint: Boolean = true
+        ignoreCustomEndpoint: Boolean = true,
+        speedOnlyMode: Boolean = false,
+        preMeasuredLatencyMs: Long = 0L
     ): Boolean {
         if (!currentCoroutineContext().isActive) return false
+
+        val speedCheckEnabled = customMinMbps != null || MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
+        if (speedOnlyMode && !speedCheckEnabled) {
+            if (preMeasuredLatencyMs > 0) {
+                MmkvManager.encodeServerTestDelayMillis(guid, preMeasuredLatencyMs)
+            }
+            if (showStatus) {
+                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_profile_check_passed))
+            }
+            GeekModeLogger.log("NodeTester", "verifyProfile: v2w-core verified $guid, speedCheck disabled -> skipped Xray")
+            return true
+        }
         
         // Выделяем свободный локальный порт для SOCKS-прокси
         val port = try {
@@ -186,8 +200,17 @@ object NodeTesterManager {
             return false
         }
 
+        val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+        val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+        val endpointE2eCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
+        val effectiveIgnoreCustomEndpoint = if (speedOnlyMode && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+            false
+        } else {
+            ignoreCustomEndpoint
+        }
+
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
-        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port, ignoreCustomEndpoint)
+        val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port, effectiveIgnoreCustomEndpoint)
         if (!configResult.status) {
             GeekModeLogger.log("NodeTester", "verifyProfile: failed to create speedtest config for $guid")
             return false
@@ -229,8 +252,12 @@ object NodeTesterManager {
             val services = ServiceCheckManager.loadServices().filter { it.enabled }
             val effectiveTimeout = if (serviceCheckEnabled && services.isNotEmpty()) maxOf(timeout, 5000) else timeout
 
-            // Реальная проверка: проверка доступности сервисов либо HTTP 204
-            val (elapsed, isSuccess) = if (serviceCheckEnabled && services.isNotEmpty()) {
+            // В режиме speedOnlyMode (v2w-core уже проверил сервисы / E2E / 204) сразу переходим к скорости
+            val (elapsed, isSuccess) = if (speedOnlyMode) {
+                val measured = if (preMeasuredLatencyMs > 0) preMeasuredLatencyMs else 1L
+                GeekModeLogger.log("NodeTester", "verifyProfile: v2w-core verified $guid (${measured}ms) -> Xray speed-only")
+                measured to true
+            } else if (serviceCheckEnabled && services.isNotEmpty() && !(customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled)) {
                 if (showStatus) {
                     MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
                 }
@@ -259,10 +286,9 @@ object NodeTesterManager {
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
 
                 // --- Предпоследний этап: e2e проверка HTTP 204 через полноценный туннель к конечному узлу ---
-                val endpointE2eCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
                 var testPortForSpeed = port
 
-                if (ignoreCustomEndpoint && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                if (!speedOnlyMode && ignoreCustomEndpoint && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
                     if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_verifying_endpoint))
@@ -377,7 +403,11 @@ object NodeTesterManager {
         }
     }
 
-    fun verifyAndCacheLeftovers(context: Context, candidates: List<Triple<String, ProfileItem, Long>>) {
+    fun verifyAndCacheLeftovers(
+        context: Context,
+        candidates: List<Triple<String, ProfileItem, Long>>,
+        speedOnlyMode: Boolean = false
+    ) {
         val limitedCandidates = candidates.take(3)
         CoroutineScope(Dispatchers.IO).launch {
             kotlinx.coroutines.withTimeoutOrNull(30_000L) {
@@ -386,7 +416,15 @@ object NodeTesterManager {
                     if (!isActive) break
                     if (MmkvManager.getVipCache().size >= MmkvManager.getVipCacheLimit()) break
                     if (profileCheckEnabled) {
-                        if (verifyProfile(context, candidate.first, showStatus = false)) {
+                        if (
+                            verifyProfile(
+                                context = context,
+                                guid = candidate.first,
+                                showStatus = false,
+                                speedOnlyMode = speedOnlyMode,
+                                preMeasuredLatencyMs = candidate.third
+                            )
+                        ) {
                             GeekModeLogger.log("NodeTester", "Background: added ${candidate.second.remarks} to VIP cache")
                             MmkvManager.addVipServer(candidate.first)
                         }

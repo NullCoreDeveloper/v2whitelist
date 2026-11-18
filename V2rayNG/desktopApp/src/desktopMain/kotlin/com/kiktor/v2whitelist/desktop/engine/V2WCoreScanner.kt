@@ -3,6 +3,7 @@ package com.kiktor.v2whitelist.desktop.engine
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
+import com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -48,11 +49,43 @@ object V2WCoreScanner {
         return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.v2wBinaryNames, customPath)
     }
 
+    private fun escapeJsonString(raw: String): String {
+        val sb = StringBuilder(raw.length)
+        for (ch in raw) {
+            when (ch) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
+    internal fun buildOptionsHeaderLine(
+        tcpConcurrency: Int,
+        verifyConcurrency: Int,
+        timeoutSec: Int,
+        endpointUrl: String?,
+        endpointE2e: Boolean,
+        serviceCheck: Boolean,
+        services: List<ServiceCheckItem>
+    ): String {
+        val svcJson = services.joinToString(",") { svc ->
+            """{"id":"${escapeJsonString(svc.id)}","name":"${escapeJsonString(svc.name)}","url":"${escapeJsonString(svc.url)}","enabled":${svc.enabled},"isCustom":${svc.isCustom}}"""
+        }
+        val ep = endpointUrl?.trim().orEmpty()
+        return """#v2w-opts:{"tcp_concurrency":$tcpConcurrency,"verify_concurrency":$verifyConcurrency,"timeout_sec":$timeoutSec,"endpoint_url":"${escapeJsonString(ep)}","endpoint_e2e":$endpointE2e,"service_check":$serviceCheck,"services":[$svcJson]}"""
+    }
+
     /**
      * Потоковое сканирование списка серверов через v2w-core.
      * @param servers список серверов (guid -> profile)
      * @param firstOnly если true, процесс v2w-core сам завершается после первого успешного узла
-     * @param concurrency количество параллельных проверок
+     * @param concurrency количество параллельных проверок профилей (по умолч. 35)
+     * @param tcpConcurrency количество параллельных TCP pre-check (по умолч. 50)
      * @param onNodeSuccess коллбек, вызываемый мгновенно при успехе ноды.
      *                      Если возвращает true — сканирование немедленно прерывается (stateless connect).
      */
@@ -61,8 +94,15 @@ object V2WCoreScanner {
         customBinaryPath: String? = null,
         firstOnly: Boolean = false,
         concurrency: Int = 35,
+        tcpConcurrency: Int = 50,
         timeoutSec: Int = 10,
-        onNodeSuccess: suspend (guid: String, profile: ProfileItem, delayMs: Long) -> Boolean
+        fullVerifyMode: Boolean = true,
+        endpointUrl: String? = null,
+        endpointE2e: Boolean = false,
+        serviceCheck: Boolean = false,
+        services: List<ServiceCheckItem> = emptyList(),
+        onNodeHit: (suspend (guid: String, profile: ProfileItem, delayMs: Long, checkedByV2W: Boolean) -> Boolean)? = null,
+        onNodeSuccess: suspend (guid: String, profile: ProfileItem, delayMs: Long) -> Boolean = { _, _, _ -> false }
     ): V2WScanSummary = withContext(Dispatchers.IO) {
         val validCustom = customBinaryPath?.takeIf { File(it).exists() }
         val binary = (validCustom?.let { findV2WScanExecutable(it) }) ?: findV2WScanExecutable(null)
@@ -104,7 +144,10 @@ object V2WCoreScanner {
             return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
         }
 
-        GeekModeLogger.log("v2w-core", "Запуск ядра сканирования: ${binary.absolutePath} (узлов: ${linksList.size}, потоков: $concurrency)")
+        GeekModeLogger.log(
+            "v2w-core",
+            "Запуск ядра сканирования: ${binary.absolutePath} (узлов: ${linksList.size}, TCP pre-check: $tcpConcurrency, проверка: $concurrency, fullVerify: $fullVerifyMode)"
+        )
 
         val cmd = mutableListOf(
             binary.absolutePath,
@@ -142,10 +185,27 @@ object V2WCoreScanner {
             activeProcess = process
         }
 
-        // Запись ссылок в stdin процесса в отдельном потоке (исключает взаимоблокировку буферов pipe)
+        // Запись опций и ссылок в stdin процесса в отдельном потоке (исключает взаимоблокировку буферов pipe)
+        val optionsHeader = if (fullVerifyMode) {
+            buildOptionsHeaderLine(
+                tcpConcurrency = tcpConcurrency,
+                verifyConcurrency = concurrency,
+                timeoutSec = timeoutSec,
+                endpointUrl = endpointUrl,
+                endpointE2e = endpointE2e,
+                serviceCheck = serviceCheck,
+                services = services
+            )
+        } else {
+            null
+        }
         val stdinWriter = Thread({
             try {
                 OutputStreamWriter(process.outputStream, Charsets.UTF_8).use { writer ->
+                    if (optionsHeader != null && process.isAlive) {
+                        writer.write(optionsHeader)
+                        writer.write("\n")
+                    }
                     for (link in linksList) {
                         if (!process.isAlive) break
                         writer.write(link)
@@ -191,6 +251,8 @@ object V2WCoreScanner {
                         if (parts.size >= 3) {
                             val delayMs = parts[1].toLongOrNull() ?: 0L
                             val configUrl = parts[2].trim()
+                            val checkedTag = parts.getOrNull(3)?.trim().orEmpty()
+                            val checkedByV2W = fullVerifyMode && checkedTag.startsWith("CHECKED=")
 
                             val isFragTcp = configUrl.contains("v2w_fragment=tcp") || configUrl.contains("⚡[FRAG:TCP]") || configUrl.contains("[FRAG:TCP]")
                             val isFragRecord = configUrl.contains("v2w_fragment=record") || configUrl.contains("⚡[FRAG:RECORD]") || configUrl.contains("[FRAG:RECORD]")
@@ -233,8 +295,9 @@ object V2WCoreScanner {
                                         matched.second.remarks = "${matched.second.remarks} ⚡[FRAG:RECORD]"
                                     }
                                 }
-                                GeekModeLogger.log("v2w-core", "Node responded: ${matched.second.remarks} (${delayMs}ms)")
-                                val shouldAbort = onNodeSuccess(matched.first, matched.second, delayMs)
+                                GeekModeLogger.log("v2w-core", "Node responded: ${matched.second.remarks} (${delayMs}ms, v2wChecked=$checkedByV2W)")
+                                val shouldAbort = onNodeHit?.invoke(matched.first, matched.second, delayMs, checkedByV2W)
+                                    ?: onNodeSuccess(matched.first, matched.second, delayMs)
                                 if (shouldAbort) {
                                     stoppedEarly = true
                                     GeekModeLogger.log("v2w-core", "Stateless fast-match triggered! Остановка сканера...")

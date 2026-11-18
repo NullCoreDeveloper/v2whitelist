@@ -526,6 +526,21 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                                     }
                                 }
                             }
+                            "pref_v2w_tcp_concurrency" -> {
+                                val conc = pref.text?.toIntOrNull() ?: 50
+                                pref.summary = getString(R.string.pref_concurrency_summary, conc)
+                                pref.setOnPreferenceChangeListener { p, newValue ->
+                                    val raw = newValue as? String
+                                    val c = raw?.toIntOrNull()
+                                    if (c == null || c <= 0 || c > 200) {
+                                        requireContext().toast(getString(R.string.toast_invalid_value))
+                                        false
+                                    } else {
+                                        p.summary = getString(R.string.pref_concurrency_summary, c)
+                                        true
+                                    }
+                                }
+                            }
                             else -> {
                                 pref.summary = pref.text.orEmpty()
                                 pref.setOnPreferenceChangeListener { p, newValue ->

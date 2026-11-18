@@ -62,9 +62,20 @@ object DesktopProfileVerifier {
         endpointE2eCheckEnabled: Boolean = true,
         serviceCheckEnabled: Boolean = false,
         servicesToCheck: List<com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem> = emptyList(),
+        speedOnlyMode: Boolean = false,
+        preMeasuredLatencyMs: Long = 0L,
         onStatusUpdate: ((String) -> Unit)? = null
     ): VerifyResult = withContext(Dispatchers.IO) {
         if (!isActive) throw CancellationException("Верификация отменена")
+        val serverTitle = profile.remarks.ifBlank { profile.server }
+        if (speedOnlyMode && !speedCheckEnabled) {
+            onStatusUpdate?.invoke("Проверено в v2w-core ✔: $serverTitle")
+            return@withContext VerifyResult(
+                success = true,
+                latencyMs = preMeasuredLatencyMs.coerceAtLeast(1L)
+            )
+        }
+
         val runner = XrayDesktopRunner()
         val binary = runner.findXrayExecutable(xrayBinaryPath)
         if (binary == null) {
@@ -76,13 +87,19 @@ object DesktopProfileVerifier {
 
         val testPort = findFreePort()
         val testHttpPort = findFreePort()
+        val singleChainEndpoint = if (speedOnlyMode && endpointE2eCheckEnabled && !customEndpointUrl.isNullOrBlank()) {
+            customEndpointUrl
+        } else {
+            null
+        }
         val options = XrayGeneratorOptions(
             socksPort = testPort,
             httpPort = testHttpPort,
             enableHttpInbound = true,
             logLevel = "none",
             bypassRussianServices = false,
-            bypassPrivateIps = false
+            bypassPrivateIps = false,
+            customEndpointUrl = singleChainEndpoint
         )
 
         var tempConfig: File? = null
@@ -120,103 +137,108 @@ object DesktopProfileVerifier {
                 )
             }
 
-            // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 через SOCKS / HTTP ──
-            val serverTitle = profile.remarks.ifBlank { profile.server }
-            val enabledServices = servicesToCheck.filter { it.enabled }
-            val useServicesCheck = serviceCheckEnabled && customEndpointUrl.isNullOrBlank() && enabledServices.isNotEmpty()
-
+            // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 (пропускается в speedOnlyMode, т.к. уже проверено в v2w-core) ──
             val latency: Long
-            if (useServicesCheck) {
-                onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
-                val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
-                    services = enabledServices,
-                    socksPort = testPort,
-                    httpPort = testHttpPort,
-                    timeoutMs = maxOf(timeoutMs, 5000L)
-                )
-                val failed = results.filter { !it.success }
-                if (failed.isNotEmpty()) {
-                    val failedNames = failed.joinToString(", ") { it.service.name }
-                    GeekModeLogger.log("Verifier", "${profile.remarks}: сервисы недоступны [$failedNames]")
-                    onStatusUpdate?.invoke("Сервисы недоступны ($failedNames), пробуем другой…")
-                    return@withContext VerifyResult(
-                        success = false,
-                        errorMessage = "Сервисы недоступны: $failedNames"
-                    )
-                }
-                latency = results.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 } ?: 100L
-                GeekModeLogger.log("Verifier", "${profile.remarks}: все ${enabledServices.size} сервисов доступны (ср. ${latency}ms)")
-            } else {
-                onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
-                val l = measureE2ELatency(testPort, testHttpPort, timeoutMs)
-                if (l <= 0) {
-                    GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
-                    onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
-                    return@withContext VerifyResult(
-                        success = false,
-                        errorMessage = "e2e проверка не прошла"
-                    )
-                }
-                latency = l
-                GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
-            }
-
-            // ── Шаг 1.5: e2e HTTP 204 либо проверка сервисов через конечный узел ──
             var testPortForSpeed = testPort
-            if (!customEndpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
-                onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
-                val chainedPort = findFreePort()
-                val chainedHttpPort = findFreePort()
-                val chainedOptions = options.copy(
-                    socksPort = chainedPort,
-                    httpPort = chainedHttpPort,
-                    enableHttpInbound = true,
-                    customEndpointUrl = customEndpointUrl
-                )
-                try {
-                    val chainedJson = XrayConfigGenerator.generateJson(profile, chainedOptions)
-                    chainedTempConfig = File.createTempFile("v2w_endpoint_e2e_", ".json").apply {
-                        deleteOnExit()
-                        writeText(chainedJson)
-                    }
-                    val chainedPb = ProcessBuilder(binary.absolutePath, "run", "-c", chainedTempConfig.absolutePath)
-                        .redirectErrorStream(true)
-                    chainedPb.directory(binary.parentFile)
-                    if (assetDir != null && assetDir.exists()) {
-                        chainedPb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
-                        chainedPb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
-                    }
-                    chainedProcess = chainedPb.start()
-                    activeProcesses.add(chainedProcess)
-                    delay(400)
-                    if (!chainedProcess.isAlive) {
-                        val exitCode = try { chainedProcess.exitValue() } catch (_: Exception) { -1 }
-                        val err = try { chainedProcess.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
-                        GeekModeLogger.log("Verifier", "Тестовый инстанс Xray для цепочки конечного узла упал при старте (code=$exitCode): $err")
+            if (speedOnlyMode) {
+                latency = preMeasuredLatencyMs.coerceAtLeast(1L)
+                GeekModeLogger.log("Verifier", "${profile.remarks}: v2w-core уже выполнил полную проверку (${latency}ms) -> Xray только замер скорости")
+            } else {
+                val enabledServices = servicesToCheck.filter { it.enabled }
+                val hasEndpointE2e = endpointE2eCheckEnabled && !customEndpointUrl.isNullOrBlank()
+                val useServicesCheck = serviceCheckEnabled && !hasEndpointE2e && enabledServices.isNotEmpty()
+
+                if (useServicesCheck) {
+                    onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
+                    val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                        services = enabledServices,
+                        socksPort = testPort,
+                        httpPort = testHttpPort,
+                        timeoutMs = maxOf(timeoutMs, 5000L)
+                    )
+                    val failed = results.filter { !it.success }
+                    if (failed.isNotEmpty()) {
+                        val failedNames = failed.joinToString(", ") { it.service.name }
+                        GeekModeLogger.log("Verifier", "${profile.remarks}: сервисы недоступны [$failedNames]")
+                        onStatusUpdate?.invoke("Сервисы недоступны ($failedNames), пробуем другой…")
                         return@withContext VerifyResult(
                             success = false,
-                            errorMessage = "Инстанс цепочки не запустился: $err"
+                            errorMessage = "Сервисы недоступны: $failedNames"
                         )
                     }
-
-                    if (!isActive) throw CancellationException("Верификация отменена")
-
-                    onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
-                    val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
-                    if (chainedLatency <= 0) {
-                        GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                    latency = results.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 } ?: 100L
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: все ${enabledServices.size} сервисов доступны (ср. ${latency}ms)")
+                } else {
+                    onStatusUpdate?.invoke("Проверяем профиль: $serverTitle…")
+                    val l = measureE2ELatency(testPort, testHttpPort, timeoutMs)
+                    if (l <= 0) {
+                        GeekModeLogger.log("Verifier", "Трафик не прошел через ${profile.remarks}")
+                        onStatusUpdate?.invoke("Профиль не прошёл проверку, пробуем другой…")
                         return@withContext VerifyResult(
                             success = false,
-                            errorMessage = "Конечный узел не отвечает через данный сервер"
+                            errorMessage = "e2e проверка не прошла"
                         )
                     }
-                    GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
-                    testPortForSpeed = chainedPort
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    GeekModeLogger.log("Verifier", "Ошибка при проверке цепочки: ${e.message}")
-                    return@withContext VerifyResult(success = false, errorMessage = e.message)
+                    latency = l
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
+                }
+
+                // ── Шаг 1.5: e2e HTTP 204 через конечный узел ──
+                if (!customEndpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                    onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
+                    val chainedPort = findFreePort()
+                    val chainedHttpPort = findFreePort()
+                    val chainedOptions = options.copy(
+                        socksPort = chainedPort,
+                        httpPort = chainedHttpPort,
+                        enableHttpInbound = true,
+                        customEndpointUrl = customEndpointUrl
+                    )
+                    try {
+                        val chainedJson = XrayConfigGenerator.generateJson(profile, chainedOptions)
+                        chainedTempConfig = File.createTempFile("v2w_endpoint_e2e_", ".json").apply {
+                            deleteOnExit()
+                            writeText(chainedJson)
+                        }
+                        val chainedPb = ProcessBuilder(binary.absolutePath, "run", "-c", chainedTempConfig.absolutePath)
+                            .redirectErrorStream(true)
+                        chainedPb.directory(binary.parentFile)
+                        if (assetDir != null && assetDir.exists()) {
+                            chainedPb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                            chainedPb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
+                        }
+                        chainedProcess = chainedPb.start()
+                        activeProcesses.add(chainedProcess)
+                        delay(400)
+                        if (!chainedProcess.isAlive) {
+                            val exitCode = try { chainedProcess.exitValue() } catch (_: Exception) { -1 }
+                            val err = try { chainedProcess.inputStream.bufferedReader().readText().trim() } catch (_: Exception) { "" }
+                            GeekModeLogger.log("Verifier", "Тестовый инстанс Xray для цепочки конечного узла упал при старте (code=$exitCode): $err")
+                            return@withContext VerifyResult(
+                                success = false,
+                                errorMessage = "Инстанс цепочки не запустился: $err"
+                            )
+                        }
+
+                        if (!isActive) throw CancellationException("Верификация отменена")
+
+                        onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
+                        val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
+                        if (chainedLatency <= 0) {
+                            GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                            return@withContext VerifyResult(
+                                success = false,
+                                errorMessage = "Конечный узел не отвечает через данный сервер"
+                            )
+                        }
+                        GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
+                        testPortForSpeed = chainedPort
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        GeekModeLogger.log("Verifier", "Ошибка при проверке цепочки: ${e.message}")
+                        return@withContext VerifyResult(success = false, errorMessage = e.message)
+                    }
                 }
             }
 

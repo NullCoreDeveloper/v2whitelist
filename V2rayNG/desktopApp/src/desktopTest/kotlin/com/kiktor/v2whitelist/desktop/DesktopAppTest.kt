@@ -378,5 +378,81 @@ class DesktopAppTest {
         assertTrue(kotlin.math.abs(speed - 4.0) < 0.01)
         assertNull(com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier.computeSustainedMbps(100_000L, 50_000_000L))
     }
+
+    @Test
+    fun testTcpPrecheckAndFullVerifyModeDefaultsAndSave() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+
+        assertEquals(50, state.tcpPrecheckConcurrency.value)
+        assertEquals(35, state.v2wCoreSockets.value)
+        assertEquals(true, state.v2wFullVerifyMode.value)
+
+        state.saveSettings(
+            subUrl = "",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            tcpPrecheck = 75,
+            v2wSockets = 40,
+            v2wFullVerify = false
+        )
+
+        assertEquals(75, state.tcpPrecheckConcurrency.value)
+        assertEquals(40, state.v2wCoreSockets.value)
+        assertEquals(false, state.v2wFullVerifyMode.value)
+        assertEquals(75, settingsRepo.getInt("pref_tcp_precheck_concurrency", 50))
+        assertEquals(40, settingsRepo.getInt("pref_v2w_core_sockets", 35))
+        assertEquals(false, settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
+    }
+
+    @Test
+    fun testV2WCoreOptionsHeaderAndSpeedOnlyVerifierSkip() = runTest {
+        val header = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.buildOptionsHeaderLine(
+            tcpConcurrency = 50,
+            verifyConcurrency = 35,
+            timeoutSec = 6,
+            endpointUrl = "vless://uuid@1.2.3.4:443",
+            endpointE2e = true,
+            serviceCheck = true,
+            services = listOf(
+                com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem(
+                    id = "custom_1",
+                    name = "Test \"Site\"",
+                    url = "https://example.org/ok",
+                    enabled = true,
+                    isCustom = true
+                )
+            )
+        )
+        assertTrue(header.startsWith("#v2w-opts:"))
+        assertTrue(header.contains("\"tcp_concurrency\":50"))
+        assertTrue(header.contains("\"verify_concurrency\":35"))
+        assertTrue(header.contains("\"endpoint_e2e\":true"))
+        assertTrue(header.contains("Test \\\"Site\\\""))
+
+        val profile = ProfileItem(
+            configType = EConfigType.VLESS,
+            server = "127.0.0.1",
+            serverPort = "443",
+            remarks = "Sample"
+        )
+        val res = com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier.verifyProfile(
+            profile = profile,
+            xrayBinaryPath = "/nonexistent/path/to/xray",
+            speedCheckEnabled = false,
+            speedOnlyMode = true,
+            preMeasuredLatencyMs = 42L
+        )
+        assertTrue(res.success)
+        assertEquals(42L, res.latencyMs)
+    }
 }
 

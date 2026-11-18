@@ -296,7 +296,9 @@ class DesktopAppState(
     val smartDistributionPreset = MutableStateFlow(settingsRepo.getString("pref_smart_distribution", "EQUAL"))
     val useV2WCore = MutableStateFlow(settingsRepo.getBoolean("pref_use_v2w_core", true))
     val useFallbackScanner = MutableStateFlow(settingsRepo.getBoolean("pref_use_fallback_scanner", true))
-    val v2wCoreSockets = MutableStateFlow(settingsRepo.getInt("pref_v2w_core_sockets", 35))
+    val tcpPrecheckConcurrency = MutableStateFlow(settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200))
+    val v2wCoreSockets = MutableStateFlow(settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100))
+    val v2wFullVerifyMode = MutableStateFlow(settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
 
     val removeInsecureProfiles = MutableStateFlow(settingsRepo.getBoolean("pref_remove_insecure_profiles", true))
     val testProfileBeforeConnect = MutableStateFlow(settingsRepo.getBoolean("pref_test_before_connect", true))
@@ -2258,13 +2260,22 @@ class DesktopAppState(
             val v2wPath = settingsRepo.getString("v2w_scan_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
             val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
 
+            val customEpUrl = if (useCustomEndpoint.value) customEndpointUrl.value.ifBlank { null } else null
+            val fullVerify = v2wFullVerifyMode.value
             V2WCoreScanner.runStreamingScan(
                 servers = all,
                 customBinaryPath = v2wPath,
                 firstOnly = false,
-                onNodeSuccess = { guid: String, profile: ProfileItem, delayMs: Long ->
+                concurrency = v2wCoreSockets.value,
+                tcpConcurrency = tcpPrecheckConcurrency.value,
+                fullVerifyMode = fullVerify,
+                endpointUrl = customEpUrl,
+                endpointE2e = endpointE2eCheckEnabled.value,
+                serviceCheck = serviceCheckEnabled.value,
+                services = servicesList.value,
+                onNodeHit = { guid: String, profile: ProfileItem, delayMs: Long, checkedByV2W: Boolean ->
                     if (delayMs in 1..1500) {
-                        // Верификация через Xray ядро и скорость
+                        // Верификация через Xray ядро (или только скорость, если v2w-core уже проверил профиль)
                         val verifyRes = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
                             DesktopProfileVerifier.verifyProfile(
                                 profile = profile,
@@ -2273,14 +2284,19 @@ class DesktopAppState(
                                 speedCheckEnabled = speedTestOnCheck.value,
                                 minSpeedMbps = minSpeedThresholdMbps.value,
                                 bytesToDownload = speedTestDownloadBytes.value.toLong(),
+                                customEndpointUrl = customEpUrl,
+                                endpointE2eCheckEnabled = endpointE2eCheckEnabled.value,
                                 serviceCheckEnabled = serviceCheckEnabled.value,
-                                servicesToCheck = servicesList.value
+                                servicesToCheck = servicesList.value,
+                                speedOnlyMode = checkedByV2W && fullVerify,
+                                preMeasuredLatencyMs = delayMs
                             )
                         }
                         if (verifyRes.success) {
                             serverRepo.addVipServer(guid, limit)
-                            _pingMap.value = _pingMap.value + (guid to (if (verifyRes.latencyMs > 0) verifyRes.latencyMs else delayMs))
-                            GeekModeLogger.log("GeekMode", "Узел принят в VIP: ${profile.remarks} (204: ${verifyRes.latencyMs}ms, скорость: ${verifyRes.speedMbps ?: "—"} Мбит/с)")
+                            val lat = if (verifyRes.latencyMs > 0) verifyRes.latencyMs else delayMs
+                            _pingMap.value = _pingMap.value + (guid to lat)
+                            GeekModeLogger.log("GeekMode", "Узел принят в VIP: ${profile.remarks} (${lat}ms, скорость: ${verifyRes.speedMbps ?: "—"} Мбит/с)")
                         } else {
                             GeekModeLogger.log("GeekMode", "Узел ${profile.remarks} отклонен: ${verifyRes.errorMessage}")
                         }
@@ -2458,7 +2474,9 @@ class DesktopAppState(
         smartPreset: String = smartDistributionPreset.value,
         v2wCore: Boolean = useV2WCore.value,
         fallbackScanner: Boolean = useFallbackScanner.value,
+        tcpPrecheck: Int = tcpPrecheckConcurrency.value,
         v2wSockets: Int = v2wCoreSockets.value,
+        v2wFullVerify: Boolean = v2wFullVerifyMode.value,
         removeInsecure: Boolean = removeInsecureProfiles.value,
         testBeforeConnect: Boolean = testProfileBeforeConnect.value,
         serviceCheck: Boolean = serviceCheckEnabled.value,
@@ -2530,7 +2548,11 @@ class DesktopAppState(
         smartDistributionPreset.value = smartPreset
         useV2WCore.value = v2wCore
         useFallbackScanner.value = fallbackScanner
-        v2wCoreSockets.value = v2wSockets
+        val clampedTcp = tcpPrecheck.coerceIn(1, 200)
+        val clampedV2w = v2wSockets.coerceIn(1, 100)
+        tcpPrecheckConcurrency.value = clampedTcp
+        v2wCoreSockets.value = clampedV2w
+        v2wFullVerifyMode.value = v2wFullVerify
         removeInsecureProfiles.value = removeInsecure
         testProfileBeforeConnect.value = testBeforeConnect
         serviceCheckEnabled.value = serviceCheck
@@ -2627,7 +2649,9 @@ class DesktopAppState(
             settingsRepo.setString("pref_smart_distribution", smartPreset)
             settingsRepo.setBoolean("pref_use_v2w_core", v2wCore)
             settingsRepo.setBoolean("pref_use_fallback_scanner", fallbackScanner)
-            settingsRepo.setInt("pref_v2w_core_sockets", v2wSockets)
+            settingsRepo.setInt("pref_tcp_precheck_concurrency", clampedTcp)
+            settingsRepo.setInt("pref_v2w_core_sockets", clampedV2w)
+            settingsRepo.setBoolean("pref_v2w_full_verify_mode", v2wFullVerify)
             settingsRepo.setBoolean("pref_remove_insecure_profiles", removeInsecure)
             settingsRepo.setBoolean("pref_test_before_connect", testBeforeConnect)
             settingsRepo.setBoolean("pref_service_check_enabled", serviceCheck)
@@ -2714,6 +2738,9 @@ class DesktopAppState(
         speedTestOnCheck.value = true
         smartConnectBatchSize.value = 20
         verifyConcurrency.value = 4
+        tcpPrecheckConcurrency.value = 50
+        v2wCoreSockets.value = 35
+        v2wFullVerifyMode.value = true
         smartFailover.value = true
         autoCheckUpdates.value = true
         settingsRevision.value++

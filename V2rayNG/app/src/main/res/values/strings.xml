@@ -331,8 +331,12 @@
     <string name="title_smartconnect_settings">SmartConnect Settings</string>
     <string name="title_pref_v2w_core_enabled">Use v2w-core engine</string>
     <string name="summary_pref_v2w_core_enabled">Experimental. Mass parallel server scanning to bypass DDoS protection and find the best nodes in real-time.</string>
-    <string name="title_pref_v2w_core_concurrency">v2w-core socket concurrency</string>
-    <string name="summary_pref_v2w_core_concurrency">Maximum number of concurrent connections for scanning (Default: 20)</string>
+    <string name="title_pref_v2w_core_concurrency">v2w-core profile check concurrency</string>
+    <string name="summary_pref_v2w_core_concurrency">Maximum number of concurrent profile checks (Default: 35)</string>
+    <string name="title_pref_v2w_tcp_concurrency">TCP pre-check concurrency</string>
+    <string name="summary_pref_v2w_tcp_concurrency">Maximum concurrent TCP pre-check sockets before profile verification (Default: 50)</string>
+    <string name="title_pref_v2w_full_verify_mode">Full verification in v2w-core</string>
+    <string name="summary_pref_v2w_full_verify_mode">Run 204, service &amp; exit-node checks asynchronously in v2w-core; Xray only measures speed</string>
     <string name="title_pref_v2w_core_fallback">Fallback to classic scanner</string>
     <string name="summary_pref_v2w_core_fallback">If v2w-core finds no available servers, automatically switch to classic scanner</string>
     <string name="status_v2w_fallback_to_classic">v2w-core: falling back to classic scanner…</string>

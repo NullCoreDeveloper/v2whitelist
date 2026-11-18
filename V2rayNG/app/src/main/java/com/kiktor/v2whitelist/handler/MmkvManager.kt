@@ -890,6 +890,7 @@ object MmkvManager {
         AppConfig.PREF_USE_BUILTIN_SUB,
         AppConfig.PREF_IS_PAUSED,
         AppConfig.PREF_V2W_CORE_ENABLED,
+        AppConfig.PREF_V2W_FULL_VERIFY_MODE,
         AppConfig.PREF_V2W_CORE_FALLBACK,
         AppConfig.PREF_V2W_CORE_MIGRATION_V1,
         AppConfig.PREF_AMOLED_BLACK,
@@ -1100,7 +1101,16 @@ object MmkvManager {
 
     fun getV2wCoreConcurrency(): Int {
         val concStr = decodeSettingsString(AppConfig.PREF_V2W_CORE_CONCURRENCY, "35")
-        return concStr?.toIntOrNull() ?: 35
+        return concStr?.toIntOrNull()?.coerceIn(1, 200) ?: 35
+    }
+
+    fun getV2wTcpConcurrency(): Int {
+        val concStr = decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY, "50")
+        return concStr?.toIntOrNull()?.coerceIn(1, 200) ?: 50
+    }
+
+    fun isV2wFullVerifyMode(): Boolean {
+        return decodeSettingsBool(AppConfig.PREF_V2W_FULL_VERIFY_MODE, true)
     }
 
     //endregion

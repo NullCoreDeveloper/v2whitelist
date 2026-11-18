@@ -104,7 +104,9 @@ fun SettingsScreen(
     // Ядро v2w-core
     var useV2w by remember { mutableStateOf(state.useV2WCore.value) }
     var useFallback by remember { mutableStateOf(state.useFallbackScanner.value) }
+    var tcpPrecheckInput by remember { mutableStateOf(state.tcpPrecheckConcurrency.value.toString()) }
     var v2wSockets by remember { mutableStateOf(state.v2wCoreSockets.value.toString()) }
+    var v2wFullVerify by remember { mutableStateOf(state.v2wFullVerifyMode.value) }
     var xrayPathInput by remember { mutableStateOf(state.xrayBinaryPath.value) }
     var v2wPathInput by remember { mutableStateOf(state.v2wScanPath.value) }
 
@@ -237,7 +239,9 @@ fun SettingsScreen(
             smartPreset = smartPreset,
             v2wCore = useV2w,
             fallbackScanner = useFallback,
-            v2wSockets = v2wSockets.toIntOrNull() ?: 35,
+            tcpPrecheck = (tcpPrecheckInput.toIntOrNull() ?: 50).coerceIn(1, 200),
+            v2wSockets = (v2wSockets.toIntOrNull() ?: 35).coerceIn(1, 100),
+            v2wFullVerify = v2wFullVerify,
             removeInsecure = removeInsecure,
             testBeforeConnect = testBeforeConnect,
             serviceCheck = serviceCheckEnabled,
@@ -319,7 +323,9 @@ fun SettingsScreen(
         smartPreset = state.smartDistributionPreset.value
         useV2w = state.useV2WCore.value
         useFallback = state.useFallbackScanner.value
+        tcpPrecheckInput = state.tcpPrecheckConcurrency.value.toString()
         v2wSockets = state.v2wCoreSockets.value.toString()
+        v2wFullVerify = state.v2wFullVerifyMode.value
         xrayPathInput = state.xrayBinaryPath.value
         v2wPathInput = state.v2wScanPath.value
         removeInsecure = state.removeInsecureProfiles.value
@@ -410,7 +416,9 @@ fun SettingsScreen(
         smartPreset != state.smartDistributionPreset.value ||
         useV2w != state.useV2WCore.value ||
         useFallback != state.useFallbackScanner.value ||
+        tcpPrecheckInput != state.tcpPrecheckConcurrency.value.toString() ||
         v2wSockets != state.v2wCoreSockets.value.toString() ||
+        v2wFullVerify != state.v2wFullVerifyMode.value ||
         xrayPathInput != state.xrayBinaryPath.value ||
         v2wPathInput != state.v2wScanPath.value ||
         removeInsecure != state.removeInsecureProfiles.value ||
@@ -706,6 +714,20 @@ fun SettingsScreen(
                         checked = useFallback,
                         onCheckedChange = { useFallback = it }
                     )
+                    SettingSwitchRow(
+                        title = strings.v2wFullVerifyTitle,
+                        desc = strings.v2wFullVerifyDesc,
+                        checked = v2wFullVerify,
+                        onCheckedChange = { v2wFullVerify = it }
+                    )
+                    OutlinedTextField(
+                        value = tcpPrecheckInput,
+                        onValueChange = { tcpPrecheckInput = it },
+                        label = { Text(strings.tcpPrecheckLabel) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = v2wSockets,
                         onValueChange = { v2wSockets = it },

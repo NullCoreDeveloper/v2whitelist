@@ -239,6 +239,9 @@ interface AppStrings {
     val v2wFallback: String
     val v2wFallbackDesc: String
     val v2wSocketsLabel: String
+    val tcpPrecheckLabel: String get() = "TCP pre-check concurrency (default 50)"
+    val v2wFullVerifyTitle: String get() = "Full verification in v2w-core"
+    val v2wFullVerifyDesc: String get() = "v2w-core handles HTTP 204, service & endpoint checks; Xray only measures speed"
     val xrayPathLabel: String
     val v2wPathLabel: String
     val cardProfileCheck: String
@@ -657,7 +660,10 @@ object StringsRu : AppStrings {
     override val v2wEnableDesc: String = "Быстрое нативное тестирование через отдельный процесс"
     override val v2wFallback: String = "Fallback на старый сканер"
     override val v2wFallbackDesc: String = "Резервный механизм при сбоях нативного бинарника"
-    override val v2wSocketsLabel: String = "Количество сокетов v2w-core (параллелизм)"
+    override val v2wSocketsLabel: String = "Потоки проверки профилей v2w-core (по умолч. 35)"
+    override val tcpPrecheckLabel: String = "Потоки TCP pre-check (по умолч. 50)"
+    override val v2wFullVerifyTitle: String = "Полная проверка в v2w-core (Xray только скорость)"
+    override val v2wFullVerifyDesc: String = "204, сервисы и конечный узел проверяются асинхронно в v2w-core; Xray замеряет только скорость"
     override val xrayPathLabel: String = "Путь к бинарнику Xray (оставьте пустым для автопоиска)"
     override val v2wPathLabel: String = "Путь к бинарнику v2w-scan (оставьте пустым для автопоиска)"
     override val cardProfileCheck: String = "Smart-проверка профилей"
@@ -1066,7 +1072,10 @@ object StringsEn : AppStrings {
     override val v2wEnableDesc: String = "Ultra-fast native probing through a dedicated background process"
     override val v2wFallback: String = "Fallback to legacy scanner"
     override val v2wFallbackDesc: String = "Fallback probing mechanism if the native binary encounters errors"
-    override val v2wSocketsLabel: String = "v2w-core socket concurrency limit"
+    override val v2wSocketsLabel: String = "v2w-core profile check concurrency (default 35)"
+    override val tcpPrecheckLabel: String = "TCP pre-check concurrency (default 50)"
+    override val v2wFullVerifyTitle: String = "Full verification in v2w-core (Xray speed-only)"
+    override val v2wFullVerifyDesc: String = "Run 204, service & exit-node checks asynchronously in v2w-core; Xray only measures speed"
     override val xrayPathLabel: String = "Xray binary path (leave empty for auto-detection)"
     override val v2wPathLabel: String = "v2w-scan binary path (leave empty for auto-detection)"
     override val cardProfileCheck: String = "Smart Profile Validation"

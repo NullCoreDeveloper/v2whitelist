@@ -182,6 +182,8 @@ object AppConfig {
     /** v2w-core settings */
     const val PREF_V2W_CORE_ENABLED = "pref_v2w_core_enabled"
     const val PREF_V2W_CORE_CONCURRENCY = "pref_v2w_core_concurrency"
+    const val PREF_V2W_TCP_CONCURRENCY = "pref_v2w_tcp_concurrency"
+    const val PREF_V2W_FULL_VERIFY_MODE = "pref_v2w_full_verify_mode"
     const val PREF_V2W_CORE_FALLBACK = "pref_v2w_core_fallback"
     const val PREF_V2W_CORE_MIGRATION_V1 = "v2w_core_default_enabled_migrated_v1"
 

@@ -307,8 +307,12 @@
     <string name="title_pref_v2w_core_enabled">Использовать ядро v2w-core</string>
     <string name="summary_pref_v2w_core_enabled">Экспериментально. Массовое параллельное сканирование серверов для обхода DDoS-защиты и поиска лучших узлов в реальном времени.</string>
     <string name="v2w_core_init">Инициализация v2w-core сканера…</string>
-    <string name="title_pref_v2w_core_concurrency">Количество сокетов v2w-core</string>
-    <string name="summary_pref_v2w_core_concurrency">Максимальное количество параллельных подключений для сканирования (по умолчанию: 20)</string>
+    <string name="title_pref_v2w_core_concurrency">Потоки проверки профилей v2w-core</string>
+    <string name="summary_pref_v2w_core_concurrency">Максимум параллельных проверок профилей в v2w-core (по умолчанию: 35)</string>
+    <string name="title_pref_v2w_tcp_concurrency">Потоки TCP pre-check</string>
+    <string name="summary_pref_v2w_tcp_concurrency">Максимум параллельных TCP pre-check сокетов до проверки профилей (по умолчанию: 50)</string>
+    <string name="title_pref_v2w_full_verify_mode">Полная проверка в v2w-core</string>
+    <string name="summary_pref_v2w_full_verify_mode">204, сервисы и конечный узел проверяются асинхронно в v2w-core; Xray замеряет только скорость</string>
     <string name="title_pref_v2w_core_fallback">Резервный классический сканер</string>
     <string name="summary_pref_v2w_core_fallback">Если v2w-core не найдет доступных серверов, автоматически переключаться на старый сканер</string>
     <string name="status_v2w_fallback_to_classic">v2w-core: переключение на старый сканер…</string>

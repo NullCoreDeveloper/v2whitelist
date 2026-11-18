@@ -11,14 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 
-	core "github.com/kiktor/v2w-core" // the scanner package
 	"github.com/kiktor/v2w-core/common/net"
 	"github.com/kiktor/v2w-core/common/protocol"
 	"github.com/kiktor/v2w-core/common/serial"
-	"github.com/kiktor/v2w-core/common/session"
 	"github.com/kiktor/v2w-core/proxy/hysteria"
 	"github.com/kiktor/v2w-core/proxy/hysteria/account"
 	"github.com/kiktor/v2w-core/proxy/shadowsocks"
@@ -84,10 +80,11 @@ func StopV2WScanner() {
 }
 
 func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {
-	if maxConcurrency <= 0 {
-		maxConcurrency = 20
+	opts, links, hasHeader := ParseConfigsWithOptions(configs, int(maxConcurrency))
+	if maxConcurrency > 0 && !hasHeader {
+		opts.VerifyConcurrency = int(maxConcurrency)
 	}
-	
+
 	scanMutex.Lock()
 	if scanCancel != nil {
 		scanCancel()
@@ -96,16 +93,6 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 	scanCancel = cancelGlobal
 	scanMutex.Unlock()
 
-	configs = strings.ReplaceAll(configs, "\r\n", "\n")
-	rawLines := strings.Split(configs, "\n")
-	var links []string
-	for _, line := range rawLines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "vless://") || strings.HasPrefix(line, "vmess://") || strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") || strings.HasPrefix(line, "trojan://") || strings.HasPrefix(line, "ss://") {
-			links = append(links, line)
-		}
-	}
-
 	if len(links) == 0 {
 		if callback != nil {
 			callback.OnScanComplete(0, 0)
@@ -113,162 +100,23 @@ func RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallbac
 		return
 	}
 
-	var wg sync.WaitGroup
-	coreScanner := core.NewScanner()
-	var successCount int64
-	var failCount int64
-
-	sem := make(chan struct{}, maxConcurrency)
-
-	for _, l := range links {
-		wg.Add(1)
-		go func(linkStr string) {
-			defer wg.Done()
-
-			// Check if we should abort before waiting for semaphore
-			if globalCtx.Err() != nil {
-				return
-			}
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			// Check again after acquiring semaphore
-			if globalCtx.Err() != nil {
-				return
-			}
-
-			config, stream, dest, err := parseVlessURL(linkStr)
-			if err != nil {
-				atomic.AddInt64(&failCount, 1)
-				return
-			}
-			_ = dest
-
-			// Fast TCP pre-check to rapidly drop dead/blackholed endpoints
-			// before heavy Xray in-memory initialization and TLS handshake.
-			if dest.Network == net.Network_TCP {
-				targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
-				tcpDialer := stdnet.Dialer{Timeout: 2000 * time.Millisecond}
-				network := "tcp"
-				if dest.Address.Family().IsDomain() {
-					network = "tcp4"
-				}
-				tcpConn, tcpErr := tcpDialer.DialContext(globalCtx, network, targetAddr)
-				if tcpErr != nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				_ = tcpConn.Close()
-			}
-
-			var handler core.ProxyHandler
-			if outboundConfig, ok := config.(*vless_outbound.Config); ok {
-				h, err := vless_outbound.New(context.Background(), outboundConfig)
-				if err != nil || h == nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				handler = h
-			} else if outboundConfig, ok := config.(*vmess_outbound.Config); ok {
-				h, err := vmess_outbound.New(context.Background(), outboundConfig)
-				if err != nil || h == nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				handler = h
-			} else if outboundConfig, ok := config.(*hysteria.ClientConfig); ok {
-				h, err := hysteria.NewClient(session.ContextWithStreamSettings(context.Background(), stream), outboundConfig)
-				if err != nil || h == nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				handler = h
-			} else if outboundConfig, ok := config.(*trojan.ClientConfig); ok {
-				h, err := trojan.NewClient(context.Background(), outboundConfig)
-				if err != nil || h == nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				handler = h
-			} else if outboundConfig, ok := config.(*shadowsocks.ClientConfig); ok {
-				h, err := shadowsocks.NewClient(context.Background(), outboundConfig)
-				if err != nil || h == nil {
-					atomic.AddInt64(&failCount, 1)
-					return
-				}
-				handler = h
-			}
-
-			if handler == nil {
-				atomic.AddInt64(&failCount, 1)
-				return
-			}
-
-			dialer := &customDialer{streamSettings: stream}
-			targetDest := net.TCPDestination(net.DomainAddress("cp.cloudflare.com"), 80)
-
-			startT := time.Now()
-			ctx, cancel := context.WithTimeout(globalCtx, 5*time.Second)
-			res := coreScanner.TestNode(ctx, handler, dialer, targetDest)
-			delayMs := time.Since(startT).Milliseconds()
-			cancel()
-
-			if res.Error == nil {
-				atomic.AddInt64(&successCount, 1)
-				if callback != nil {
-					callback.OnServerSuccess(linkStr, delayMs)
-				}
-				return
-			}
-
-			// Fallback: Retry with ClientHello fragmentation on TLS failure
-			isTLS := stream.SecurityType == "tls" || stream.SecurityType == "reality"
-			if isTLS && dest.Network == net.Network_TCP {
-				// Retry 1: TCP segmentation
-				fragCtx, fragCancel := context.WithTimeout(globalCtx, 4*time.Second)
-				fragCtx = internet.ContextWithFragment(fragCtx, internet.FragmentTCP)
-				fStart := time.Now()
-				fragRes := coreScanner.TestNode(fragCtx, handler, dialer, targetDest)
-				fDelay := time.Since(fStart).Milliseconds()
-				fragCancel()
-
-				if fragRes.Error == nil {
-					atomic.AddInt64(&successCount, 1)
-					if callback != nil {
-						fragLink := tagLinkWithFragment(linkStr, "tcp")
-						callback.OnServerSuccess(fragLink, fDelay)
-					}
-					return
-				}
-
-				// Retry 2: TLS record-layer splitting
-				recCtx, recCancel := context.WithTimeout(globalCtx, 4*time.Second)
-				recCtx = internet.ContextWithFragment(recCtx, internet.FragmentRecord)
-				rStart := time.Now()
-				recRes := coreScanner.TestNode(recCtx, handler, dialer, targetDest)
-				rDelay := time.Since(rStart).Milliseconds()
-				recCancel()
-
-				if recRes.Error == nil {
-					atomic.AddInt64(&successCount, 1)
-					if callback != nil {
-						fragLink := tagLinkWithFragment(linkStr, "record")
-						callback.OnServerSuccess(fragLink, rDelay)
-					}
-					return
-				}
-			}
-
-			atomic.AddInt64(&failCount, 1)
-		}(l)
-	}
-
 	go func() {
-		wg.Wait()
-		if callback != nil {
-			callback.OnScanComplete(atomic.LoadInt64(&successCount), atomic.LoadInt64(&failCount))
-		}
+		RunScanPipeline(globalCtx, links, opts, ScanEventCallbacks{
+			OnSuccess: func(link string, delayMs int64, mode string, _ string) {
+				if callback != nil {
+					outLink := link
+					if hasHeader {
+						outLink = appendQueryParam(link, "v2w_checked", mode)
+					}
+					callback.OnServerSuccess(outLink, delayMs)
+				}
+			},
+			OnComplete: func(totalSuccess int64, totalFailed int64, _ int64) {
+				if callback != nil {
+					callback.OnScanComplete(totalSuccess, totalFailed)
+				}
+			},
+		})
 	}()
 }
 
@@ -585,7 +433,8 @@ func parseVmessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 	return config, streamSettings, dest, nil
 }
 
-func parseVlessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
+// ParseNodeURL парсит URI узла (VLESS/VMess/Trojan/Shadowsocks/Hysteria2) в конфиг Xray и настройки транспорта.
+func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
 	if strings.HasPrefix(rawURL, "vmess://") {
 		return parseVmessURL(rawURL)
 	}
