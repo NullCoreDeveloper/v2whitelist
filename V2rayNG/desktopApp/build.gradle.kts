@@ -186,7 +186,11 @@ tasks.matching {
         // Compose копирует в каталог ресурсов приложения (app/resources) только содержимое common/ и <os>-<arch>/,
         // иначе в MSI/EXE-установщике нет xray/tun2socks/v2w-scan.
         val commonDir = File(resDir, "common").apply { mkdirs() }
-        if (binDir.exists()) binDir.copyRecursively(File(commonDir, "bin"), overwrite = true)
+        if (binDir.exists()) {
+            val commonBin = File(commonDir, "bin").apply { mkdirs() }
+            binDir.copyRecursively(commonBin, overwrite = true)
+            commonBin.listFiles()?.forEach { it.setExecutable(true) }
+        }
         if (assetsDir.exists()) assetsDir.copyRecursively(File(commonDir, "assets"), overwrite = true)
         val winDir = File(resDir, "windows-x64").apply { mkdirs() }
         if (binDir.exists()) binDir.copyRecursively(File(winDir, "bin"), overwrite = true)
@@ -339,7 +343,61 @@ tasks.matching {
             val destAssets = File(resDir, "assets").apply { mkdirs() }
             if (binDir.exists()) binDir.copyRecursively(destBin, overwrite = true)
             if (assetsDir.exists()) assetsDir.copyRecursively(destAssets, overwrite = true)
-            destBin.listFiles()?.forEach { it.setExecutable(true) }
+
+            // Выставляем +x на все исполняемые файлы в Contents/MacOS, Contents/Resources/bin и Contents/app/resources/bin
+            listOf(
+                File(macAppDir, "Contents/MacOS"),
+                destBin,
+                File(macAppDir, "Contents/app/resources/bin")
+            ).forEach { dir ->
+                if (dir.exists()) {
+                    dir.listFiles()?.forEach { f ->
+                        if (f.isFile) f.setExecutable(true, false)
+                    }
+                }
+            }
+
+            // Переподписываем .app (adhoc) ПОСЛЕ копирования bin/ и assets/, иначе _CodeSignature/CodeResources ломается
+            runCatching {
+                ProcessBuilder("xattr", "-cr", macAppDir.absolutePath).start().waitFor()
+            }
+            val signProc = ProcessBuilder(
+                "codesign", "--force", "--deep", "--sign", "-", macAppDir.absolutePath
+            ).inheritIO().start()
+            val signExit = signProc.waitFor()
+            if (signExit != 0) {
+                throw GradleException("codesign failed with exit code $signExit for ${macAppDir.absolutePath}")
+            }
+
+            // Если это задача упаковки DMG — пересобираем .dmg уже из переподписанного .app
+            val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile
+            if (dmgDir.exists()) {
+                val dmgFiles = dmgDir.listFiles { f -> f.isFile && f.extension.equals("dmg", ignoreCase = true) } ?: emptyArray()
+                dmgFiles.forEach { dmgFile ->
+                    val stageDir = File(layout.buildDirectory.asFile.get(), "tmp/dmg-stage-${dmgFile.nameWithoutExtension}")
+                    stageDir.deleteRecursively()
+                    stageDir.mkdirs()
+                    // Копируем .app с сохранением прав/симлинков через ditto
+                    val dittoExit = ProcessBuilder("ditto", macAppDir.absolutePath, File(stageDir, macAppDir.name).absolutePath)
+                        .inheritIO().start().waitFor()
+                    if (dittoExit == 0) {
+                        ProcessBuilder("ln", "-s", "/Applications", File(stageDir, "Applications").absolutePath)
+                            .start().waitFor()
+                        dmgFile.delete()
+                        val hdiExit = ProcessBuilder(
+                            "hdiutil", "create",
+                            "-volname", "v2whitelist",
+                            "-srcfolder", stageDir.absolutePath,
+                            "-ov", "-format", "UDZO",
+                            dmgFile.absolutePath
+                        ).inheritIO().start().waitFor()
+                        if (hdiExit != 0) {
+                            throw GradleException("hdiutil create failed with exit code $hdiExit for ${dmgFile.absolutePath}")
+                        }
+                    }
+                    stageDir.deleteRecursively()
+                }
+            }
         }
     }
 }

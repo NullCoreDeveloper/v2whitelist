@@ -260,17 +260,19 @@ jobs:
           cd V2rayNG
           ./gradlew :desktopApp:createDistributable -PpackageVersion=0.0.1 --no-daemon --stacktrace
 
-          # Предварительное наполнение каталогов дистрибутива bin и assets ДО упаковки в MSI / инсталлятор
-          APP_DIR=$(find desktopApp/build/compose/binaries/main/app -mindepth 1 -maxdepth 1 -type d | head -n 1)
-          if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
-            echo "Предварительное наполнение каталога приложения $APP_DIR..."
-            mkdir -p "$APP_DIR/bin" "$APP_DIR/assets" "$APP_DIR/app/resources/bin" "$APP_DIR/app/resources/assets" "$APP_DIR/resources/bin" "$APP_DIR/resources/assets"
-            cp -a desktopApp/bin/* "$APP_DIR/bin/" || true
-            cp -a desktopApp/assets/* "$APP_DIR/assets/" || true
-            cp -a desktopApp/bin/* "$APP_DIR/app/resources/bin/" || true
-            cp -a desktopApp/assets/* "$APP_DIR/app/resources/assets/" || true
-            cp -a desktopApp/bin/* "$APP_DIR/resources/bin/" || true
-            cp -a desktopApp/assets/* "$APP_DIR/resources/assets/" || true
+          # Предварительное наполнение каталогов дистрибутива bin и assets ДО упаковки в MSI / инсталлятор (не трогаем корень .app на macOS)
+          if [ "${{ matrix.platform }}" != "darwin" ]; then
+            APP_DIR=$(find desktopApp/build/compose/binaries/main/app -mindepth 1 -maxdepth 1 -type d | head -n 1)
+            if [ -n "$APP_DIR" ] && [ -d "$APP_DIR" ]; then
+              echo "Предварительное наполнение каталога приложения $APP_DIR..."
+              mkdir -p "$APP_DIR/bin" "$APP_DIR/assets" "$APP_DIR/app/resources/bin" "$APP_DIR/app/resources/assets" "$APP_DIR/resources/bin" "$APP_DIR/resources/assets"
+              cp -a desktopApp/bin/* "$APP_DIR/bin/" || true
+              cp -a desktopApp/assets/* "$APP_DIR/assets/" || true
+              cp -a desktopApp/bin/* "$APP_DIR/app/resources/bin/" || true
+              cp -a desktopApp/assets/* "$APP_DIR/app/resources/assets/" || true
+              cp -a desktopApp/bin/* "$APP_DIR/resources/bin/" || true
+              cp -a desktopApp/assets/* "$APP_DIR/resources/assets/" || true
+            fi
           fi
 
           # Windows: вшиваем манифест asInvoker в v2whitelist.exe для корректных метаданных
