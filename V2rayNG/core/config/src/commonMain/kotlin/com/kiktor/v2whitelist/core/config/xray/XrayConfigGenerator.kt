@@ -305,17 +305,45 @@ object XrayConfigGenerator {
             )
         }
 
-        // Custom proxy domains (раздельное туннелирование - наивысший приоритет)
-        if (options.customProxyDomains.isNotEmpty()) {
-            val formattedProxy = options.customProxyDomains.map {
-                if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
+        fun isIpOrCidrRule(entry: String): Boolean {
+            if (entry.startsWith("geoip:", ignoreCase = true)) return true
+            val host = entry.substringBefore('/')
+            val parts = host.split('.')
+            if (parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 }) return true
+            return host.contains(':') && !host.startsWith("domain:", ignoreCase = true) &&
+                !host.startsWith("geosite:", ignoreCase = true) &&
+                !host.startsWith("full:", ignoreCase = true) &&
+                !host.startsWith("keyword:", ignoreCase = true) &&
+                !host.startsWith("regexp:", ignoreCase = true)
+        }
+
+        fun formatDomainRule(entry: String): String {
+            return if (entry.startsWith("domain:") || entry.startsWith("geosite:") || entry.startsWith("full:") || entry.startsWith("keyword:") || entry.startsWith("regexp:")) {
+                entry
+            } else {
+                "domain:$entry"
             }
-            rules.add(
-                XrayRule(
-                    outboundTag = "proxy",
-                    domain = formattedProxy
+        }
+
+        // Custom proxy domains / IPs (раздельное туннелирование - наивысший приоритет)
+        if (options.customProxyDomains.isNotEmpty()) {
+            val (ipEntries, domainEntries) = options.customProxyDomains.partition(::isIpOrCidrRule)
+            if (domainEntries.isNotEmpty()) {
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        domain = domainEntries.map(::formatDomainRule)
+                    )
                 )
-            )
+            }
+            if (ipEntries.isNotEmpty()) {
+                rules.add(
+                    XrayRule(
+                        outboundTag = "proxy",
+                        ip = ipEntries
+                    )
+                )
+            }
         }
 
         if (options.domainWhitelistMode) {
@@ -329,15 +357,23 @@ object XrayConfigGenerator {
         } else {
             // Custom direct domains / IPs (раздельное туннелирование)
             if (options.customDirectDomains.isNotEmpty()) {
-                val formattedDirect = options.customDirectDomains.map {
-                    if (it.startsWith("domain:") || it.startsWith("geosite:") || it.startsWith("full:") || it.startsWith("keyword:") || it.startsWith("regexp:")) it else "domain:$it"
-                }
-                rules.add(
-                    XrayRule(
-                        outboundTag = "direct",
-                        domain = formattedDirect
+                val (ipEntries, domainEntries) = options.customDirectDomains.partition(::isIpOrCidrRule)
+                if (domainEntries.isNotEmpty()) {
+                    rules.add(
+                        XrayRule(
+                            outboundTag = "direct",
+                            domain = domainEntries.map(::formatDomainRule)
+                        )
                     )
-                )
+                }
+                if (ipEntries.isNotEmpty()) {
+                    rules.add(
+                        XrayRule(
+                            outboundTag = "direct",
+                            ip = ipEntries
+                        )
+                    )
+                }
             }
             if (options.customDirectIps.isNotEmpty()) {
                 rules.add(

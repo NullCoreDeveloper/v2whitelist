@@ -300,5 +300,83 @@ class DesktopAppTest {
         assertTrue(subs.size >= 18, "Should have all prepopulated subscriptions")
         assertTrue(subs.all { it.enabled }, "All default subscriptions must be enabled in Auto mode like on Android")
     }
+
+    @Test
+    fun testSaveSettingsPersistsAutoCheckUpdatesServiceCheckAndIncrementsRevision() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val runner = XrayDesktopRunner()
+
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = runner,
+            autoCheckNetworkOnStart = false
+        )
+
+        val initialRev = state.settingsRevision.value
+        state.saveSettings(
+            subUrl = "",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            serviceCheck = false,
+            autoCheckUpdatesVal = false
+        )
+
+        assertEquals(false, state.serviceCheckEnabled.value)
+        assertEquals(false, settingsRepo.getBoolean("pref_service_check_enabled", true))
+        assertEquals(false, state.autoCheckUpdates.value)
+        assertEquals(false, settingsRepo.getBoolean("pref_auto_check_updates", true))
+        assertEquals(initialRev + 1, state.settingsRevision.value)
+
+        state.saveSettings(
+            subUrl = "",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            serviceCheck = true,
+            autoCheckUpdatesVal = true
+        )
+
+        assertEquals(true, state.serviceCheckEnabled.value)
+        assertEquals(true, settingsRepo.getBoolean("pref_service_check_enabled", false))
+        assertEquals(true, state.autoCheckUpdates.value)
+        assertEquals(true, settingsRepo.getBoolean("pref_auto_check_updates", false))
+        assertEquals(initialRev + 2, state.settingsRevision.value)
+    }
+
+    @Test
+    fun testVerifyConcurrencyRoutingModePersistenceAndSpeedMath() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        settingsRepo.setString("pref_routing_mode", "TUN")
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+
+        assertEquals("TUN", state.routingMode.value)
+        state.saveSettings(
+            subUrl = "",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            verifyConcurrencyVal = 6
+        )
+        assertEquals(6, state.verifyConcurrency.value)
+        assertEquals(6, settingsRepo.getInt("pref_verify_concurrency", 4))
+
+        // Speed math: 1_000_000 bytes over 2.0 seconds = 4.0 Mbps; too short (< 80ms) returns null
+        val speed = com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier.computeSustainedMbps(1_000_000L, 2_000_000_000L)
+        assertNotNull(speed)
+        assertTrue(kotlin.math.abs(speed - 4.0) < 0.01)
+        assertNull(com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier.computeSustainedMbps(100_000L, 50_000_000L))
+    }
 }
 

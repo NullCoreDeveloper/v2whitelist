@@ -85,12 +85,17 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.kiktor.v2whitelist.desktop.MainKt"
-        jvmArgs += listOf(
-            "-Dfile.encoding=UTF-8",
-            "-Dstdout.encoding=UTF-8",
-            "-Djdk.gtk.version=3",
-            "-Djdk.lang.Process.launchMechanism=vfork"
-        )
+        val hostOs = org.gradle.internal.os.OperatingSystem.current()
+        jvmArgs += buildList {
+            add("-Dfile.encoding=UTF-8")
+            add("-Dstdout.encoding=UTF-8")
+            if (hostOs.isLinux) {
+                add("-Djdk.gtk.version=3")
+                add("-Djdk.lang.Process.launchMechanism=vfork")
+            } else if (hostOs.isMacOsX) {
+                add("-Djdk.lang.Process.launchMechanism=posix_spawn")
+            }
+        }
 
         nativeDistributions {
             modules("java.base", "java.desktop", "java.logging", "java.net.http", "java.sql", "jdk.unsupported")

@@ -243,6 +243,17 @@ object DesktopProfileVerifier {
                         )
                     }
                     onStatusUpdate?.invoke("Профиль проверен ✔ · $formatted Мбит/с")
+                } else if (minSpeedMbps > 0.0) {
+                    GeekModeLogger.log(
+                        "Verifier",
+                        "${profile.remarks}: не удалось подтвердить скорость ≥ $minSpeedMbps Мбит/с (таймаут/сбой замера) -> отклонен"
+                    )
+                    onStatusUpdate?.invoke("Скорость не подтверждена (< $minSpeedMbps Мбит/с), пробуем другой…")
+                    return@withContext VerifyResult(
+                        success = false,
+                        latencyMs = latency,
+                        errorMessage = "Не удалось подтвердить скорость ≥ $minSpeedMbps Мбит/с"
+                    )
                 } else {
                     GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости завершился таймаутом, но HTTP 204 успешен -> узел допущен")
                     onStatusUpdate?.invoke("Профиль прошёл проверку ✔")
@@ -295,7 +306,7 @@ object DesktopProfileVerifier {
         }
     }
 
-    private fun measureE2ELatency(socksPort: Int, httpPort: Int? = null, timeoutMs: Long = 4000L): Long {
+    private suspend fun measureE2ELatency(socksPort: Int, httpPort: Int? = null, timeoutMs: Long = 4000L): Long = coroutineScope {
         val testUrls = listOf(
             "https://www.google.com/generate_204",
             "https://cp.cloudflare.com/generate_204",
@@ -306,72 +317,116 @@ object DesktopProfileVerifier {
             socksPort > 0 -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
             else -> Proxy.NO_PROXY
         }
-        val perUrlTimeout = minOf(timeoutMs.toInt(), 5000)
+        val perUrlTimeout = timeoutMs.coerceIn(1500L, 4500L).toInt()
+        val resultChannel = kotlinx.coroutines.channels.Channel<Long>(testUrls.size)
+        val pending = java.util.concurrent.atomic.AtomicInteger(testUrls.size)
 
-        for (urlStr in testUrls) {
-            try {
-                val url = java.net.URI.create(urlStr).toURL()
-                val start = System.currentTimeMillis()
-                val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
-                    connectTimeout = perUrlTimeout
-                    readTimeout = perUrlTimeout
-                    instanceFollowRedirects = false
-                    requestMethod = "GET"
-                }
-
+        val jobs = testUrls.map { urlStr ->
+            launch(Dispatchers.IO) {
+                var latency = -1L
                 try {
-                    conn.connect()
-                    val code = conn.responseCode
-                    val elapsed = System.currentTimeMillis() - start
-                    if (code in 200..399) {
-                        return elapsed
+                    val url = java.net.URI.create(urlStr).toURL()
+                    val start = System.currentTimeMillis()
+                    val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
+                        connectTimeout = perUrlTimeout
+                        readTimeout = perUrlTimeout
+                        instanceFollowRedirects = false
+                        requestMethod = "GET"
                     }
+                    try {
+                        conn.connect()
+                        val code = conn.responseCode
+                        val elapsed = System.currentTimeMillis() - start
+                        if (code in 200..399) {
+                            latency = elapsed
+                        }
+                    } finally {
+                        conn.disconnect()
+                    }
+                } catch (_: Exception) {
                 } finally {
-                    conn.disconnect()
+                    if (latency > 0) {
+                        resultChannel.trySend(latency)
+                    } else if (pending.decrementAndGet() == 0) {
+                        resultChannel.trySend(-1L)
+                    }
                 }
-            } catch (_: Exception) {}
+            }
         }
-        return -1L
+
+        val winnerLatency = withTimeoutOrNull(perUrlTimeout.toLong() + 300L) {
+            resultChannel.receive()
+        } ?: -1L
+        jobs.forEach { it.cancel() }
+        winnerLatency
+    }
+
+    internal fun computeSustainedMbps(measuredBytes: Long, elapsedNanos: Long): Double? {
+        if (measuredBytes <= 0L || elapsedNanos <= 0L) return null
+        val elapsedSec = elapsedNanos / 1_000_000_000.0
+        if (elapsedSec < 0.08) return null
+        return (measuredBytes * 8.0) / (elapsedSec * 1_000_000.0)
     }
 
     private fun measureSpeed(socksPort: Int, bytes: Long, timeoutMs: Long): Double? {
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-        val urlStr = "https://speed.cloudflare.com/__down?bytes=$bytes"
+        val targetBytes = maxOf(bytes, 1_500_000L)
+        val effectiveTimeoutMs = maxOf(timeoutMs, 3500L).coerceAtMost(15_000L).toInt()
+        val urlStr = "https://speed.cloudflare.com/__down?bytes=$targetBytes"
+        val warmupBytesThreshold = minOf(targetBytes / 5L, 262_144L)
+        val warmupNanosThreshold = 250_000_000L // 250ms прогрева отсекают стартовый TCP-всплеск буфера
 
         return try {
             val url = java.net.URI.create(urlStr).toURL()
             val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
-                connectTimeout = timeoutMs.toInt()
-                readTimeout = timeoutMs.toInt()
+                connectTimeout = minOf(effectiveTimeoutMs, 4500)
+                readTimeout = effectiveTimeoutMs
                 requestMethod = "GET"
             }
 
             var stream: InputStream? = null
             var totalRead = 0L
-            var firstByteTime = 0L
+            var firstByteNs = 0L
+            var measureStartNs = 0L
+            var measuredBytes = 0L
+            val deadlineNs = System.nanoTime() + effectiveTimeoutMs.toLong() * 1_000_000L
 
             try {
                 conn.connect()
                 stream = conn.inputStream
                 val buf = ByteArray(16384)
-                var n: Int
-                while (stream.read(buf).also { n = it } != -1) {
-                    if (firstByteTime == 0L) {
-                        firstByteTime = System.currentTimeMillis()
+                while (System.nanoTime() < deadlineNs) {
+                    val n = stream.read(buf)
+                    if (n == -1) break
+                    val nowNs = System.nanoTime()
+                    if (firstByteNs == 0L) {
+                        firstByteNs = nowNs
                     }
                     totalRead += n
+                    if (measureStartNs == 0L) {
+                        if (totalRead >= warmupBytesThreshold && (nowNs - firstByteNs) >= warmupNanosThreshold) {
+                            measureStartNs = nowNs
+                        }
+                    } else {
+                        measuredBytes += n
+                    }
                 }
+            } catch (_: Exception) {
+                // При срабатывании readTimeout или обрыве оцениваем реально прокачанный объём после прогрева
             } finally {
                 try { stream?.close() } catch (_: Exception) {}
                 conn.disconnect()
             }
 
-            if (firstByteTime == 0L || totalRead == 0L) return null
-            val elapsedSec = (System.currentTimeMillis() - firstByteTime) / 1000.0
-            if (elapsedSec <= 0.05) return null
-
-            val mbps = (totalRead * 8.0) / (elapsedSec * 1_000_000.0)
-            mbps
+            val endNs = System.nanoTime()
+            if (measureStartNs > 0L && measuredBytes > 0L) {
+                computeSustainedMbps(measuredBytes, endNs - measureStartNs)
+            } else if (firstByteNs > 0L && totalRead > 0L) {
+                // Фоллбек, если соединение за всё время не смогло выйти за порог прогрева (очень медленный узел)
+                computeSustainedMbps(totalRead, endNs - firstByteNs)
+            } else {
+                null
+            }
         } catch (_: Exception) {
             null
         }

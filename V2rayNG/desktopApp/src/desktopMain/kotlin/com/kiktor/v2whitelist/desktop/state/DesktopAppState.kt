@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.decodeFromString
@@ -130,8 +131,18 @@ class DesktopAppState(
     private val _removedSubIds = MutableStateFlow<Set<String>>(emptySet())
     val removedSubIds: StateFlow<Set<String>> = _removedSubIds.asStateFlow()
 
+    // Тикер для периодического пересчёта относительного времени подписки ("прошло X мин")
+    private val _statusTick = MutableStateFlow(System.currentTimeMillis())
+
+    // Счётчик сохранений/сбросов для синхронизации локального состояния экрана настроек
+    val settingsRevision = MutableStateFlow(0L)
+
     // Статус актуальности подписки на главном экране (актуальна, если час совпадает)
-    val subscriptionStatus: StateFlow<SubscriptionStatusInfo> = _subscriptions.combine(_isUpdatingSub) { subs, updating ->
+    val subscriptionStatus: StateFlow<SubscriptionStatusInfo> = combine(
+        _subscriptions,
+        _isUpdatingSub,
+        _statusTick
+    ) { subs, updating, _ ->
         calculateSubscriptionStatus(subs, updating)
     }.stateIn(
         internalStateScope,
@@ -180,8 +191,14 @@ class DesktopAppState(
     val allowLan = MutableStateFlow(settingsRepo.getBoolean("allow_lan", false))
     val clipboardNotice = MutableStateFlow<String?>(null)
 
-    // Режим маршрутизации при старте всегда сбрасывается на PROXY (сессионный выбор, исключающий запросы sudo при обычном запуске)
-    val routingMode = MutableStateFlow("PROXY")
+    // По умолчанию на Windows используем полный режим (TUN), на Linux/macOS — PROXY до явного переключения пользователем
+    val routingMode = MutableStateFlow(
+        settingsRepo.getString("pref_routing_mode", "").let { saved ->
+            if (saved == "TUN" || saved == "PROXY") saved
+            else if (DesktopTunManager.isWindows) "TUN"
+            else "PROXY"
+        }
+    )
     val uiTheme = MutableStateFlow(settingsRepo.getString("ui_theme", "CYAN"))
     val uiCompactCards = MutableStateFlow(settingsRepo.getBoolean("ui_compact_cards", false))
     val minimizeToTray = MutableStateFlow(settingsRepo.getBoolean("minimize_to_tray", true))
@@ -274,6 +291,7 @@ class DesktopAppState(
 
     // Расширенные настройки ядра и VPN
     val smartConnectBatchSize = MutableStateFlow(settingsRepo.getInt("pref_smart_batch_size", 20))
+    val verifyConcurrency = MutableStateFlow(settingsRepo.getInt("pref_verify_concurrency", 4).coerceIn(1, 10))
     val isWindowsServiceAvailable = MutableStateFlow(false)
     val smartDistributionPreset = MutableStateFlow(settingsRepo.getString("pref_smart_distribution", "EQUAL"))
     val useV2WCore = MutableStateFlow(settingsRepo.getBoolean("pref_use_v2w_core", true))
@@ -459,11 +477,33 @@ class DesktopAppState(
             }
         }
 
-        // Автоматическая проверка обновлений при старте (если включено в настройках)
-        if (autoCheckUpdates.value) {
-            scope.launch(Dispatchers.Default) {
-                delay(3000L)
-                checkAppUpdate(manual = false)
+        // Тикер раз в 30 сек обновляет счётчик минут/часов с последнего обновления подписок
+        scope.launch {
+            while (true) {
+                delay(30_000L)
+                _statusTick.value = System.currentTimeMillis()
+            }
+        }
+
+        // Автоматическая фоновая проверка обновлений при старте и периодически (если включено)
+        restartPeriodicAppUpdateCheck()
+
+        // Когда VPN подключается (актуально, если GitHub недоступен напрямую при старте),
+        // повторно запускаем проверку обновлений при устаревшем/неудачном последнем чеке
+        scope.launch {
+            var prevState = coreState.value
+            coreState.collect { currentState ->
+                if (currentState == DesktopCoreState.RUNNING && prevState != DesktopCoreState.RUNNING) {
+                    val stale = lastSuccessfulAppUpdateCheckMs == 0L ||
+                        (System.currentTimeMillis() - lastSuccessfulAppUpdateCheckMs) >= 30 * 60 * 1000L
+                    if (autoCheckUpdates.value && stale) {
+                        delay(2500L)
+                        if (coreState.value == DesktopCoreState.RUNNING && autoCheckUpdates.value) {
+                            checkAppUpdate(manual = false)
+                        }
+                    }
+                }
+                prevState = currentState
             }
         }
 
@@ -788,6 +828,7 @@ class DesktopAppState(
 
     private fun applyRoutingMode(mode: String) {
         routingMode.value = mode
+        settingsRepo.setString("pref_routing_mode", mode)
         GeekModeLogger.log("AppState", "Режим работы переключен на: $mode")
         if (coreState.value == DesktopCoreState.RUNNING) {
             if (mode == "PROXY" && DesktopTunManager.isTunActive) {
@@ -1082,6 +1123,24 @@ class DesktopAppState(
         }
     }
 
+    private val yandexMutex = kotlinx.coroutines.sync.Mutex()
+    @Volatile
+    private var yandexCooldownUntilMs: Long = 0L
+
+    private fun looksLikeYandexHtmlErrorOrChallenge(body: String): Boolean {
+        val lower = body.lowercase()
+        val isHtml = lower.contains("<html") || lower.contains("<!doctype")
+        if (!isHtml) return false
+        return lower.contains("smartcaptcha") ||
+            lower.contains("showcaptcha") ||
+            lower.contains("captcha.yandex") ||
+            lower.contains("checkboxcaptcha") ||
+            lower.contains("запросы, отправленные с вашего") ||
+            lower.contains("подтвердите, что запросы") ||
+            lower.contains("<title>ой!</title>") ||
+            lower.contains("429 too many requests")
+    }
+
     private suspend fun fetchViaYandexFirstMirror(
         mirrors: List<String>,
         userAgent: String,
@@ -1092,20 +1151,34 @@ class DesktopAppState(
             var lastError: Throwable? = null
             for (mirror in mirrors) {
                 try {
-                    val encoded = java.net.URLEncoder.encode(mirror, "UTF-8")
-                    val yandexUrl = "https://translate.yandex.ru/translate?lang=en-ru&view=compact&url=$encoded"
-                    val res = SubscriptionFetcher.fetchSingle(client, yandexUrl, userAgent)
-                    if (res.isSuccess) {
-                        val body = res.getOrNull().orEmpty()
+                    val bodyResult = yandexMutex.withLock {
+                        val now = System.currentTimeMillis()
+                        val waitMs = (yandexCooldownUntilMs - now).coerceAtLeast(0L)
+                        if (waitMs > 0L) {
+                            delay(waitMs.coerceAtMost(12_000L))
+                        }
+                        val encoded = java.net.URLEncoder.encode(mirror, "UTF-8")
+                        val yandexUrl = "https://translate.yandex.ru/translate?lang=en-ru&view=compact&url=$encoded"
+                        val res = SubscriptionFetcher.fetchSingle(client, yandexUrl, userAgent)
+                        val gapMs = if (res.isSuccess) 450L else 1200L
+                        yandexCooldownUntilMs = System.currentTimeMillis() + gapMs
+                        res
+                    }
+                    if (bodyResult.isSuccess) {
+                        val body = bodyResult.getOrNull().orEmpty()
+                        if (looksLikeYandexHtmlErrorOrChallenge(body)) {
+                            yandexCooldownUntilMs = System.currentTimeMillis() + 5000L
+                            lastError = IllegalStateException("Яндекс вернул страницу проверки/ограничения")
+                            continue
+                        }
                         val preMatcher = Regex("<pre[^>]*>([\\s\\S]*?)</pre>", RegexOption.IGNORE_CASE).find(body)
                         val extracted = if (preMatcher != null) {
                             preMatcher.groupValues[1]
-                        } else if (!body.contains("<html", ignoreCase = true)) {
+                        } else if (!body.contains("<html", ignoreCase = true) && !body.contains("<body", ignoreCase = true)) {
                             body
                         } else {
-                            body.replace(Regex("(?i)<br\\s*/?>"), "\n")
-                                .replace(Regex("(?i)</p>"), "\n")
-                                .replace(Regex("<[^>]+>"), "")
+                            // Не превращаем произвольный HTML (без <pre>) в мусорную «подписку»
+                            ""
                         }
                         val unescaped = extracted
                             .replace("&amp;", "&")
@@ -1118,9 +1191,15 @@ class DesktopAppState(
                             .trim()
                         if (unescaped.isNotBlank()) {
                             return Result.success(unescaped)
+                        } else {
+                            lastError = IllegalStateException("Пустой ответ или отсутствует <pre> блок")
                         }
                     } else {
-                        lastError = res.exceptionOrNull()
+                        val err = bodyResult.exceptionOrNull()
+                        if (err?.message?.contains("429") == true) {
+                            yandexCooldownUntilMs = System.currentTimeMillis() + 6000L
+                        }
+                        lastError = err
                     }
                 } catch (e: Exception) {
                     lastError = e
@@ -1227,15 +1306,21 @@ class DesktopAppState(
                                             val batch = parsed.map { generateStableServerGuid(it) to it }
                                             serverRepo.replaceSubscriptionServers(oldForSub, batch)
                                             anySubUpdated.set(true)
+                                            if (subIdx >= 0) {
+                                                updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                                                    lastUpdated = System.currentTimeMillis(),
+                                                    lastUpdateFailed = false
+                                                )
+                                            }
+                                            GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
+                                        } else {
+                                            GeekModeLogger.log("Subscriptions", "${sub.name}: сервер не вернул узлов (0). Сохранены прежние узлы.")
+                                            if (subIdx >= 0) {
+                                                updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                                                    lastUpdateFailed = true
+                                                )
+                                            }
                                         }
-
-                                        if (subIdx >= 0) {
-                                            updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
-                                                lastUpdated = System.currentTimeMillis(),
-                                                lastUpdateFailed = false
-                                            )
-                                        }
-                                        GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
                                     } else {
                                         val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
                                         val existingCount = serverRepo.serversFlow.value.count {
@@ -2184,7 +2269,7 @@ class DesktopAppState(
                             DesktopProfileVerifier.verifyProfile(
                                 profile = profile,
                                 xrayBinaryPath = xrayPath,
-                                timeoutMs = 4000L,
+                                timeoutMs = speedTestTimeoutMs.value.toLong(),
                                 speedCheckEnabled = speedTestOnCheck.value,
                                 minSpeedMbps = minSpeedThresholdMbps.value,
                                 bytesToDownload = speedTestDownloadBytes.value.toLong(),
@@ -2417,7 +2502,9 @@ class DesktopAppState(
         yandexUpdateVal: Boolean = yandexTranslateUpdateEnabled.value,
         domainSplitVal: Boolean = domainSplitTunnelingEnabled.value,
         domainWhitelistVal: Boolean = domainWhitelistMode.value,
-        vipLimit: Int = vipCacheLimit.value
+        vipLimit: Int = vipCacheLimit.value,
+        autoCheckUpdatesVal: Boolean = autoCheckUpdates.value,
+        verifyConcurrencyVal: Int = verifyConcurrency.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
@@ -2504,84 +2591,93 @@ class DesktopAppState(
         fragmentPackets.value = fragmentPackVal
         yandexTranslateUpdateEnabled.value = yandexUpdateVal
         domainSplitTunnelingEnabled.value = domainSplitVal
-
-        settingsRepo.setString("subscription_url", subUrl)
-        val persistXrayPath = if (DesktopBinaryResolver.isTemporaryMountPath(xrayPath)) "" else xrayPath
-        val persistV2wPath = if (DesktopBinaryResolver.isTemporaryMountPath(v2wPath)) "" else v2wPath
-        settingsRepo.setString("xray_path", persistXrayPath)
-        settingsRepo.setString("v2w_scan_path", persistV2wPath)
-        settingsRepo.setHttpPort(effectiveHttp)
-        settingsRepo.setSocksPort(effectiveSocks)
-        settingsRepo.setInt("pref_local_proxy_port", effectiveSocks)
-        settingsRepo.setBoolean("auto_enable_system_proxy", autoSystemProxy)
-        settingsRepo.setBoolean("allow_lan", lan)
-        settingsRepo.setString("custom_direct_domains", directDomains)
-        settingsRepo.setString("custom_proxy_domains", proxyDomains)
-        settingsRepo.setString("subscription_user_agent", subUserAgent)
-        settingsRepo.setInt("subscription_threads", subThreads)
-        settingsRepo.setBoolean("subscription_auto_update", subAutoUpdate)
-        settingsRepo.setInt("subscription_update_interval_minutes", subIntervalMins)
-        settingsRepo.setBoolean("subscription_update_on_startup", subUpdateOnStart)
-        settingsRepo.setBoolean("subscription_update_only_via_proxy", subOnlyViaProxy)
-        settingsRepo.setBoolean("pref_custom_endpoint_enabled", customEndpoint)
-        settingsRepo.setString("pref_custom_endpoint_url", customEndpointConfig)
-        settingsRepo.setString("pref_custom_endpoint_sub_url", customEndpointSub)
-        settingsRepo.setBoolean("pref_endpoint_e2e_check_enabled", endpointE2eCheck)
-        settingsRepo.setBoolean("pref_bypass_russian_services", bypassRu)
-        settingsRepo.setString("pref_conn_check_url", checkUrl)
-
-        settingsRepo.setInt("pref_smart_batch_size", smartBatch)
-        settingsRepo.setString("pref_smart_distribution", smartPreset)
-        settingsRepo.setBoolean("pref_use_v2w_core", v2wCore)
-        settingsRepo.setBoolean("pref_use_fallback_scanner", fallbackScanner)
-        settingsRepo.setInt("pref_v2w_core_sockets", v2wSockets)
-        settingsRepo.setBoolean("pref_remove_insecure_profiles", removeInsecure)
-        settingsRepo.setBoolean("pref_test_before_connect", testBeforeConnect)
-        settingsRepo.setBoolean("pref_service_check_enabled", serviceCheck)
-        settingsRepo.setBoolean("pref_speed_test_on_check", speedTestCheck)
-        settingsRepo.setInt("pref_speed_test_bytes", speedTestBytes)
-        settingsRepo.setInt("pref_speed_test_timeout_ms", speedTestTimeout)
-        settingsRepo.setString("pref_min_speed_mbps", minSpeed.toString())
-        settingsRepo.setBoolean("pref_auto_failover", autoFailoverEnabled)
-        settingsRepo.setInt("pref_heartbeat_interval", heartbeatSec)
-        settingsRepo.setBoolean("pref_smart_failover", smartFailoverEnabled)
-        settingsRepo.setInt("pref_failover_degradation_kb", degradationKb)
-        settingsRepo.setInt("pref_failover_stuck_sec", stuckSec)
-        settingsRepo.setBoolean("pref_network_check_enabled", netCheckEnabled)
-        settingsRepo.setString("pref_net_check_primary", primaryDomain)
-        settingsRepo.setString("pref_net_check_fallback", fallbackDomain)
-        settingsRepo.setBoolean("pref_receive_beta_updates", betaUpdates)
-        settingsRepo.setBoolean("pref_prefer_ipv6", prefIpv6)
-        settingsRepo.setBoolean("pref_use_local_dns", localDnsVal)
-        settingsRepo.setBoolean("pref_use_fakedns", fakeDnsVal)
-        settingsRepo.setBoolean("pref_add_http_proxy", addHttpProxyVal)
-        settingsRepo.setString("pref_vpn_dns", vpnDnsVal)
-        settingsRepo.setBoolean("pref_vpn_bypass_lan", vpnBypassLanVal)
-        settingsRepo.setString("pref_vpn_address", vpnAddressVal)
-        settingsRepo.setInt("pref_vpn_mtu", vpnMtuVal)
-        settingsRepo.setBoolean("pref_sniffing_enabled", sniffingVal)
-        settingsRepo.setBoolean("pref_route_only", routeOnlyVal)
-        settingsRepo.setBoolean("pref_allow_insecure", allowInsecureVal)
-        settingsRepo.setString("pref_local_proxy_login", localLoginVal)
-        settingsRepo.setString("pref_local_proxy_pass", localPassVal)
-        settingsRepo.setString("pref_remote_dns", remoteDnsVal)
-        settingsRepo.setString("pref_internal_dns", internalDnsVal)
-        settingsRepo.setString("pref_dns_hosts", dnsHostsVal)
-        settingsRepo.setBoolean("pref_mux_enabled", muxVal)
-        settingsRepo.setInt("pref_mux_tcp", muxTcpVal)
-        settingsRepo.setInt("pref_mux_xudp", muxXudpVal)
-        settingsRepo.setBoolean("pref_fragment_enabled", fragmentVal)
-        settingsRepo.setString("pref_fragment_length", fragmentLenVal)
-        settingsRepo.setString("pref_fragment_interval", fragmentIntVal)
-        settingsRepo.setString("pref_fragment_packets", fragmentPackVal)
-        settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
-        settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
         domainWhitelistMode.value = domainWhitelistVal
-        settingsRepo.setBoolean("pref_domain_whitelist_mode", domainWhitelistVal)
         vipCacheLimit.value = vipLimit
-        settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
+        autoCheckUpdates.value = autoCheckUpdatesVal
+        val clampedConcurrency = verifyConcurrencyVal.coerceIn(1, 10)
+        verifyConcurrency.value = clampedConcurrency
+
+        settingsRepo.runBatch {
+            settingsRepo.setString("subscription_url", subUrl)
+            val persistXrayPath = if (DesktopBinaryResolver.isTemporaryMountPath(xrayPath)) "" else xrayPath
+            val persistV2wPath = if (DesktopBinaryResolver.isTemporaryMountPath(v2wPath)) "" else v2wPath
+            settingsRepo.setString("xray_path", persistXrayPath)
+            settingsRepo.setString("v2w_scan_path", persistV2wPath)
+            settingsRepo.setSocksPort(effectiveSocks)
+            settingsRepo.setHttpPort(effectiveHttp)
+            settingsRepo.setInt("pref_local_proxy_port", effectiveSocks)
+            settingsRepo.setBoolean("auto_enable_system_proxy", autoSystemProxy)
+            settingsRepo.setBoolean("allow_lan", lan)
+            settingsRepo.setString("custom_direct_domains", directDomains)
+            settingsRepo.setString("custom_proxy_domains", proxyDomains)
+            settingsRepo.setString("subscription_user_agent", subUserAgent)
+            settingsRepo.setInt("subscription_threads", subThreads)
+            settingsRepo.setBoolean("subscription_auto_update", subAutoUpdate)
+            settingsRepo.setInt("subscription_update_interval_minutes", subIntervalMins)
+            settingsRepo.setBoolean("subscription_update_on_startup", subUpdateOnStart)
+            settingsRepo.setBoolean("subscription_update_only_via_proxy", subOnlyViaProxy)
+            settingsRepo.setBoolean("pref_custom_endpoint_enabled", customEndpoint)
+            settingsRepo.setString("pref_custom_endpoint_url", customEndpointConfig)
+            settingsRepo.setString("pref_custom_endpoint_sub_url", customEndpointSub)
+            settingsRepo.setBoolean("pref_endpoint_e2e_check_enabled", endpointE2eCheck)
+            settingsRepo.setBoolean("pref_bypass_russian_services", bypassRu)
+            settingsRepo.setString("pref_conn_check_url", checkUrl)
+
+            settingsRepo.setInt("pref_smart_batch_size", smartBatch)
+            settingsRepo.setString("pref_smart_distribution", smartPreset)
+            settingsRepo.setBoolean("pref_use_v2w_core", v2wCore)
+            settingsRepo.setBoolean("pref_use_fallback_scanner", fallbackScanner)
+            settingsRepo.setInt("pref_v2w_core_sockets", v2wSockets)
+            settingsRepo.setBoolean("pref_remove_insecure_profiles", removeInsecure)
+            settingsRepo.setBoolean("pref_test_before_connect", testBeforeConnect)
+            settingsRepo.setBoolean("pref_service_check_enabled", serviceCheck)
+            settingsRepo.setBoolean("pref_speed_test_on_check", speedTestCheck)
+            settingsRepo.setInt("pref_speed_test_bytes", speedTestBytes)
+            settingsRepo.setInt("pref_speed_test_timeout_ms", speedTestTimeout)
+            settingsRepo.setString("pref_min_speed_mbps", minSpeed.toString())
+            settingsRepo.setBoolean("pref_auto_failover", autoFailoverEnabled)
+            settingsRepo.setInt("pref_heartbeat_interval", heartbeatSec)
+            settingsRepo.setBoolean("pref_smart_failover", smartFailoverEnabled)
+            settingsRepo.setInt("pref_failover_degradation_kb", degradationKb)
+            settingsRepo.setInt("pref_failover_stuck_sec", stuckSec)
+            settingsRepo.setBoolean("pref_network_check_enabled", netCheckEnabled)
+            settingsRepo.setString("pref_net_check_primary", primaryDomain)
+            settingsRepo.setString("pref_net_check_fallback", fallbackDomain)
+            settingsRepo.setBoolean("pref_receive_beta_updates", betaUpdates)
+            settingsRepo.setBoolean("pref_auto_check_updates", autoCheckUpdatesVal)
+            settingsRepo.setBoolean("pref_prefer_ipv6", prefIpv6)
+            settingsRepo.setBoolean("pref_use_local_dns", localDnsVal)
+            settingsRepo.setBoolean("pref_use_fakedns", fakeDnsVal)
+            settingsRepo.setBoolean("pref_add_http_proxy", addHttpProxyVal)
+            settingsRepo.setString("pref_vpn_dns", vpnDnsVal)
+            settingsRepo.setBoolean("pref_vpn_bypass_lan", vpnBypassLanVal)
+            settingsRepo.setString("pref_vpn_address", vpnAddressVal)
+            settingsRepo.setInt("pref_vpn_mtu", vpnMtuVal)
+            settingsRepo.setBoolean("pref_sniffing_enabled", sniffingVal)
+            settingsRepo.setBoolean("pref_route_only", routeOnlyVal)
+            settingsRepo.setBoolean("pref_allow_insecure", allowInsecureVal)
+            settingsRepo.setString("pref_local_proxy_login", localLoginVal)
+            settingsRepo.setString("pref_local_proxy_pass", localPassVal)
+            settingsRepo.setString("pref_remote_dns", remoteDnsVal)
+            settingsRepo.setString("pref_internal_dns", internalDnsVal)
+            settingsRepo.setString("pref_dns_hosts", dnsHostsVal)
+            settingsRepo.setBoolean("pref_mux_enabled", muxVal)
+            settingsRepo.setInt("pref_mux_tcp", muxTcpVal)
+            settingsRepo.setInt("pref_mux_xudp", muxXudpVal)
+            settingsRepo.setBoolean("pref_fragment_enabled", fragmentVal)
+            settingsRepo.setString("pref_fragment_length", fragmentLenVal)
+            settingsRepo.setString("pref_fragment_interval", fragmentIntVal)
+            settingsRepo.setString("pref_fragment_packets", fragmentPackVal)
+            settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
+            settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
+            settingsRepo.setBoolean("pref_domain_whitelist_mode", domainWhitelistVal)
+            settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
+            settingsRepo.setInt("pref_verify_concurrency", clampedConcurrency)
+        }
 
         restartPeriodicSubscriptionUpdates()
+        restartPeriodicAppUpdateCheck()
+        settingsRevision.value++
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
         if (isSystemProxyActive.value) {
@@ -2612,12 +2708,16 @@ class DesktopAppState(
         localProxyPort.value = 10808
         autoEnableSystemProxy.value = false
         allowLan.value = false
-        routingMode.value = "PROXY"
+        routingMode.value = if (DesktopTunManager.isWindows) "TUN" else "PROXY"
         minSpeedThresholdMbps.value = 1.0
         serviceCheckEnabled.value = false
         speedTestOnCheck.value = true
         smartConnectBatchSize.value = 20
+        verifyConcurrency.value = 4
         smartFailover.value = true
+        autoCheckUpdates.value = true
+        settingsRevision.value++
+        restartPeriodicAppUpdateCheck()
 
         // Восстановление подписок по умолчанию
         _subscriptions.value = DefaultSubscriptions.PREPOPULATED_SUBS
@@ -2661,6 +2761,55 @@ class DesktopAppState(
         return TargetPlatform.Desktop(os = os, arch = arch)
     }
 
+    private var periodicAppUpdateJob: Job? = null
+    private var lastSuccessfulAppUpdateCheckMs: Long = 0L
+    private var lastNotifiedUpdateVersion: String? = null
+
+    fun restartPeriodicAppUpdateCheck() {
+        periodicAppUpdateJob?.cancel()
+        if (!autoCheckUpdates.value) return
+        periodicAppUpdateJob = scope.launch(Dispatchers.Default) {
+            delay(3000L)
+            if (autoCheckUpdates.value) {
+                checkAppUpdate(manual = false)
+            }
+            while (true) {
+                delay(30 * 60 * 1000L)
+                if (autoCheckUpdates.value) {
+                    checkAppUpdate(manual = false)
+                }
+            }
+        }
+    }
+
+    private fun showDesktopUpdateNotification(version: String) {
+        val title = "Доступно обновление ПроБел v$version"
+        val message = "Откройте ПроБел, чтобы скачать и установить новую версию."
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                when {
+                    DesktopTunManager.isWindows -> {
+                        val psScript = """
+                            Add-Type -AssemblyName System.Windows.Forms
+                            ${'$'}n = New-Object System.Windows.Forms.NotifyIcon
+                            ${'$'}n.Icon = [System.Drawing.SystemIcons]::Information
+                            ${'$'}n.Visible = ${'$'}true
+                            ${'$'}n.ShowBalloonTip(5000, '${title.replace("'", "''")}', '${message.replace("'", "''")}', [System.Windows.Forms.ToolTipIcon]::Info)
+                            Start-Sleep -Milliseconds 5500
+                            ${'$'}n.Dispose()
+                        """.trimIndent()
+                        ProcessBuilder("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
+                            .redirectErrorStream(true)
+                            .start()
+                    }
+                    else -> {
+                        ProcessBuilder("notify-send", title, message).start()
+                    }
+                }
+            }
+        }
+    }
+
     fun checkAppUpdate(manual: Boolean = false) {
         if (isCheckingAppUpdate.value) return
         scope.launch(Dispatchers.IO) {
@@ -2669,16 +2818,55 @@ class DesktopAppState(
             try {
                 GeekModeLogger.log("UpdateChecker", "Проверка обновлений ПроБел (manual=$manual, beta=${receiveBetaUpdates.value})...")
                 val platform = getDesktopTargetPlatform()
-                val result = UpdateChecker.checkForUpdate(
-                    apiUrl = GITHUB_REPO_API,
-                    currentVersion = APP_VERSION,
-                    targetPlatform = platform,
-                    includePreRelease = receiveBetaUpdates.value
-                )
+                var result: CheckUpdateResult? = null
+
+                // Если ядро запущено, сначала пробуем через локальный HTTP-прокси (на случай блокировок GitHub API),
+                // при ошибке или при выключенном VPN выполняем прямой запрос
+                if (coreState.value == DesktopCoreState.RUNNING) {
+                    val proxyPort = httpPort.value
+                    if (proxyPort in 1..65535) {
+                        val proxyClient = SubscriptionFetcher.createHttpClient(
+                            httpProxyPort = proxyPort,
+                            timeoutMs = 10000L
+                        )
+                        try {
+                            val proxyRes = UpdateChecker.checkForUpdate(
+                                apiUrl = GITHUB_REPO_API,
+                                currentVersion = APP_VERSION,
+                                targetPlatform = platform,
+                                includePreRelease = receiveBetaUpdates.value,
+                                client = proxyClient
+                            )
+                            if (proxyRes.hasUpdate || proxyRes.error == null) {
+                                result = proxyRes
+                            }
+                        } finally {
+                            proxyClient.close()
+                        }
+                    }
+                }
+
+                if (result == null) {
+                    result = UpdateChecker.checkForUpdate(
+                        apiUrl = GITHUB_REPO_API,
+                        currentVersion = APP_VERSION,
+                        targetPlatform = platform,
+                        includePreRelease = receiveBetaUpdates.value
+                    )
+                }
+
+                if (result.error == null) {
+                    lastSuccessfulAppUpdateCheckMs = System.currentTimeMillis()
+                }
+
                 if (result.hasUpdate) {
                     GeekModeLogger.log("UpdateChecker", "Найдено обновление: v${result.latestVersion}")
                     availableAppUpdate.value = result
                     showAppUpdateDialog.value = true
+                    if (!manual && !result.latestVersion.isNullOrBlank() && lastNotifiedUpdateVersion != result.latestVersion) {
+                        lastNotifiedUpdateVersion = result.latestVersion
+                        showDesktopUpdateNotification(result.latestVersion!!)
+                    }
                 } else {
                     if (manual) {
                         if (result.error != null) {

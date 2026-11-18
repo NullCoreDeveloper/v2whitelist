@@ -12,6 +12,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 @Serializable
 internal data class ServersStorage(
@@ -198,11 +200,54 @@ internal object DesktopStorageManager {
         }
     }
 
+    private val settingsFileLock = Any()
+
     fun saveSettings(storage: SettingsStorage) {
-        try {
-            val content = json.encodeToString(storage)
-            settingsFile.writeText(content)
-        } catch (_: Exception) {}
+        synchronized(settingsFileLock) {
+            val content = try {
+                json.encodeToString(storage)
+            } catch (e: Exception) {
+                System.err.println("[DesktopStorageManager] Ошибка сериализации настроек: ${e.message}")
+                return
+            }
+            val parent = settingsFile.parentFile ?: baseDir
+            if (!parent.exists()) parent.mkdirs()
+            val tempFile = File(parent, "${settingsFile.name}.tmp")
+            var lastError: Exception? = null
+            for (attempt in 0 until 4) {
+                try {
+                    tempFile.writeText(content)
+                    try {
+                        Files.move(
+                            tempFile.toPath(),
+                            settingsFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE
+                        )
+                    } catch (_: Exception) {
+                        Files.move(
+                            tempFile.toPath(),
+                            settingsFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING
+                        )
+                    }
+                    return
+                } catch (e: Exception) {
+                    lastError = e
+                    if (attempt < 3) {
+                        try { Thread.sleep(25L * (attempt + 1)) } catch (_: InterruptedException) {}
+                    }
+                }
+            }
+            // Резервная прямая запись, если переименование файла заблокировано
+            try {
+                settingsFile.writeText(content)
+            } catch (e: Exception) {
+                System.err.println("[DesktopStorageManager] Не удалось сохранить settings.json: ${lastError?.message ?: e.message}")
+            } finally {
+                runCatching { if (tempFile.exists()) tempFile.delete() }
+            }
+        }
     }
 
     fun clearDiskStorage() {
@@ -463,22 +508,32 @@ class DesktopFileSettingsRepository : SettingsRepository {
         loadFromDisk()
     }
 
+    private val repoLock = Any()
+    private var inBatch = false
+    private var dirtyInBatch = false
+
     private fun loadFromDisk() {
-        val loaded = DesktopStorageManager.loadSettings()
-        appScenario = try { AppScenario.valueOf(loaded.appScenario) } catch (_: Exception) { AppScenario.AUTO }
-        smartFailover = loaded.smartFailover
-        socksPort = loaded.socksPort
-        httpPort = loaded.httpPort
-        stringMap.clear()
-        stringMap.putAll(loaded.stringMap)
-        boolMap.clear()
-        boolMap.putAll(loaded.boolMap)
-        intMap.clear()
-        intMap.putAll(loaded.intMap)
+        synchronized(repoLock) {
+            val loaded = DesktopStorageManager.loadSettings()
+            appScenario = try { AppScenario.valueOf(loaded.appScenario) } catch (_: Exception) { AppScenario.AUTO }
+            smartFailover = loaded.smartFailover
+            socksPort = loaded.socksPort
+            httpPort = loaded.httpPort
+            stringMap.clear()
+            stringMap.putAll(loaded.stringMap)
+            boolMap.clear()
+            boolMap.putAll(loaded.boolMap)
+            intMap.clear()
+            intMap.putAll(loaded.intMap)
+        }
     }
 
     private fun persist() {
-        DesktopStorageManager.saveSettings(
+        val snapshot = synchronized(repoLock) {
+            if (inBatch) {
+                dirtyInBatch = true
+                return
+            }
             SettingsStorage(
                 appScenario = appScenario.name,
                 smartFailover = smartFailover,
@@ -488,69 +543,110 @@ class DesktopFileSettingsRepository : SettingsRepository {
                 boolMap = boolMap.toMap(),
                 intMap = intMap.toMap()
             )
-        )
+        }
+        DesktopStorageManager.saveSettings(snapshot)
     }
 
-    override fun getAppScenario(): AppScenario = appScenario
+    override fun runBatch(block: () -> Unit) {
+        val snapshotToPersist = synchronized(repoLock) {
+            val alreadyInBatch = inBatch
+            if (!alreadyInBatch) {
+                inBatch = true
+                dirtyInBatch = false
+            }
+            try {
+                block()
+            } finally {
+                if (!alreadyInBatch) {
+                    inBatch = false
+                }
+            }
+            if (!alreadyInBatch && dirtyInBatch) {
+                dirtyInBatch = false
+                SettingsStorage(
+                    appScenario = appScenario.name,
+                    smartFailover = smartFailover,
+                    socksPort = socksPort,
+                    httpPort = httpPort,
+                    stringMap = stringMap.toMap(),
+                    boolMap = boolMap.toMap(),
+                    intMap = intMap.toMap()
+                )
+            } else {
+                null
+            }
+        }
+        if (snapshotToPersist != null) {
+            DesktopStorageManager.saveSettings(snapshotToPersist)
+        }
+    }
+
+    override fun getAppScenario(): AppScenario = synchronized(repoLock) { appScenario }
     override fun setAppScenario(scenario: AppScenario) {
-        appScenario = scenario
+        synchronized(repoLock) { appScenario = scenario }
         persist()
     }
 
-    override fun isSmartFailoverEnabled(): Boolean = smartFailover
+    override fun isSmartFailoverEnabled(): Boolean = synchronized(repoLock) { smartFailover }
     override fun setSmartFailoverEnabled(enabled: Boolean) {
-        smartFailover = enabled
+        synchronized(repoLock) { smartFailover = enabled }
         persist()
     }
 
-    override fun getSocksPort(): Int = socksPort
+    override fun getSocksPort(): Int = synchronized(repoLock) { socksPort }
     override fun setSocksPort(port: Int) {
-        socksPort = port
-        httpPort = port + 1
+        synchronized(repoLock) {
+            socksPort = port
+            httpPort = port + 1
+        }
         persist()
     }
 
-    override fun getHttpPort(): Int = if (httpPort == socksPort || httpPort <= 0) socksPort + 1 else httpPort
+    override fun getHttpPort(): Int = synchronized(repoLock) {
+        if (httpPort == socksPort || httpPort <= 0) socksPort + 1 else httpPort
+    }
     override fun setHttpPort(port: Int) {
-        httpPort = port
+        synchronized(repoLock) { httpPort = port }
         persist()
     }
 
     override fun clearAll() {
-        appScenario = AppScenario.AUTO
-        smartFailover = true
-        socksPort = 10808
-        httpPort = 10809
-        stringMap.clear()
-        boolMap.clear()
-        intMap.clear()
+        synchronized(repoLock) {
+            appScenario = AppScenario.AUTO
+            smartFailover = true
+            socksPort = 10808
+            httpPort = 10809
+            stringMap.clear()
+            boolMap.clear()
+            intMap.clear()
+        }
         persist()
     }
 
-    override fun getString(key: String, defaultValue: String): String {
-        return stringMap[key] ?: defaultValue
+    override fun getString(key: String, defaultValue: String): String = synchronized(repoLock) {
+        stringMap[key] ?: defaultValue
     }
 
     override fun setString(key: String, value: String) {
-        stringMap[key] = value
+        synchronized(repoLock) { stringMap[key] = value }
         persist()
     }
 
-    override fun getBoolean(key: String, defaultValue: Boolean): Boolean {
-        return boolMap[key] ?: defaultValue
+    override fun getBoolean(key: String, defaultValue: Boolean): Boolean = synchronized(repoLock) {
+        boolMap[key] ?: defaultValue
     }
 
     override fun setBoolean(key: String, value: Boolean) {
-        boolMap[key] = value
+        synchronized(repoLock) { boolMap[key] = value }
         persist()
     }
 
-    override fun getInt(key: String, defaultValue: Int): Int {
-        return intMap[key] ?: defaultValue
+    override fun getInt(key: String, defaultValue: Int): Int = synchronized(repoLock) {
+        intMap[key] ?: defaultValue
     }
 
     override fun setInt(key: String, value: Int) {
-        intMap[key] = value
+        synchronized(repoLock) { intMap[key] = value }
         persist()
     }
 }

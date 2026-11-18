@@ -5,6 +5,7 @@ import com.kiktor.v2whitelist.core.config.xray.XrayGeneratorOptions
 import com.kiktor.v2whitelist.core.model.EConfigType
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -157,5 +158,25 @@ class XrayConfigGeneratorTest {
         assertTrue(jsonStr.contains("\"tag\": \"fragment\""))
         assertTrue(jsonStr.contains("\"dialerProxy\": \"fragment\""))
         assertTrue(jsonStr.contains("\"packets\": \"tlshello\""))
+    }
+
+    @Test
+    fun testSplitTunnelingSeparatesDomainAndIpRules() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=tls&type=tcp#Node"
+        val profile = UniversalConfigParser.parse(uri)!!
+        val options = XrayGeneratorOptions(
+            customDirectDomains = listOf("vk.com", "192.168.10.0/24", "geoip:ru"),
+            customProxyDomains = listOf("youtube.com", "8.8.8.8")
+        )
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+
+        assertTrue(jsonStr.contains("\"domain:vk.com\""))
+        assertTrue(jsonStr.contains("\"domain:youtube.com\""))
+        assertTrue(jsonStr.contains("\"192.168.10.0/24\""))
+        assertTrue(jsonStr.contains("\"geoip:ru\""))
+        assertTrue(jsonStr.contains("\"8.8.8.8\""))
+        assertFalse(jsonStr.contains("\"domain:192.168.10.0/24\""))
+        assertFalse(jsonStr.contains("\"domain:geoip:ru\""))
+        assertFalse(jsonStr.contains("\"domain:8.8.8.8\""))
     }
 }

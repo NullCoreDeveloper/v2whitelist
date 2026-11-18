@@ -98,6 +98,7 @@ fun SettingsScreen(
 
     // SmartConnect
     var smartBatchSize by remember { mutableStateOf(state.smartConnectBatchSize.value.toString()) }
+    var verifyConcurrencyInput by remember { mutableStateOf(state.verifyConcurrency.value.toString()) }
     var smartPreset by remember { mutableStateOf(state.smartDistributionPreset.value) }
 
     // Ядро v2w-core
@@ -280,28 +281,32 @@ fun SettingsScreen(
             yandexUpdateVal = yandexUpdate,
             domainSplitVal = domainSplit,
             domainWhitelistVal = domainWhitelist,
-            vipLimit = (vipCacheLimitInput.toIntOrNull() ?: 5).coerceIn(1, 100)
+            vipLimit = (vipCacheLimitInput.toIntOrNull() ?: 5).coerceIn(1, 100),
+            autoCheckUpdatesVal = autoUpdateCheck,
+            verifyConcurrencyVal = (verifyConcurrencyInput.toIntOrNull() ?: 4).coerceIn(1, 10)
         )
-        state.setMinimizeToTray(minimizeToTray)
-        state.setAllowLan(allowLan)
-        state.personalServersEnabled.value = personalEnabled
-        state.settingsRepo.setBoolean("pref_personal_servers_enabled", personalEnabled)
-        state.personalIgnoreExitNode.value = personalIgnoreExit
-        state.settingsRepo.setBoolean("pref_personal_ignore_exit_node", personalIgnoreExit)
-        state.personalAutoConnectOnStartup.value = personalAutoConnect
-        state.settingsRepo.setBoolean("pref_personal_auto_connect", personalAutoConnect)
-        state.personalFallbackPublic.value = personalFallbackPub
-        state.settingsRepo.setBoolean("pref_personal_fallback_public", personalFallbackPub)
-        state.personalSelectedGuid.value = personalSelectedGuid
-        state.settingsRepo.setString("pref_personal_selected_guid", personalSelectedGuid)
-        state.personalBlacklistRule.value = personalBlacklistRule
-        state.settingsRepo.setString("pref_personal_blacklist_rule", personalBlacklistRule.name)
-        state.personalWhitelistRule.value = personalWhitelistRule
-        state.settingsRepo.setString("pref_personal_whitelist_rule", personalWhitelistRule.name)
+        state.settingsRepo.runBatch {
+            state.setMinimizeToTray(minimizeToTray)
+            state.setAllowLan(allowLan)
+            state.personalServersEnabled.value = personalEnabled
+            state.settingsRepo.setBoolean("pref_personal_servers_enabled", personalEnabled)
+            state.personalIgnoreExitNode.value = personalIgnoreExit
+            state.settingsRepo.setBoolean("pref_personal_ignore_exit_node", personalIgnoreExit)
+            state.personalAutoConnectOnStartup.value = personalAutoConnect
+            state.settingsRepo.setBoolean("pref_personal_auto_connect", personalAutoConnect)
+            state.personalFallbackPublic.value = personalFallbackPub
+            state.settingsRepo.setBoolean("pref_personal_fallback_public", personalFallbackPub)
+            state.personalSelectedGuid.value = personalSelectedGuid
+            state.settingsRepo.setString("pref_personal_selected_guid", personalSelectedGuid)
+            state.personalBlacklistRule.value = personalBlacklistRule
+            state.settingsRepo.setString("pref_personal_blacklist_rule", personalBlacklistRule.name)
+            state.personalWhitelistRule.value = personalWhitelistRule
+            state.settingsRepo.setString("pref_personal_whitelist_rule", personalWhitelistRule.name)
+        }
         isSavedNotice = true
     }
 
-    val doDiscard = {
+    val syncFromState = {
         personalEnabled = state.personalServersEnabled.value
         personalIgnoreExit = state.personalIgnoreExitNode.value
         personalAutoConnect = state.personalAutoConnectOnStartup.value
@@ -310,6 +315,7 @@ fun SettingsScreen(
         personalBlacklistRule = state.personalBlacklistRule.value
         personalWhitelistRule = state.personalWhitelistRule.value
         smartBatchSize = state.smartConnectBatchSize.value.toString()
+        verifyConcurrencyInput = state.verifyConcurrency.value.toString()
         smartPreset = state.smartDistributionPreset.value
         useV2w = state.useV2WCore.value
         useFallback = state.useFallbackScanner.value
@@ -377,11 +383,30 @@ fun SettingsScreen(
         minimizeToTray = state.minimizeToTray.value
         connCheckUrl = state.connectionCheckServiceUrl.value
         betaUpdates = state.receiveBetaUpdates.value
+    }
+
+    val doDiscard = {
+        syncFromState()
         isSavedNotice = false
+    }
+
+    val settingsRev by state.settingsRevision.collectAsState()
+    LaunchedEffect(settingsRev) {
+        if (settingsRev > 0L) {
+            syncFromState()
+        }
+    }
+
+    LaunchedEffect(isSavedNotice) {
+        if (isSavedNotice) {
+            kotlinx.coroutines.delay(3500L)
+            isSavedNotice = false
+        }
     }
 
     val checkDirty: () -> Boolean = {
         smartBatchSize != state.smartConnectBatchSize.value.toString() ||
+        verifyConcurrencyInput != state.verifyConcurrency.value.toString() ||
         smartPreset != state.smartDistributionPreset.value ||
         useV2w != state.useV2WCore.value ||
         useFallback != state.useFallbackScanner.value ||
@@ -478,7 +503,6 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(if (meshEnabled) Color.Transparent else MaterialTheme.colorScheme.background)
             .padding(24.dp)
-            .verticalScroll(scrollState)
     ) {
         // Шапка с кнопкой сохранения
         Row(
@@ -531,8 +555,14 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(14.dp))
 
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+        ) {
         // Горизонтальный переключатель категорий настроек
         val categoryScrollState = rememberScrollState()
         val categoryScope = rememberCoroutineScope()
@@ -544,7 +574,13 @@ fun SettingsScreen(
             IconButton(
                 onClick = { categoryScope.launch { categoryScrollState.animateScrollBy(-300f) } },
                 enabled = categoryScrollState.value > 0
-            ) { Icon(Icons.Default.ChevronLeft, null) }
+            ) {
+                Icon(
+                    Icons.Default.ChevronLeft,
+                    contentDescription = "Прокрутить влево",
+                    tint = if (categoryScrollState.value > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                )
+            }
         }
         Row(
             modifier = Modifier
@@ -598,7 +634,13 @@ fun SettingsScreen(
             IconButton(
                 onClick = { categoryScope.launch { categoryScrollState.animateScrollBy(300f) } },
                 enabled = categoryScrollState.value < categoryScrollState.maxValue
-            ) { Icon(Icons.Default.ChevronRight, null) }
+            ) {
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = "Прокрутить вправо",
+                    tint = if (categoryScrollState.value < categoryScrollState.maxValue) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                )
+            }
         }
         }
 
@@ -622,6 +664,14 @@ fun SettingsScreen(
                         value = smartBatchSize,
                         onValueChange = { smartBatchSize = it },
                         label = { Text(strings.smartBatchLabel) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = verifyConcurrencyInput,
+                        onValueChange = { verifyConcurrencyInput = it },
+                        label = { Text("Одновременные потоки проверки (1–10, по умолч. 4)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -729,7 +779,7 @@ fun SettingsScreen(
                     SettingSwitchRow(
                         title = strings.serviceCheckEnable,
                         desc = if (isExitNodeActive) "${strings.serviceCheckEnableDesc} (игнорируется при активном конечном узле)" else strings.serviceCheckEnableDesc,
-                        checked = if (isExitNodeActive) false else serviceCheckEnabled,
+                        checked = serviceCheckEnabled,
                         enabled = !isExitNodeActive,
                         onCheckedChange = { serviceCheckEnabled = it }
                     )
@@ -1057,9 +1107,54 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = customDirect,
                         onValueChange = { customDirect = it },
-                        label = { Text(strings.directDomainsLabel) },
+                        label = { Text("${strings.directDomainsLabel} (домены, IP/CIDR, geoip:)") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Быстрые пресеты (домены/IP через запятую или с новой строки):",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val additions = listOf("geosite:category-ru", "domain:ru", "geoip:ru")
+                                val existing = customDirect.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
+                                existing.addAll(additions)
+                                customDirect = existing.joinToString("\n")
+                                domainSplit = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text("+ Сайты РФ напрямую", fontSize = 11.sp) }
+                        OutlinedButton(
+                            onClick = {
+                                val additions = listOf("geosite:steam", "steampowered.com", "steamcommunity.com", "steamstatic.com")
+                                val existing = customDirect.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
+                                existing.addAll(additions)
+                                customDirect = existing.joinToString("\n")
+                                domainSplit = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text("+ Steam напрямую", fontSize = 11.sp) }
+                        OutlinedButton(
+                            onClick = {
+                                val additions = listOf("geosite:youtube", "googlevideo.com", "discord.com", "discord.gg")
+                                val existing = customProxy.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
+                                existing.addAll(additions)
+                                customProxy = existing.joinToString("\n")
+                                domainSplit = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) { Text("+ YouTube & Discord в VPN", fontSize = 11.sp) }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -1788,6 +1883,7 @@ fun SettingsScreen(
         com.kiktor.v2whitelist.desktop.ui.components.ServiceAvailabilityDialog(state = state)
 
         Spacer(Modifier.height(40.dp))
+        }
     }
 }
 

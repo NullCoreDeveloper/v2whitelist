@@ -27,6 +27,12 @@ interface SettingsRepository {
     fun getInt(key: String, defaultValue: Int = 0): Int
     fun setInt(key: String, value: Int)
 
+    /**
+     * Группирует серию изменений, чтобы реализации с дисковым хранилищем
+     * записывали настройки на диск один раз по завершении блока.
+     */
+    fun runBatch(block: () -> Unit) = block()
+
     fun clearAll() {}
 }
 

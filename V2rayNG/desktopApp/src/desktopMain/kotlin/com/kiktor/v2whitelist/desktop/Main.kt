@@ -517,24 +517,39 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
 }
 
 fun main() {
-    System.setProperty("jdk.lang.Process.launchMechanism", "vfork")
+    val osNameLower = System.getProperty("os.name")?.lowercase().orEmpty()
+    when {
+        osNameLower.contains("linux") -> {
+            if (System.getProperty("jdk.lang.Process.launchMechanism").isNullOrBlank()) {
+                System.setProperty("jdk.lang.Process.launchMechanism", "vfork")
+            }
+        }
+        osNameLower.contains("mac") -> {
+            // macOS Apple Silicon (Java 17+) поддерживает только posix_spawn; vfork вызывает java.lang.Error
+            System.setProperty("jdk.lang.Process.launchMechanism", "posix_spawn")
+        }
+    }
     if (!DesktopStorageManager.acquireSingleInstanceLock()) {
         System.err.println("Экземпляр приложения ПроБел (v2whitelist) уже запущен.")
         return
     }
-    Runtime.getRuntime().addShutdownHook(Thread {
-        try {
-            ProcessBuilder("pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_").start().waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (_: Exception) {}
-    })
+    if (!osNameLower.contains("win")) {
+        Runtime.getRuntime().addShutdownHook(Thread {
+            try {
+                ProcessBuilder("pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_").start().waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (_: Exception) {}
+        })
+    }
     application {
         val state = remember { DesktopAppState() }
         var isWindowVisible by remember { mutableStateOf(true) }
+        var restoreWindowTrigger by remember { mutableIntStateOf(0) }
         val coreState by state.coreState.collectAsState()
         val isSystemProxyActive by state.isSystemProxyActive.collectAsState()
         val routingMode by state.routingMode.collectAsState()
         val minimizeToTray by state.minimizeToTray.collectAsState()
         val appLanguage by state.appLanguage.collectAsState()
+        val availableAppUpdate by state.availableAppUpdate.collectAsState()
         val strings = remember(appLanguage) { I18n.get(appLanguage) }
 
         val trayIcon = remember(coreState) {
@@ -546,6 +561,14 @@ fun main() {
             height = 760.dp
         )
 
+        val restoreWindow: () -> Unit = {
+            isWindowVisible = true
+            windowState.isMinimized = false
+            restoreWindowTrigger++
+        }
+
+        val updateTooltipSuffix = availableAppUpdate?.let { " • Обновление v${it.latestVersion}" } ?: ""
+
         Tray(
             icon = trayIcon,
             tooltip = "${strings.appName} — ${when (coreState) {
@@ -553,19 +576,26 @@ fun main() {
                 DesktopCoreState.STARTING -> strings.statusConnecting
                 DesktopCoreState.ERROR -> strings.statusError
                 DesktopCoreState.STOPPED -> strings.statusDisconnected
-            }}",
+            }}$updateTooltipSuffix",
             primaryAction = {
-                isWindowVisible = true
-                windowState.isMinimized = false
+                restoreWindow()
             }
         ) {
             Item(
                 label = strings.trayOpen,
                 onClick = {
-                    isWindowVisible = true
-                    windowState.isMinimized = false
+                    restoreWindow()
                 }
             )
+            availableAppUpdate?.let { upd ->
+                Item(
+                    label = "Обновить до v${upd.latestVersion}",
+                    onClick = {
+                        state.showAppUpdateDialog.value = true
+                        restoreWindow()
+                    }
+                )
+            }
             Divider()
             Item(
                 label = when (coreState) {
@@ -609,11 +639,20 @@ fun main() {
             title = strings.appTitle,
             icon = trayIcon
         ) {
-            LaunchedEffect(isWindowVisible) {
+            LaunchedEffect(isWindowVisible, restoreWindowTrigger) {
                 if (isWindowVisible) {
                     windowState.isMinimized = false
+                    window.isVisible = true
+                    val ext = window.extendedState
+                    if ((ext and java.awt.Frame.ICONIFIED) != 0) {
+                        window.extendedState = ext and java.awt.Frame.ICONIFIED.inv()
+                    }
+                    // Временное isAlwaysOnTop выводит окно поверх других приложений на Windows при клике по трею
+                    val prevAlwaysOnTop = window.isAlwaysOnTop
+                    window.isAlwaysOnTop = true
                     window.toFront()
                     window.requestFocus()
+                    window.isAlwaysOnTop = prevAlwaysOnTop
                 }
             }
             App(state = state)

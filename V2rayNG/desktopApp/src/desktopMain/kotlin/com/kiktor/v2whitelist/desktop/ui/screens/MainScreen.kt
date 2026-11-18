@@ -587,6 +587,16 @@ fun MainScreen(
                         fontWeight = FontWeight.SemiBold,
                         color = if (isManualSelection) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val locMode by state.locationFilterMode.collectAsState()
+                    val locSet by state.locationFilterSet.collectAsState()
+                    val availLocs by state.availableLocations.collectAsState()
+                    val locBtnLabel = when {
+                        locMode == com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode.WHITELIST && locSet.isNotEmpty() ->
+                            "${strings.locationsFilter} (${locSet.size}/${availLocs.size})"
+                        locMode == com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode.EXCLUDE && locSet.isNotEmpty() ->
+                            "${strings.locationsFilter} (-${locSet.size}/${availLocs.size})"
+                        else -> "${strings.locationsFilter} (${availLocs.size})"
+                    }
                     OutlinedButton(
                         onClick = { state.promptLocationFilterDialog() },
                         shape = RoundedCornerShape(8.dp),
@@ -595,7 +605,7 @@ fun MainScreen(
                     ) {
                         Icon(Icons.Default.Public, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.locationsFilter, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(locBtnLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
