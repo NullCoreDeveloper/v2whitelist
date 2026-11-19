@@ -22,11 +22,14 @@ import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
+import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
+import com.kiktor.v2whitelist.desktop.engine.AppSplitTunnelingConfig
 import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
+import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
 import com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
 import io.ktor.client.request.get
@@ -243,6 +246,38 @@ class DesktopAppState(
     val bypassRussianServices = MutableStateFlow(settingsRepo.getBoolean("pref_bypass_russian_services", true))
     val customDirectDomains = MutableStateFlow(settingsRepo.getString("custom_direct_domains", ""))
     val customProxyDomains = MutableStateFlow(settingsRepo.getString("custom_proxy_domains", ""))
+
+    // Раздельное туннелирование по приложениям (TUN) и выбор TUN-драйвера
+    val tunEnginePreference = MutableStateFlow(
+        TunEnginePreference.fromString(settingsRepo.getString("pref_tun_engine", TunEnginePreference.AUTO.name))
+    )
+    val appSplitTunnelingEnabled = MutableStateFlow(settingsRepo.getBoolean("pref_app_split_enabled", false))
+    val appSplitTunnelingMode = MutableStateFlow(
+        AppSplitMode.fromString(settingsRepo.getString("pref_app_split_mode", AppSplitMode.BYPASS.name))
+    )
+    val appSplitDirectApps = MutableStateFlow(
+        parseAppSplitList(settingsRepo.getString("pref_app_split_direct_apps", ""))
+    )
+    val appSplitProxyApps = MutableStateFlow(
+        parseAppSplitList(settingsRepo.getString("pref_app_split_proxy_apps", ""))
+    )
+    val showAppSplitDialog = MutableStateFlow(false)
+
+    private fun parseAppSplitList(raw: String): List<String> {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return try {
+            jsonHelper.decodeFromString<List<String>>(trimmed)
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinctBy { it.lowercase() }
+        } catch (_: Exception) {
+            trimmed.split(",", "\n")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinctBy { it.lowercase() }
+        }
+    }
 
     // Личный прокси как конечный узел (цепочка: SmartConnect -> Конечный узел)
     val useCustomEndpoint = MutableStateFlow(settingsRepo.getBoolean("pref_custom_endpoint_enabled", false))
@@ -1728,6 +1763,45 @@ class DesktopAppState(
         showServiceCheckDialog.value = false
     }
 
+    fun promptAppSplitDialog() {
+        showAppSplitDialog.value = true
+    }
+
+    fun dismissAppSplitDialog() {
+        showAppSplitDialog.value = false
+    }
+
+    fun setTunEnginePreference(pref: TunEnginePreference) {
+        tunEnginePreference.value = pref
+        settingsRepo.setString("pref_tun_engine", pref.name)
+    }
+
+    fun setAppSplitEnabled(enabled: Boolean) {
+        appSplitTunnelingEnabled.value = enabled
+        settingsRepo.setBoolean("pref_app_split_enabled", enabled)
+    }
+
+    fun setAppSplitMode(mode: AppSplitMode) {
+        appSplitTunnelingMode.value = mode
+        settingsRepo.setString("pref_app_split_mode", mode.name)
+    }
+
+    fun setAppSplitRoute(appId: String, target: String) {
+        val clean = appId.trim()
+        if (clean.isEmpty()) return
+        val key = clean.lowercase()
+        val updatedDirect = appSplitDirectApps.value.filterNot { it.lowercase() == key }.toMutableList()
+        val updatedProxy = appSplitProxyApps.value.filterNot { it.lowercase() == key }.toMutableList()
+        when (target.uppercase()) {
+            "DIRECT" -> updatedDirect.add(clean)
+            "PROXY" -> updatedProxy.add(clean)
+        }
+        appSplitDirectApps.value = updatedDirect
+        appSplitProxyApps.value = updatedProxy
+        settingsRepo.setString("pref_app_split_direct_apps", jsonHelper.encodeToString(updatedDirect))
+        settingsRepo.setString("pref_app_split_proxy_apps", jsonHelper.encodeToString(updatedProxy))
+    }
+
     fun setServiceCheckEnabled(enabled: Boolean) {
         serviceCheckEnabled.value = enabled
         settingsRepo.setBoolean("pref_service_check_enabled", enabled)
@@ -1999,13 +2073,20 @@ class DesktopAppState(
                         return@launch
                     }
 
-                    // Режим TUN: запуск сетевого адаптера v2w-tun через tun2socks
+                    // Режим TUN: запуск сетевого адаптера v2w-tun (tun2socks либо кастомный v2w-tun)
                     val tunStarted = withContext(Dispatchers.IO) {
                         DesktopTunManager.start(
                             socksPort = currentSocksPort,
                             serverAddress = profile.server,
                             sudoPassword = sessionSudoPassword,
-                            tunIp = vpnInterfaceAddress.value.ifBlank { null }
+                            tunIp = vpnInterfaceAddress.value.ifBlank { null },
+                            tunEnginePreference = tunEnginePreference.value,
+                            appSplitConfig = AppSplitTunnelingConfig(
+                                enabled = appSplitTunnelingEnabled.value,
+                                mode = appSplitTunnelingMode.value,
+                                directApps = appSplitDirectApps.value,
+                                proxyApps = appSplitProxyApps.value
+                            )
                         )
                     }
                     if (tunStarted) {
@@ -2616,7 +2697,10 @@ class DesktopAppState(
         domainWhitelistVal: Boolean = domainWhitelistMode.value,
         vipLimit: Int = vipCacheLimit.value,
         autoCheckUpdatesVal: Boolean = autoCheckUpdates.value,
-        verifyConcurrencyVal: Int = verifyConcurrency.value
+        verifyConcurrencyVal: Int = verifyConcurrency.value,
+        tunEnginePrefVal: TunEnginePreference = tunEnginePreference.value,
+        appSplitEnabledVal: Boolean = appSplitTunnelingEnabled.value,
+        appSplitModeVal: AppSplitMode = appSplitTunnelingMode.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
@@ -2708,6 +2792,9 @@ class DesktopAppState(
         yandexTranslateUpdateEnabled.value = yandexUpdateVal
         domainSplitTunnelingEnabled.value = domainSplitVal
         domainWhitelistMode.value = domainWhitelistVal
+        tunEnginePreference.value = tunEnginePrefVal
+        appSplitTunnelingEnabled.value = appSplitEnabledVal
+        appSplitTunnelingMode.value = appSplitModeVal
         vipCacheLimit.value = vipLimit
         autoCheckUpdates.value = autoCheckUpdatesVal
         val clampedConcurrency = verifyConcurrencyVal.coerceIn(1, 10)
@@ -2789,6 +2876,11 @@ class DesktopAppState(
             settingsRepo.setBoolean("pref_yandex_translate_update", yandexUpdateVal)
             settingsRepo.setBoolean("pref_domain_split_tunneling", domainSplitVal)
             settingsRepo.setBoolean("pref_domain_whitelist_mode", domainWhitelistVal)
+            settingsRepo.setString("pref_tun_engine", tunEnginePrefVal.name)
+            settingsRepo.setBoolean("pref_app_split_enabled", appSplitEnabledVal)
+            settingsRepo.setString("pref_app_split_mode", appSplitModeVal.name)
+            settingsRepo.setString("pref_app_split_direct_apps", jsonHelper.encodeToString(appSplitDirectApps.value))
+            settingsRepo.setString("pref_app_split_proxy_apps", jsonHelper.encodeToString(appSplitProxyApps.value))
             settingsRepo.setInt("pref_vip_cache_limit", vipLimit)
             settingsRepo.setInt("pref_verify_concurrency", clampedConcurrency)
         }
@@ -2857,6 +2949,11 @@ class DesktopAppState(
 
         domainSplitTunnelingEnabled.value = true
         domainWhitelistMode.value = false
+        tunEnginePreference.value = TunEnginePreference.AUTO
+        appSplitTunnelingEnabled.value = false
+        appSplitTunnelingMode.value = AppSplitMode.BYPASS
+        appSplitDirectApps.value = emptyList()
+        appSplitProxyApps.value = emptyList()
         bypassRussianServices.value = true
         customDirectDomains.value = ""
         customProxyDomains.value = ""

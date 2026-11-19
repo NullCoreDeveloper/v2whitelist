@@ -25,7 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
+import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
@@ -145,6 +147,9 @@ fun SettingsScreen(
     var domainWhitelist by remember { mutableStateOf(state.domainWhitelistMode.value) }
     var customDirect by remember { mutableStateOf(state.customDirectDomains.value) }
     var customProxy by remember { mutableStateOf(state.customProxyDomains.value) }
+    var tunEnginePref by remember { mutableStateOf(state.tunEnginePreference.value) }
+    var appSplitEnabled by remember { mutableStateOf(state.appSplitTunnelingEnabled.value) }
+    var appSplitMode by remember { mutableStateOf(state.appSplitTunnelingMode.value) }
 
     // Отдельные настройки
     val scope = rememberCoroutineScope()
@@ -287,7 +292,10 @@ fun SettingsScreen(
             domainWhitelistVal = domainWhitelist,
             vipLimit = (vipCacheLimitInput.toIntOrNull() ?: 5).coerceIn(1, 100),
             autoCheckUpdatesVal = autoUpdateCheck,
-            verifyConcurrencyVal = (verifyConcurrencyInput.toIntOrNull() ?: 4).coerceIn(1, 10)
+            verifyConcurrencyVal = (verifyConcurrencyInput.toIntOrNull() ?: 4).coerceIn(1, 10),
+            tunEnginePrefVal = tunEnginePref,
+            appSplitEnabledVal = appSplitEnabled,
+            appSplitModeVal = appSplitMode
         )
         state.settingsRepo.runBatch {
             state.setMinimizeToTray(minimizeToTray)
@@ -354,6 +362,9 @@ fun SettingsScreen(
         domainWhitelist = state.domainWhitelistMode.value
         customDirect = state.customDirectDomains.value
         customProxy = state.customProxyDomains.value
+        tunEnginePref = state.tunEnginePreference.value
+        appSplitEnabled = state.appSplitTunnelingEnabled.value
+        appSplitMode = state.appSplitTunnelingMode.value
         bypassRu = state.bypassRussianServices.value
         autoUpdateCheck = state.autoCheckUpdates.value
         useCustomEp = state.useCustomEndpoint.value
@@ -447,6 +458,9 @@ fun SettingsScreen(
         domainWhitelist != state.domainWhitelistMode.value ||
         customDirect != state.customDirectDomains.value ||
         customProxy != state.customProxyDomains.value ||
+        tunEnginePref != state.tunEnginePreference.value ||
+        appSplitEnabled != state.appSplitTunnelingEnabled.value ||
+        appSplitMode != state.appSplitTunnelingMode.value ||
         bypassRu != state.bypassRussianServices.value ||
         autoUpdateCheck != state.autoCheckUpdates.value ||
         useCustomEp != state.useCustomEndpoint.value ||
@@ -800,9 +814,8 @@ fun SettingsScreen(
                     val isExitNodeActive = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value.isNotBlank()
                     SettingSwitchRow(
                         title = strings.serviceCheckEnable,
-                        desc = if (isExitNodeActive) "${strings.serviceCheckEnableDesc} (игнорируется при активном конечном узле)" else strings.serviceCheckEnableDesc,
+                        desc = if (isExitNodeActive) "${strings.serviceCheckEnableDesc} (проверяется через конечный узел)" else strings.serviceCheckEnableDesc,
                         checked = serviceCheckEnabled,
-                        enabled = !isExitNodeActive,
                         onCheckedChange = { serviceCheckEnabled = it }
                     )
                     val currentServices by state.servicesList.collectAsState()
@@ -810,8 +823,7 @@ fun SettingsScreen(
                     OutlinedButton(
                         onClick = { state.promptServiceCheckDialog() },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        enabled = !isExitNodeActive
+                        shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
@@ -1097,6 +1109,80 @@ fun SettingsScreen(
                         checked = bypassRu,
                         onCheckedChange = { bypassRu = it }
                     )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Раздельное туннелирование по приложениям (TUN + v2w-tun)
+                val directAppsCount = state.appSplitDirectApps.collectAsState().value.size
+                val proxyAppsCount = state.appSplitProxyApps.collectAsState().value.size
+                val effectiveTunDriver = DesktopTunManager.resolveEffectiveTunEngine(tunEnginePref, appSplitEnabled)
+                SettingsCard(
+                    title = "Раздельное туннелирование по приложениям",
+                    icon = Icons.Default.Apps,
+                    description = "Маршрутизация конкретных программ в Direct (обход VPN) или Proxy в режиме TUN"
+                ) {
+                    SettingSwitchRow(
+                        title = "Включить разделение по приложениям (TUN)",
+                        desc = "При включении автоматически задействуется кастомный TUN-драйвер v2w-tun (если в настройках TUN выбран режим Авто)",
+                        checked = appSplitEnabled,
+                        onCheckedChange = { enabled ->
+                            appSplitEnabled = enabled
+                            state.setAppSplitEnabled(enabled)
+                        }
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Политика по умолчанию для приложений вне списков:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsChip(
+                            label = "Всё в VPN (кроме Direct)",
+                            selected = appSplitMode == AppSplitMode.BYPASS,
+                            onClick = {
+                                appSplitMode = AppSplitMode.BYPASS
+                                state.setAppSplitMode(AppSplitMode.BYPASS)
+                            }
+                        )
+                        SettingsChip(
+                            label = "Напрямую (кроме Proxy)",
+                            selected = appSplitMode == AppSplitMode.ONLY_PROXY,
+                            onClick = {
+                                appSplitMode = AppSplitMode.ONLY_PROXY
+                                state.setAppSplitMode(AppSplitMode.ONLY_PROXY)
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { state.promptAppSplitDialog() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Выбрать приложения (Direct: $directAppsCount • Proxy: $proxyAppsCount)", fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Активный TUN-драйвер при подключении: ${if (effectiveTunDriver == TunEnginePreference.V2W_TUN) "v2w-tun (кастомный)" else "tun2socks"}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (appSplitEnabled && tunEnginePref == TunEnginePreference.TUN2SOCKS) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Внимание: вручную выбран tun2socks — разделение по приложениям работает только с v2w-tun (или в режиме Авто).",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -1715,6 +1801,46 @@ fun SettingsScreen(
                     Spacer(Modifier.height(14.dp))
                 }
 
+                // Выбор TUN-драйвера (tun2socks / кастомный v2w-tun)
+                SettingsCard(
+                    title = "TUN-драйвер (движок маршрутизации)",
+                    icon = Icons.Default.SettingsInputComponent,
+                    description = "По умолчанию используется tun2socks; при включении сплита по приложениям автоматически выбирается v2w-tun, либо можно включить v2w-tun вручную"
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsChip(
+                            label = "Авто (tun2socks / v2w-tun)",
+                            selected = tunEnginePref == TunEnginePreference.AUTO,
+                            onClick = { tunEnginePref = TunEnginePreference.AUTO }
+                        )
+                        SettingsChip(
+                            label = "tun2socks",
+                            selected = tunEnginePref == TunEnginePreference.TUN2SOCKS,
+                            onClick = { tunEnginePref = TunEnginePreference.TUN2SOCKS }
+                        )
+                        SettingsChip(
+                            label = "Кастомный (v2w-tun)",
+                            selected = tunEnginePref == TunEnginePreference.V2W_TUN,
+                            onClick = { tunEnginePref = TunEnginePreference.V2W_TUN }
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    val effectiveNow = DesktopTunManager.resolveEffectiveTunEngine(tunEnginePref, appSplitEnabled)
+                    Text(
+                        text = when (effectiveNow) {
+                            TunEnginePreference.V2W_TUN -> "Будет использован: кастомный v2w-tun (gVisor + маршрутизация по процессам)"
+                            else -> "Будет использован: стандартный tun2socks"
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
                 // 9. Базовые настройки VPN
                 SettingsCard(
                     title = strings.cardVpnDns,
@@ -1903,6 +2029,7 @@ fun SettingsScreen(
         }
 
         com.kiktor.v2whitelist.desktop.ui.components.ServiceAvailabilityDialog(state = state)
+        com.kiktor.v2whitelist.desktop.ui.components.AppSplitTunnelingDialog(state = state)
 
         Spacer(Modifier.height(40.dp))
         }

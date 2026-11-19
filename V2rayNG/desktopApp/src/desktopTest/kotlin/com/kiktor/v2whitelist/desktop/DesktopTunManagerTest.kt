@@ -1,6 +1,8 @@
 package com.kiktor.v2whitelist.desktop
 
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
+import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
+import com.kiktor.v2whitelist.desktop.util.DesktopInstalledAppsProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,5 +58,37 @@ class DesktopTunManagerTest {
             excludeIps = setOf("192.168.1.1")
         )
         assertEquals(listOf("46.61.250.138", "46.61.250.139", "77.88.8.8"), parsed)
+    }
+
+    @Test
+    fun testResolveEffectiveTunEngineAutoAndManual() {
+        assertEquals(
+            TunEnginePreference.TUN2SOCKS,
+            DesktopTunManager.resolveEffectiveTunEngine(TunEnginePreference.AUTO, appSplitEnabled = false)
+        )
+        assertEquals(
+            TunEnginePreference.V2W_TUN,
+            DesktopTunManager.resolveEffectiveTunEngine(TunEnginePreference.AUTO, appSplitEnabled = true)
+        )
+        assertEquals(
+            TunEnginePreference.V2W_TUN,
+            DesktopTunManager.resolveEffectiveTunEngine(TunEnginePreference.V2W_TUN, appSplitEnabled = false)
+        )
+        assertEquals(
+            TunEnginePreference.TUN2SOCKS,
+            DesktopTunManager.resolveEffectiveTunEngine(TunEnginePreference.TUN2SOCKS, appSplitEnabled = true)
+        )
+    }
+
+    @Test
+    fun testExtractExecutableFromDesktopExec() {
+        assertEquals(
+            "/usr/bin/firefox",
+            DesktopInstalledAppsProvider.extractExecutableFromDesktopExec("\"/usr/bin/firefox\" %u")
+        )
+        assertEquals(
+            "steam",
+            DesktopInstalledAppsProvider.extractExecutableFromDesktopExec("env STEAM_FORCE_DESKTOPUI_SCALING=1 steam %U")
+        )
     }
 }

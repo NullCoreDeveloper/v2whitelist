@@ -65,19 +65,19 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                 if (isEndpointActive) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier.padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = null, tint = AccentRed, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = strings.servCheckEndpointWarning,
+                                text = "Конечный узел активен: проверка доступности выбранных сервисов выполняется через цепочку конечного узла.",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }

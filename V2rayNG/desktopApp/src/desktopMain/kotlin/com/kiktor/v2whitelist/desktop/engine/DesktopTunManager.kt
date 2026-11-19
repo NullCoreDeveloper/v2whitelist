@@ -2,6 +2,10 @@ package com.kiktor.v2whitelist.desktop.engine
 
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import kotlinx.coroutines.*
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -12,7 +16,91 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+
+enum class TunEnginePreference {
+    AUTO,
+    TUN2SOCKS,
+    V2W_TUN;
+
+    companion object {
+        fun fromString(raw: String?): TunEnginePreference {
+            return when (raw?.trim()?.uppercase()) {
+                "TUN2SOCKS" -> TUN2SOCKS
+                "V2W_TUN" -> V2W_TUN
+                else -> AUTO
+            }
+        }
+    }
+}
+
+enum class AppSplitMode {
+    BYPASS,
+    ONLY_PROXY;
+
+    fun toWireValue(): String = when (this) {
+        BYPASS -> "bypass"
+        ONLY_PROXY -> "only_proxy"
+    }
+
+    companion object {
+        fun fromString(raw: String?): AppSplitMode {
+            return when (raw?.trim()?.uppercase()) {
+                "ONLY_PROXY" -> ONLY_PROXY
+                else -> BYPASS
+            }
+        }
+    }
+}
+
+data class AppSplitTunnelingConfig(
+    val enabled: Boolean = false,
+    val mode: AppSplitMode = AppSplitMode.BYPASS,
+    val directApps: List<String> = emptyList(),
+    val proxyApps: List<String> = emptyList()
+)
+
+@Serializable
+private data class ServiceStartTunRequestDto(
+    @SerialName("socks_port") val socksPort: Int,
+    @SerialName("server_ip") val serverIp: String,
+    @SerialName("gateway") val gateway: String,
+    @SerialName("physical_dev") val physicalDev: String,
+    @SerialName("tun2socks_path") val tun2socksPath: String,
+    @SerialName("tun_ip") val tunIp: String,
+    @SerialName("tun_mask") val tunMask: String,
+    @SerialName("tun_gateway") val tunGateway: String,
+    @SerialName("dns_servers") val dnsServers: List<String>,
+    @SerialName("tun_engine") val tunEngine: String,
+    @SerialName("socks_user") val socksUser: String = "",
+    @SerialName("socks_pass") val socksPass: String = "",
+    @SerialName("direct_dns") val directDns: String = "",
+    @SerialName("split_enabled") val splitEnabled: Boolean = false,
+    @SerialName("split_mode") val splitMode: String = "bypass",
+    @SerialName("direct_apps") val directApps: List<String> = emptyList(),
+    @SerialName("proxy_apps") val proxyApps: List<String> = emptyList()
+)
+
+@Serializable
+private data class V2wTunSplitConfigDto(
+    @SerialName("enabled") val enabled: Boolean,
+    @SerialName("mode") val mode: String,
+    @SerialName("direct_apps") val directApps: List<String>,
+    @SerialName("proxy_apps") val proxyApps: List<String>
+)
+
+@Serializable
+private data class V2wTunRouterConfigDto(
+    @SerialName("device_name") val deviceName: String,
+    @SerialName("mtu") val mtu: Int,
+    @SerialName("socks_addr") val socksAddr: String,
+    @SerialName("socks_user") val socksUser: String = "",
+    @SerialName("socks_pass") val socksPass: String = "",
+    @SerialName("physical_iface") val physicalIface: String = "",
+    @SerialName("direct_dns") val directDns: String = "",
+    @SerialName("split") val split: V2wTunSplitConfigDto
+)
 
 data class ConfiguredServerRoute(
     val ip: String,
@@ -48,12 +136,15 @@ object DesktopTunManager {
     val isLinux = !isWindows && !isMac
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val jsonCodec = Json { encodeDefaults = true; ignoreUnknownKeys = true }
     private var tunProcess: Process? = null
+    private var v2wTunConfigFile: File? = null
     private var logJob: Job? = null
     private var currentSudoPassword: String? = null
     private var configuredRoute: ConfiguredServerRoute? = null
     private val configuredDnsRoutes = mutableListOf<Pair<String, String>>()
     private var activeTunGw: String = DEFAULT_TUN_GW
+    private var activeMacDevice: String = "utun"
 
     var isTunActive: Boolean = false
         private set
@@ -85,6 +176,30 @@ object DesktopTunManager {
      */
     fun findTun2SocksExecutable(customPath: String? = null): File? {
         return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.tun2socksBinaryNames, customPath)
+    }
+
+    /**
+     * Поиск бинарного файла встроенного кастомного TUN-движка v2w-tun.
+     */
+    fun findV2wTunExecutable(customPath: String? = null): File? {
+        return DesktopBinaryResolver.findBinary(DesktopBinaryResolver.v2wTunBinaryNames, customPath)
+    }
+
+    /**
+     * Выбирает фактический TUN-движок:
+     * - По умолчанию (AUTO) используется tun2socks;
+     * - При включении раздельного туннелирования по приложениям (AUTO + split) автоматически выбирается v2w-tun;
+     * - Явный выбор пользователя (TUN2SOCKS или V2W_TUN) всегда соблюдается.
+     */
+    fun resolveEffectiveTunEngine(
+        preference: TunEnginePreference,
+        appSplitEnabled: Boolean
+    ): TunEnginePreference {
+        return when (preference) {
+            TunEnginePreference.V2W_TUN -> TunEnginePreference.V2W_TUN
+            TunEnginePreference.TUN2SOCKS -> TunEnginePreference.TUN2SOCKS
+            TunEnginePreference.AUTO -> if (appSplitEnabled) TunEnginePreference.V2W_TUN else TunEnginePreference.TUN2SOCKS
+        }
     }
 
     /**
@@ -170,7 +285,12 @@ object DesktopTunManager {
         tun2socksPath: String?,
         tunIp: String,
         tunMask: String,
-        tunGateway: String
+        tunGateway: String,
+        effectiveEngine: TunEnginePreference,
+        socksUser: String?,
+        socksPass: String?,
+        directDns: String?,
+        appSplitConfig: AppSplitTunnelingConfig
     ): Boolean {
         return try {
             val client = HttpClient.newBuilder()
@@ -178,19 +298,28 @@ object DesktopTunManager {
                 .build()
             serviceSelfTestFailed = false
 
-            val jsonBody = StringBuilder()
-                .append("{")
-                .append("\"socks_port\":").append(socksPort).append(",")
-                .append("\"server_ip\":\"").append(serverIp.orEmpty()).append("\",")
-                .append("\"gateway\":\"").append(gateway).append("\",")
-                .append("\"physical_dev\":\"").append(physicalDev).append("\",")
-                .append("\"tun2socks_path\":\"").append((tun2socksPath.orEmpty()).replace("\\", "\\\\")).append("\",")
-                .append("\"tun_ip\":\"").append(tunIp).append("\",")
-                .append("\"tun_mask\":\"").append(tunMask).append("\",")
-                .append("\"tun_gateway\":\"").append(tunGateway).append("\",")
-                .append("\"dns_servers\":[\"1.1.1.1\",\"8.8.8.8\"]")
-                .append("}")
-                .toString()
+            val engineWire = if (effectiveEngine == TunEnginePreference.V2W_TUN) "v2w-tun" else "tun2socks"
+            val jsonBody = jsonCodec.encodeToString(
+                ServiceStartTunRequestDto(
+                    socksPort = socksPort,
+                    serverIp = serverIp.orEmpty(),
+                    gateway = gateway,
+                    physicalDev = physicalDev,
+                    tun2socksPath = tun2socksPath.orEmpty(),
+                    tunIp = tunIp,
+                    tunMask = tunMask,
+                    tunGateway = tunGateway,
+                    dnsServers = listOf("1.1.1.1", "8.8.8.8"),
+                    tunEngine = engineWire,
+                    socksUser = socksUser.orEmpty(),
+                    socksPass = socksPass.orEmpty(),
+                    directDns = directDns.orEmpty(),
+                    splitEnabled = appSplitConfig.enabled,
+                    splitMode = appSplitConfig.mode.toWireValue(),
+                    directApps = appSplitConfig.directApps,
+                    proxyApps = appSplitConfig.proxyApps
+                )
+            )
 
             val request = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/tun/start"))
@@ -365,7 +494,12 @@ object DesktopTunManager {
         serverAddress: String?,
         sudoPassword: String?,
         customPath: String? = null,
-        tunIp: String? = null
+        tunIp: String? = null,
+        tunEnginePreference: TunEnginePreference = TunEnginePreference.AUTO,
+        appSplitConfig: AppSplitTunnelingConfig = AppSplitTunnelingConfig(),
+        directDns: String? = null,
+        socksUser: String? = null,
+        socksPass: String? = null
     ): Boolean {
         if (isTunActive) {
             stop(sudoPassword)
@@ -375,6 +509,11 @@ object DesktopTunManager {
         serviceSelfTestFailed = false
         val (resolvedTunIp, resolvedTunMask, resolvedTunGw) = resolveTunNetworkConfig(tunIp)
         activeTunGw = resolvedTunGw
+        val effectiveEngine = resolveEffectiveTunEngine(tunEnginePreference, appSplitConfig.enabled)
+        GeekModeLogger.log(
+            "TUN",
+            "Выбранный TUN-движок: $effectiveEngine (настройка=$tunEnginePreference, appSplit=${appSplitConfig.enabled}, mode=${appSplitConfig.mode})"
+        )
 
         // 1. Определение шлюза и сетевого интерфейса по умолчанию
         val (gateway, physicalDev) = detectDefaultGateway()
@@ -390,13 +529,16 @@ object DesktopTunManager {
             GeekModeLogger.log("TUN", "Целевой сервер для исключения из туннеля: $serverIp ($serverAddress)")
         }
 
+        val resolvedDirectDns = directDns?.trim()?.takeIf { it.isNotEmpty() }
+            ?: detectUnixPhysicalDns(excludeIps = setOfNotNull(serverIp, "1.1.1.1", "8.8.8.8"))
+
         // 3. Windows Service Mode (Вариант 1)
         if (isWindows) {
             if (!isServiceAvailable()) {
                 installOrStartService()
             }
             if (isServiceAvailable()) {
-                GeekModeLogger.log("TUN", "Используется системная служба v2w-service (Service Mode, запуск без UAC)")
+                GeekModeLogger.log("TUN", "Используется системная служба v2w-service ($effectiveEngine, Service Mode)")
                 val started = startViaService(
                     socksPort = socksPort,
                     serverIp = serverIp,
@@ -405,7 +547,12 @@ object DesktopTunManager {
                     tun2socksPath = findTun2SocksExecutable(customPath)?.absolutePath,
                     tunIp = resolvedTunIp,
                     tunMask = resolvedTunMask,
-                    tunGateway = resolvedTunGw
+                    tunGateway = resolvedTunGw,
+                    effectiveEngine = effectiveEngine,
+                    socksUser = socksUser,
+                    socksPass = socksPass,
+                    directDns = resolvedDirectDns,
+                    appSplitConfig = appSplitConfig
                 )
                 if (started) {
                     isTunActive = true
@@ -421,13 +568,23 @@ object DesktopTunManager {
         }
 
         // 4. Прямой режим (Direct process mode)
-        val binary = findTun2SocksExecutable(customPath)
+        var useV2wTun = effectiveEngine == TunEnginePreference.V2W_TUN
+        var binary = if (useV2wTun) findV2wTunExecutable() else findTun2SocksExecutable(customPath)
+        if (useV2wTun && binary == null) {
+            if (appSplitConfig.enabled || tunEnginePreference == TunEnginePreference.V2W_TUN) {
+                GeekModeLogger.log("TUN", "Исполняемый файл v2w-tun не найден в bin/ и системе.")
+                return false
+            }
+            GeekModeLogger.log("TUN", "Бинарник v2w-tun не найден, откат на tun2socks.")
+            useV2wTun = false
+            binary = findTun2SocksExecutable(customPath)
+        }
         if (binary == null) {
             GeekModeLogger.log("TUN", "Исполняемый файл tun2socks не найден в bin/ и системе. Переход в резервный режим.")
             return false
         }
 
-        GeekModeLogger.log("TUN", "Используется tun2socks: ${binary.absolutePath}")
+        GeekModeLogger.log("TUN", "Используется ${if (useV2wTun) "v2w-tun" else "tun2socks"}: ${binary.absolutePath}")
 
         if (isWindows && !isWindowsAdmin()) {
             GeekModeLogger.log(
@@ -436,7 +593,7 @@ object DesktopTunManager {
             )
         }
 
-        val deviceName = when {
+        var deviceName = when {
             isWindows -> "wintun"
             isMac -> "utun"
             else -> "v2w-tun"
@@ -451,7 +608,8 @@ object DesktopTunManager {
 
         val useSudo = !sudoPassword.isNullOrBlank() && isLinux
         val effectiveBinary = if (isLinux && (DesktopBinaryResolver.isTemporaryMountPath(binary.absolutePath) || useSudo)) {
-            val extracted = File("/tmp/v2w-tun2socks")
+            val tmpName = if (useV2wTun) "v2w-tun" else "v2w-tun2socks"
+            val extracted = File("/tmp/$tmpName")
             try {
                 if (!extracted.exists() || extracted.length() != binary.length()) {
                     binary.copyTo(extracted, overwrite = true)
@@ -460,7 +618,7 @@ object DesktopTunManager {
                 }
                 extracted
             } catch (e: Exception) {
-                GeekModeLogger.log("TUN", "Копирование tun2socks в /tmp не удалось: ${e.message}")
+                GeekModeLogger.log("TUN", "Копирование $tmpName в /tmp не удалось: ${e.message}")
                 binary
             }
         } else {
@@ -471,12 +629,36 @@ object DesktopTunManager {
         if (useSudo) {
             tunArgs.addAll(listOf("sudo", "-S"))
         }
-        tunArgs.addAll(listOf(
-            effectiveBinary.absolutePath,
-            "-device", deviceName,
-            "-proxy", "socks5://127.0.0.1:$socksPort",
-            "-loglevel", "warning"
-        ))
+        if (useV2wTun) {
+            val cfgDto = V2wTunRouterConfigDto(
+                deviceName = deviceName,
+                mtu = 1500,
+                socksAddr = "127.0.0.1:$socksPort",
+                socksUser = socksUser.orEmpty(),
+                socksPass = socksPass.orEmpty(),
+                physicalIface = physicalDev,
+                directDns = resolvedDirectDns.orEmpty(),
+                split = V2wTunSplitConfigDto(
+                    enabled = appSplitConfig.enabled,
+                    mode = appSplitConfig.mode.toWireValue(),
+                    directApps = appSplitConfig.directApps,
+                    proxyApps = appSplitConfig.proxyApps
+                )
+            )
+            val cfgFile = File.createTempFile("v2w_tun_", ".json").apply {
+                deleteOnExit()
+                writeText(jsonCodec.encodeToString(cfgDto))
+            }
+            v2wTunConfigFile = cfgFile
+            tunArgs.addAll(listOf(effectiveBinary.absolutePath, "-config", cfgFile.absolutePath))
+        } else {
+            tunArgs.addAll(listOf(
+                effectiveBinary.absolutePath,
+                "-device", deviceName,
+                "-proxy", "socks5://127.0.0.1:$socksPort",
+                "-loglevel", "warning"
+            ))
+        }
 
         try {
             val pb = ProcessBuilder(tunArgs).redirectErrorStream(true)
@@ -493,28 +675,52 @@ object DesktopTunManager {
                 } catch (_: Exception) {}
             }
 
+            val readyLatch = if (useV2wTun) CountDownLatch(1) else null
+            val reportedDevice = java.util.concurrent.atomic.AtomicReference<String?>(null)
+            val logTag = if (useV2wTun) "v2w-tun" else "tun2socks"
+
             logJob = scope.launch(Dispatchers.IO) {
                 try {
                     BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                         var line: String? = null
                         while (isActive && reader.readLine().also { line = it } != null) {
-                            line?.let {
-                                if (!it.contains("[sudo]")) {
-                                    GeekModeLogger.log("tun2socks", it)
+                            line?.let { raw ->
+                                if (raw.startsWith("V2W_TUN_READY")) {
+                                    val devMatch = Regex("""device=([^\s]+)""").find(raw)
+                                    if (devMatch != null) {
+                                        reportedDevice.set(devMatch.groupValues[1])
+                                    }
+                                    readyLatch?.countDown()
+                                }
+                                if (!raw.contains("[sudo]")) {
+                                    GeekModeLogger.log(logTag, raw)
                                 }
                             }
                         }
                     }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                } finally {
+                    readyLatch?.countDown()
+                }
             }
 
-            Thread.sleep(500)
+            if (readyLatch != null) {
+                readyLatch.await(2000, TimeUnit.MILLISECONDS)
+                Thread.sleep(150)
+            } else {
+                Thread.sleep(500)
+            }
 
             if (!proc.isAlive) {
                 val code = proc.exitValue()
-                GeekModeLogger.log("TUN", "Процесс tun2socks завершился сразу с кодом: $code")
+                GeekModeLogger.log("TUN", "Процесс $logTag завершился сразу с кодом: $code")
                 cleanupProcess(sudoPassword)
                 return false
+            }
+
+            val effectiveDeviceName = reportedDevice.get()?.takeIf { it.isNotBlank() } ?: deviceName
+            if (isMac) {
+                activeMacDevice = effectiveDeviceName
             }
 
             when {
@@ -634,19 +840,19 @@ object DesktopTunManager {
                 }
 
                 isMac -> {
-                    runSudoCommand(listOf("ifconfig", deviceName, "198.18.0.1", "198.18.0.2", "up"), sudoPassword)
+                    runSudoCommand(listOf("ifconfig", effectiveDeviceName, "198.18.0.1", "198.18.0.2", "up"), sudoPassword)
                     if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
                         runSudoCommand(listOf("route", "add", "-host", serverIp, gateway), sudoPassword)
                         configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
                     }
-                    runSudoCommand(listOf("route", "add", "-net", "0.0.0.0/1", "-interface", deviceName), sudoPassword)
-                    runSudoCommand(listOf("route", "add", "-net", "128.0.0.0/1", "-interface", deviceName), sudoPassword)
+                    runSudoCommand(listOf("route", "add", "-net", "0.0.0.0/1", "-interface", effectiveDeviceName), sudoPassword)
+                    runSudoCommand(listOf("route", "add", "-net", "128.0.0.0/1", "-interface", effectiveDeviceName), sudoPassword)
                 }
             }
 
             isTunActive = true
             isServiceMode = false
-            GeekModeLogger.log("TUN", "Адаптер $deviceName успешно активен. Все соединения ОС направлены через Xray TUN.")
+            GeekModeLogger.log("TUN", "Адаптер $effectiveDeviceName ($logTag) успешно активен. Соединения ОС маршрутизируются через TUN.")
             return true
         } catch (e: Exception) {
             GeekModeLogger.log("TUN", "Исключение при запуске TUN: ${e.message}")
@@ -756,10 +962,31 @@ object DesktopTunManager {
             }
         }
         tunProcess = null
+        runCatching { v2wTunConfigFile?.delete() }
+        v2wTunConfigFile = null
 
         if (isLinux) {
             runSudoCommand(listOf("ip", "link", "del", "dev", "v2w-tun"), sudoPassword)
         }
+    }
+
+    private fun detectUnixPhysicalDns(excludeIps: Set<String> = emptySet()): String? {
+        if (!isLinux && !isMac) return null
+        return runCatching {
+            val resolv = File("/etc/resolv.conf")
+            if (!resolv.exists()) return@runCatching null
+            resolv.readLines()
+                .asSequence()
+                .map { it.trim() }
+                .filter { it.startsWith("nameserver") }
+                .mapNotNull { it.split(Regex("""\s+""")).getOrNull(1)?.trim() }
+                .firstOrNull { ip ->
+                    ip.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) &&
+                        !ip.startsWith("127.") &&
+                        !ip.startsWith("198.18.") &&
+                        ip !in excludeIps
+                }
+        }.getOrNull()
     }
 
     /**

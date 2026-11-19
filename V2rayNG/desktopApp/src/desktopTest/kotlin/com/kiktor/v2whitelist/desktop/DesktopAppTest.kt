@@ -519,6 +519,41 @@ class DesktopAppTest {
         assertEquals("", state.personalSelectedGuid.value)
         assertEquals("", state.globalSni.value)
         assertEquals("", state.cloudflareIp.value)
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.TunEnginePreference.AUTO, state.tunEnginePreference.value)
+        assertEquals(false, state.appSplitTunnelingEnabled.value)
+        assertTrue(state.appSplitDirectApps.value.isEmpty())
+        assertTrue(state.appSplitProxyApps.value.isEmpty())
+    }
+
+    @Test
+    fun testAppSplitTunnelingAndTunEnginePersistence() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.TunEnginePreference.AUTO, state.tunEnginePreference.value)
+        assertEquals(false, state.appSplitTunnelingEnabled.value)
+
+        state.setTunEnginePreference(com.kiktor.v2whitelist.desktop.engine.TunEnginePreference.V2W_TUN)
+        state.setAppSplitEnabled(true)
+        state.setAppSplitMode(com.kiktor.v2whitelist.desktop.engine.AppSplitMode.ONLY_PROXY)
+        state.setAppSplitRoute("steam.exe", "DIRECT")
+        state.setAppSplitRoute("firefox", "PROXY")
+        // Перемещение приложения из PROXY в DIRECT должно удалять его из PROXY
+        state.setAppSplitRoute("firefox", "DIRECT")
+
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.TunEnginePreference.V2W_TUN, state.tunEnginePreference.value)
+        assertEquals(true, state.appSplitTunnelingEnabled.value)
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.AppSplitMode.ONLY_PROXY, state.appSplitTunnelingMode.value)
+        assertEquals(listOf("steam.exe", "firefox"), state.appSplitDirectApps.value)
+        assertTrue(state.appSplitProxyApps.value.isEmpty())
+        assertEquals("V2W_TUN", settingsRepo.getString("pref_tun_engine"))
+        assertEquals(true, settingsRepo.getBoolean("pref_app_split_enabled"))
     }
 }
 
