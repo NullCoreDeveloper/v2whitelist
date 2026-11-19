@@ -145,17 +145,17 @@ object DesktopProfileVerifier {
             }
 
             // ── Шаг 1: Проверка доступности сервисов либо e2e HTTP 204 (пропускается в speedOnlyMode, т.к. уже проверено в v2w-core) ──
-            val latency: Long
+            var latency: Long
             var testPortForSpeed = testPort
             if (speedOnlyMode) {
                 latency = preMeasuredLatencyMs.coerceAtLeast(1L)
                 GeekModeLogger.log("Verifier", "${profile.remarks}: v2w-core уже выполнил полную проверку (${latency}ms) -> Xray только замер скорости")
             } else {
                 val enabledServices = servicesToCheck.filter { it.enabled }
-                val hasEndpointE2e = endpointE2eCheckEnabled && hasEndpoint
-                val useServicesCheck = serviceCheckEnabled && !hasEndpointE2e && enabledServices.isNotEmpty()
+                val shouldCheckServices = serviceCheckEnabled && enabledServices.isNotEmpty()
+                val checkServicesOnOuterHop = shouldCheckServices && !hasEndpoint
 
-                if (useServicesCheck) {
+                if (checkServicesOnOuterHop) {
                     onStatusUpdate?.invoke("Проверяем доступность сервисов (${enabledServices.size}): $serverTitle…")
                     val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
                         services = enabledServices,
@@ -190,7 +190,7 @@ object DesktopProfileVerifier {
                     GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
                 }
 
-                // ── Шаг 1.5: Подключение цепочки через конечный узел (для e2e-проверки и замера скорости) ──
+                // ── Шаг 1.5: Подключение цепочки через конечный узел (сервисы / e2e 204 и замер скорости) ──
                 if (hasEndpoint) {
                     onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
                     val chainedPort = findFreePort()
@@ -229,7 +229,29 @@ object DesktopProfileVerifier {
 
                         if (!isActive) throw CancellationException("Верификация отменена")
 
-                        if (endpointE2eCheckEnabled) {
+                        if (shouldCheckServices) {
+                            onStatusUpdate?.invoke("Проверка сервисов (${enabledServices.size}) через конечный узел…")
+                            val results = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                                services = enabledServices,
+                                socksPort = chainedPort,
+                                httpPort = chainedHttpPort,
+                                timeoutMs = maxOf(timeoutMs, 6000L)
+                            )
+                            val failed = results.filter { !it.success }
+                            if (failed.isNotEmpty()) {
+                                val failedNames = failed.joinToString(", ") { it.service.name }
+                                GeekModeLogger.log("Verifier", "⚠️ Сервисы через конечный узел недоступны [$failedNames] для ${profile.remarks}")
+                                onStatusUpdate?.invoke("Сервисы через конечный узел недоступны ($failedNames)…")
+                                return@withContext VerifyResult(
+                                    success = false,
+                                    errorMessage = "Сервисы через конечный узел недоступны: $failedNames"
+                                )
+                            }
+                            results.map { it.latencyMs }.filter { it > 0 }.average().toLong().takeIf { it > 0 }?.let {
+                                latency = it
+                            }
+                            GeekModeLogger.log("Verifier", "${profile.remarks}: все ${enabledServices.size} сервисов через конечный узел доступны (ср. ${latency}ms)")
+                        } else if (endpointE2eCheckEnabled) {
                             onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
                             val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
                             if (chainedLatency <= 0) {

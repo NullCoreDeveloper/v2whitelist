@@ -31,7 +31,7 @@ func TestDefaultScanOptionsAndPriority(t *testing.T) {
 		t.Fatalf("expected default mode '204', got %q", mode)
 	}
 
-	// Endpoint E2E активен + сервисы активны -> приоритет у "endpoint" (сервисы игнорируются).
+	// Endpoint E2E активен + сервисы активны -> приоритет у "endpoint_services" (сервисы проверяются через цепочку).
 	withBoth := def
 	withBoth.EndpointE2E = true
 	withBoth.EndpointURL = "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443"
@@ -39,12 +39,27 @@ func TestDefaultScanOptionsAndPriority(t *testing.T) {
 	withBoth.Services = []core.ServiceCheckSpec{
 		{ID: "custom_1", Name: "MySite", URL: "http://example.com/", Enabled: true, IsCustom: true},
 	}
-	if mode := withBoth.EffectiveCheckMode(); mode != "endpoint" {
-		t.Fatalf("expected mode 'endpoint' when endpoint E2E is enabled alongside services, got %q", mode)
+	if mode := withBoth.EffectiveCheckMode(); mode != "endpoint_services" {
+		t.Fatalf("expected mode 'endpoint_services' when endpoint and services are enabled, got %q", mode)
 	}
 
-	// Endpoint E2E выключен, сервисы включены -> режим "services".
+	// Endpoint задан + сервисы активны, даже при EndpointE2E=false -> всё равно "endpoint_services".
+	endpointServicesNoE2E := withBoth
+	endpointServicesNoE2E.EndpointE2E = false
+	if mode := endpointServicesNoE2E.EffectiveCheckMode(); mode != "endpoint_services" {
+		t.Fatalf("expected mode 'endpoint_services' when endpoint is set and services are enabled, got %q", mode)
+	}
+
+	// Endpoint E2E активен без сервисов -> режим "endpoint".
+	endpointOnly := withBoth
+	endpointOnly.ServiceCheck = false
+	if mode := endpointOnly.EffectiveCheckMode(); mode != "endpoint" {
+		t.Fatalf("expected mode 'endpoint' when services disabled, got %q", mode)
+	}
+
+	// Endpoint выключен, сервисы включены -> режим "services".
 	servicesOnly := withBoth
+	servicesOnly.EndpointURL = ""
 	servicesOnly.EndpointE2E = false
 	if mode := servicesOnly.EffectiveCheckMode(); mode != "services" {
 		t.Fatalf("expected mode 'services', got %q", mode)
@@ -71,8 +86,8 @@ vmess://eyJhZGQiOiI4LjguOC44IiwicG9ydCI6NDQzLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0x
 	if opts.TCPConcurrency != 50 || opts.VerifyConcurrency != 35 {
 		t.Fatalf("unexpected concurrencies: tcp=%d verify=%d", opts.TCPConcurrency, opts.VerifyConcurrency)
 	}
-	if opts.EffectiveCheckMode() != "services" {
-		t.Fatalf("expected mode 'services', got %q", opts.EffectiveCheckMode())
+	if opts.EffectiveCheckMode() != "endpoint_services" {
+		t.Fatalf("expected mode 'endpoint_services', got %q", opts.EffectiveCheckMode())
 	}
 	if len(links) != 2 {
 		t.Fatalf("expected 2 supported links, got %d", len(links))

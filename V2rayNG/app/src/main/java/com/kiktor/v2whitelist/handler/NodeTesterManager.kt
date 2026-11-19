@@ -247,14 +247,15 @@ object NodeTesterManager {
 
             val serviceCheckEnabled = ServiceCheckManager.isServiceCheckEnabled()
             val services = ServiceCheckManager.loadServices().filter { it.enabled }
-            val effectiveTimeout = if (serviceCheckEnabled && services.isNotEmpty()) maxOf(timeout, 5000) else timeout
+            val shouldCheckServices = serviceCheckEnabled && services.isNotEmpty()
+            val effectiveTimeout = if (shouldCheckServices) maxOf(timeout, 5000) else timeout
 
             // В режиме speedOnlyMode (v2w-core уже проверил сервисы / E2E / 204) сразу переходим к скорости
             val (elapsed, isSuccess) = if (speedOnlyMode) {
                 val measured = if (preMeasuredLatencyMs > 0) preMeasuredLatencyMs else 1L
                 GeekModeLogger.log("NodeTester", "verifyProfile: v2w-core verified $guid (${measured}ms) -> Xray speed-only")
                 measured to true
-            } else if (serviceCheckEnabled && services.isNotEmpty() && !(hasCustomEndpoint && endpointE2eCheckEnabled)) {
+            } else if (shouldCheckServices && !(hasCustomEndpoint && effectiveIgnoreCustomEndpoint)) {
                 if (showStatus) {
                     MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
                 }
@@ -285,7 +286,7 @@ object NodeTesterManager {
                 // --- Предпоследний этап: цепочка к конечному узлу (для e2e-проверки и замера скорости) ---
                 var testPortForSpeed = port
 
-                if (!speedOnlyMode && ignoreCustomEndpoint && hasCustomEndpoint) {
+                if (!speedOnlyMode && effectiveIgnoreCustomEndpoint && hasCustomEndpoint) {
                     if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_verifying_endpoint))
@@ -317,7 +318,30 @@ object NodeTesterManager {
                             return false
                         }
 
-                        if (endpointE2eCheckEnabled) {
+                        if (shouldCheckServices) {
+                            if (showStatus) {
+                                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
+                            }
+                            val svcResults = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
+                                services = services,
+                                socksPort = chainedPort,
+                                timeoutMs = maxOf(effectiveTimeout.toLong(), 6000L),
+                                socksUser = SettingsManager.getSocksUser(),
+                                socksPass = SettingsManager.getSocksPass()
+                            )
+                            val failed = svcResults.filter { !it.success }
+                            if (failed.isNotEmpty()) {
+                                val failedNames = failed.joinToString(", ") { it.service.name }
+                                GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ services through custom endpoint FAILED [$failedNames] for server $guid")
+                                chainedController?.stopLoop()
+                                return false
+                            }
+                            val avgLatency = svcResults.map { it.latencyMs }.filter { it > 0 }.average().toLong()
+                            if (avgLatency > 0) {
+                                MmkvManager.encodeServerTestDelayMillis(guid, avgLatency)
+                            }
+                            GeekModeLogger.log("NodeTester", "verifyProfile: services through custom endpoint PASSED (${avgLatency}ms)")
+                        } else if (endpointE2eCheckEnabled) {
                             val (chainedElapsed, _) = SpeedtestManager.testConnection(context, chainedPort, maxOf(timeout, 6000))
                             if (chainedElapsed <= 0) {
                                 GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ e2e check through custom endpoint FAILED for server $guid")
