@@ -82,19 +82,18 @@ func (o ScanOptions) EnabledServices() []core.ServiceCheckSpec {
 }
 
 // EffectiveCheckMode определяет режим проверки по приоритету настроек:
-// - "endpoint_services": конечный узел задан И включена проверка сервисов (сервисы проверяются через цепочку)
-// - "endpoint": конечный узел задан и включена E2E-проверка 204 без сервисов
-// - "services": проверка сервисов напрямую через внешний узел
+// - "endpoint": конечный узел задан и включена E2E-проверка 204 без сервисов (сервисы при конечном узле отключаются)
+// - "services": проверка сервисов напрямую через внешний узел (только когда конечный узел не задан)
 // - "204": стандартная проверка HTTP 204
 func (o ScanOptions) EffectiveCheckMode() string {
 	hasEndpoint := strings.TrimSpace(o.EndpointURL) != ""
+	if hasEndpoint {
+		if o.EndpointE2E {
+			return "endpoint"
+		}
+		return "204"
+	}
 	hasServices := o.ServiceCheck && len(o.EnabledServices()) > 0
-	if hasEndpoint && hasServices {
-		return "endpoint_services"
-	}
-	if hasEndpoint && o.EndpointE2E {
-		return "endpoint"
-	}
 	if hasServices {
 		return "services"
 	}
@@ -270,7 +269,7 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 	enabledServices := opts.EnabledServices()
 
 	var exitCompiled *exitNodeCompiled
-	if mode == "endpoint" || mode == "endpoint_services" {
+	if mode == "endpoint" {
 		exitCfg, exitStream, _, err := ParseNodeURL(strings.TrimSpace(opts.EndpointURL))
 		if err == nil {
 			if exitHandler, hErr := BuildProxyHandler(exitCfg, exitStream); hErr == nil && exitHandler != nil {
@@ -365,18 +364,6 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 	verifyNode := func(baseCtx context.Context, cand parsedCandidate, outerHandler core.ProxyHandler, outerDialer internet.Dialer) (int64, error) {
 		startT := time.Now()
 		switch mode {
-		case "endpoint_services":
-			chainCtx := core.NewChainDialerCtx(baseCtx, outerHandler, outerDialer)
-			avgLat, err := coreScanner.CheckServicesParallel(chainCtx, exitCompiled.handler, exitCompiled.dialer, enabledServices, serviceCheckTimeout(opts.TimeoutSec))
-			if err != nil {
-				return 0, err
-			}
-			ms := avgLat.Milliseconds()
-			if ms <= 0 {
-				ms = time.Since(startT).Milliseconds()
-			}
-			return ms, nil
-
 		case "endpoint":
 			chainCtx := core.NewChainDialerCtx(baseCtx, outerHandler, outerDialer)
 			res := coreScanner.TestNode(chainCtx, exitCompiled.handler, exitCompiled.dialer, targetDest)

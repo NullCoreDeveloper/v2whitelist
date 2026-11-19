@@ -31,7 +31,7 @@ func TestDefaultScanOptionsAndPriority(t *testing.T) {
 		t.Fatalf("expected default mode '204', got %q", mode)
 	}
 
-	// Endpoint E2E активен + сервисы активны -> приоритет у "endpoint_services" (сервисы проверяются через цепочку).
+	// Endpoint E2E активен + сервисы активны -> конечный узел отключает проверку сервисов, режим "endpoint".
 	withBoth := def
 	withBoth.EndpointE2E = true
 	withBoth.EndpointURL = "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443"
@@ -39,15 +39,15 @@ func TestDefaultScanOptionsAndPriority(t *testing.T) {
 	withBoth.Services = []core.ServiceCheckSpec{
 		{ID: "custom_1", Name: "MySite", URL: "http://example.com/", Enabled: true, IsCustom: true},
 	}
-	if mode := withBoth.EffectiveCheckMode(); mode != "endpoint_services" {
-		t.Fatalf("expected mode 'endpoint_services' when endpoint and services are enabled, got %q", mode)
+	if mode := withBoth.EffectiveCheckMode(); mode != "endpoint" {
+		t.Fatalf("expected mode 'endpoint' when endpoint disables services check, got %q", mode)
 	}
 
-	// Endpoint задан + сервисы активны, даже при EndpointE2E=false -> всё равно "endpoint_services".
+	// Endpoint задан + сервисы активны, но EndpointE2E=false -> падает на "204" (сервисы не проверяются).
 	endpointServicesNoE2E := withBoth
 	endpointServicesNoE2E.EndpointE2E = false
-	if mode := endpointServicesNoE2E.EffectiveCheckMode(); mode != "endpoint_services" {
-		t.Fatalf("expected mode 'endpoint_services' when endpoint is set and services are enabled, got %q", mode)
+	if mode := endpointServicesNoE2E.EffectiveCheckMode(); mode != "204" {
+		t.Fatalf("expected mode '204' when endpoint is set without E2E (services disabled), got %q", mode)
 	}
 
 	// Endpoint E2E активен без сервисов -> режим "endpoint".
@@ -86,8 +86,8 @@ vmess://eyJhZGQiOiI4LjguOC44IiwicG9ydCI6NDQzLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0x
 	if opts.TCPConcurrency != 50 || opts.VerifyConcurrency != 35 {
 		t.Fatalf("unexpected concurrencies: tcp=%d verify=%d", opts.TCPConcurrency, opts.VerifyConcurrency)
 	}
-	if opts.EffectiveCheckMode() != "endpoint_services" {
-		t.Fatalf("expected mode 'endpoint_services', got %q", opts.EffectiveCheckMode())
+	if opts.EffectiveCheckMode() != "204" {
+		t.Fatalf("expected mode '204' when endpoint is set with endpoint_e2e=false, got %q", opts.EffectiveCheckMode())
 	}
 	if len(links) != 2 {
 		t.Fatalf("expected 2 supported links, got %d", len(links))
