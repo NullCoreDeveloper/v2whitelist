@@ -495,7 +495,7 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_LENGTH, "50-100")
         ensureDefaultValue(AppConfig.PREF_FRAGMENT_INTERVAL, "10-20")
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
-        ensureDefaultValue(AppConfig.PREF_V2W_FULL_VERIFY_MODE, true)
+        ensureDefaultValue(AppConfig.PREF_V2W_FULL_VERIFY_MODE, false)
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
         ensureDefaultValue(AppConfig.PREF_HIDE_TUNNEL, true)
         ensureDefaultValue(AppConfig.PREF_LOCAL_DNS_ENABLED, true)

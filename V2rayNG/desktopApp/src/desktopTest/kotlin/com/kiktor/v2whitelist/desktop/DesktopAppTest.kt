@@ -392,7 +392,7 @@ class DesktopAppTest {
 
         assertEquals(50, state.tcpPrecheckConcurrency.value)
         assertEquals(35, state.v2wCoreSockets.value)
-        assertEquals(true, state.v2wFullVerifyMode.value)
+        assertEquals(false, state.v2wFullVerifyMode.value)
 
         state.saveSettings(
             subUrl = "",
@@ -402,15 +402,15 @@ class DesktopAppTest {
             socksP = 10808,
             tcpPrecheck = 75,
             v2wSockets = 40,
-            v2wFullVerify = false
+            v2wFullVerify = true
         )
 
         assertEquals(75, state.tcpPrecheckConcurrency.value)
         assertEquals(40, state.v2wCoreSockets.value)
-        assertEquals(false, state.v2wFullVerifyMode.value)
+        assertEquals(true, state.v2wFullVerifyMode.value)
         assertEquals(75, settingsRepo.getInt("pref_tcp_precheck_concurrency", 50))
         assertEquals(40, settingsRepo.getInt("pref_v2w_core_sockets", 35))
-        assertEquals(false, settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
+        assertEquals(true, settingsRepo.getBoolean("pref_v2w_full_verify_mode", false))
     }
 
     @Test

@@ -167,8 +167,10 @@ class DesktopSmartConnectManager(
             val verifyConcurrency = settingsRepo.getInt("pref_verify_concurrency", 4).coerceIn(1, 10)
             val tcpPrecheckConcurrency = settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200)
             val v2wCoreSockets = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
-            val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", true)
+            val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", false)
             val testBeforeConnect = settingsRepo.getBoolean("pref_test_before_connect", true)
+            val connCheckUrl = settingsRepo.getString("pref_conn_check_url", "").trim()
+                .takeIf { it.startsWith("http://") || it.startsWith("https://") }
 
             // ══════════════════════════════════════════════════════════════════════════════
             // ЭТАП 0: Проверка и применение доверенных серверов (Personal Servers)
@@ -257,6 +259,7 @@ class DesktopSmartConnectManager(
                                     concurrency = v2wCoreSockets,
                                     tcpConcurrency = tcpPrecheckConcurrency,
                                     fullVerifyMode = v2wFullVerifyMode,
+                                    destUrl = connCheckUrl,
                                     endpointUrl = customEndpointUrl,
                                     endpointE2e = endpointE2eCheck,
                                     serviceCheck = serviceCheckEnabled,
@@ -444,6 +447,7 @@ class DesktopSmartConnectManager(
                         concurrency = v2wCoreSockets,
                         tcpConcurrency = tcpPrecheckConcurrency,
                         fullVerifyMode = v2wFullVerifyMode,
+                        destUrl = connCheckUrl,
                         endpointUrl = customEndpointUrl,
                         endpointE2e = endpointE2eCheck,
                         serviceCheck = serviceCheckEnabled,

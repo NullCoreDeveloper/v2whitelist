@@ -71,13 +71,17 @@ object V2WCoreScanner {
         endpointUrl: String?,
         endpointE2e: Boolean,
         serviceCheck: Boolean,
-        services: List<ServiceCheckItem>
+        services: List<ServiceCheckItem>,
+        destUrl: String? = null
     ): String {
         val svcJson = services.joinToString(",") { svc ->
             """{"id":"${escapeJsonString(svc.id)}","name":"${escapeJsonString(svc.name)}","url":"${escapeJsonString(svc.url)}","enabled":${svc.enabled},"isCustom":${svc.isCustom}}"""
         }
         val ep = endpointUrl?.trim().orEmpty()
-        return """#v2w-opts:{"tcp_concurrency":$tcpConcurrency,"verify_concurrency":$verifyConcurrency,"timeout_sec":$timeoutSec,"endpoint_url":"${escapeJsonString(ep)}","endpoint_e2e":$endpointE2e,"service_check":$serviceCheck,"services":[$svcJson]}"""
+        val destField = destUrl?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            ""","dest_url":"${escapeJsonString(it)}""""
+        }.orEmpty()
+        return """#v2w-opts:{"tcp_concurrency":$tcpConcurrency,"verify_concurrency":$verifyConcurrency,"timeout_sec":$timeoutSec$destField,"endpoint_url":"${escapeJsonString(ep)}","endpoint_e2e":$endpointE2e,"service_check":$serviceCheck,"services":[$svcJson]}"""
     }
 
     /**
@@ -96,7 +100,8 @@ object V2WCoreScanner {
         concurrency: Int = 35,
         tcpConcurrency: Int = 50,
         timeoutSec: Int = 10,
-        fullVerifyMode: Boolean = true,
+        fullVerifyMode: Boolean = false,
+        destUrl: String? = null,
         endpointUrl: String? = null,
         endpointE2e: Boolean = false,
         serviceCheck: Boolean = false,
@@ -194,7 +199,8 @@ object V2WCoreScanner {
                 endpointUrl = endpointUrl,
                 endpointE2e = endpointE2e,
                 serviceCheck = serviceCheck,
-                services = services
+                services = services,
+                destUrl = destUrl
             )
         } else {
             null

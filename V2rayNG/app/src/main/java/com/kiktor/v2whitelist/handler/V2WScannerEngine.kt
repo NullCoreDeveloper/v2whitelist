@@ -49,6 +49,10 @@ object V2WScannerEngine {
         val endpointE2e = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
         val serviceCheckEnabled = ServiceCheckManager.isServiceCheckEnabled()
         val services = ServiceCheckManager.loadServices()
+        val destUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_DELAY_TEST_URL)
+            ?.trim()
+            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            ?: AppConfig.DELAY_TEST_URL
 
         val servicesArray = JSONArray()
         for (svc in services) {
@@ -67,6 +71,7 @@ object V2WScannerEngine {
             put("tcp_concurrency", tcpConcurrency)
             put("verify_concurrency", verifyConcurrency)
             put("timeout_sec", 6)
+            put("dest_url", destUrl)
             put("endpoint_url", endpointUrl)
             put("endpoint_e2e", endpointE2e)
             put("service_check", serviceCheckEnabled)

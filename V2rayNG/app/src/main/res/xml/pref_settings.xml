@@ -75,7 +75,7 @@
 
         <CheckBoxPreference
             android:key="pref_v2w_full_verify_mode"
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:dependency="pref_v2w_core_enabled"
             android:summary="@string/summary_pref_v2w_full_verify_mode"
             android:title="@string/title_pref_v2w_full_verify_mode" />

@@ -1110,7 +1110,7 @@ object MmkvManager {
     }
 
     fun isV2wFullVerifyMode(): Boolean {
-        return decodeSettingsBool(AppConfig.PREF_V2W_FULL_VERIFY_MODE, true)
+        return decodeSettingsBool(AppConfig.PREF_V2W_FULL_VERIFY_MODE, false)
     }
 
     //endregion
