@@ -1143,7 +1143,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SettingsChip(
-                            label = "Всё в VPN (кроме Direct)",
+                            label = "Всё в VPN (кроме исключений)",
                             selected = appSplitMode == AppSplitMode.BYPASS,
                             onClick = {
                                 appSplitMode = AppSplitMode.BYPASS
@@ -1151,7 +1151,7 @@ fun SettingsScreen(
                             }
                         )
                         SettingsChip(
-                            label = "Напрямую (кроме Proxy)",
+                            label = "Только выбранные в VPN",
                             selected = appSplitMode == AppSplitMode.ONLY_PROXY,
                             onClick = {
                                 appSplitMode = AppSplitMode.ONLY_PROXY
@@ -1167,7 +1167,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Выбрать приложения (Direct: $directAppsCount • Proxy: $proxyAppsCount)", fontSize = 13.sp)
+                        Text("Выбрать приложения (Без VPN: $directAppsCount • Через VPN: $proxyAppsCount)", fontSize = 13.sp)
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(

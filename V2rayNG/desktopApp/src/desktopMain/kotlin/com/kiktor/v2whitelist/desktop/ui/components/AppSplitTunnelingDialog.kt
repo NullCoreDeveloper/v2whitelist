@@ -112,16 +112,25 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                     FilterChip(
                         selected = splitMode == AppSplitMode.BYPASS,
                         onClick = { state.setAppSplitMode(AppSplitMode.BYPASS) },
-                        label = { Text("Все в VPN (кроме Direct)", fontSize = 11.sp) },
+                        label = { Text("Все в VPN (кроме исключений)", fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = splitMode == AppSplitMode.ONLY_PROXY,
                         onClick = { state.setAppSplitMode(AppSplitMode.ONLY_PROXY) },
-                        label = { Text("Напрямую (кроме Proxy)", fontSize = 11.sp) },
+                        label = { Text("Только выбранные в VPN", fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                 }
+                Text(
+                    text = if (splitMode == AppSplitMode.BYPASS) {
+                        "Весь компьютер работает через VPN. Отметьте «Без VPN» для программ, которым нужен обычный интернет."
+                    } else {
+                        "Обычный интернет для всех программ. Отметьте «Через VPN» только для нужных приложений."
+                    },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 // Поле ручного добавления процесса / пути
                 Row(
@@ -139,7 +148,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                     FilterChip(
                         selected = manualTarget == "DIRECT",
                         onClick = { manualTarget = if (manualTarget == "DIRECT") "PROXY" else "DIRECT" },
-                        label = { Text(if (manualTarget == "DIRECT") "Direct" else "Proxy", fontSize = 11.sp) }
+                        label = { Text(if (manualTarget == "DIRECT") "Без VPN" else "Через VPN", fontSize = 11.sp) }
                     )
                     IconButton(
                         onClick = {
@@ -246,13 +255,13 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                                     FilterChip(
                                         selected = isDirect,
                                         onClick = { state.setAppSplitRoute(app.id, if (isDirect) "NONE" else "DIRECT") },
-                                        label = { Text("Direct", fontSize = 10.sp) }
+                                        label = { Text("Без VPN", fontSize = 10.sp) }
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     FilterChip(
                                         selected = isProxy,
                                         onClick = { state.setAppSplitRoute(app.id, if (isProxy) "NONE" else "PROXY") },
-                                        label = { Text("Proxy", fontSize = 10.sp) }
+                                        label = { Text("Через VPN", fontSize = 10.sp) }
                                     )
                                 }
                             }
