@@ -84,6 +84,26 @@ object MmkvManager {
         }
     }
 
+    private const val KEY_CORE_DELAY_MS = "KEY_CORE_DELAY_MS"
+    private const val KEY_CORE_DELAY_TS = "KEY_CORE_DELAY_TS"
+
+    /**
+     * Сохраняет результат последнего замера задержки из процесса демона.
+     */
+    fun encodeCoreDelayResult(delayMs: Long) {
+        mainStorage.encode(KEY_CORE_DELAY_MS, delayMs)
+        mainStorage.encode(KEY_CORE_DELAY_TS, System.currentTimeMillis())
+    }
+
+    /**
+     * Возвращает пару (delayMs, timestampMs) последнего замера задержки из процесса демона.
+     */
+    fun decodeCoreDelayResult(): Pair<Long, Long> {
+        val delay = mainStorage.decodeLong(KEY_CORE_DELAY_MS, -1L)
+        val ts = mainStorage.decodeLong(KEY_CORE_DELAY_TS, 0L)
+        return delay to ts
+    }
+
     /**
      * Sets the selected server GUID.
      *

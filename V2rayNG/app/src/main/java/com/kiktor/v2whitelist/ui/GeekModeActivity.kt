@@ -47,10 +47,6 @@ class GeekModeActivity : BaseActivity() {
 
         binding.btnForcePing.setOnClickListener {
             viewModel.forcePingTest()
-            // Если VPN запущен — также тригеррим системный пинг-тест ядра
-            if (V2RayServiceManager.isRunning() == true) {
-                MessageUtil.sendMsg2Service(this, AppConfig.MSG_MEASURE_DELAY, "")
-            }
         }
 
         binding.btnFindMoreVip.setOnClickListener {
@@ -268,18 +264,26 @@ class GeekModeActivity : BaseActivity() {
 
     private fun updateNodeInfo() {
         val guid = MmkvManager.getSelectServer()
-        if (guid.isNullOrEmpty()) {
+        val runningConfig = if (V2RayServiceManager.isRunning()) {
+            MmkvManager.decodeRunningServerConfig()
+        } else null
+
+        val config = guid?.let { MmkvManager.decodeServerConfig(it) } ?: runningConfig
+        if (config == null && guid.isNullOrEmpty()) {
             binding.tvNodeInfo.text = getString(R.string.geek_mode_no_server)
             binding.tvExitIp.text = ""
             return
         }
-        val config = MmkvManager.decodeServerConfig(guid)
         if (config != null) {
             val address = config.server ?: ""
             val port = config.serverPort?.toIntOrNull() ?: 0
             val protocol = config.configType.name
-            val delay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
-            val delayStr = if (delay > 0) "\nPing: ${delay}ms" else if (delay < 0) "\nPing: Failed (-1)" else ""
+            val affDelay = guid?.let { MmkvManager.decodeServerAffiliationInfo(it)?.testDelayMillis } ?: 0L
+            val coreDelay = if (affDelay == 0L && V2RayServiceManager.isRunning()) {
+                val (d, _) = MmkvManager.decodeCoreDelayResult()
+                if (d > 0) d else 0L
+            } else affDelay
+            val delayStr = if (coreDelay > 0) "\nPing: ${coreDelay}ms" else if (coreDelay < 0) "\nPing: Failed (-1)" else ""
             binding.tvNodeInfo.text = "Name: ${config.remarks}\nProtocol: $protocol\nAddress: $address:$port$delayStr"
         } else {
             binding.tvNodeInfo.text = getString(R.string.geek_mode_unknown_config)

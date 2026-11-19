@@ -219,12 +219,16 @@ object SpeedtestManager {
         return@withContext Pair(-1L, lastErrorResult)
     }
 
-    fun getRemoteIPInfo(): String? {
+    fun getRemoteIPInfo(overrideSocksPort: Int? = null): String? {
         val url = MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL)
             .takeIf { !it.isNullOrBlank() } ?: AppConfig.IP_API_URL
 
         val isRunning = V2RayServiceManager.isRunning() == true
-        val socksPort = if (isRunning) SettingsManager.getSocksPort() else 0
+        val socksPort = when {
+            overrideSocksPort != null && overrideSocksPort > 0 -> overrideSocksPort
+            isRunning -> SettingsManager.getSocksPort()
+            else -> 0
+        }
 
         val content = if (socksPort > 0) {
             try {

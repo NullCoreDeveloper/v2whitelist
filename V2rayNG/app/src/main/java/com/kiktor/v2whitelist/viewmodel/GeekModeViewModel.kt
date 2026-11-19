@@ -159,8 +159,48 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
     fun fetchExitIp() {
         viewModelScope.launch(Dispatchers.IO) {
             GeekModeLogger.log("GeekMode", "Fetching exit IP...")
-            val isRunning = V2RayServiceManager.isRunning() == true
-            val ip = SpeedtestManager.getRemoteIPInfo()
+            val isRunning = V2RayServiceManager.isRunning()
+            val hideTunnel = isRunning &&
+                SettingsManager.isVpnMode() &&
+                !SettingsManager.isUsingHevTun() &&
+                SettingsManager.isHideTunnelEnabled()
+
+            val ip = if (isRunning && hideTunnel) {
+                val serverGuid = MmkvManager.getSelectServer()
+                if (!serverGuid.isNullOrEmpty() && MmkvManager.decodeServerConfig(serverGuid) != null) {
+                    var coreController: CoreController? = null
+                    try {
+                        val ephemeralPort = java.net.ServerSocket(0).use { it.localPort }
+                        val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(
+                            getApplication(),
+                            serverGuid,
+                            ephemeralPort,
+                            ignoreCustomEndpoint = false
+                        )
+                        if (speedtestConfig.status) {
+                            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                                override fun startup(): Long = 0
+                                override fun shutdown(): Long = 0
+                                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+                            })
+                            coreController.startLoop(speedtestConfig.content, 0)
+                            kotlinx.coroutines.delay(500L)
+                            SpeedtestManager.getRemoteIPInfo(overrideSocksPort = ephemeralPort)
+                        } else {
+                            null
+                        }
+                    } catch (_: Exception) {
+                        null
+                    } finally {
+                        try { coreController?.stopLoop() } catch (_: Exception) {}
+                    }
+                } else {
+                    null
+                }
+            } else {
+                SpeedtestManager.getRemoteIPInfo()
+            }
+
             if (ip != null) {
                 _exitIp.value = ip
                 GeekModeLogger.log("GeekMode", "Exit IP: $ip")
@@ -177,12 +217,15 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
     fun forcePingTest() {
         viewModelScope.launch(Dispatchers.IO) {
             val serverGuid = MmkvManager.getSelectServer()
-            if (serverGuid.isNullOrEmpty()) {
+            val isRunning = V2RayServiceManager.isRunning()
+            val runningConfig = if (isRunning) MmkvManager.decodeRunningServerConfig() else null
+
+            if (serverGuid.isNullOrEmpty() && runningConfig == null) {
                 GeekModeLogger.log("GeekMode", "No server selected")
                 return@launch
             }
 
-            val config = MmkvManager.decodeServerConfig(serverGuid)
+            val config = serverGuid?.let { MmkvManager.decodeServerConfig(it) } ?: runningConfig
             if (config != null) {
                 val address = config.server ?: ""
                 val port = config.serverPort?.toIntOrNull() ?: 0
@@ -193,23 +236,22 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
                 }
             }
 
-            if (V2RayServiceManager.isRunning() == true) {
+            if (isRunning) {
                 GeekModeLogger.log("GeekMode", "Testing proxy latency via active core...")
-                var delay = V2RayServiceManager.measureDelay()
-                if (delay <= 0) {
-                    val socksPort = SettingsManager.getSocksPort()
-                    val (elapsed, _) = SpeedtestManager.testConnection(getApplication(), socksPort)
-                    if (elapsed > 0) delay = elapsed
-                }
+                val delay = V2RayServiceManager.measureDelayCrossProcess(getApplication(), 6000L)
 
                 if (delay > 0) {
                     GeekModeLogger.log("GeekMode", "Proxy latency: ${delay}ms")
-                    MmkvManager.encodeServerTestDelayMillis(serverGuid, delay)
+                    if (!serverGuid.isNullOrEmpty()) {
+                        MmkvManager.encodeServerTestDelayMillis(serverGuid, delay)
+                    }
                 } else {
                     GeekModeLogger.log("GeekMode", "Proxy latency test failed")
-                    MmkvManager.encodeServerTestDelayMillis(serverGuid, -1L)
+                    if (!serverGuid.isNullOrEmpty()) {
+                        MmkvManager.encodeServerTestDelayMillis(serverGuid, -1L)
+                    }
                 }
-            } else {
+            } else if (!serverGuid.isNullOrEmpty()) {
                 GeekModeLogger.log("GeekMode", "VPN not running, testing via isolated core...")
                 val speedtestConfig = V2rayConfigManager.getV2rayConfig4Speedtest(getApplication(), serverGuid, ignoreCustomEndpoint = true)
                 var delay = -1L

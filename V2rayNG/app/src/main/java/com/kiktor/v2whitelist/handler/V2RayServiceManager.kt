@@ -92,6 +92,7 @@ object V2RayServiceManager {
         // чтобы кнопка "Стоп" гарантированно сработала даже если сервис в фоне уже был убит ОС
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
         MmkvManager.encodeRunningServerConfig(null)
+        MmkvManager.encodeCoreDelayResult(-1L)
         NotificationManager.cancelNotification()
         MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_STOP_SUCCESS, "")
 
@@ -198,6 +199,51 @@ object V2RayServiceManager {
         } catch (e: Exception) {
             -1L
         }
+    }
+
+    /**
+     * Измеряет задержку через активный туннель Xray даже из UI-процесса (через IPC к :RunSoLibV2RayDaemon).
+     * Если [hideTunnel] выключен и IPC не ответил, откатывается на проверку через локальный SOCKS5.
+     */
+    suspend fun measureDelayCrossProcess(context: Context, timeoutMs: Long = 5000L): Long {
+        if (coreController.isRunning) {
+            val urls = listOf(
+                SettingsManager.getDelayTestUrl(),
+                SettingsManager.getDelayTestUrl(true),
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.google.com/generate_204"
+            ).distinct()
+            for (u in urls) {
+                val res = measureDelay(u)
+                if (res > 0) return res
+            }
+            return -1L
+        }
+
+        if (!isRunning()) return -1L
+
+        val (_, beforeTs) = MmkvManager.decodeCoreDelayResult()
+        MessageUtil.sendMsg2Service(context, AppConfig.MSG_MEASURE_DELAY, "silent")
+
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs.coerceAtLeast(1500L)
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            delay(100L)
+            val (delayMs, ts) = MmkvManager.decodeCoreDelayResult()
+            if (ts > beforeTs) {
+                if (delayMs > 0) return delayMs
+                break
+            }
+        }
+
+        val hideTunnel = SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()
+        if (!hideTunnel) {
+            val socksPort = SettingsManager.getSocksPort()
+            if (socksPort > 0) {
+                val (socksDelay, _) = SpeedtestManager.testConnection(context, socksPort, timeoutMs.toInt())
+                if (socksDelay > 0) return socksDelay
+            }
+        }
+        return -1L
     }
 
     @Volatile
@@ -381,6 +427,7 @@ object V2RayServiceManager {
         Log.i(AppConfig.TAG, "stopCoreLoop: called, coreController.isRunning=${coreController.isRunning}")
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SERVICE_RUNNING, false)
         MmkvManager.encodeRunningServerConfig(null)
+        MmkvManager.encodeCoreDelayResult(-1L)
         currentConfig = null
         
         SmartFailoverManager.stopFailoverMonitor()
@@ -430,30 +477,42 @@ object V2RayServiceManager {
      * Tests with primary URL first, then falls back to alternative URL if needed.
      * Also fetches remote IP information if the delay test was successful.
      */
-    private fun measureV2rayDelay() {
+    private fun measureV2rayDelay(silent: Boolean = false) {
         if (coreController.isRunning == false) {
+            MmkvManager.encodeCoreDelayResult(-1L)
             return
         }
 
         CoroutineScope(Dispatchers.IO).launch {
-            val service = getService() ?: return@launch
+            val service = getService() ?: run {
+                MmkvManager.encodeCoreDelayResult(-1L)
+                return@launch
+            }
             var time = -1L
             var errorStr = ""
 
-            try {
-                time = coreController.measureDelay(SettingsManager.getDelayTestUrl())
-            } catch (e: Exception) {
-                Log.e(AppConfig.TAG, "Failed to measure delay with primary URL", e)
-                errorStr = e.message?.substringAfter("\":") ?: "empty message"
-            }
-            if (time == -1L) {
+            val urls = listOf(
+                SettingsManager.getDelayTestUrl(),
+                SettingsManager.getDelayTestUrl(true),
+                "https://cp.cloudflare.com/generate_204",
+                "https://www.google.com/generate_204"
+            ).distinct()
+
+            for (url in urls) {
                 try {
-                    time = coreController.measureDelay(SettingsManager.getDelayTestUrl(true))
+                    val res = coreController.measureDelay(url)
+                    if (res > 0) {
+                        time = res
+                        break
+                    }
                 } catch (e: Exception) {
-                    Log.v(AppConfig.TAG, "Failed to measure delay with alternative URL", e)
+                    Log.v(AppConfig.TAG, "Failed to measure delay with URL $url: ${e.message}")
                     errorStr = e.message?.substringAfter("\":") ?: "empty message"
                 }
             }
+
+            MmkvManager.encodeCoreDelayResult(time)
+            if (silent) return@launch
 
             val result = if (time >= 0) {
                 service.getString(R.string.connection_test_available, time)
@@ -462,8 +521,9 @@ object V2RayServiceManager {
             }
             MessageUtil.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_SUCCESS, result)
 
-            // Only fetch IP info if the delay test was successful
-            if (time >= 0) {
+            val hideTunnel = SettingsManager.isVpnMode() && !SettingsManager.isUsingHevTun() && SettingsManager.isHideTunnelEnabled()
+            // Only fetch IP info if the delay test was successful and local SOCKS is exposed
+            if (time >= 0 && !hideTunnel) {
                 SpeedtestManager.getRemoteIPInfo()?.let { ip ->
                     MessageUtil.sendMsg2UI(service, AppConfig.MSG_MEASURE_DELAY_SUCCESS, "$result\n$ip")
                 }
@@ -640,7 +700,8 @@ object V2RayServiceManager {
                 }
 
                 AppConfig.MSG_MEASURE_DELAY -> {
-                    measureV2rayDelay()
+                    val silent = intent?.getStringExtra("content") == "silent"
+                    measureV2rayDelay(silent = silent)
                 }
             }
 
