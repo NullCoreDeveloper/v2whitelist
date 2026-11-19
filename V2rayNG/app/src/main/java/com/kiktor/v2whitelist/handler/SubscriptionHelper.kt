@@ -605,7 +605,12 @@ object SubscriptionHelper {
      * @param sequential если true — последовательная подкачка (фоновый воркер),
      *                    false — параллельная гонка зеркал (UI).
      */
-    suspend fun updateSubscription(context: Context, isStartup: Boolean = false, sequential: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun updateSubscription(
+        context: Context,
+        isStartup: Boolean = false,
+        sequential: Boolean = false,
+        silent: Boolean = false
+    ) = withContext(Dispatchers.IO) {
         // ══════════════════════════════════════════════════════════════════════
         // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
         // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
@@ -756,10 +761,12 @@ object SubscriptionHelper {
                     semaphore.withPermit {
                         val currentStarted = startedCount.incrementAndGet()
                         val prefix = "[$currentStarted/$totalSubs]"
-                        MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${task.name}")
+                        if (!silent && !SmartConnectManager.isScanning.get()) {
+                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${task.name}")
+                        }
                         val count = task.updateAction()
                         val done = finishedCount.incrementAndGet()
-                        if (count > 0) {
+                        if (count > 0 && !silent && !SmartConnectManager.isScanning.get()) {
                             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "[$done/$totalSubs] ${task.name}: +$count")
                         }
                     }

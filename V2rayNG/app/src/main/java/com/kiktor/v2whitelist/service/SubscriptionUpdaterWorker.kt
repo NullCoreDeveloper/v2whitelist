@@ -57,6 +57,11 @@ class SubscriptionUpdaterWorker(
             return Result.success()
         }
 
+        if (SmartConnectManager.isScanning.get()) {
+            Log.i(AppConfig.TAG, "SubscriptionUpdaterWorker: skipped (SmartConnect scan/connect in progress)")
+            return Result.success()
+        }
+
         val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
         if (onlyViaVpn) {
             val isVpnActive = NetworkManager.isVpnActive(applicationContext)
@@ -76,7 +81,7 @@ class SubscriptionUpdaterWorker(
             // sequential=true: перебираем зеркала по одному, без параллельных GlobalScope-корутин.
             // Ограничиваем таймаутом 2 минуты, чтобы воркер не зависал в фоне бесконечно
             val completed = kotlinx.coroutines.withTimeoutOrNull(120_000L) {
-                SubscriptionHelper.updateSubscription(applicationContext, sequential = true)
+                SubscriptionHelper.updateSubscription(applicationContext, sequential = true, silent = true)
                 true
             }
             if (completed == true) {

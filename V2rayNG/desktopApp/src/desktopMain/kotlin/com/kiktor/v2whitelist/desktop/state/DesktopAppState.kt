@@ -1064,6 +1064,10 @@ class DesktopAppState(
                     continue
                 }
 
+                if (coreState.value == DesktopCoreState.STARTING) {
+                    continue
+                }
+
                 if (subscriptionUpdateOnlyViaProxy.value && coreState.value != DesktopCoreState.RUNNING) {
                     if (!skippedLogged) {
                         GeekModeLogger.log(
@@ -1093,6 +1097,10 @@ class DesktopAppState(
 
         scope.launch(Dispatchers.Default) {
             delay(1500L)
+            if (coreState.value == DesktopCoreState.STARTING) {
+                GeekModeLogger.log("Subscriptions", "Автообновление при старте пропущено: выполняется сканирование/подключение.")
+                return@launch
+            }
 
             val enabledSubs = _subscriptions.value.filter {
                 it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
