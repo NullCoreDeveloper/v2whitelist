@@ -220,6 +220,16 @@ func (s *Scanner) ProbeHTTP(
 	}
 }
 
+// HTTPStatusError означает, что HTTP-ответ через прокси уже получен, но статус не совпал с ожидаемым.
+type HTTPStatusError struct {
+	StatusCode int
+	WantCode   int
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("status %d (want %d)", e.StatusCode, e.WantCode)
+}
+
 // TestNode performs a full End-to-End connectivity test.
 // It establishes the proxy tunnel and verifies a real HTTP 204 response.
 func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, dest xnet.Destination) ScanResult {
@@ -240,7 +250,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 		return ScanResult{Error: err}
 	}
 	if res.StatusCode != http.StatusNoContent {
-		return ScanResult{Error: fmt.Errorf("status %d (want 204)", res.StatusCode)}
+		return ScanResult{Error: &HTTPStatusError{StatusCode: res.StatusCode, WantCode: http.StatusNoContent}}
 	}
 	return ScanResult{Latency: res.Latency}
 }

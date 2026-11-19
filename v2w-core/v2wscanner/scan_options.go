@@ -3,6 +3,7 @@ package v2wscanner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	stdnet "net"
 	"net/url"
@@ -223,6 +224,19 @@ type exitNodeCompiled struct {
 	dialer  internet.Dialer
 }
 
+// shouldRetryWithFragment возвращает true только при транспортной/TLS ошибке внешнего узла,
+// когда повтор с фрагментацией ClientHello имеет смысл (исключая случаи, где HTTP-ответ уже получен).
+func shouldRetryWithFragment(err error, cand parsedCandidate) bool {
+	if err == nil || cand.stream == nil || cand.dest.Network != net.Network_TCP {
+		return false
+	}
+	var httpStatusErr *core.HTTPStatusError
+	if errors.As(err, &httpStatusErr) {
+		return false
+	}
+	return cand.stream.SecurityType == "tls" || cand.stream.SecurityType == "reality"
+}
+
 // RunScanPipeline запускает двухступенчатый асинхронный пайплайн:
 // 1) Пул быстрого TCP pre-check (по умолчанию 50 воркеров).
 // 2) Пул проверки профилей (по умолчанию 35 воркеров): Exit Node E2E > Сервисы > HTTP 204 (+ TLS-фрагментация).
@@ -404,9 +418,8 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 				}
 
 				// Fallback на фрагментацию ClientHello при TLS/Reality ошибке внешнего узла
-				isTLS := cand.stream.SecurityType == "tls" || cand.stream.SecurityType == "reality"
 				revived := false
-				if isTLS && cand.dest.Network == net.Network_TCP && ctx.Err() == nil {
+				if shouldRetryWithFragment(err, cand) && ctx.Err() == nil {
 					for _, fragStep := range []struct {
 						mode internet.FragmentMode
 						tag  string

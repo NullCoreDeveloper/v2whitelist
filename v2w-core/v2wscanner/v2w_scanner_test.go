@@ -228,3 +228,23 @@ func TestNewChainDialerCtxAvoidsRecursion(t *testing.T) {
 		t.Fatalf("expected exactly 1 call to outerHandler, got %d", outerCalls)
 	}
 }
+
+func TestShouldRetryWithFragmentSkipsHTTPStatusErrors(t *testing.T) {
+	tlsCand := parsedCandidate{
+		stream: &internet.MemoryStreamConfig{SecurityType: "tls"},
+		dest:   xnet.TCPDestination(xnet.DomainAddress("example.com"), 443),
+	}
+	if shouldRetryWithFragment(&core.HTTPStatusError{StatusCode: 301, WantCode: 204}, tlsCand) {
+		t.Fatal("expected HTTPStatusError not to trigger TLS fragmentation retries")
+	}
+	if !shouldRetryWithFragment(fmt.Errorf("tls handshake timeout"), tlsCand) {
+		t.Fatal("expected TLS handshake error on TCP+TLS node to allow fragmentation retry")
+	}
+	udpCand := parsedCandidate{
+		stream: &internet.MemoryStreamConfig{SecurityType: "tls"},
+		dest:   xnet.UDPDestination(xnet.DomainAddress("example.com"), 443),
+	}
+	if shouldRetryWithFragment(fmt.Errorf("timeout"), udpCand) {
+		t.Fatal("expected UDP candidate not to trigger TCP/TLS fragmentation retry")
+	}
+}
