@@ -26,6 +26,15 @@ interface ServerRepository {
         removeServers(oldGuids)
         saveServerConfigs(newConfigs)
     }
+    fun replaceSubscriptionsBatch(
+        batches: List<Pair<Collection<String>, List<Pair<String, ProfileItem>>>>,
+        deduplicate: Boolean = true
+    ): Int {
+        for ((oldGuids, newConfigs) in batches) {
+            replaceSubscriptionServers(oldGuids, newConfigs)
+        }
+        return if (deduplicate) removeDuplicates() else 0
+    }
 
     fun getSelectedServerGuid(): String?
     fun setSelectedServerGuid(guid: String?)

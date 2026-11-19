@@ -44,6 +44,10 @@ internal object DesktopStorageManager {
         prettyPrint = true
         ignoreUnknownKeys = true
     }
+    private val compactJson = Json {
+        prettyPrint = false
+        ignoreUnknownKeys = true
+    }
 
     private val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
     private val isMac = System.getProperty("os.name")?.lowercase()?.contains("mac") == true
@@ -177,7 +181,7 @@ internal object DesktopStorageManager {
         val f = serversFile
         if (!f.exists()) return ServersStorage()
         return try {
-            json.decodeFromString<ServersStorage>(f.readText())
+            compactJson.decodeFromString<ServersStorage>(f.readText())
         } catch (e: Exception) {
             ServersStorage()
         }
@@ -185,7 +189,7 @@ internal object DesktopStorageManager {
 
     fun saveServers(storage: ServersStorage) {
         try {
-            val content = json.encodeToString(storage)
+            val content = compactJson.encodeToString(storage)
             serversFile.writeText(content)
         } catch (_: Exception) {}
     }
@@ -361,8 +365,12 @@ class DesktopFileServerRepository : ServerRepository {
         return "${profile.configType}:$srv:${profile.serverPort}:$pwd:$hostOrSni"
     }
 
-    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) = synchronized(repoLock) {
-        val oldVipGuids = vipList.filter { it in oldGuids }.toSet()
+    private fun applySubReplacementLocked(
+        oldGuids: Collection<String>,
+        newConfigs: List<Pair<String, ProfileItem>>
+    ) {
+        val oldSet = if (oldGuids is Set<String>) oldGuids else oldGuids.toSet()
+        val oldVipGuids = vipList.filter { it in oldSet }.toSet()
         val oldVipKeys = oldVipGuids.mapNotNull { g ->
             serverMap[g]?.let { getNetworkIdentityKey(it) }
         }.toSet()
@@ -371,8 +379,8 @@ class DesktopFileServerRepository : ServerRepository {
 
         for (g in oldGuids) {
             serverMap.remove(g)
-            vipList.remove(g)
         }
+        vipList.removeAll(oldSet)
 
         var restoredSelectedGuid: String? = null
 
@@ -391,11 +399,30 @@ class DesktopFileServerRepository : ServerRepository {
 
         if (restoredSelectedGuid != null) {
             selectedGuid = restoredSelectedGuid
-        } else if (selectedGuid == null || selectedGuid in oldGuids) {
+        } else if (selectedGuid == null || selectedGuid in oldSet) {
             selectedGuid = serverMap.keys.firstOrNull()
         }
+    }
+
+    override fun replaceSubscriptionServers(oldGuids: Collection<String>, newConfigs: List<Pair<String, ProfileItem>>) = synchronized(repoLock) {
+        applySubReplacementLocked(oldGuids, newConfigs)
         updateFlow()
         persist()
+    }
+
+    override fun replaceSubscriptionsBatch(
+        batches: List<Pair<Collection<String>, List<Pair<String, ProfileItem>>>>,
+        deduplicate: Boolean
+    ): Int = synchronized(repoLock) {
+        for ((oldGuids, newConfigs) in batches) {
+            applySubReplacementLocked(oldGuids, newConfigs)
+        }
+        val removed = if (deduplicate) deduplicateLocked() else 0
+        if (batches.isNotEmpty() || removed > 0) {
+            updateFlow()
+            persist()
+        }
+        removed
     }
 
     override fun getSelectedServerGuid(): String? = synchronized(repoLock) {
@@ -452,12 +479,12 @@ class DesktopFileServerRepository : ServerRepository {
         persist()
     }
 
-    override fun removeDuplicates(): Int = synchronized(repoLock) {
+    private fun deduplicateLocked(): Int {
         val uniqueKeys = mutableSetOf<String>()
         val guidsToDelete = mutableListOf<String>()
 
         // 1. Сначала регистрируем ключи всех личных серверов (они никогда не удаляются)
-        for ((guid, profile) in serverMap) {
+        for ((_, profile) in serverMap) {
             if (PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
                 val sniOrHost = profile.sni?.takeIf { it.isNotBlank() } ?: profile.host.orEmpty()
                 val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
@@ -479,19 +506,26 @@ class DesktopFileServerRepository : ServerRepository {
             }
         }
 
+        val deleteSet = guidsToDelete.toSet()
         for (g in guidsToDelete) {
             serverMap.remove(g)
-            vipList.remove(g)
-            if (selectedGuid == g) {
+        }
+        if (deleteSet.isNotEmpty()) {
+            vipList.removeAll(deleteSet)
+            if (selectedGuid in deleteSet) {
                 selectedGuid = serverMap.keys.firstOrNull()
             }
         }
+        return guidsToDelete.size
+    }
 
-        if (guidsToDelete.isNotEmpty()) {
+    override fun removeDuplicates(): Int = synchronized(repoLock) {
+        val count = deduplicateLocked()
+        if (count > 0) {
             updateFlow()
             persist()
         }
-        return guidsToDelete.size
+        return count
     }
 }
 

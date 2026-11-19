@@ -206,11 +206,19 @@ class DesktopAppState(
     val minimizeToTray = MutableStateFlow(settingsRepo.getBoolean("minimize_to_tray", true))
 
     // TUN & Sudo сессия (хранится только в памяти на время работы приложения)
+    private enum class PendingSudoAction {
+        NONE,
+        START_SMART_CONNECT,
+        SWITCH_TO_NEXT_SERVER,
+        CONNECT_CURRENT,
+        APPLY_TUN_MODE
+    }
     var sessionSudoPassword: String? = null
         private set
     val showSudoDialog = MutableStateFlow(false)
     val sudoError = MutableStateFlow<String?>(null)
     val isVerifyingSudo = MutableStateFlow(false)
+    private var pendingSudoAction: PendingSudoAction = PendingSudoAction.NONE
 
     // Предупреждение о несохраненных настройках при смене экрана
     val showUnsavedSettingsDialog = MutableStateFlow(false)
@@ -854,8 +862,19 @@ class DesktopAppState(
         setRoutingMode(next)
     }
 
+    private fun ensureLinuxSudoForTun(action: PendingSudoAction): Boolean {
+        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+            pendingSudoAction = action
+            sudoError.value = null
+            showSudoDialog.value = true
+            return false
+        }
+        return true
+    }
+
     fun setRoutingMode(mode: String) {
         if (mode == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
+            pendingSudoAction = PendingSudoAction.APPLY_TUN_MODE
             sudoError.value = null
             showSudoDialog.value = true
             return
@@ -892,8 +911,15 @@ class DesktopAppState(
                 sessionSudoPassword = password
                 showSudoDialog.value = false
                 sudoError.value = null
-                applyRoutingMode("TUN")
-                GeekModeLogger.log("TUN", "Права sudo успешно подтверждены. Режим TUN активирован.")
+                val nextAction = pendingSudoAction
+                pendingSudoAction = PendingSudoAction.NONE
+                GeekModeLogger.log("TUN", "Права sudo успешно подтверждены (nextAction=$nextAction).")
+                when (nextAction) {
+                    PendingSudoAction.START_SMART_CONNECT -> startSmartConnect()
+                    PendingSudoAction.SWITCH_TO_NEXT_SERVER -> switchToNextServer()
+                    PendingSudoAction.CONNECT_CURRENT -> connectCurrent()
+                    PendingSudoAction.APPLY_TUN_MODE, PendingSudoAction.NONE -> applyRoutingMode("TUN")
+                }
             } else {
                 sudoError.value = errorMsg ?: "INVALID_PASSWORD"
                 GeekModeLogger.log("TUN", "Сбой подтверждения прав sudo: ${sudoError.value}")
@@ -904,6 +930,7 @@ class DesktopAppState(
     fun dismissSudoDialog() {
         showSudoDialog.value = false
         sudoError.value = null
+        pendingSudoAction = PendingSudoAction.NONE
     }
 
     private fun verifySudoPassword(password: String): Pair<Boolean, String?> {
@@ -1299,7 +1326,8 @@ class DesktopAppState(
 
                 val updatedSubsList = _subscriptions.value.toMutableList()
                 val updatedSubsLock = Any()
-                val anySubUpdated = AtomicBoolean(false)
+                val pendingBatches = mutableListOf<Pair<Collection<String>, List<Pair<String, com.kiktor.v2whitelist.core.model.ProfileItem>>>>()
+                val snapshotServers = serverRepo.serversFlow.value
 
                 coroutineScope {
                     val jobs = enabledSubs.map { sub ->
@@ -1327,39 +1355,44 @@ class DesktopAppState(
                                     result = fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
                                 }
 
+                                // Парсинг и фильтрация выполняются параллельно вне блокировки
+                                var batch: List<Pair<String, com.kiktor.v2whitelist.core.model.ProfileItem>> = emptyList()
+                                var oldForSub: List<String> = emptyList()
+                                if (result.isSuccess) {
+                                    val content = result.getOrNull().orEmpty()
+                                    var parsed = SubscriptionParser.parse(content)
+
+                                    if (sub.filter.isNotBlank()) {
+                                        try {
+                                            val filterRegex = Regex(sub.filter)
+                                            parsed = parsed.filter { !filterRegex.containsMatchIn(it.remarks) }
+                                        } catch (_: Exception) {}
+                                    }
+
+                                    for (p in parsed) {
+                                        p.subscriptionId = sub.id
+                                    }
+
+                                    if (parsed.isNotEmpty()) {
+                                        oldForSub = snapshotServers.filter {
+                                            it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
+                                        }.map { it.first }
+                                        batch = parsed.map { generateStableServerGuid(it) to it }
+                                    }
+                                }
+
                                 synchronized(updatedSubsLock) {
                                     val subIdx = updatedSubsList.indexOfFirst { it.id == sub.id }
                                     if (result.isSuccess) {
-                                        val content = result.getOrNull().orEmpty()
-                                        var parsed = SubscriptionParser.parse(content)
-
-                                        if (sub.filter.isNotBlank()) {
-                                            try {
-                                                val filterRegex = Regex(sub.filter)
-                                                parsed = parsed.filter { !filterRegex.containsMatchIn(it.remarks) }
-                                            } catch (_: Exception) {}
-                                        }
-
-                                        for (p in parsed) {
-                                            p.subscriptionId = sub.id
-                                        }
-
-                                        if (parsed.isNotEmpty()) {
-                                            val currentServers = serverRepo.serversFlow.value
-                                            val oldForSub = currentServers.filter {
-                                                it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
-                                            }.map { it.first }
-
-                                            val batch = parsed.map { generateStableServerGuid(it) to it }
-                                            serverRepo.replaceSubscriptionServers(oldForSub, batch)
-                                            anySubUpdated.set(true)
+                                        if (batch.isNotEmpty()) {
+                                            pendingBatches.add(oldForSub to batch)
                                             if (subIdx >= 0) {
                                                 updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
                                                     lastUpdated = System.currentTimeMillis(),
                                                     lastUpdateFailed = false
                                                 )
                                             }
-                                            GeekModeLogger.log("Subscriptions", "${sub.name}: +${parsed.size} узлов")
+                                            GeekModeLogger.log("Subscriptions", "${sub.name}: +${batch.size} узлов")
                                         } else {
                                             GeekModeLogger.log("Subscriptions", "${sub.name}: сервер не вернул узлов (0). Сохранены прежние узлы.")
                                             if (subIdx >= 0) {
@@ -1370,7 +1403,7 @@ class DesktopAppState(
                                         }
                                     } else {
                                         val err = result.exceptionOrNull()?.message ?: "Ошибка загрузки"
-                                        val existingCount = serverRepo.serversFlow.value.count {
+                                        val existingCount = snapshotServers.count {
                                             it.second.subscriptionId == sub.id || it.second.subscriptionId == sub.name
                                         }
                                         GeekModeLogger.log("Subscriptions", "${sub.name}: сбой ($err). Ранее полученные серверы сохранены ($existingCount узлов).")
@@ -1390,9 +1423,9 @@ class DesktopAppState(
                 _subscriptions.value = updatedSubsList
                 saveSubscriptionsToStorage(updatedSubsList)
 
-                if (anySubUpdated.get()) {
-                    val removed = serverRepo.removeDuplicates()
-                    GeekModeLogger.log("Subscriptions", "Автоматически устранено дубликатов: $removed")
+                if (pendingBatches.isNotEmpty()) {
+                    val removed = serverRepo.replaceSubscriptionsBatch(pendingBatches, deduplicate = true)
+                    GeekModeLogger.log("Subscriptions", "Пакетное сохранение (${pendingBatches.size} подписок) завершено, устранено дубликатов: $removed")
                     _selectedGuid.value = serverRepo.getSelectedServerGuid()
                     pingAllServers()
                 }
@@ -1480,8 +1513,7 @@ class DesktopAppState(
                         val prevPersonalSelected = personalSelectedGuid.value
 
                         val batch = parsed.map { generateStableServerGuid(it) to it }
-                        serverRepo.replaceSubscriptionServers(oldForSub, batch)
-                        serverRepo.removeDuplicates()
+                        serverRepo.replaceSubscriptionsBatch(listOf(oldForSub to batch), deduplicate = true)
                         _selectedGuid.value = serverRepo.getSelectedServerGuid()
 
                         // Восстановление выбранного личного сервера при обновлении подписки
@@ -1601,12 +1633,14 @@ class DesktopAppState(
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
             stopCore()
         } else {
-            // Мгновенный визуальный фидбек для пользователя
-            xrayRunner.markStarting()
             if (isManualSelection.value && !_selectedGuid.value.isNullOrBlank()) {
+                if (!ensureLinuxSudoForTun(PendingSudoAction.CONNECT_CURRENT)) return
+                xrayRunner.markStarting()
                 GeekModeLogger.log("DesktopApp", "Ручной режим: запуск выбранного сервера ${_selectedGuid.value}")
                 connectCurrent()
             } else {
+                if (!ensureLinuxSudoForTun(PendingSudoAction.START_SMART_CONNECT)) return
+                xrayRunner.markStarting()
                 GeekModeLogger.log("DesktopApp", "Авто-режим (${_scenario.value}): запуск SmartConnect...")
                 startSmartConnect()
             }
@@ -1616,6 +1650,7 @@ class DesktopAppState(
     private var smartConnectJob: Job? = null
 
     fun startSmartConnect() {
+        if (!ensureLinuxSudoForTun(PendingSudoAction.START_SMART_CONNECT)) return
         smartConnectJob?.cancel()
         smartConnectManager.stop()
         V2WCoreScanner.stop()
@@ -1659,6 +1694,7 @@ class DesktopAppState(
 
     fun switchToNextServer() {
         if (isSwitchingServer.value) return
+        if (!ensureLinuxSudoForTun(PendingSudoAction.SWITCH_TO_NEXT_SERVER)) return
         scope.launch {
             isSwitchingServer.value = true
             isManualSelection.value = false
@@ -1974,11 +2010,7 @@ class DesktopAppState(
             GeekModeLogger.log("GeekMode", "Применён Global SNI: $gSni для ${profile.remarks}")
         }
 
-        if (routingMode.value == "TUN" && DesktopProxyManager.isLinux && sessionSudoPassword == null) {
-            sudoError.value = null
-            showSudoDialog.value = true
-            return
-        }
+        if (!ensureLinuxSudoForTun(PendingSudoAction.CONNECT_CURRENT)) return
 
         scope.launch {
             val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
@@ -2606,6 +2638,7 @@ class DesktopAppState(
 
     fun runSmartConnect(minSpeedMbps: Double = 1.0) {
         if (_isV2WScanning.value) return
+        if (!ensureLinuxSudoForTun(PendingSudoAction.START_SMART_CONNECT)) return
         scope.launch {
             _isV2WScanning.value = true
             try {

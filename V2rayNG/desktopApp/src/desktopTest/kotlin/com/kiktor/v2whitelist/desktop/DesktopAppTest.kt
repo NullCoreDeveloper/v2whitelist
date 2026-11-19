@@ -587,5 +587,64 @@ class DesktopAppTest {
         restartedState.resetAllSettingsAndData()
         assertEquals("TUN", restartedState.routingMode.value)
     }
+
+    @Test
+    fun testLinuxTunPromptsSudoBeforeStartingScan() = runTest {
+        if (!com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager.isLinux) return@runTest
+
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+        assertEquals("TUN", state.routingMode.value)
+        assertNull(state.sessionSudoPassword)
+
+        // Запрос запуска автопоиска в режиме TUN на Linux должен сначала открыть sudo-диалог, не начиная скан
+        state.startSmartConnect()
+        assertTrue(state.showSudoDialog.value)
+        assertNull(state.smartConnectStatus.value)
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.DesktopCoreState.STOPPED, state.coreState.value)
+
+        state.dismissSudoDialog()
+        assertFalse(state.showSudoDialog.value)
+
+        // То же самое при нажатии главной кнопки подключения в авто-режиме
+        state.toggleConnect()
+        assertTrue(state.showSudoDialog.value)
+        assertNull(state.smartConnectStatus.value)
+        assertEquals(com.kiktor.v2whitelist.desktop.engine.DesktopCoreState.STOPPED, state.coreState.value)
+    }
+
+    @Test
+    fun testBatchReplaceSubscriptionsDeduplicatesAndPreservesSelected() {
+        val repo = InMemoryServerRepository()
+        val old1 = ProfileItem(configType = EConfigType.VLESS, remarks = "Old 1", server = "1.1.1.1", serverPort = "443", subscriptionId = "sub1")
+        val old2 = ProfileItem(configType = EConfigType.VLESS, remarks = "Old 2", server = "2.2.2.2", serverPort = "443", subscriptionId = "sub2")
+        repo.saveServerConfigs(listOf("old-1" to old1, "old-2" to old2))
+
+        val new1a = ProfileItem(configType = EConfigType.VLESS, remarks = "Node A", server = "3.3.3.3", serverPort = "443", password = "u1", subscriptionId = "sub1")
+        val new2a = ProfileItem(configType = EConfigType.VLESS, remarks = "Node A Dup", server = "3.3.3.3", serverPort = "443", password = "u1", subscriptionId = "sub2")
+        val new2b = ProfileItem(configType = EConfigType.VLESS, remarks = "Node B", server = "4.4.4.4", serverPort = "443", password = "u2", subscriptionId = "sub2")
+
+        val removed = repo.replaceSubscriptionsBatch(
+            listOf(
+                listOf("old-1") to listOf("new-1a" to new1a),
+                listOf("old-2") to listOf("new-2a" to new2a, "new-2b" to new2b)
+            ),
+            deduplicate = true
+        )
+
+        assertEquals(1, removed)
+        val remaining = repo.serversFlow.value.map { it.first }
+        assertFalse(remaining.contains("old-1"))
+        assertFalse(remaining.contains("old-2"))
+        assertEquals(2, remaining.size)
+        assertTrue(remaining.contains("new-1a"))
+        assertTrue(remaining.contains("new-2b"))
+    }
 }
 
