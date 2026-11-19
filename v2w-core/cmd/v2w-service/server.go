@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kiktor/v2w-core/tunrouter"
 )
 
 const (
@@ -25,15 +27,23 @@ const (
 )
 
 type StartTunRequest struct {
-	SocksPort   int      `json:"socks_port"`
-	ServerIP    string   `json:"server_ip"`
-	Gateway     string   `json:"gateway"`
-	PhysicalDev string   `json:"physical_dev"`
-	Tun2Socks   string   `json:"tun2socks_path"`
-	TunIP       string   `json:"tun_ip"`
-	TunMask     string   `json:"tun_mask"`
-	TunGateway  string   `json:"tun_gateway"`
-	DnsServers  []string `json:"dns_servers"`
+	SocksPort    int      `json:"socks_port"`
+	ServerIP     string   `json:"server_ip"`
+	Gateway      string   `json:"gateway"`
+	PhysicalDev  string   `json:"physical_dev"`
+	Tun2Socks    string   `json:"tun2socks_path"`
+	TunIP        string   `json:"tun_ip"`
+	TunMask      string   `json:"tun_mask"`
+	TunGateway   string   `json:"tun_gateway"`
+	DnsServers   []string `json:"dns_servers"`
+	TunEngine    string   `json:"tun_engine,omitempty"`
+	SocksUser    string   `json:"socks_user,omitempty"`
+	SocksPass    string   `json:"socks_pass,omitempty"`
+	DirectDNS    string   `json:"direct_dns,omitempty"`
+	SplitEnabled bool     `json:"split_enabled,omitempty"`
+	SplitMode    string   `json:"split_mode,omitempty"`
+	DirectApps   []string `json:"direct_apps,omitempty"`
+	ProxyApps    []string `json:"proxy_apps,omitempty"`
 }
 
 type ApiResponse struct {
@@ -58,6 +68,7 @@ type TunServer struct {
 	tunActive       bool
 	tunCmd          *exec.Cmd
 	tunDone         chan struct{}
+	tunRouter       *tunrouter.Router
 	startedAt       time.Time
 	activeConfig    StartTunRequest
 	activeTunGW     string
@@ -180,54 +191,89 @@ func (s *TunServer) handleStopTun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TunServer) startTunLocked(req StartTunRequest) error {
-	// Служба работает от SYSTEM: путь из запроса НЕ используется (иначе любой локальный процесс
-	// мог бы запустить произвольный exe). Берём только tun2socks рядом с v2w-service.exe.
-	tun2socksBin := findTun2SocksBin()
-	if tun2socksBin == "" || !fileExists(tun2socksBin) {
-		return fmt.Errorf("tun2socks executable not found (provided: %s)", req.Tun2Socks)
-	}
-
-	binDir := filepath.Dir(tun2socksBin)
-
-	args := []string{
-		"-device", DefaultDeviceName,
-		"-proxy", fmt.Sprintf("socks5://127.0.0.1:%d", req.SocksPort),
-		"-loglevel", "info",
-	}
-
 	// Остатки прошлого запуска (убитая служба/краш) не должны ломать новый запуск.
 	// Также удаляем персистентный маршрут если он остался в реестре.
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0").Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0").Run()
 	exec.Command("route", "delete", "0.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
 	exec.Command("route", "delete", "128.0.0.0", "mask", "128.0.0.0", DefaultTunGW).Run()
-	exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
-	time.Sleep(500 * time.Millisecond)
 
-	cmd := exec.Command(tun2socksBin, args...)
-	cmd.Dir = binDir
-	if lf := openLogFile("tun2socks.log"); lf != nil {
-		cmd.Stdout = lf
-		cmd.Stderr = lf
+	useCustomRouter := strings.EqualFold(strings.TrimSpace(req.TunEngine), "v2w-tun") || req.SplitEnabled
+	if strings.EqualFold(strings.TrimSpace(req.TunEngine), "tun2socks") {
+		useCustomRouter = false
 	}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to launch tun2socks: %w", err)
-	}
-	s.tunCmd = cmd
-	done := make(chan struct{})
-	s.tunDone = done
-	go func() {
-		_ = cmd.Wait()
-		close(done)
-		// tun2socks упал сам — снимаем маршруты, иначе весь трафик уходит в «чёрную дыру»
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if s.tunCmd == cmd {
-			log.Printf("[v2w-service] tun2socks неожиданно завершился — откат маршрутов")
-			s.stopTunLocked()
+	if useCustomRouter {
+		directDNS := strings.TrimSpace(req.DirectDNS)
+		if directDNS == "" {
+			if phys := detectWindowsPhysicalDNS(req.DnsServers, req.ServerIP, req.Gateway); len(phys) > 0 {
+				directDNS = phys[0]
+			}
 		}
-	}()
+		routerCfg := tunrouter.RouterConfig{
+			DeviceName:    DefaultDeviceName,
+			MTU:           1500,
+			SocksAddr:     fmt.Sprintf("127.0.0.1:%d", req.SocksPort),
+			SocksUser:     req.SocksUser,
+			SocksPass:     req.SocksPass,
+			PhysicalIface: req.PhysicalDev,
+			DirectDNS:     directDNS,
+			Split: tunrouter.SplitConfig{
+				Enabled:    req.SplitEnabled,
+				Mode:       req.SplitMode,
+				DirectApps: req.DirectApps,
+				ProxyApps:  req.ProxyApps,
+			},
+		}
+		router, err := tunrouter.StartRouter(routerCfg)
+		if err != nil {
+			return fmt.Errorf("failed to start v2w-tun router: %w", err)
+		}
+		s.tunRouter = router
+		log.Printf("[v2w-service] Started built-in v2w-tun router (split=%v, mode=%s, direct=%d, proxy=%d)",
+			req.SplitEnabled, req.SplitMode, len(req.DirectApps), len(req.ProxyApps))
+	} else {
+		// Служба работает от SYSTEM: путь из запроса НЕ используется (иначе любой локальный процесс
+		// мог бы запустить произвольный exe). Берём только tun2socks рядом с v2w-service.exe.
+		tun2socksBin := findTun2SocksBin()
+		if tun2socksBin == "" || !fileExists(tun2socksBin) {
+			return fmt.Errorf("tun2socks executable not found (provided: %s)", req.Tun2Socks)
+		}
+
+		binDir := filepath.Dir(tun2socksBin)
+		exec.Command("taskkill", "/F", "/IM", filepath.Base(tun2socksBin)).Run()
+		time.Sleep(500 * time.Millisecond)
+
+		args := []string{
+			"-device", DefaultDeviceName,
+			"-proxy", fmt.Sprintf("socks5://127.0.0.1:%d", req.SocksPort),
+			"-loglevel", "info",
+		}
+		cmd := exec.Command(tun2socksBin, args...)
+		cmd.Dir = binDir
+		if lf := openLogFile("tun2socks.log"); lf != nil {
+			cmd.Stdout = lf
+			cmd.Stderr = lf
+		}
+
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("failed to launch tun2socks: %w", err)
+		}
+		s.tunCmd = cmd
+		done := make(chan struct{})
+		s.tunDone = done
+		go func() {
+			_ = cmd.Wait()
+			close(done)
+			// tun2socks упал сам — снимаем маршруты, иначе весь трафик уходит в «чёрную дыру»
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.tunCmd == cmd {
+				log.Printf("[v2w-service] tun2socks неожиданно завершился — откат маршрутов")
+				s.stopTunLocked()
+			}
+		}()
+	}
 
 	// Ожидаем появления активного (connected) интерфейса wintun в системе (до 5 секунд)
 	var wintunIdx int = -1
@@ -586,7 +632,11 @@ func (s *TunServer) stopTunLocked() {
 	// Сброс DNS кэша Windows
 	exec.Command("ipconfig", "/flushdns").Run()
 
-	// Завершаем процесс tun2socks
+	// Завершаем процесс tun2socks или встроенный v2w-tun роутер
+	if s.tunRouter != nil {
+		_ = s.tunRouter.Close()
+		s.tunRouter = nil
+	}
 	if s.tunCmd != nil && s.tunCmd.Process != nil {
 		_ = s.tunCmd.Process.Kill()
 		if s.tunDone != nil {
