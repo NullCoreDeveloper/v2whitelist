@@ -27,11 +27,16 @@ var (
 		"IR": true, "KP": true, "MO": true, "RU": true, "SY": true,
 	}
 	blockedGeminiRegions = map[string]bool{
-		"CHN": true, "RUS": true, "BLR": true, "CUB": true, "IRN": true,
-		"PRK": true, "SYR": true, "HKG": true, "MAC": true,
+		"AFG": true, "CHN": true, "RUS": true, "BLR": true, "CUB": true,
+		"IRN": true, "PRK": true, "SYR": true, "HKG": true, "MAC": true,
 	}
-	cfTraceLocRegex = regexp.MustCompile(`(?m)^loc=([A-Za-z]{2})\r?$`)
-	geminiMarker    = `,2,1,200,"`
+	cfTraceLocRegex       = regexp.MustCompile(`(?m)^loc=([A-Za-z]{2})\r?$`)
+	geminiMarkerRegex     = regexp.MustCompile(`,2,1,200,"([A-Za-z]{3})"`)
+	geminiStatusCodeRegex = regexp.MustCompile(`,2,1,([0-9]+),`)
+	geminiHeaders         = map[string]string{
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "en-US,en;q=0.9",
+	}
 	whatsappHeaders = map[string]string{
 		"User-Agent":     "WhatsApp/2.24.1.6 A",
 		"Accept":         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -206,14 +211,15 @@ func (s *Scanner) checkChatGPTLite(ctx context.Context, handler ProxyHandler, di
 	return 0, fmt.Errorf("HTTP %d", iosRes.StatusCode)
 }
 
-const geminiMaxBodyBytes = 1_500_000
+const geminiMaxBodyBytes = 2_000_000
 
 func resolveGeminiRedirect(baseRaw, location string) (string, error) {
 	loc := strings.TrimSpace(location)
 	if loc == "" {
 		return "", fmt.Errorf("empty redirect location")
 	}
-	if strings.Contains(loc, "/sorry/") {
+	lowerLoc := strings.ToLower(loc)
+	if strings.Contains(lowerLoc, "/sorry/") {
 		return "", fmt.Errorf("google bot-protection")
 	}
 	baseURL, err := url.Parse(baseRaw)
@@ -229,19 +235,22 @@ func resolveGeminiRedirect(baseRaw, location string) (string, error) {
 	if host != "gemini.google.com" && !strings.HasSuffix(host, ".gemini.google.com") {
 		return "", fmt.Errorf("redirect to %s", host)
 	}
+	if strings.HasPrefix(strings.ToLower(resolved.Path), "/faq") {
+		return "", fmt.Errorf("redirect to gemini faq (region unsupported)")
+	}
 	return resolved.String(), nil
 }
 
 func (s *Scanner) checkGeminiLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (time.Duration, error) {
-	targetURL := "https://gemini.google.com"
+	targetURL := "https://gemini.google.com/app"
 	var res *HTTPProbeResult
 	for hop := 0; hop < 3; hop++ {
 		var err error
-		res, err = s.ProbeHTTP(ctx, handler, dialer, targetURL, nil, geminiMaxBodyBytes)
+		res, err = s.ProbeHTTP(ctx, handler, dialer, targetURL, geminiHeaders, geminiMaxBodyBytes)
 		if err != nil || res == nil {
 			return 0, err
 		}
-		if res.StatusCode == 429 || strings.Contains(res.Location, "/sorry/") {
+		if res.StatusCode == 429 || strings.Contains(strings.ToLower(res.Location), "/sorry/") {
 			return 0, fmt.Errorf("google bot-protection")
 		}
 		if res.StatusCode >= 300 && res.StatusCode < 400 {
@@ -262,15 +271,25 @@ func (s *Scanner) checkGeminiLite(ctx context.Context, handler ProxyHandler, dia
 	}
 	lower := strings.ToLower(res.Body)
 	if strings.Contains(lower, "not supported in your country") ||
+		strings.Contains(lower, "isn't supported in your country") ||
 		strings.Contains(lower, "is not available in your country") ||
-		strings.Contains(lower, "isn't supported in your country") {
-		return 0, fmt.Errorf("region unsupported")
+		strings.Contains(lower, "isn't available in your country") ||
+		strings.Contains(lower, "not available in your region") ||
+		strings.Contains(lower, "isn't available in your region") ||
+		strings.Contains(lower, "unusual traffic") ||
+		strings.Contains(lower, "/sorry/") {
+		return 0, fmt.Errorf("region or bot blocked")
 	}
-	if idx := strings.Index(res.Body, geminiMarker); idx != -1 && len(res.Body) >= idx+len(geminiMarker)+3 {
-		reg := strings.ToUpper(res.Body[idx+len(geminiMarker) : idx+len(geminiMarker)+3])
-		if blockedGeminiRegions[reg] {
-			return 0, fmt.Errorf("region %s blocked", reg)
+	m := geminiMarkerRegex.FindStringSubmatch(res.Body)
+	if len(m) < 2 {
+		if sm := geminiStatusCodeRegex.FindStringSubmatch(res.Body); len(sm) >= 2 && sm[1] != "200" {
+			return 0, fmt.Errorf("gemini marker status %s", sm[1])
 		}
+		return 0, fmt.Errorf("gemini region marker missing (body=%d bytes)", len(res.Body))
+	}
+	reg := strings.ToUpper(m[1])
+	if blockedGeminiRegions[reg] {
+		return 0, fmt.Errorf("region %s blocked", reg)
 	}
 	return res.Latency, nil
 }

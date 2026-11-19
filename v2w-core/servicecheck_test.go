@@ -177,8 +177,8 @@ func TestCheckGeminiLiteLargeBodyAndRedirects(t *testing.T) {
 		{
 			name: "relative redirect inside gemini.google.com followed",
 			responder: func(host, reqPath string) (int, map[string]string, string) {
-				if reqPath == "/" || reqPath == "" {
-					return 302, map[string]string{"Location": "/app"}, ""
+				if reqPath == "/app" {
+					return 302, map[string]string{"Location": "/app/welcome"}, ""
 				}
 				return 200, nil, padding + `,2,1,200,"DEU",null`
 			},
@@ -186,8 +186,8 @@ func TestCheckGeminiLiteLargeBodyAndRedirects(t *testing.T) {
 		{
 			name: "relative redirect leading to RUS region rejected",
 			responder: func(host, reqPath string) (int, map[string]string, string) {
-				if reqPath == "/" || reqPath == "" {
-					return 302, map[string]string{"Location": "/app"}, ""
+				if reqPath == "/app" {
+					return 302, map[string]string{"Location": "/app/welcome"}, ""
 				}
 				return 200, nil, padding + `,2,1,200,"RUS",null`
 			},
@@ -199,6 +199,41 @@ func TestCheckGeminiLiteLargeBodyAndRedirects(t *testing.T) {
 				return 302, map[string]string{"Location": "https://www.google.com/sorry/index"}, ""
 			},
 			wantErr: "google bot-protection",
+		},
+		{
+			name: "faq redirect rejected",
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 302, map[string]string{"Location": "/faq"}, ""
+			},
+			wantErr: "redirect to gemini faq",
+		},
+		{
+			name: "missing region marker rejected",
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, "<html><body>Gemini landing shell</body></html>"
+			},
+			wantErr: "gemini region marker missing",
+		},
+		{
+			name: "empty region marker rejected",
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, padding + `,2,1,200,"",null`
+			},
+			wantErr: "gemini region marker missing",
+		},
+		{
+			name: "non-200 inner marker rejected",
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, padding + `,2,1,403,"NLD",null`
+			},
+			wantErr: "gemini marker status 403",
+		},
+		{
+			name: "AFG region blocked",
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, padding + `,2,1,200,"AFG",null`
+			},
+			wantErr: "region AFG blocked",
 		},
 	}
 
