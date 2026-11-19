@@ -159,12 +159,17 @@ class GeekModeViewModel(application: Application) : AndroidViewModel(application
     fun fetchExitIp() {
         viewModelScope.launch(Dispatchers.IO) {
             GeekModeLogger.log("GeekMode", "Fetching exit IP...")
+            val isRunning = V2RayServiceManager.isRunning() == true
             val ip = SpeedtestManager.getRemoteIPInfo()
             if (ip != null) {
                 _exitIp.value = ip
                 GeekModeLogger.log("GeekMode", "Exit IP: $ip")
+            } else if (isRunning) {
+                _exitIp.value = "Нет ответа (таймаут)"
+                GeekModeLogger.log("GeekMode", "Could not fetch exit IP (timeout or no response via tunnel)")
             } else {
-                GeekModeLogger.log("GeekMode", "Could not fetch exit IP (VPN may not be running)")
+                _exitIp.value = null
+                GeekModeLogger.log("GeekMode", "Could not fetch exit IP (VPN is not running)")
             }
         }
     }

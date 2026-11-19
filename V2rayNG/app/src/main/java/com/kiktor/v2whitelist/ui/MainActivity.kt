@@ -849,7 +849,9 @@ class MainActivity : HelperBaseActivity() {
                         if (!V2RayServiceManager.isRunning()) return@launch
                         val timeout = if (attempt == 1) 3500 else 4500
                         val delay = if (hideTunnel) {
-                            V2RayServiceManager.measureDelay()
+                            val coreDelay = V2RayServiceManager.measureDelay()
+                            if (coreDelay > 0) coreDelay
+                            else SpeedtestManager.testConnection(this@MainActivity, socksPort, timeout).first
                         } else {
                             SpeedtestManager.testConnection(this@MainActivity, socksPort, timeout).first
                         }

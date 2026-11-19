@@ -160,55 +160,63 @@ object SpeedtestManager {
      * @return A pair containing the elapsed time in milliseconds and the result message.
      */
     suspend fun testConnection(context: Context, port: Int, timeoutMs: Int = 15000): Pair<Long, String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        var result = ""
-        var elapsed = -1L
+        val primaryUrl = SettingsManager.getDelayTestUrl()
+        val urls = listOf(
+            primaryUrl,
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.google.com/generate_204"
+        ).distinct()
 
-        val conn = HttpUtil.createProxyConnection(
-            SettingsManager.getDelayTestUrl(),
-            port,
-            timeoutMs,
-            timeoutMs,
-            proxyType = Proxy.Type.SOCKS
-        ) ?: return@withContext Pair(elapsed, "")
-        
-        val job = launch {
-            try {
-                kotlinx.coroutines.awaitCancellation()
-            } finally {
-                Thread { try { conn.disconnect() } catch (e: Exception) {} }.start()
-            }
-        }
-
-        try {
-            val start = SystemClock.elapsedRealtime()
+        var lastErrorResult = ""
+        for (url in urls) {
             if (!isActive) return@withContext Pair(-1L, "")
+            val conn = HttpUtil.createProxyConnection(
+                url,
+                port,
+                timeoutMs,
+                timeoutMs,
+                proxyType = Proxy.Type.SOCKS
+            ) ?: continue
 
-            val code = conn.responseCode
-            elapsed = SystemClock.elapsedRealtime() - start
-
-            if (!isActive) return@withContext Pair(-1L, "")
-
-            result = when (code) {
-                204 -> context.getString(R.string.connection_test_available, elapsed)
-                200 -> {
-                    if (conn.contentLengthLong == 0L) context.getString(R.string.connection_test_available, elapsed)
-                    else throw IOException(context.getString(R.string.connection_test_error_status_code, code))
+            val job = launch {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    Thread { try { conn.disconnect() } catch (_: Exception) {} }.start()
                 }
-                else -> throw IOException(context.getString(R.string.connection_test_error_status_code, code))
             }
-        } catch (e: IOException) {
-            Log.e(AppConfig.TAG, "Connection test IOException", e)
-            result = context.getString(R.string.connection_test_error, e.message)
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e(AppConfig.TAG, "Connection test Exception", e)
-            result = context.getString(R.string.connection_test_error, e.message)
-        } finally {
-            job.cancel()
-            conn.disconnect()
+
+            try {
+                val start = SystemClock.elapsedRealtime()
+                if (!isActive) return@withContext Pair(-1L, "")
+
+                val code = conn.responseCode
+                val measured = SystemClock.elapsedRealtime() - start
+
+                if (!isActive) return@withContext Pair(-1L, "")
+
+                when {
+                    code == 204 || (code == 200 && conn.contentLengthLong == 0L) -> {
+                        return@withContext Pair(measured, context.getString(R.string.connection_test_available, measured))
+                    }
+                    else -> {
+                        lastErrorResult = context.getString(R.string.connection_test_error_status_code, code)
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(AppConfig.TAG, "Connection test IOException ($url)", e)
+                lastErrorResult = context.getString(R.string.connection_test_error, e.message)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(AppConfig.TAG, "Connection test Exception ($url)", e)
+                lastErrorResult = context.getString(R.string.connection_test_error, e.message)
+            } finally {
+                job.cancel()
+                conn.disconnect()
+            }
         }
 
-        return@withContext Pair(elapsed, result)
+        return@withContext Pair(-1L, lastErrorResult)
     }
 
     fun getRemoteIPInfo(): String? {

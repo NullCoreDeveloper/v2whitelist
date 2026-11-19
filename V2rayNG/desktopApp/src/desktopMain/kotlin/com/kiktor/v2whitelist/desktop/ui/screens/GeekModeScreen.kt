@@ -56,6 +56,7 @@ fun GeekModeScreen(
     val selectedGuid by state.selectedGuid.collectAsState()
     val pings by state.pingMap.collectAsState()
     val exitIp by state.exitIp.collectAsState()
+    val exitIpError by state.exitIpError.collectAsState()
     val vipGuids by state.vipGuids.collectAsState()
     val coreState by state.coreState.collectAsState()
     val meshEnabled by state.meshGradientEnabled.collectAsState()
@@ -242,11 +243,21 @@ fun GeekModeScreen(
                             fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        val exitIpText = when {
+                            exitIp != null -> exitIp!!
+                            coreState == DesktopCoreState.RUNNING && !exitIpError.isNullOrBlank() -> exitIpError!!
+                            else -> strings.geekExitIpUndefined
+                        }
+                        val exitIpColor = when {
+                            exitIp != null -> AccentMint
+                            coreState == DesktopCoreState.RUNNING && !exitIpError.isNullOrBlank() -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                         Text(
-                            text = exitIp ?: strings.geekExitIpUndefined,
+                            text = exitIpText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (exitIp != null) AccentMint else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = exitIpColor
                         )
                     }
                     IconButton(

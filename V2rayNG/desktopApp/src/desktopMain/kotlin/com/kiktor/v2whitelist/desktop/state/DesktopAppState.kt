@@ -283,6 +283,7 @@ class DesktopAppState(
     val cloudflareIp = MutableStateFlow(settingsRepo.getString("pref_cloudflare_ip", ""))
     val customUserAgent = MutableStateFlow(settingsRepo.getString("pref_custom_user_agent", "Auto (Default)"))
     val exitIp = MutableStateFlow<String?>(null)
+    val exitIpError = MutableStateFlow<String?>(null)
     val isPingingVip = MutableStateFlow(false)
     val isFindingVip = MutableStateFlow(false)
     val isForcePinging = MutableStateFlow(false)
@@ -1834,6 +1835,8 @@ class DesktopAppState(
         isSwitchingServer.value = false
         stopFailoverWatchdog()
         _smartConnectStatus.value = null
+        exitIp.value = null
+        exitIpError.value = null
         xrayRunner.stop()
         if (DesktopTunManager.isTunActive) {
             DesktopTunManager.stop(sessionSudoPassword)
@@ -1913,19 +1916,9 @@ class DesktopAppState(
                 customProxyDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
             } else emptyList()
 
-            val isPersonal = com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)
-            sanitizeExitNode()
-            val endpoint = if (isPersonal && personalIgnoreExitNode.value) {
-                null
-            } else if (useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()) {
-                val epUrl = customEndpointUrl.value.trim()
-                val epParsed = com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(epUrl)
-                if (epParsed != null && epParsed.server == profile.server && epParsed.serverPort == profile.serverPort) {
-                    null
-                } else {
-                    epUrl
-                }
-            } else null
+            val endpoint = resolveActiveCustomEndpointUrl(profile)
+            exitIp.value = null
+            exitIpError.value = null
 
             val currentSocksPort = socksPort.value
             val currentHttpPort = if (httpPort.value > 0 && httpPort.value != currentSocksPort) httpPort.value else currentSocksPort + 1
@@ -2188,13 +2181,29 @@ class DesktopAppState(
         settingsRepo.setString("pref_custom_user_agent", ua)
     }
 
+    private fun resolveActiveCustomEndpointUrl(profile: ProfileItem?): String? {
+        sanitizeExitNode()
+        val isPersonal = profile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)
+        if (isPersonal && personalIgnoreExitNode.value) return null
+        if (!useCustomEndpoint.value || customEndpointUrl.value.isBlank()) return null
+
+        val epUrl = customEndpointUrl.value.trim()
+        val epParsed = com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(epUrl)
+        if (profile != null && epParsed != null && epParsed.server == profile.server && epParsed.serverPort == profile.serverPort) {
+            return null
+        }
+        return epUrl
+    }
+
     fun fetchExitIp() {
         scope.launch {
-            val proxyP = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else 0
+            val isRunning = coreState.value == DesktopCoreState.RUNNING
+            val proxyP = if (isRunning) httpPort.value else 0
+            exitIpError.value = null
             val client = SubscriptionFetcher.createHttpClient(
                 httpProxyHost = "127.0.0.1",
                 httpProxyPort = proxyP,
-                timeoutMs = 4000L
+                timeoutMs = 5000L
             )
             try {
                 val checkUrl = connectionCheckServiceUrl.value.trim().ifBlank { "https://api.myip.la/en?json" }
@@ -2206,12 +2215,24 @@ class DesktopAppState(
                     if (ipMatch != null) {
                         val full = "$ipMatch (${country ?: "Online"})"
                         exitIp.value = full
+                        exitIpError.value = null
                         publicIpInfo.value = full
                         GeekModeLogger.log("GeekMode", "Exit IP определён: $full")
+                    } else if (isRunning) {
+                        exitIp.value = null
+                        exitIpError.value = "Некорректный ответ IP API"
                     }
+                } else if (isRunning) {
+                    exitIp.value = null
+                    exitIpError.value = "HTTP ${resp.status.value} через туннель"
                 }
             } catch (e: Exception) {
                 GeekModeLogger.log("GeekMode", "Не удалось определить Exit IP: ${e.message}")
+                if (isRunning) {
+                    exitIp.value = null
+                    val hasEndpoint = useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()
+                    exitIpError.value = if (hasEndpoint) "Нет ответа через конечный узел" else "Нет ответа через туннель"
+                }
             } finally {
                 client.close()
             }
@@ -2224,7 +2245,37 @@ class DesktopAppState(
         scope.launch {
             isForcePinging.value = true
             GeekModeLogger.log("GeekMode", "Force Ping: проверка ${profile.remarks}...")
-            val ping = NodePingTester.testSingleTcp(profile)
+            val ping = if (coreState.value == DesktopCoreState.RUNNING) {
+                val activeHttpPort = if (httpPort.value > 0 && httpPort.value != socksPort.value) httpPort.value else socksPort.value + 1
+                var delayMs = NodePingTester.testHttpProxyDelay(
+                    proxyPort = activeHttpPort,
+                    testUrl = "https://www.google.com/generate_204",
+                    timeoutMs = 4500L
+                )
+                if (delayMs <= 0L) {
+                    delayMs = NodePingTester.testHttpProxyDelay(
+                        proxyPort = activeHttpPort,
+                        testUrl = "https://cp.cloudflare.com/generate_204",
+                        timeoutMs = 4500L
+                    )
+                }
+                delayMs
+            } else {
+                val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
+                val verifyRes = DesktopProfileVerifier.verifyProfile(
+                    profile = profile,
+                    xrayBinaryPath = xrayPath,
+                    timeoutMs = 4500L,
+                    speedCheckEnabled = false,
+                    customEndpointUrl = resolveActiveCustomEndpointUrl(profile),
+                    endpointE2eCheckEnabled = true
+                )
+                if (verifyRes.success && verifyRes.latencyMs > 0) {
+                    verifyRes.latencyMs
+                } else {
+                    NodePingTester.testSingleTcp(profile)
+                }
+            }
             _pingMap.value = _pingMap.value + (guid to ping)
             GeekModeLogger.log("GeekMode", "Результат: ${if (ping > 0) "${ping}ms" else "Ошибка (-1)"}")
             fetchExitIp()
@@ -2249,6 +2300,7 @@ class DesktopAppState(
                     xrayBinaryPath = xrayPath,
                     timeoutMs = 3500L,
                     speedCheckEnabled = false,
+                    customEndpointUrl = resolveActiveCustomEndpointUrl(profile),
                     serviceCheckEnabled = serviceCheckEnabled.value,
                     servicesToCheck = servicesList.value
                 )
