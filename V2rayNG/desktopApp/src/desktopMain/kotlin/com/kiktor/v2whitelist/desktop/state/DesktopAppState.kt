@@ -194,12 +194,11 @@ class DesktopAppState(
     val allowLan = MutableStateFlow(settingsRepo.getBoolean("allow_lan", false))
     val clipboardNotice = MutableStateFlow<String?>(null)
 
-    // По умолчанию на Windows используем полный режим (TUN), на Linux/macOS — PROXY до явного переключения пользователем
+    // По умолчанию используем полный режим (TUN) на всех платформах до явного переключения пользователем
     val routingMode = MutableStateFlow(
         settingsRepo.getString("pref_routing_mode", "").let { saved ->
             if (saved == "TUN" || saved == "PROXY") saved
-            else if (DesktopTunManager.isWindows) "TUN"
-            else "PROXY"
+            else "TUN"
         }
     )
     val uiTheme = MutableStateFlow(settingsRepo.getString("ui_theme", "CYAN"))
@@ -2927,7 +2926,7 @@ class DesktopAppState(
         localProxyPort.value = 10808
         autoEnableSystemProxy.value = false
         allowLan.value = false
-        routingMode.value = if (DesktopTunManager.isWindows) "TUN" else "PROXY"
+        routingMode.value = "TUN"
 
         uiTheme.value = "CYAN"
         uiCompactCards.value = false

@@ -555,5 +555,37 @@ class DesktopAppTest {
         assertEquals("V2W_TUN", settingsRepo.getString("pref_tun_engine"))
         assertEquals(true, settingsRepo.getBoolean("pref_app_split_enabled"))
     }
+
+    @Test
+    fun testRoutingModeDefaultIsTunAndPersistsAcrossRestarts() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+
+        // 1. По умолчанию на всех платформах режим TUN
+        val initialState = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+        assertEquals("TUN", initialState.routingMode.value)
+
+        // 2. Переключение на PROXY сохраняется и восстанавливается при перезапуске
+        initialState.setRoutingMode("PROXY")
+        assertEquals("PROXY", initialState.routingMode.value)
+        assertEquals("PROXY", settingsRepo.getString("pref_routing_mode"))
+
+        val restartedState = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+        assertEquals("PROXY", restartedState.routingMode.value)
+
+        // 3. Сброс настроек возвращает режим по умолчанию (TUN)
+        restartedState.resetAllSettingsAndData()
+        assertEquals("TUN", restartedState.routingMode.value)
+    }
 }
 
