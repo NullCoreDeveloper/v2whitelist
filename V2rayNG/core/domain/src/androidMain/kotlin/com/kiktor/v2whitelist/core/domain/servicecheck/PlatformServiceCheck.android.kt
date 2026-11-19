@@ -10,10 +10,13 @@ import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URI
+import java.util.zip.GZIPInputStream
 
 private val CLAUDE_BLOCKED_REGIONS = setOf("AF", "BY", "CN", "CU", "HK", "IR", "KP", "MO", "RU", "SY")
 private val CHATGPT_BLOCKED_REGIONS = setOf("AF", "BY", "CN", "CU", "HK", "IR", "KP", "MO", "RU", "SY")
-private val GEMINI_BLOCKED_REGIONS = setOf("CHN", "RUS", "BLR", "CUB", "IRN", "PRK", "SYR", "HKG", "MAC")
+private val GEMINI_BLOCKED_REGIONS = setOf("AFG", "CHN", "RUS", "BLR", "CUB", "IRN", "PRK", "SYR", "HKG", "MAC")
+private val GEMINI_MARKER_REGEX = Regex(""",2,1,200,"([A-Za-z]{3})"""")
+private val GEMINI_STATUS_REGEX = Regex(""",2,1,([0-9]+),""")
 private const val BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 private const val WHATSAPP_UA = "WhatsApp/2.24.1.6 A"
 
@@ -277,39 +280,26 @@ private fun checkGeminiSmart(
     proxy: Proxy,
     timeoutMs: Long
 ): ServiceCheckResult {
+    return checkGeminiUrl(service, proxy, timeoutMs, "https://gemini.google.com/app")
+}
+
+internal fun checkGeminiUrl(
+    service: ServiceCheckItem,
+    proxy: Proxy,
+    timeoutMs: Long,
+    initialUrl: String = "https://gemini.google.com/app",
+    maxHops: Int = 3
+): ServiceCheckResult {
     val start = currentTimeMillis()
     var conn: HttpURLConnection? = null
     return try {
-        val url = URI.create("https://gemini.google.com").toURL()
-        conn = (url.openConnection(proxy) as HttpURLConnection).apply {
-            connectTimeout = timeoutMs.toInt()
-            readTimeout = timeoutMs.toInt()
-            instanceFollowRedirects = false
-            useCaches = false
-            requestMethod = "GET"
-            setRequestProperty("Connection", "close")
-            setRequestProperty("User-Agent", BROWSER_UA)
-            setRequestProperty("Accept", "*/*")
-        }
-        conn.connect()
-        var code = conn.responseCode
-        val loc = conn.getHeaderField("Location")
+        var targetUrl = initialUrl
+        var code = -1
 
-        // Проверяем заглушку Google Captcha / Sorry / Rate Limit
-        if (loc?.contains("/sorry/") == true || code == 429) {
-            return ServiceCheckResult(
-                service = service,
-                success = false,
-                latencyMs = -1L,
-                httpCode = code,
-                errorMessage = "Google Bot-Protection (Captcha)"
-            )
-        }
-
-        // Если 301/302 редирект внутри gemini.google.com
-        if ((code == 301 || code == 302) && loc != null && loc.contains("gemini.google.com")) {
-            conn.disconnect()
-            conn = (URI.create(loc).toURL().openConnection(proxy) as HttpURLConnection).apply {
+        for (hop in 0 until maxHops) {
+            conn?.disconnect()
+            val url = URI.create(targetUrl).toURL()
+            conn = (url.openConnection(proxy) as HttpURLConnection).apply {
                 connectTimeout = timeoutMs.toInt()
                 readTimeout = timeoutMs.toInt()
                 instanceFollowRedirects = false
@@ -317,12 +307,16 @@ private fun checkGeminiSmart(
                 requestMethod = "GET"
                 setRequestProperty("Connection", "close")
                 setRequestProperty("User-Agent", BROWSER_UA)
-                setRequestProperty("Accept", "*/*")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                setRequestProperty("Accept-Encoding", "gzip")
             }
             conn.connect()
             code = conn.responseCode
-            val newLoc = conn.getHeaderField("Location")
-            if (newLoc?.contains("/sorry/") == true || code == 429) {
+            val loc = conn.getHeaderField("Location")?.trim()
+
+            // Проверяем заглушку Google Captcha / Sorry / Rate Limit
+            if (code == 429 || loc?.lowercase()?.contains("/sorry/") == true) {
                 return ServiceCheckResult(
                     service = service,
                     success = false,
@@ -331,77 +325,54 @@ private fun checkGeminiSmart(
                     errorMessage = "Google Bot-Protection (Captcha)"
                 )
             }
+
+            if (code in 300..399) {
+                if (loc.isNullOrEmpty()) {
+                    return ServiceCheckResult(
+                        service = service,
+                        success = false,
+                        latencyMs = -1L,
+                        httpCode = code,
+                        errorMessage = "Пустой редирект HTTP $code"
+                    )
+                }
+                val resolved = URI.create(targetUrl).resolve(loc)
+                val host = resolved.host?.lowercase().orEmpty()
+                if (host != "gemini.google.com" && !host.endsWith(".gemini.google.com") && host != URI.create(initialUrl).host?.lowercase()) {
+                    return ServiceCheckResult(
+                        service = service,
+                        success = false,
+                        latencyMs = -1L,
+                        httpCode = code,
+                        errorMessage = "Редирект на $host (недоступен)"
+                    )
+                }
+                if (resolved.path?.lowercase()?.startsWith("/faq") == true) {
+                    return ServiceCheckResult(
+                        service = service,
+                        success = false,
+                        latencyMs = -1L,
+                        httpCode = code,
+                        errorMessage = "Регион не поддерживается (/faq)"
+                    )
+                }
+                if (hop == maxHops - 1) {
+                    return ServiceCheckResult(
+                        service = service,
+                        success = false,
+                        latencyMs = -1L,
+                        httpCode = code,
+                        errorMessage = "Слишком много редиректов"
+                    )
+                }
+                targetUrl = resolved.toString()
+                continue
+            }
+            break
         }
 
-        if (code in 200..399) {
-            val stream = try { conn.inputStream } catch (_: Exception) { null }
-            var foundRegion: String? = null
-            var unsupportedText = false
-
-            if (stream != null) {
-                try {
-                    val marker = ",2,1,200,\""
-                    val buf = ByteArray(8192)
-                    val sb = StringBuilder()
-                    var readTotal = 0
-                    val maxScan = 1_000_000 // до 1 МБ
-                    while (readTotal < maxScan) {
-                        val r = stream.read(buf)
-                        if (r <= 0) break
-                        val chunk = String(buf, 0, r, Charsets.UTF_8)
-                        sb.append(chunk)
-                        val idx = sb.indexOf(marker)
-                        if (idx != -1 && sb.length >= idx + marker.length + 3) {
-                            foundRegion = sb.substring(idx + marker.length, idx + marker.length + 3).uppercase()
-                            break
-                        }
-                        val lowerChunk = chunk.lowercase()
-                        if (lowerChunk.contains("not supported in your country") ||
-                            lowerChunk.contains("is not available in your country")) {
-                            unsupportedText = true
-                            break
-                        }
-                        if (sb.length > 32768) {
-                            sb.delete(0, 16384)
-                        }
-                        readTotal += r
-                    }
-                } catch (_: Exception) {
-                    // Таймаут дочитывания длинного тела на медленном узле — не отменяет факт ответа сервера
-                }
-            }
-
-            val elapsed = currentTimeMillis() - start
-            when {
-                unsupportedText -> {
-                    ServiceCheckResult(
-                        service = service,
-                        success = false,
-                        latencyMs = -1L,
-                        httpCode = code,
-                        errorMessage = "Регион не поддерживается"
-                    )
-                }
-                foundRegion != null && foundRegion in GEMINI_BLOCKED_REGIONS -> {
-                    ServiceCheckResult(
-                        service = service,
-                        success = false,
-                        latencyMs = -1L,
-                        httpCode = code,
-                        errorMessage = "Регион $foundRegion не поддерживается"
-                    )
-                }
-                else -> {
-                    ServiceCheckResult(
-                        service = service,
-                        success = true,
-                        latencyMs = elapsed,
-                        httpCode = code
-                    )
-                }
-            }
-        } else {
-            ServiceCheckResult(
+        if (code !in 200..299) {
+            return ServiceCheckResult(
                 service = service,
                 success = false,
                 latencyMs = -1L,
@@ -409,8 +380,101 @@ private fun checkGeminiSmart(
                 errorMessage = "HTTP $code"
             )
         }
-    } catch (e: Exception) {
+
+        val rawStream = conn?.inputStream ?: return ServiceCheckResult(
+            service = service,
+            success = false,
+            latencyMs = -1L,
+            httpCode = code,
+            errorMessage = "Пустой ответ сервера"
+        )
+        val isGzip = conn.contentEncoding?.lowercase()?.contains("gzip") == true
+        val stream: InputStream = if (isGzip) GZIPInputStream(rawStream) else rawStream
+
+        var foundRegion: String? = null
+        var non200Status: String? = null
+        var unsupportedText = false
+
+        stream.use { input ->
+            val buf = ByteArray(8192)
+            val sb = StringBuilder()
+            var readTotal = 0
+            val maxScan = 2_000_000
+            while (readTotal < maxScan) {
+                val r = input.read(buf)
+                if (r <= 0) break
+                val chunk = String(buf, 0, r, Charsets.UTF_8)
+                sb.append(chunk)
+
+                val window = if (sb.length > 32768) sb.substring(sb.length - 32768) else sb.toString()
+                val lowerWindow = window.lowercase()
+                if (lowerWindow.contains("not supported in your country") ||
+                    lowerWindow.contains("isn't supported in your country") ||
+                    lowerWindow.contains("is not available in your country") ||
+                    lowerWindow.contains("isn't available in your country") ||
+                    lowerWindow.contains("not available in your region") ||
+                    lowerWindow.contains("isn't available in your region") ||
+                    lowerWindow.contains("unusual traffic") ||
+                    lowerWindow.contains("/sorry/")
+                ) {
+                    unsupportedText = true
+                    break
+                }
+
+                val match = GEMINI_MARKER_REGEX.find(window)
+                if (match != null) {
+                    foundRegion = match.groupValues[1].uppercase()
+                    break
+                }
+                if (non200Status == null) {
+                    val statusMatch = GEMINI_STATUS_REGEX.find(window)
+                    if (statusMatch != null && statusMatch.groupValues[1] != "200") {
+                        non200Status = statusMatch.groupValues[1]
+                    }
+                }
+
+                if (sb.length > 65536) {
+                    sb.delete(0, sb.length - 32768)
+                }
+                readTotal += r
+            }
+        }
+
         val elapsed = currentTimeMillis() - start
+        when {
+            unsupportedText -> ServiceCheckResult(
+                service = service,
+                success = false,
+                latencyMs = -1L,
+                httpCode = code,
+                errorMessage = "Регион или IP не поддерживается"
+            )
+            foundRegion == null -> ServiceCheckResult(
+                service = service,
+                success = false,
+                latencyMs = -1L,
+                httpCode = code,
+                errorMessage = if (non200Status != null) {
+                    "Gemini статус $non200Status"
+                } else {
+                    "Не удалось подтвердить регион Gemini"
+                }
+            )
+            foundRegion in GEMINI_BLOCKED_REGIONS -> ServiceCheckResult(
+                service = service,
+                success = false,
+                latencyMs = -1L,
+                httpCode = code,
+                errorMessage = "Регион $foundRegion не поддерживается"
+            )
+            else -> ServiceCheckResult(
+                service = service,
+                success = true,
+                latencyMs = elapsed,
+                httpCode = code
+            )
+        }
+    } catch (e: Exception) {
         ServiceCheckResult(
             service = service,
             success = false,
