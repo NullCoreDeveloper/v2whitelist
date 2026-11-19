@@ -64,6 +64,16 @@ object V2WCoreScanner {
         return sb.toString()
     }
 
+    internal fun resolveGenerate204DestUrl(rawUrl: String?): String? {
+        val trimmed = rawUrl?.trim().orEmpty()
+        if (!trimmed.startsWith("http://", ignoreCase = true) &&
+            !trimmed.startsWith("https://", ignoreCase = true)
+        ) {
+            return null
+        }
+        return trimmed.takeIf { it.contains("generate_204", ignoreCase = true) }
+    }
+
     internal fun buildOptionsHeaderLine(
         tcpConcurrency: Int,
         verifyConcurrency: Int,
@@ -315,13 +325,19 @@ object V2WCoreScanner {
                         val parts = l.substring(completeIdx).split("\t")
                         if (parts.size >= 3) {
                             val totalSuccess = parts[1].toIntOrNull() ?: successCount
-                            val totalFailed = parts[2].toIntOrNull() ?: 0
+                            val totalFailed = parts[2].toIntOrNull() ?: failCount
                             successCount = totalSuccess
                             failCount = totalFailed
                         }
                     } else if (l.isNotEmpty()) {
+                        if (l.startsWith("FAILED\t")) {
+                            failCount++
+                        }
                         GeekModeLogger.log("v2w-core-out", l)
                     }
+                }
+                if (!isActive && !stoppedEarly) {
+                    stoppedEarly = true
                 }
             }
         } finally {

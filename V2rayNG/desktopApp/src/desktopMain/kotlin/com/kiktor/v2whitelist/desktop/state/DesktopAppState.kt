@@ -2120,8 +2120,7 @@ class DesktopAppState(
     }
 
     private fun testTunnelConnectivity(port: Int = socksPort.value): Boolean {
-        val customUrl = connectionCheckServiceUrl.value.trim()
-            .takeIf { it.contains("generate_204", ignoreCase = true) }
+        val customUrl = V2WCoreScanner.resolveGenerate204DestUrl(connectionCheckServiceUrl.value)
         val checkUrls = listOfNotNull(
             customUrl,
             "https://cp.cloudflare.com/generate_204",
@@ -2363,7 +2362,7 @@ class DesktopAppState(
                 concurrency = v2wCoreSockets.value,
                 tcpConcurrency = tcpPrecheckConcurrency.value,
                 fullVerifyMode = fullVerify,
-                destUrl = connectionCheckServiceUrl.value.takeIf { it.startsWith("http://") || it.startsWith("https://") },
+                destUrl = V2WCoreScanner.resolveGenerate204DestUrl(connectionCheckServiceUrl.value),
                 endpointUrl = customEpUrl,
                 endpointE2e = endpointE2eCheckEnabled.value,
                 serviceCheck = serviceCheckEnabled.value,
@@ -2819,27 +2818,124 @@ class DesktopAppState(
         settingsRepo.clearAll()
         DesktopStorageManager.clearDiskStorage()
 
-        // Сброс StateFlow к дефолтным значениям
+        // Сброс всех StateFlow-параметров к дефолтным значениям
         _scenario.value = AppScenario.AUTO
         _selectedGuid.value = null
+        _pingMap.value = emptyMap()
+        _removedSubIds.value = emptySet()
+        isManualSelection.value = false
+        locationFilterMode.value = LocationFilterMode.EXCLUDE
+        locationFilterSet.value = ServerTagResolver.getDefaultFilterSet()
+
+        subscriptionUrl.value = ""
+        xrayBinaryPath.value = xrayRunner.findXrayExecutable(null)?.absolutePath.orEmpty()
+        v2wScanPath.value = V2WCoreScanner.findV2WScanExecutable(null)?.absolutePath.orEmpty()
         socksPort.value = 10808
         httpPort.value = 10809
         localProxyPort.value = 10808
         autoEnableSystemProxy.value = false
         allowLan.value = false
         routingMode.value = if (DesktopTunManager.isWindows) "TUN" else "PROXY"
-        minSpeedThresholdMbps.value = 1.0
-        serviceCheckEnabled.value = false
-        speedTestOnCheck.value = true
+
+        uiTheme.value = "CYAN"
+        uiCompactCards.value = false
+        minimizeToTray.value = true
+        themeMode.value = "DARK"
+        themePalette.value = "CYAN"
+        pureBlackAmoled.value = false
+        appLanguage.value = "RU"
+        meshGradientEnabled.value = false
+        meshGradientMode.value = "STATIC"
+
+        subscriptionUserAgent.value = "v2rayNG/1.10.x"
+        subscriptionUpdateOnlyViaProxy.value = false
+        subscriptionThreads.value = 15
+        subscriptionAutoUpdate.value = true
+        subscriptionUpdateIntervalMinutes.value = 30
+        subscriptionUpdateOnStartup.value = true
+        yandexTranslateUpdateEnabled.value = false
+
+        domainSplitTunnelingEnabled.value = true
+        domainWhitelistMode.value = false
+        bypassRussianServices.value = true
+        customDirectDomains.value = ""
+        customProxyDomains.value = ""
+
+        useCustomEndpoint.value = false
+        customEndpointUrl.value = ""
+        customEndpointSubUrl.value = ""
+        endpointE2eCheckEnabled.value = true
+
+        personalServersEnabled.value = false
+        personalSelectedGuid.value = ""
+        personalIgnoreExitNode.value = true
+        personalAutoConnectOnStartup.value = true
+        personalFallbackPublic.value = true
+        personalBlacklistRule.value = com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PERSONAL_AUTO
+        personalWhitelistRule.value = com.kiktor.v2whitelist.core.model.NetworkBindingRule.USE_PUBLIC_SUBS
+
+        globalSni.value = ""
+        cloudflareIp.value = ""
+        customUserAgent.value = "Auto (Default)"
+        vipCacheLimit.value = 5
+
         smartConnectBatchSize.value = 20
         verifyConcurrency.value = 4
+        smartDistributionPreset.value = "EQUAL"
+        useV2WCore.value = true
+        useFallbackScanner.value = true
         tcpPrecheckConcurrency.value = 50
         v2wCoreSockets.value = 35
         v2wFullVerifyMode.value = false
-        subscriptionThreads.value = 15
+
+        removeInsecureProfiles.value = true
+        testProfileBeforeConnect.value = true
+        serviceCheckEnabled.value = false
+        servicesList.value = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.DEFAULT_SERVICES
+        speedTestOnCheck.value = true
+        speedTestDownloadBytes.value = 2000000
+        speedTestTimeoutMs.value = 3000
+        minSpeedThresholdMbps.value = 1.0
+
+        autoFailover.value = true
+        heartbeatIntervalSeconds.value = 30
         smartFailover.value = true
+        failoverDegradationThresholdKb.value = 3
+        failoverStuckDurationSeconds.value = 3
+
+        networkCheckEnabled.value = true
+        networkCheckPrimaryDomain.value = "google.com"
+        networkCheckFallbackDomain.value = "ya.ru"
         autoCheckUpdates.value = true
+        receiveBetaUpdates.value = false
+        connectionCheckServiceUrl.value = "https://api.ip.sb/geoip"
+
+        preferIpv6.value = false
+        useLocalDns.value = true
+        useFakeDns.value = false
+        additionalHttpProxy.value = false
+        vpnDns.value = "1.1.1.1"
+        vpnBypassLan.value = true
+        vpnInterfaceAddress.value = "10.10.14.1"
+        vpnMtu.value = 1500
+        sniffingEnabled.value = true
+        routeOnly.value = false
+        allowInsecure.value = false
+        localProxyLogin.value = "v2w_${UUID.randomUUID().toString().take(6)}"
+        localProxyPassword.value = UUID.randomUUID().toString().take(10)
+        remoteDns.value = "1.1.1.1"
+        internalDns.value = "223.5.5.5"
+        dnsHosts.value = ""
+        muxEnabled.value = false
+        muxTcpConcurrency.value = 8
+        muxXudpConcurrency.value = 8
+        fragmentEnabled.value = false
+        fragmentLength.value = "50-100"
+        fragmentInterval.value = "10-20"
+        fragmentPackets.value = "tlshello"
+
         settingsRevision.value++
+        restartPeriodicSubscriptionUpdates()
         restartPeriodicAppUpdateCheck()
 
         // Восстановление подписок по умолчанию

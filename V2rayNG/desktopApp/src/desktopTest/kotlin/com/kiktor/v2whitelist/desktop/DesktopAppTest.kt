@@ -461,5 +461,64 @@ class DesktopAppTest {
         assertTrue(repo.getSocksPort() > 0)
         assertTrue(repo.getHttpPort() > 0)
     }
+
+    @Test
+    fun testResolveGenerate204DestUrlFiltersOutGeoIpEndpoints() {
+        assertNull(com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl(null))
+        assertNull(com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl(""))
+        assertNull(com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl("https://api.ip.sb/geoip"))
+        assertNull(com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl("ftp://cp.cloudflare.com/generate_204"))
+        assertEquals(
+            "https://cp.cloudflare.com/generate_204",
+            com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl("  https://cp.cloudflare.com/generate_204  ")
+        )
+        assertEquals(
+            "http://www.gstatic.com/generate_204",
+            com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.resolveGenerate204DestUrl("http://www.gstatic.com/generate_204")
+        )
+    }
+
+    @Test
+    fun testResetAllSettingsAndDataResetsAllStateFlowsToDefaults() = runTest {
+        val serverRepo = InMemoryServerRepository()
+        val settingsRepo = InMemorySettingsRepository()
+        val state = DesktopAppState(
+            serverRepo = serverRepo,
+            settingsRepo = settingsRepo,
+            xrayRunner = XrayDesktopRunner(),
+            autoCheckNetworkOnStart = false
+        )
+
+        state.saveSettings(
+            subUrl = "https://example.com/sub",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 11809,
+            socksP = 11808,
+            customEndpoint = true,
+            customEndpointConfig = "vless://uuid@1.2.3.4:443",
+            customEndpointSub = "https://example.com/ep",
+            checkUrl = "https://custom.example/geoip",
+            v2wCore = false,
+            v2wFullVerify = true
+        )
+        state.personalServersEnabled.value = true
+        state.personalSelectedGuid.value = "guid-123"
+        state.setGlobalSni("sni.example.com")
+        state.setCloudflareIp("1.0.0.1")
+
+        state.resetAllSettingsAndData()
+
+        assertEquals("https://api.ip.sb/geoip", state.connectionCheckServiceUrl.value)
+        assertEquals(false, state.useCustomEndpoint.value)
+        assertEquals("", state.customEndpointUrl.value)
+        assertEquals("", state.customEndpointSubUrl.value)
+        assertEquals(true, state.useV2WCore.value)
+        assertEquals(false, state.v2wFullVerifyMode.value)
+        assertEquals(false, state.personalServersEnabled.value)
+        assertEquals("", state.personalSelectedGuid.value)
+        assertEquals("", state.globalSni.value)
+        assertEquals("", state.cloudflareIp.value)
+    }
 }
 

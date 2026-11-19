@@ -169,8 +169,11 @@ class DesktopSmartConnectManager(
             val v2wCoreSockets = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
             val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", false)
             val testBeforeConnect = settingsRepo.getBoolean("pref_test_before_connect", true)
-            val connCheckUrl = settingsRepo.getString("pref_conn_check_url", "").trim()
-                .takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            // pref_conn_check_url на Desktop по умолчанию указывает на GeoIP API (api.ip.sb/geoip),
+            // поэтому передаём в v2w-core только URL, явно предназначенный для HTTP 204-проверки.
+            val connCheckUrl = V2WCoreScanner.resolveGenerate204DestUrl(
+                settingsRepo.getString("pref_conn_check_url", "")
+            )
 
             // ══════════════════════════════════════════════════════════════════════════════
             // ЭТАП 0: Проверка и применение доверенных серверов (Personal Servers)
