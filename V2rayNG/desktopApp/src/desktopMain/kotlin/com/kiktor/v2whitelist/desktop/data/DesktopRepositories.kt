@@ -503,14 +503,13 @@ class DesktopFileSettingsRepository : SettingsRepository {
     private var smartFailover: Boolean = true
     private var socksPort: Int = 10808
     private var httpPort: Int = 10809
+    private val repoLock = Any()
+    private var inBatch = false
+    private var dirtyInBatch = false
 
     init {
         loadFromDisk()
     }
-
-    private val repoLock = Any()
-    private var inBatch = false
-    private var dirtyInBatch = false
 
     private fun loadFromDisk() {
         synchronized(repoLock) {

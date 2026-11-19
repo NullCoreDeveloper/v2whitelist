@@ -454,5 +454,12 @@ class DesktopAppTest {
         assertTrue(res.success)
         assertEquals(42L, res.latencyMs)
     }
+
+    @Test
+    fun testDesktopFileSettingsRepositoryInitializationDoesNotThrowNpe() {
+        val repo = com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository()
+        assertTrue(repo.getSocksPort() > 0)
+        assertTrue(repo.getHttpPort() > 0)
+    }
 }
 
