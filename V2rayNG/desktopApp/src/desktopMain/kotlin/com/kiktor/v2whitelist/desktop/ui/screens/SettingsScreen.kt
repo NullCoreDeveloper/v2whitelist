@@ -815,7 +815,7 @@ fun SettingsScreen(
                     SettingSwitchRow(
                         title = strings.serviceCheckEnable,
                         desc = if (isExitNodeActive) {
-                            "${strings.serviceCheckEnableDesc} (отключено при активном конечном узле — проверяется только e2e цепочка)"
+                            "${strings.serviceCheckEnableDesc}${strings.serviceCheckEndpointDisabledSuffix}"
                         } else {
                             strings.serviceCheckEnableDesc
                         },
@@ -1123,13 +1123,13 @@ fun SettingsScreen(
                 val proxyAppsCount = state.appSplitProxyApps.collectAsState().value.size
                 val effectiveTunDriver = DesktopTunManager.resolveEffectiveTunEngine(tunEnginePref, appSplitEnabled)
                 SettingsCard(
-                    title = "Раздельное туннелирование по приложениям",
+                    title = strings.appSplitCardTitle,
                     icon = Icons.Default.Apps,
-                    description = "Маршрутизация конкретных программ в Direct (обход VPN) или Proxy в режиме TUN"
+                    description = strings.appSplitCardDesc
                 ) {
                     SettingSwitchRow(
-                        title = "Включить разделение по приложениям (TUN)",
-                        desc = "При включении автоматически задействуется кастомный TUN-драйвер v2w-tun (если в настройках TUN выбран режим Авто)",
+                        title = strings.appSplitEnableTitle,
+                        desc = strings.appSplitEnableDesc,
                         checked = appSplitEnabled,
                         onCheckedChange = { enabled ->
                             appSplitEnabled = enabled
@@ -1138,7 +1138,7 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Политика по умолчанию для приложений вне списков:",
+                        text = strings.appSplitDefaultPolicyLabel,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1148,7 +1148,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SettingsChip(
-                            label = "Всё в VPN (кроме исключений)",
+                            label = strings.appSplitModeBypassLabel,
                             selected = appSplitMode == AppSplitMode.BYPASS,
                             onClick = {
                                 appSplitMode = AppSplitMode.BYPASS
@@ -1156,7 +1156,7 @@ fun SettingsScreen(
                             }
                         )
                         SettingsChip(
-                            label = "Только выбранные в VPN",
+                            label = strings.appSplitModeOnlyProxyLabel,
                             selected = appSplitMode == AppSplitMode.ONLY_PROXY,
                             onClick = {
                                 appSplitMode = AppSplitMode.ONLY_PROXY
@@ -1172,18 +1172,18 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Выбрать приложения (Без VPN: $directAppsCount • Через VPN: $proxyAppsCount)", fontSize = 13.sp)
+                        Text("${strings.appSplitSelectAppsPrefix} (${strings.appSplitBypassTag}: $directAppsCount • ${strings.appSplitVpnTag}: $proxyAppsCount)", fontSize = 13.sp)
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Активный TUN-драйвер при подключении: ${if (effectiveTunDriver == TunEnginePreference.V2W_TUN) "v2w-tun (кастомный)" else "tun2socks"}",
+                        text = "${strings.appSplitActiveDriverPrefix} ${if (effectiveTunDriver == TunEnginePreference.V2W_TUN) strings.appSplitDriverCustomName else "tun2socks"}",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary
                     )
                     if (appSplitEnabled && tunEnginePref == TunEnginePreference.TUN2SOCKS) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Внимание: вручную выбран tun2socks — разделение по приложениям работает только с v2w-tun (или в режиме Авто).",
+                            text = strings.appSplitTun2socksWarning,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -1808,16 +1808,16 @@ fun SettingsScreen(
 
                 // Выбор TUN-драйвера (tun2socks / кастомный v2w-tun)
                 SettingsCard(
-                    title = "TUN-драйвер (движок маршрутизации)",
+                    title = strings.tunEngineCardTitle,
                     icon = Icons.Default.SettingsInputComponent,
-                    description = "По умолчанию используется tun2socks; при включении сплита по приложениям автоматически выбирается v2w-tun, либо можно включить v2w-tun вручную"
+                    description = strings.tunEngineCardDesc
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SettingsChip(
-                            label = "Авто (tun2socks / v2w-tun)",
+                            label = strings.tunEngineAuto,
                             selected = tunEnginePref == TunEnginePreference.AUTO,
                             onClick = { tunEnginePref = TunEnginePreference.AUTO }
                         )
@@ -1827,7 +1827,7 @@ fun SettingsScreen(
                             onClick = { tunEnginePref = TunEnginePreference.TUN2SOCKS }
                         )
                         SettingsChip(
-                            label = "Кастомный (v2w-tun)",
+                            label = strings.tunEngineCustom,
                             selected = tunEnginePref == TunEnginePreference.V2W_TUN,
                             onClick = { tunEnginePref = TunEnginePreference.V2W_TUN }
                         )
@@ -1836,8 +1836,8 @@ fun SettingsScreen(
                     val effectiveNow = DesktopTunManager.resolveEffectiveTunEngine(tunEnginePref, appSplitEnabled)
                     Text(
                         text = when (effectiveNow) {
-                            TunEnginePreference.V2W_TUN -> "Будет использован: кастомный v2w-tun (gVisor + маршрутизация по процессам)"
-                            else -> "Будет использован: стандартный tun2socks"
+                            TunEnginePreference.V2W_TUN -> strings.tunEngineEffectiveCustom
+                            else -> strings.tunEngineEffectiveTun2socks
                         },
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary

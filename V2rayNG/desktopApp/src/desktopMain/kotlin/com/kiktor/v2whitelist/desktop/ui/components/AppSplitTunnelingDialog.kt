@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.util.DesktopAppEntry
 import com.kiktor.v2whitelist.desktop.util.DesktopInstalledAppsProvider
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
     val show by state.showAppSplitDialog.collectAsState()
     if (!show) return
 
+    val strings = LocalAppStrings.current
     val splitMode by state.appSplitTunnelingMode.collectAsState()
     val directApps by state.appSplitDirectApps.collectAsState()
     val proxyApps by state.appSplitProxyApps.collectAsState()
@@ -89,7 +91,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
         },
         title = {
             Text(
-                text = "Маршрутизация приложений (TUN)",
+                text = strings.appSplitDialogTitle,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -101,7 +103,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
             ) {
                 // Выбор режима по умолчанию
                 Text(
-                    text = "Политика по умолчанию для остальных приложений:",
+                    text = strings.appSplitDefaultPolicyLabel,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -112,21 +114,21 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                     FilterChip(
                         selected = splitMode == AppSplitMode.BYPASS,
                         onClick = { state.setAppSplitMode(AppSplitMode.BYPASS) },
-                        label = { Text("Все в VPN (кроме исключений)", fontSize = 11.sp) },
+                        label = { Text(strings.appSplitModeBypassLabel, fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = splitMode == AppSplitMode.ONLY_PROXY,
                         onClick = { state.setAppSplitMode(AppSplitMode.ONLY_PROXY) },
-                        label = { Text("Только выбранные в VPN", fontSize = 11.sp) },
+                        label = { Text(strings.appSplitModeOnlyProxyLabel, fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                 }
                 Text(
                     text = if (splitMode == AppSplitMode.BYPASS) {
-                        "Весь компьютер работает через VPN. Отметьте «Без VPN» для программ, которым нужен обычный интернет."
+                        strings.appSplitModeBypassHint
                     } else {
-                        "Обычный интернет для всех программ. Отметьте «Через VPN» только для нужных приложений."
+                        strings.appSplitModeOnlyProxyHint
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -141,14 +143,14 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                     OutlinedTextField(
                         value = manualInput,
                         onValueChange = { manualInput = it },
-                        placeholder = { Text("Имя процесса или путь (напр. steam.exe / firefox)", fontSize = 11.sp) },
+                        placeholder = { Text(strings.appSplitManualPlaceholder, fontSize = 11.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = manualTarget == "DIRECT",
                         onClick = { manualTarget = if (manualTarget == "DIRECT") "PROXY" else "DIRECT" },
-                        label = { Text(if (manualTarget == "DIRECT") "Без VPN" else "Через VPN", fontSize = 11.sp) }
+                        label = { Text(if (manualTarget == "DIRECT") strings.appSplitBypassTag else strings.appSplitVpnTag, fontSize = 11.sp) }
                     )
                     IconButton(
                         onClick = {
@@ -159,7 +161,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                             }
                         }
                     ) {
-                        Icon(Icons.Default.AddCircle, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -171,24 +173,24 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                     FilterChip(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        label = { Text("Запущенные (${runningApps.size})", fontSize = 11.sp) }
+                        label = { Text("${strings.appSplitTabRunning} (${runningApps.size})", fontSize = 11.sp) }
                     )
                     FilterChip(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        label = { Text("Установленные (${installedApps.size})", fontSize = 11.sp) }
+                        label = { Text("${strings.appSplitTabInstalled} (${installedApps.size})", fontSize = 11.sp) }
                     )
                     FilterChip(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
-                        label = { Text("Выбранные (${configuredEntries.size})", fontSize = 11.sp) }
+                        label = { Text("${strings.appSplitTabSelected} (${configuredEntries.size})", fontSize = 11.sp) }
                     )
                 }
 
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Поиск приложения или процесса…", fontSize = 12.sp) },
+                    placeholder = { Text(strings.appSplitSearchPlaceholder, fontSize = 12.sp) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -207,7 +209,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Список пуст",
+                            text = strings.appSplitEmptyList,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -255,13 +257,13 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                                     FilterChip(
                                         selected = isDirect,
                                         onClick = { state.setAppSplitRoute(app.id, if (isDirect) "NONE" else "DIRECT") },
-                                        label = { Text("Без VPN", fontSize = 10.sp) }
+                                        label = { Text(strings.appSplitBypassTag, fontSize = 10.sp) }
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     FilterChip(
                                         selected = isProxy,
                                         onClick = { state.setAppSplitRoute(app.id, if (isProxy) "NONE" else "PROXY") },
-                                        label = { Text("Через VPN", fontSize = 10.sp) }
+                                        label = { Text(strings.appSplitVpnTag, fontSize = 10.sp) }
                                     )
                                 }
                             }
@@ -275,7 +277,7 @@ fun AppSplitTunnelingDialog(state: DesktopAppState) {
                 onClick = { state.dismissAppSplitDialog() },
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Готово")
+                Text(strings.done)
             }
         }
     )

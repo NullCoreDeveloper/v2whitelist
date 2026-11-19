@@ -420,6 +420,41 @@ interface AppStrings {
     val traySystemProxyOn: String
     val traySystemProxyOff: String
     val trayExit: String
+
+    // SmartConnect / Status / Exit-node & Services
+    val smartConnectScanning: String
+    val serviceCheckEndpointDisabledSuffix: String
+    val servCheckEndpointDisabledBanner: String
+
+    // TUN Engine & App Split Tunneling
+    val tunEngineCardTitle: String
+    val tunEngineCardDesc: String
+    val tunEngineAuto: String
+    val tunEngineCustom: String
+    val tunEngineEffectiveCustom: String
+    val tunEngineEffectiveTun2socks: String
+    val appSplitCardTitle: String
+    val appSplitCardDesc: String
+    val appSplitEnableTitle: String
+    val appSplitEnableDesc: String
+    val appSplitDefaultPolicyLabel: String
+    val appSplitModeBypassLabel: String
+    val appSplitModeOnlyProxyLabel: String
+    val appSplitSelectAppsPrefix: String
+    val appSplitActiveDriverPrefix: String
+    val appSplitDriverCustomName: String
+    val appSplitTun2socksWarning: String
+    val appSplitDialogTitle: String
+    val appSplitModeBypassHint: String
+    val appSplitModeOnlyProxyHint: String
+    val appSplitManualPlaceholder: String
+    val appSplitBypassTag: String
+    val appSplitVpnTag: String
+    val appSplitTabRunning: String
+    val appSplitTabInstalled: String
+    val appSplitTabSelected: String
+    val appSplitSearchPlaceholder: String
+    val appSplitEmptyList: String
 }
 
 object StringsRu : AppStrings {
@@ -832,6 +867,37 @@ object StringsRu : AppStrings {
     override val traySystemProxyOn: String = "✔ Системный прокси ОС: ВКЛ (нажать — выкл)"
     override val traySystemProxyOff: String = "Системный прокси ОС: ВЫКЛ (нажать — вкл)"
     override val trayExit: String = "Выход"
+    override val smartConnectScanning: String = "Поиск и проверка серверов…"
+    override val serviceCheckEndpointDisabledSuffix: String = " (отключено при активном конечном узле — проверяется только e2e цепочка)"
+    override val servCheckEndpointDisabledBanner: String = "Конечный узел активен: при автоподборе проверка сервисов отключена (проверяется только e2e цепочка). Здесь можно проверить текущее подключение вручную."
+    override val tunEngineCardTitle: String = "TUN-движок (драйвер маршрутизации)"
+    override val tunEngineCardDesc: String = "По умолчанию используется tun2socks; при включении разделения по приложениям автоматически выбирается v2w-tun, либо можно включить его вручную"
+    override val tunEngineAuto: String = "Авто (tun2socks / v2w-tun)"
+    override val tunEngineCustom: String = "Кастомный (v2w-tun)"
+    override val tunEngineEffectiveCustom: String = "Будет использован: кастомный v2w-tun (gVisor + маршрутизация по процессам)"
+    override val tunEngineEffectiveTun2socks: String = "Будет использован: стандартный tun2socks"
+    override val appSplitCardTitle: String = "Раздельное туннелирование по приложениям"
+    override val appSplitCardDesc: String = "Выбор программ, которые пойдут без VPN или через VPN в режиме TUN"
+    override val appSplitEnableTitle: String = "Включить разделение по приложениям (TUN)"
+    override val appSplitEnableDesc: String = "При включении автоматически задействуется кастомный TUN-драйвер v2w-tun (если в настройках TUN выбран режим Авто)"
+    override val appSplitDefaultPolicyLabel: String = "Политика по умолчанию для остальных приложений:"
+    override val appSplitModeBypassLabel: String = "Все в VPN (кроме исключений)"
+    override val appSplitModeOnlyProxyLabel: String = "Только выбранные в VPN"
+    override val appSplitSelectAppsPrefix: String = "Выбрать приложения"
+    override val appSplitActiveDriverPrefix: String = "Активный TUN-драйвер при подключении:"
+    override val appSplitDriverCustomName: String = "v2w-tun (кастомный)"
+    override val appSplitTun2socksWarning: String = "Внимание: вручную выбран tun2socks — разделение по приложениям работает только с v2w-tun (или в режиме Авто)."
+    override val appSplitDialogTitle: String = "Маршрутизация приложений (TUN)"
+    override val appSplitModeBypassHint: String = "Весь компьютер работает через VPN. Отметьте «Без VPN» для программ, которым нужен обычный интернет."
+    override val appSplitModeOnlyProxyHint: String = "Обычный интернет для всех программ. Отметьте «Через VPN» только для нужных приложений."
+    override val appSplitManualPlaceholder: String = "Имя процесса или путь (напр. steam.exe / firefox)"
+    override val appSplitBypassTag: String = "Без VPN"
+    override val appSplitVpnTag: String = "Через VPN"
+    override val appSplitTabRunning: String = "Запущенные"
+    override val appSplitTabInstalled: String = "Установленные"
+    override val appSplitTabSelected: String = "Выбранные"
+    override val appSplitSearchPlaceholder: String = "Поиск приложения или процесса…"
+    override val appSplitEmptyList: String = "Список пуст"
 }
 
 object StringsEn : AppStrings {
@@ -1244,6 +1310,37 @@ object StringsEn : AppStrings {
     override val traySystemProxyOn: String = "✔ System Proxy: ON (click to disable)"
     override val traySystemProxyOff: String = "System Proxy: OFF (click to enable)"
     override val trayExit: String = "Exit"
+    override val smartConnectScanning: String = "Scanning and verifying servers…"
+    override val serviceCheckEndpointDisabledSuffix: String = " (disabled while exit node is active — only e2e chain is checked)"
+    override val servCheckEndpointDisabledBanner: String = "Exit node is active: service checks are disabled during auto-connect (only e2e chain is tested). You can still test the active connection manually here."
+    override val tunEngineCardTitle: String = "TUN Engine (Routing Driver)"
+    override val tunEngineCardDesc: String = "Uses tun2socks by default; automatically switches to v2w-tun when per-app split tunneling is enabled, or you can select v2w-tun manually"
+    override val tunEngineAuto: String = "Auto (tun2socks / v2w-tun)"
+    override val tunEngineCustom: String = "Custom (v2w-tun)"
+    override val tunEngineEffectiveCustom: String = "Will use: custom v2w-tun (gVisor + per-process routing)"
+    override val tunEngineEffectiveTun2socks: String = "Will use: standard tun2socks"
+    override val appSplitCardTitle: String = "Per-App Split Tunneling"
+    override val appSplitCardDesc: String = "Choose which programs bypass VPN or go through VPN in TUN mode"
+    override val appSplitEnableTitle: String = "Enable per-app split tunneling (TUN)"
+    override val appSplitEnableDesc: String = "Automatically enables the custom v2w-tun driver when TUN Engine is set to Auto"
+    override val appSplitDefaultPolicyLabel: String = "Default policy for other applications:"
+    override val appSplitModeBypassLabel: String = "All via VPN (except bypassed)"
+    override val appSplitModeOnlyProxyLabel: String = "Only selected via VPN"
+    override val appSplitSelectAppsPrefix: String = "Select applications"
+    override val appSplitActiveDriverPrefix: String = "Active TUN driver on connect:"
+    override val appSplitDriverCustomName: String = "v2w-tun (custom)"
+    override val appSplitTun2socksWarning: String = "Warning: tun2socks is selected manually — per-app split tunneling only works with v2w-tun (or Auto mode)."
+    override val appSplitDialogTitle: String = "Application Routing (TUN)"
+    override val appSplitModeBypassHint: String = "All system traffic goes through VPN. Mark «No VPN» for programs that should use your regular internet."
+    override val appSplitModeOnlyProxyHint: String = "Regular internet for all programs. Mark «Via VPN» only for selected applications."
+    override val appSplitManualPlaceholder: String = "Process name or path (e.g. steam.exe / firefox)"
+    override val appSplitBypassTag: String = "No VPN"
+    override val appSplitVpnTag: String = "Via VPN"
+    override val appSplitTabRunning: String = "Running"
+    override val appSplitTabInstalled: String = "Installed"
+    override val appSplitTabSelected: String = "Selected"
+    override val appSplitSearchPlaceholder: String = "Search application or process…"
+    override val appSplitEmptyList: String = "List is empty"
 }
 
 object StringsZh : AppStrings {
@@ -1653,6 +1750,40 @@ object StringsZh : AppStrings {
     override val traySystemProxyOn: String = "✔ 系统代理: 已开启 (点击关闭)"
     override val traySystemProxyOff: String = "系统代理: 已关闭 (点击开启)"
     override val trayExit: String = "退出"
+    override val tcpPrecheckLabel: String = "TCP 预检并发上限（默认 50）"
+    override val v2wFullVerifyTitle: String = "在 v2w-core 中执行完整校验（Xray 仅测速）"
+    override val v2wFullVerifyDesc: String = "204、服务与出口节点校验均在 v2w-core 中异步执行；Xray 仅用于测速"
+    override val smartConnectScanning: String = "正在扫描并检测服务器…"
+    override val serviceCheckEndpointDisabledSuffix: String = "（启用出口节点时已禁用 — 仅检测端到端链路）"
+    override val servCheckEndpointDisabledBanner: String = "出口节点已启用：自动选路时将跳过服务检测（仅检测端到端链路）。您仍可在此手动测试当前连接。"
+    override val tunEngineCardTitle: String = "TUN 引擎（路由驱动）"
+    override val tunEngineCardDesc: String = "默认使用 tun2socks；开启按应用分流时将自动切换为 v2w-tun，也可手动启用 v2w-tun"
+    override val tunEngineAuto: String = "自动 (tun2socks / v2w-tun)"
+    override val tunEngineCustom: String = "自定义 (v2w-tun)"
+    override val tunEngineEffectiveCustom: String = "将使用：自定义 v2w-tun（gVisor + 按进程分流）"
+    override val tunEngineEffectiveTun2socks: String = "将使用：标准 tun2socks"
+    override val appSplitCardTitle: String = "按应用分流隧道"
+    override val appSplitCardDesc: String = "选择在 TUN 模式下绕过 VPN 或通过 VPN 代理的应用程序"
+    override val appSplitEnableTitle: String = "启用按应用分流 (TUN)"
+    override val appSplitEnableDesc: String = "若 TUN 引擎设为“自动”，开启此项将自动启用自定义 v2w-tun 驱动"
+    override val appSplitDefaultPolicyLabel: String = "其他应用的默认策略："
+    override val appSplitModeBypassLabel: String = "全部走 VPN（排除列表除外）"
+    override val appSplitModeOnlyProxyLabel: String = "仅所选应用走 VPN"
+    override val appSplitSelectAppsPrefix: String = "选择应用"
+    override val appSplitActiveDriverPrefix: String = "连接时使用的 TUN 驱动："
+    override val appSplitDriverCustomName: String = "v2w-tun（自定义）"
+    override val appSplitTun2socksWarning: String = "注意：您已手动选择 tun2socks — 按应用分流仅在使用 v2w-tun（或自动模式）时生效。"
+    override val appSplitDialogTitle: String = "应用分流路由 (TUN)"
+    override val appSplitModeBypassHint: String = "全部系统流量均通过 VPN。请为需要直连网络的程序标记“不走 VPN”。"
+    override val appSplitModeOnlyProxyHint: String = "所有程序默认直连网络。请仅为需要代理的应用标记“走 VPN”。"
+    override val appSplitManualPlaceholder: String = "进程名或路径（如 steam.exe / firefox）"
+    override val appSplitBypassTag: String = "不走 VPN"
+    override val appSplitVpnTag: String = "走 VPN"
+    override val appSplitTabRunning: String = "运行中"
+    override val appSplitTabInstalled: String = "已安装"
+    override val appSplitTabSelected: String = "已选择"
+    override val appSplitSearchPlaceholder: String = "搜索应用或进程…"
+    override val appSplitEmptyList: String = "列表为空"
 }
 
 object StringsFa : AppStrings {
@@ -2062,6 +2193,40 @@ object StringsFa : AppStrings {
     override val traySystemProxyOn: String = "✔ پروکسی سیستم: روشن (برای خاموش کردن کلیک کنید)"
     override val traySystemProxyOff: String = "پروکسی سیستم: خاموش (برای روشن کردن کلیک کنید)"
     override val trayExit: String = "خروج"
+    override val tcpPrecheckLabel: String = "سقف همزمانی پیش‌بررسی TCP (پیش‌فرض ۵۰)"
+    override val v2wFullVerifyTitle: String = "بررسی کامل در v2w-core (Xray فقط سرعت)"
+    override val v2wFullVerifyDesc: String = "تست ۲۰۴، سرویس‌ها و نود خروجی در v2w-core انجام می‌شود؛ Xray فقط سرعت را می‌سنجد"
+    override val smartConnectScanning: String = "در حال اسکن و بررسی سرورها…"
+    override val serviceCheckEndpointDisabledSuffix: String = " (در زمان فعال بودن نود خروجی غیرفعال است — فقط زنجیره e2e بررسی می‌شود)"
+    override val servCheckEndpointDisabledBanner: String = "نود خروجی فعال است: بررسی سرویس‌ها هنگام انتخاب خودکار غیرفعال است (فقط زنجیره e2e آزمایش می‌شود). در اینجا می‌توانید اتصال فعلی را به صورت دستی تست کنید."
+    override val tunEngineCardTitle: String = "موتور TUN (درایور مسیریابی)"
+    override val tunEngineCardDesc: String = "به‌طور پیش‌فرض از tun2socks استفاده می‌شود؛ با فعال کردن تفکیک برنامه‌ها به‌طور خودکار v2w-tun انتخاب می‌شود یا می‌توانید آن را دستی فعال کنید"
+    override val tunEngineAuto: String = "خودکار (tun2socks / v2w-tun)"
+    override val tunEngineCustom: String = "سفارشی (v2w-tun)"
+    override val tunEngineEffectiveCustom: String = "استفاده خواهد شد: موتور سفارشی v2w-tun (gVisor + مسیریابی بر اساس برنامه)"
+    override val tunEngineEffectiveTun2socks: String = "استفاده خواهد شد: tun2socks استاندارد"
+    override val appSplitCardTitle: String = "تونل‌سازی تفکیکی بر اساس برنامه"
+    override val appSplitCardDesc: String = "انتخاب برنامه‌هایی که در حالت TUN بدون VPN یا از طریق VPN متصل شوند"
+    override val appSplitEnableTitle: String = "فعال‌سازی تفکیک برنامه‌ها (TUN)"
+    override val appSplitEnableDesc: String = "اگر موتور TUN روی خودکار باشد، با روشن کردن این گزینه درایور سفارشی v2w-tun فعال می‌شود"
+    override val appSplitDefaultPolicyLabel: String = "سیاست پیش‌فرض برای سایر برنامه‌ها:"
+    override val appSplitModeBypassLabel: String = "همه با VPN (به‌جز استثناها)"
+    override val appSplitModeOnlyProxyLabel: String = "فقط برنامه‌های انتخاب‌شده با VPN"
+    override val appSplitSelectAppsPrefix: String = "انتخاب برنامه‌ها"
+    override val appSplitActiveDriverPrefix: String = "درایور TUN فعال هنگام اتصال:"
+    override val appSplitDriverCustomName: String = "v2w-tun (سفارشی)"
+    override val appSplitTun2socksWarning: String = "توجه: tun2socks به صورت دستی انتخاب شده است — تفکیک برنامه‌ها فقط با v2w-tun (یا حالت خودکار) کار می‌کند."
+    override val appSplitDialogTitle: String = "مسیریابی برنامه‌ها (TUN)"
+    override val appSplitModeBypassHint: String = "تمام ترافیک سیستم از VPN عبور می‌کند. برای برنامه‌هایی که اینترنت عادی نیاز دارند گزینه «بدون VPN» را بزنید."
+    override val appSplitModeOnlyProxyHint: String = "اینترنت عادی برای همه برنامه‌ها. گزینه «با VPN» را فقط برای برنامه‌های دلخواه بزنید."
+    override val appSplitManualPlaceholder: String = "نام پردازش یا مسیر (مثلاً steam.exe / firefox)"
+    override val appSplitBypassTag: String = "بدون VPN"
+    override val appSplitVpnTag: String = "با VPN"
+    override val appSplitTabRunning: String = "در حال اجرا"
+    override val appSplitTabInstalled: String = "نصب‌شده"
+    override val appSplitTabSelected: String = "انتخاب‌شده"
+    override val appSplitSearchPlaceholder: String = "جستجوی برنامه یا پردازش…"
+    override val appSplitEmptyList: String = "فهرست خالی است"
 }
 
 object I18n {

@@ -1620,7 +1620,7 @@ class DesktopAppState(
         smartConnectManager.stop()
         V2WCoreScanner.stop()
         DesktopProfileVerifier.stop()
-        _smartConnectStatus.value = "Инициализация автопоиска…"
+        _smartConnectStatus.value = com.kiktor.v2whitelist.desktop.ui.i18n.I18n.get(appLanguage.value).smartConnectScanning
         xrayRunner.markStarting()
         smartConnectJob = scope.launch {
             try {
