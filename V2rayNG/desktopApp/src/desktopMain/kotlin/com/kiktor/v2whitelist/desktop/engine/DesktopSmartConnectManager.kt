@@ -206,6 +206,8 @@ class DesktopSmartConnectManager(
                 )
                 GeekModeLogger.log("SmartConnect", "PersonalServers: решение для $effectiveScenario -> $decision")
 
+                val personalEndpointUrl = if (personalConfig.ignoreExitNodeForPersonal) null else customEndpointUrl
+
                 when (decision) {
                     is PersonalConnectDecision.DirectNoVpn -> {
                         GeekModeLogger.log("SmartConnect", "PersonalServers: правило сценария DirectNoVpn")
@@ -220,7 +222,7 @@ class DesktopSmartConnectManager(
                             profile = decision.profile,
                             xrayBinaryPath = xrayPath,
                             speedCheckEnabled = false,
-                            customEndpointUrl = customEndpointUrl,
+                            customEndpointUrl = personalEndpointUrl,
                             endpointE2eCheckEnabled = endpointE2eCheck,
                             serviceCheckEnabled = serviceCheckEnabled,
                             servicesToCheck = servicesList,
@@ -260,7 +262,7 @@ class DesktopSmartConnectManager(
                                     tcpConcurrency = tcpPrecheckConcurrency,
                                     fullVerifyMode = v2wFullVerifyMode,
                                     destUrl = connCheckUrl,
-                                    endpointUrl = customEndpointUrl,
+                                    endpointUrl = personalEndpointUrl,
                                     endpointE2e = endpointE2eCheck,
                                     serviceCheck = serviceCheckEnabled,
                                     services = servicesList,
@@ -284,7 +286,7 @@ class DesktopSmartConnectManager(
                                     xrayBinaryPath = xrayPath,
                                     speedCheckEnabled = speedCheckEnabled,
                                     minSpeedMbps = minSpeedMbps,
-                                    customEndpointUrl = customEndpointUrl,
+                                    customEndpointUrl = personalEndpointUrl,
                                     endpointE2eCheckEnabled = endpointE2eCheck,
                                     serviceCheckEnabled = serviceCheckEnabled,
                                     servicesToCheck = servicesList,
@@ -323,7 +325,7 @@ class DesktopSmartConnectManager(
                                 xrayBinaryPath = xrayPath,
                                 speedCheckEnabled = speedCheckEnabled,
                                 minSpeedMbps = minSpeedMbps,
-                                customEndpointUrl = customEndpointUrl,
+                                customEndpointUrl = personalEndpointUrl,
                                 endpointE2eCheckEnabled = endpointE2eCheck,
                                 serviceCheckEnabled = serviceCheckEnabled,
                                 servicesToCheck = servicesList,

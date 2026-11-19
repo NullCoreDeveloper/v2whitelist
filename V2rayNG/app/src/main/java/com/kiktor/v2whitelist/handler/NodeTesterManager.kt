@@ -202,8 +202,9 @@ object NodeTesterManager {
 
         val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
         val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
+        val hasCustomEndpoint = customEndpointEnabled && !endpointUrl.isNullOrBlank()
         val endpointE2eCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_ENDPOINT_E2E_CHECK_ENABLED, true)
-        val effectiveIgnoreCustomEndpoint = if (speedOnlyMode && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+        val effectiveIgnoreCustomEndpoint = if (speedOnlyMode && hasCustomEndpoint) {
             false
         } else {
             ignoreCustomEndpoint
@@ -244,10 +245,6 @@ object NodeTesterManager {
                                ?.toIntOrNull()?.takeIf { it > 0 } ?: 3_000)
             val timeout = if (isHysteria) maxOf(baseTimeout, 4000) else baseTimeout
 
-            val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
-            val hasCustomEndpoint = customEndpointEnabled && !endpointUrl.isNullOrBlank()
-
             val serviceCheckEnabled = ServiceCheckManager.isServiceCheckEnabled()
             val services = ServiceCheckManager.loadServices().filter { it.enabled }
             val effectiveTimeout = if (serviceCheckEnabled && services.isNotEmpty()) maxOf(timeout, 5000) else timeout
@@ -257,7 +254,7 @@ object NodeTesterManager {
                 val measured = if (preMeasuredLatencyMs > 0) preMeasuredLatencyMs else 1L
                 GeekModeLogger.log("NodeTester", "verifyProfile: v2w-core verified $guid (${measured}ms) -> Xray speed-only")
                 measured to true
-            } else if (serviceCheckEnabled && services.isNotEmpty() && !(customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled)) {
+            } else if (serviceCheckEnabled && services.isNotEmpty() && !(hasCustomEndpoint && endpointE2eCheckEnabled)) {
                 if (showStatus) {
                     MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
                 }
@@ -285,10 +282,10 @@ object NodeTesterManager {
                 GeekModeLogger.log("NodeTester", "verifyProfile: server $guid is working, latency = ${elapsed}ms")
                 MmkvManager.encodeServerTestDelayMillis(guid, elapsed)
 
-                // --- Предпоследний этап: e2e проверка HTTP 204 через полноценный туннель к конечному узлу ---
+                // --- Предпоследний этап: цепочка к конечному узлу (для e2e-проверки и замера скорости) ---
                 var testPortForSpeed = port
 
-                if (!speedOnlyMode && ignoreCustomEndpoint && customEndpointEnabled && !endpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                if (!speedOnlyMode && ignoreCustomEndpoint && hasCustomEndpoint) {
                     if (showStatus) {
                         MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,
                             context.getString(R.string.status_verifying_endpoint))
@@ -320,14 +317,16 @@ object NodeTesterManager {
                             return false
                         }
 
-                        val (chainedElapsed, _) = SpeedtestManager.testConnection(context, chainedPort, timeout)
-                        if (chainedElapsed <= 0) {
-                            GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ e2e check through custom endpoint FAILED for server $guid")
-                            chainedController?.stopLoop()
-                            return false
-                        }
+                        if (endpointE2eCheckEnabled) {
+                            val (chainedElapsed, _) = SpeedtestManager.testConnection(context, chainedPort, maxOf(timeout, 6000))
+                            if (chainedElapsed <= 0) {
+                                GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ e2e check through custom endpoint FAILED for server $guid")
+                                chainedController?.stopLoop()
+                                return false
+                            }
 
-                        GeekModeLogger.log("NodeTester", "verifyProfile: e2e custom endpoint check PASSED (${chainedElapsed}ms)")
+                            GeekModeLogger.log("NodeTester", "verifyProfile: e2e custom endpoint check PASSED (${chainedElapsed}ms)")
+                        }
                         testPortForSpeed = chainedPort
                     } catch (e: Exception) {
                         GeekModeLogger.log("NodeTester", "verifyProfile: exception during custom endpoint e2e check: ${e.message}")
@@ -373,6 +372,13 @@ object NodeTesterManager {
                         if (minMbps > 0) {
                             GeekModeLogger.log("NodeTester", "verifyProfile: speed check failed and minMbps > 0, rejecting server $guid")
                             return false
+                        }
+                        if (hasCustomEndpoint && (speedOnlyMode || !endpointE2eCheckEnabled)) {
+                            val (fallbackChainElapsed, _) = SpeedtestManager.testConnection(context, testPortForSpeed, maxOf(timeout, 6000))
+                            if (fallbackChainElapsed <= 0) {
+                                GeekModeLogger.log("NodeTester", "verifyProfile: speed test and fallback e2e check through custom endpoint failed for $guid -> rejecting")
+                                return false
+                            }
                         }
                         if (showStatus) {
                             MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE,

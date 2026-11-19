@@ -85,10 +85,17 @@ object DesktopProfileVerifier {
             )
         }
 
+        val effectiveEndpointUrl = customEndpointUrl?.trim()?.takeIf { epUrl ->
+            if (epUrl.isBlank()) return@takeIf false
+            val epParsed = com.kiktor.v2whitelist.core.config.UniversalConfigParser.parse(epUrl)
+            !(epParsed != null && epParsed.server == profile.server && epParsed.serverPort == profile.serverPort)
+        }
+        val hasEndpoint = !effectiveEndpointUrl.isNullOrBlank()
+
         val testPort = findFreePort()
         val testHttpPort = findFreePort()
-        val singleChainEndpoint = if (speedOnlyMode && endpointE2eCheckEnabled && !customEndpointUrl.isNullOrBlank()) {
-            customEndpointUrl
+        val singleChainEndpoint = if (speedOnlyMode && hasEndpoint) {
+            effectiveEndpointUrl
         } else {
             null
         }
@@ -145,7 +152,7 @@ object DesktopProfileVerifier {
                 GeekModeLogger.log("Verifier", "${profile.remarks}: v2w-core уже выполнил полную проверку (${latency}ms) -> Xray только замер скорости")
             } else {
                 val enabledServices = servicesToCheck.filter { it.enabled }
-                val hasEndpointE2e = endpointE2eCheckEnabled && !customEndpointUrl.isNullOrBlank()
+                val hasEndpointE2e = endpointE2eCheckEnabled && hasEndpoint
                 val useServicesCheck = serviceCheckEnabled && !hasEndpointE2e && enabledServices.isNotEmpty()
 
                 if (useServicesCheck) {
@@ -183,8 +190,8 @@ object DesktopProfileVerifier {
                     GeekModeLogger.log("Verifier", "${profile.remarks}: e2e HTTP 204 успешен (${latency}ms)")
                 }
 
-                // ── Шаг 1.5: e2e HTTP 204 через конечный узел ──
-                if (!customEndpointUrl.isNullOrBlank() && endpointE2eCheckEnabled) {
+                // ── Шаг 1.5: Подключение цепочки через конечный узел (для e2e-проверки и замера скорости) ──
+                if (hasEndpoint) {
                     onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
                     val chainedPort = findFreePort()
                     val chainedHttpPort = findFreePort()
@@ -192,7 +199,7 @@ object DesktopProfileVerifier {
                         socksPort = chainedPort,
                         httpPort = chainedHttpPort,
                         enableHttpInbound = true,
-                        customEndpointUrl = customEndpointUrl
+                        customEndpointUrl = effectiveEndpointUrl
                     )
                     try {
                         val chainedJson = XrayConfigGenerator.generateJson(profile, chainedOptions)
@@ -222,16 +229,18 @@ object DesktopProfileVerifier {
 
                         if (!isActive) throw CancellationException("Верификация отменена")
 
-                        onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
-                        val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
-                        if (chainedLatency <= 0) {
-                            GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
-                            return@withContext VerifyResult(
-                                success = false,
-                                errorMessage = "Конечный узел не отвечает через данный сервер"
-                            )
+                        if (endpointE2eCheckEnabled) {
+                            onStatusUpdate?.invoke("Проверка сквозного соединения через конечный узел…")
+                            val chainedLatency = measureE2ELatency(chainedPort, chainedHttpPort, maxOf(timeoutMs, 6000L))
+                            if (chainedLatency <= 0) {
+                                GeekModeLogger.log("Verifier", "⚠️ e2e проверка через конечный узел FAILED для ${profile.remarks}")
+                                return@withContext VerifyResult(
+                                    success = false,
+                                    errorMessage = "Конечный узел не отвечает через данный сервер"
+                                )
+                            }
+                            GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                         }
-                        GeekModeLogger.log("Verifier", "${profile.remarks}: сквозное соединение через конечный узел успешно (${chainedLatency}ms)")
                         testPortForSpeed = chainedPort
                     } catch (e: CancellationException) {
                         throw e
@@ -276,6 +285,23 @@ object DesktopProfileVerifier {
                         latencyMs = latency,
                         errorMessage = "Не удалось подтвердить скорость ≥ $minSpeedMbps Мбит/с"
                     )
+                } else if (hasEndpoint && (speedOnlyMode || !endpointE2eCheckEnabled)) {
+                    onStatusUpdate?.invoke("Проверка соединения через конечный узел…")
+                    val fallbackChainLatency = measureE2ELatency(
+                        socksPort = testPortForSpeed,
+                        httpPort = if (testPortForSpeed == testPort) testHttpPort else null,
+                        timeoutMs = maxOf(timeoutMs, 6000L)
+                    )
+                    if (fallbackChainLatency <= 0) {
+                        GeekModeLogger.log("Verifier", "⚠️ Замер скорости и контрольный HTTP 204 через конечный узел не прошли для ${profile.remarks} -> отклонен")
+                        return@withContext VerifyResult(
+                            success = false,
+                            latencyMs = latency,
+                            errorMessage = "Конечный узел не отвечает через данный сервер"
+                        )
+                    }
+                    GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости завершился таймаутом, но HTTP 204 через конечный узел успешен (${fallbackChainLatency}ms) -> узел допущен")
+                    onStatusUpdate?.invoke("Профиль прошёл проверку ✔")
                 } else {
                     GeekModeLogger.log("Verifier", "${profile.remarks}: замер скорости завершился таймаутом, но HTTP 204 успешен -> узел допущен")
                     onStatusUpdate?.invoke("Профиль прошёл проверку ✔")
