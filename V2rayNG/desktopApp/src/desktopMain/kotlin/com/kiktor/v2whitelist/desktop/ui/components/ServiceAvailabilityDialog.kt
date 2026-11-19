@@ -75,7 +75,7 @@ fun ServiceAvailabilityDialog(state: DesktopAppState) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Конечный узел активен: проверка доступности выбранных сервисов выполняется через цепочку конечного узла.",
+                                text = "Конечный узел активен: при автоподборе проверка сервисов отключена (проверяется только e2e цепочка). Здесь можно проверить текущее подключение вручную.",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )

@@ -267,7 +267,7 @@ class DesktopSmartConnectManager(
                                     destUrl = connCheckUrl,
                                     endpointUrl = personalEndpointUrl,
                                     endpointE2e = endpointE2eCheck,
-                                    serviceCheck = serviceCheckEnabled,
+                                    serviceCheck = serviceCheckEnabled && personalEndpointUrl.isNullOrBlank(),
                                     services = servicesList,
                                     onNodeHit = { guid, profile, delayMs, checkedByV2W ->
                                         personalChannel.trySend(V2WScanCandidate(guid, profile, delayMs, checkedByV2W))
@@ -455,7 +455,7 @@ class DesktopSmartConnectManager(
                         destUrl = connCheckUrl,
                         endpointUrl = customEndpointUrl,
                         endpointE2e = endpointE2eCheck,
-                        serviceCheck = serviceCheckEnabled,
+                        serviceCheck = serviceCheckEnabled && customEndpointUrl.isNullOrBlank(),
                         services = servicesList,
                         onNodeHit = { guid, profile, delayMs, checkedByV2W ->
                             channel.trySend(V2WScanCandidate(guid, profile, delayMs, checkedByV2W))

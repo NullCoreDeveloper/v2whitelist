@@ -811,11 +811,16 @@ fun SettingsScreen(
                         checked = endpointE2eCheck,
                         onCheckedChange = { endpointE2eCheck = it }
                     )
-                    val isExitNodeActive = state.useCustomEndpoint.collectAsState().value && state.customEndpointUrl.collectAsState().value.isNotBlank()
+                    val isExitNodeActive = useCustomEp && customEpConfig.isNotBlank()
                     SettingSwitchRow(
                         title = strings.serviceCheckEnable,
-                        desc = if (isExitNodeActive) "${strings.serviceCheckEnableDesc} (проверяется через конечный узел)" else strings.serviceCheckEnableDesc,
-                        checked = serviceCheckEnabled,
+                        desc = if (isExitNodeActive) {
+                            "${strings.serviceCheckEnableDesc} (отключено при активном конечном узле — проверяется только e2e цепочка)"
+                        } else {
+                            strings.serviceCheckEnableDesc
+                        },
+                        checked = serviceCheckEnabled && !isExitNodeActive,
+                        enabled = !isExitNodeActive,
                         onCheckedChange = { serviceCheckEnabled = it }
                     )
                     val currentServices by state.servicesList.collectAsState()
