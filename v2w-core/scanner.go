@@ -189,7 +189,11 @@ func (s *Scanner) ProbeHTTP(
 		var bodyStr string
 		if maxBodyBytes > 0 {
 			limited := io.LimitReader(resp.Body, maxBodyBytes)
-			b, _ := io.ReadAll(limited)
+			b, readErr := io.ReadAll(limited)
+			if readErr != nil {
+				httpDone <- httpOutcome{err: fmt.Errorf("body read: %w", readErr)}
+				return
+			}
 			bodyStr = string(b)
 		}
 		httpDone <- httpOutcome{

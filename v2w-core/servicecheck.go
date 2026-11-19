@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -205,38 +206,73 @@ func (s *Scanner) checkChatGPTLite(ctx context.Context, handler ProxyHandler, di
 	return 0, fmt.Errorf("HTTP %d", iosRes.StatusCode)
 }
 
+const geminiMaxBodyBytes = 1_500_000
+
+func resolveGeminiRedirect(baseRaw, location string) (string, error) {
+	loc := strings.TrimSpace(location)
+	if loc == "" {
+		return "", fmt.Errorf("empty redirect location")
+	}
+	if strings.Contains(loc, "/sorry/") {
+		return "", fmt.Errorf("google bot-protection")
+	}
+	baseURL, err := url.Parse(baseRaw)
+	if err != nil {
+		return "", fmt.Errorf("invalid base url: %w", err)
+	}
+	refURL, err := url.Parse(loc)
+	if err != nil {
+		return "", fmt.Errorf("invalid redirect location: %w", err)
+	}
+	resolved := baseURL.ResolveReference(refURL)
+	host := strings.ToLower(resolved.Hostname())
+	if host != "gemini.google.com" && !strings.HasSuffix(host, ".gemini.google.com") {
+		return "", fmt.Errorf("redirect to %s", host)
+	}
+	return resolved.String(), nil
+}
+
 func (s *Scanner) checkGeminiLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (time.Duration, error) {
-	res, err := s.ProbeHTTP(ctx, handler, dialer, "https://gemini.google.com", nil, 65536)
-	if err != nil || res == nil {
-		return 0, err
-	}
-	if res.StatusCode == 429 || strings.Contains(res.Location, "/sorry/") {
-		return 0, fmt.Errorf("google bot-protection")
-	}
-	if (res.StatusCode == 301 || res.StatusCode == 302) && strings.Contains(res.Location, "gemini.google.com") {
-		res2, err2 := s.ProbeHTTP(ctx, handler, dialer, res.Location, nil, 65536)
-		if err2 != nil || res2 == nil {
-			return 0, err2
+	targetURL := "https://gemini.google.com"
+	var res *HTTPProbeResult
+	for hop := 0; hop < 3; hop++ {
+		var err error
+		res, err = s.ProbeHTTP(ctx, handler, dialer, targetURL, nil, geminiMaxBodyBytes)
+		if err != nil || res == nil {
+			return 0, err
 		}
-		if res2.StatusCode == 429 || strings.Contains(res2.Location, "/sorry/") {
+		if res.StatusCode == 429 || strings.Contains(res.Location, "/sorry/") {
 			return 0, fmt.Errorf("google bot-protection")
 		}
-		res = res2
-	}
-	if res.StatusCode >= 200 && res.StatusCode < 400 {
-		lower := strings.ToLower(res.Body)
-		if strings.Contains(lower, "not supported in your country") || strings.Contains(lower, "is not available in your country") {
-			return 0, fmt.Errorf("region unsupported")
-		}
-		if idx := strings.Index(res.Body, geminiMarker); idx != -1 && len(res.Body) >= idx+len(geminiMarker)+3 {
-			reg := strings.ToUpper(res.Body[idx+len(geminiMarker) : idx+len(geminiMarker)+3])
-			if blockedGeminiRegions[reg] {
-				return 0, fmt.Errorf("region %s blocked", reg)
+		if res.StatusCode >= 300 && res.StatusCode < 400 {
+			nextURL, redirErr := resolveGeminiRedirect(targetURL, res.Location)
+			if redirErr != nil {
+				return 0, redirErr
 			}
+			targetURL = nextURL
+			continue
 		}
-		return res.Latency, nil
+		break
 	}
-	return 0, fmt.Errorf("HTTP %d", res.StatusCode)
+	if res == nil {
+		return 0, fmt.Errorf("empty response")
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return 0, fmt.Errorf("HTTP %d", res.StatusCode)
+	}
+	lower := strings.ToLower(res.Body)
+	if strings.Contains(lower, "not supported in your country") ||
+		strings.Contains(lower, "is not available in your country") ||
+		strings.Contains(lower, "isn't supported in your country") {
+		return 0, fmt.Errorf("region unsupported")
+	}
+	if idx := strings.Index(res.Body, geminiMarker); idx != -1 && len(res.Body) >= idx+len(geminiMarker)+3 {
+		reg := strings.ToUpper(res.Body[idx+len(geminiMarker) : idx+len(geminiMarker)+3])
+		if blockedGeminiRegions[reg] {
+			return 0, fmt.Errorf("region %s blocked", reg)
+		}
+	}
+	return res.Latency, nil
 }
 
 func (s *Scanner) checkDiscordLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, rawURL string) (time.Duration, error) {
