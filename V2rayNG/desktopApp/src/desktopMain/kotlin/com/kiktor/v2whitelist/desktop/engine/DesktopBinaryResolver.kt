@@ -55,6 +55,12 @@ object DesktopBinaryResolver {
         listOf("tun2socks")
     }
 
+    val v2wTunBinaryNames: List<String> = if (isWindows) {
+        listOf("v2w-tun.exe", "v2w-tun")
+    } else {
+        listOf("v2w-tun")
+    }
+
     val serviceBinaryNames: List<String> = if (isWindows) {
         listOf("v2w-service.exe", "v2w-service")
     } else {

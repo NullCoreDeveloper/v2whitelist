@@ -14,9 +14,10 @@ echo "=== 1. Проверка бинарников ядра и сканера ==
 mkdir -p "$BIN_DIR" "$ASSETS_DIR"
 
 if [ -d "$ROOT_DIR/v2w-core" ]; then
-    echo "Сборка v2w-scan..."
+    echo "Сборка v2w-scan и v2w-tun..."
     pushd "$ROOT_DIR/v2w-core" >/dev/null
     CGO_ENABLED=0 go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o "$BIN_DIR/v2w-scan" ./cmd/v2w-scan
+    CGO_ENABLED=0 go build -trimpath -tags "netgo osusergo" -ldflags="-s -w -extldflags '-static'" -o "$BIN_DIR/v2w-tun" ./cmd/v2w-tun
     popd >/dev/null
 fi
 
