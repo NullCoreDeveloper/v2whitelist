@@ -624,7 +624,7 @@
     <string name="title_profile_check_settings">Profile Verification</string>
     <!-- v2w-core scanner section title -->
     <string name="title_v2w_core_settings">v2w-core Scanner Engine</string>
-    <string name="v2w_core_init">Initializing v2w-core scanner…</string>
+    <string name="v2w_core_init">Scanning &amp; checking servers with v2w-core…</string>
     <string name="title_v2whitelist_settings_misc">Miscellaneous Settings</string>
     <!-- Speed check prefs -->
     <string name="title_pref_profile_speed_check">Speed test during profile check</string>

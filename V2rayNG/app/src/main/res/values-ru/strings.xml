@@ -306,7 +306,7 @@
     <string name="title_smartconnect_settings">Настройка SmartConnect</string>
     <string name="title_pref_v2w_core_enabled">Использовать ядро v2w-core</string>
     <string name="summary_pref_v2w_core_enabled">Экспериментально. Массовое параллельное сканирование серверов для обхода DDoS-защиты и поиска лучших узлов в реальном времени.</string>
-    <string name="v2w_core_init">Инициализация v2w-core сканера…</string>
+    <string name="v2w_core_init">Поиск и проверка серверов (v2w-core)…</string>
     <string name="title_pref_v2w_core_concurrency">Потоки проверки профилей v2w-core</string>
     <string name="summary_pref_v2w_core_concurrency">Максимум параллельных проверок профилей в v2w-core (по умолчанию: 35)</string>
     <string name="title_pref_v2w_tcp_concurrency">Потоки TCP pre-check</string>
