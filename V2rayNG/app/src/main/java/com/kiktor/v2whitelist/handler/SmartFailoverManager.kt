@@ -122,12 +122,22 @@ object SmartFailoverManager {
             if (!isProbing.compareAndSet(false, true)) return@launch
             try {
                 GeekModeLogger.log("Failover", "Triggering express probe. Reason: $reason")
-                val delay = testTunnelDelay(4000L)
-                if (delay <= 0L || delay > 5000L) {
-                    GeekModeLogger.log("Failover", "Express probe confirmed tunnel dead ($delay ms). Initiating failover...")
-                    handleServerFailure(service, reason)
+                val delayMs = testTunnelDelay(service, 4000L)
+                if (delayMs <= 0L || delayMs > 5000L) {
+                    GeekModeLogger.log("Failover", "Express probe failed ($delayMs ms). Retrying in 1.5s...")
+                    delay(1500L)
+                    if (!V2RayServiceManager.isRunning()) return@launch
+                    val retryDelay = testTunnelDelay(service, 4500L)
+                    if (retryDelay <= 0L || retryDelay > 5500L) {
+                        GeekModeLogger.log("Failover", "Express probe retry confirmed tunnel dead ($retryDelay ms). Initiating failover...")
+                        handleServerFailure(service, reason)
+                    } else {
+                        stallDetector?.reset()
+                        GeekModeLogger.log("Failover", "Express probe retry passed ($retryDelay ms). Tunnel is alive, false alarm.")
+                    }
                 } else {
-                    GeekModeLogger.log("Failover", "Express probe passed ($delay ms). Tunnel is alive, false alarm.")
+                    stallDetector?.reset()
+                    GeekModeLogger.log("Failover", "Express probe passed ($delayMs ms). Tunnel is alive, false alarm.")
                 }
             } finally {
                 isProbing.set(false)
@@ -141,11 +151,11 @@ object SmartFailoverManager {
     private suspend fun runHeartbeatCheck(service: Service) {
         if (!isProbing.compareAndSet(false, true)) return
         try {
-            val delay = testTunnelDelay(5000L)
-            if (delay <= 0L || delay > 6000L) {
-                GeekModeLogger.log("Failover", "Heartbeat probe failed ($delay ms). Retrying in 2.0s...")
+            val delayMs = testTunnelDelay(service, 5000L)
+            if (delayMs <= 0L || delayMs > 6000L) {
+                GeekModeLogger.log("Failover", "Heartbeat probe failed ($delayMs ms). Retrying in 2.0s...")
                 delay(2000L)
-                val retryDelay = testTunnelDelay(5000L)
+                val retryDelay = testTunnelDelay(service, 5000L)
                 if (retryDelay <= 0L || retryDelay > 6000L) {
                     GeekModeLogger.log("Failover", "Heartbeat retry failed ($retryDelay ms). Initiating failover...")
                     handleServerFailure(service, "Heartbeat check failed twice")
@@ -159,14 +169,20 @@ object SmartFailoverManager {
     }
 
     /**
-     * Тестирует задержку через активный туннель xray с жестким таймаутом.
+     * Тестирует задержку через активный туннель xray с жестким таймаутом и fallback на мульти-URL SOCKS пробу.
      */
-    private suspend fun testTunnelDelay(timeoutMs: Long): Long = withContext(Dispatchers.IO) {
+    private suspend fun testTunnelDelay(context: Context, timeoutMs: Long): Long = withContext(Dispatchers.IO) {
         try {
             withTimeoutOrNull(timeoutMs) {
                 val delayUrl = SettingsManager.getDelayTestUrl()
                 val res = V2RayServiceManager.measureDelay(delayUrl)
-                if (res > 0) res else -1L
+                if (res > 0) return@withTimeoutOrNull res
+                val socksPort = SettingsManager.getSocksPort()
+                if (socksPort > 0) {
+                    val (fallbackDelay, _) = SpeedtestManager.testConnection(context, socksPort, timeoutMs.toInt())
+                    if (fallbackDelay > 0) return@withTimeoutOrNull fallbackDelay
+                }
+                -1L
             } ?: -1L
         } catch (_: Exception) {
             -1L
@@ -187,6 +203,7 @@ object SmartFailoverManager {
         }
 
         val personalCfg = PersonalServersManager.getConfig()
+        var alreadyRechecked = false
         if (personalCfg.enabled) {
             val currentGuid = MmkvManager.getSelectServer()
             val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
@@ -198,11 +215,22 @@ object SmartFailoverManager {
                     return
                 }
                 // Дополнительная проверка перед уходом с доверенного сервера (защита от ложных срабатываний)
-                val recheckDelay = testTunnelDelay(5000L)
+                alreadyRechecked = true
+                val recheckDelay = testTunnelDelay(service, 5000L)
                 if (recheckDelay > 0L) {
+                    stallDetector?.reset()
                     GeekModeLogger.log("Failover", "Personal server ${currentProfile?.remarks} responded on recheck (${recheckDelay}ms). Staying on personal node.")
                     return
                 }
+            }
+        }
+
+        if (!alreadyRechecked) {
+            val finalRecheckDelay = testTunnelDelay(service, 4500L)
+            if (finalRecheckDelay > 0L) {
+                stallDetector?.reset()
+                GeekModeLogger.log("Failover", "Tunnel responded on post-arbitration recheck (${finalRecheckDelay}ms). Aborting failover.")
+                return
             }
         }
 

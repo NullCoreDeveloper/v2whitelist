@@ -2083,6 +2083,12 @@ class DesktopAppState(
                     if (consecutiveFails >= 2) {
                         val physOk = isPhysicalNetworkAlive()
                         if (physOk) {
+                            // Контрольная перепроверка туннеля после арбитража физической сети
+                            if (testTunnelConnectivity()) {
+                                consecutiveFails = 0
+                                GeekModeLogger.log("Failover", "Туннель ответил на контрольной проверке после арбитража — переключение отменено.")
+                                continue
+                            }
                             GeekModeLogger.log("Failover", "Физическая сеть доступна, но туннель не отвечает. Запуск Auto-Failover...")
                             consecutiveFails = 0
                             withContext(Dispatchers.Main) {
@@ -2114,21 +2120,47 @@ class DesktopAppState(
     }
 
     private fun testTunnelConnectivity(port: Int = socksPort.value): Boolean {
-        return try {
-            val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", port))
-            val checkUrl = connectionCheckServiceUrl.value.ifBlank { "http://cp.cloudflare.com/generate_204" }
-            val url = java.net.URL(checkUrl)
-            val conn = url.openConnection(proxy) as java.net.HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            conn.instanceFollowRedirects = false
-            conn.requestMethod = "HEAD"
-            val code = conn.responseCode
-            conn.disconnect()
-            code in 200..399
-        } catch (_: Exception) {
-            false
+        val customUrl = connectionCheckServiceUrl.value.trim()
+            .takeIf { it.contains("generate_204", ignoreCase = true) }
+        val checkUrls = listOfNotNull(
+            customUrl,
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.google.com/generate_204"
+        ).distinct()
+
+        val hasProxyAuth = routingMode.value == "PROXY" &&
+            port == socksPort.value &&
+            (localProxyLogin.value.isNotBlank() || localProxyPassword.value.isNotBlank())
+        val activeHttpPort = if (httpPort.value > 0 && httpPort.value != port) httpPort.value else port + 1
+        val proxy = if (hasProxyAuth) {
+            java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress("127.0.0.1", activeHttpPort))
+        } else {
+            java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", port))
         }
+
+        for (checkUrl in checkUrls) {
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URI.create(checkUrl).toURL()
+                conn = (url.openConnection(proxy) as java.net.HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    instanceFollowRedirects = false
+                    requestMethod = "GET"
+                    if (hasProxyAuth) {
+                        val creds = "${localProxyLogin.value}:${localProxyPassword.value}"
+                        val encoded = java.util.Base64.getEncoder().encodeToString(creds.toByteArray(Charsets.UTF_8))
+                        setRequestProperty("Proxy-Authorization", "Basic $encoded")
+                    }
+                }
+                val code = conn.responseCode
+                if (code in 200..399) return true
+            } catch (_: Exception) {
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
+            }
+        }
+        return false
     }
 
     private fun isPhysicalNetworkAlive(): Boolean {
