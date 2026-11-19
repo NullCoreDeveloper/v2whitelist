@@ -74,7 +74,7 @@ object V2WScannerEngine {
             put("dest_url", destUrl)
             put("endpoint_url", endpointUrl)
             put("endpoint_e2e", endpointE2e)
-            put("service_check", serviceCheckEnabled)
+            put("service_check", serviceCheckEnabled && endpointUrl.isBlank())
             put("services", servicesArray)
         }
         return "#v2w-opts:${root}"

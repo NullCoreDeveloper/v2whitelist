@@ -599,6 +599,11 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
 
             // Update domain split tunneling summaries
             updateDomainSummaries()
+
+            // Отключаем проверку сервисов при активном конечном узле
+            val isExitNodeActive = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false) &&
+                !MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).isNullOrBlank()
+            findPreference<CheckBoxPreference>(AppConfig.PREF_SERVICE_CHECK_ENABLED)?.isEnabled = !isExitNodeActive
         }
 
         private fun updateDomainSummaries() {

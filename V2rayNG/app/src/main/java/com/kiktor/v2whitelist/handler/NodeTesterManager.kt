@@ -318,30 +318,7 @@ object NodeTesterManager {
                             return false
                         }
 
-                        if (shouldCheckServices) {
-                            if (showStatus) {
-                                MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, context.getString(R.string.status_verifying_services, services.size))
-                            }
-                            val svcResults = com.kiktor.v2whitelist.core.domain.servicecheck.ServiceAvailabilityChecker.checkServicesParallel(
-                                services = services,
-                                socksPort = chainedPort,
-                                timeoutMs = maxOf(effectiveTimeout.toLong(), 6000L),
-                                socksUser = SettingsManager.getSocksUser(),
-                                socksPass = SettingsManager.getSocksPass()
-                            )
-                            val failed = svcResults.filter { !it.success }
-                            if (failed.isNotEmpty()) {
-                                val failedNames = failed.joinToString(", ") { it.service.name }
-                                GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ services through custom endpoint FAILED [$failedNames] for server $guid")
-                                chainedController?.stopLoop()
-                                return false
-                            }
-                            val avgLatency = svcResults.map { it.latencyMs }.filter { it > 0 }.average().toLong()
-                            if (avgLatency > 0) {
-                                MmkvManager.encodeServerTestDelayMillis(guid, avgLatency)
-                            }
-                            GeekModeLogger.log("NodeTester", "verifyProfile: services through custom endpoint PASSED (${avgLatency}ms)")
-                        } else if (endpointE2eCheckEnabled) {
+                        if (endpointE2eCheckEnabled) {
                             val (chainedElapsed, _) = SpeedtestManager.testConnection(context, chainedPort, maxOf(timeout, 6000))
                             if (chainedElapsed <= 0) {
                                 GeekModeLogger.log("NodeTester", "verifyProfile: ⚠️ e2e check through custom endpoint FAILED for server $guid")
@@ -349,6 +326,7 @@ object NodeTesterManager {
                                 return false
                             }
 
+                            MmkvManager.encodeServerTestDelayMillis(guid, chainedElapsed)
                             GeekModeLogger.log("NodeTester", "verifyProfile: e2e custom endpoint check PASSED (${chainedElapsed}ms)")
                         }
                         testPortForSpeed = chainedPort
