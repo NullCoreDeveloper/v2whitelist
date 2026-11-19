@@ -392,7 +392,7 @@ class DesktopAppTest {
 
         assertEquals(50, state.tcpPrecheckConcurrency.value)
         assertEquals(35, state.v2wCoreSockets.value)
-        assertEquals(false, state.v2wFullVerifyMode.value)
+        assertEquals(true, state.v2wFullVerifyMode.value)
 
         state.saveSettings(
             subUrl = "",
@@ -402,15 +402,15 @@ class DesktopAppTest {
             socksP = 10808,
             tcpPrecheck = 75,
             v2wSockets = 40,
-            v2wFullVerify = true
+            v2wFullVerify = false
         )
 
         assertEquals(75, state.tcpPrecheckConcurrency.value)
         assertEquals(40, state.v2wCoreSockets.value)
-        assertEquals(true, state.v2wFullVerifyMode.value)
+        assertEquals(false, state.v2wFullVerifyMode.value)
         assertEquals(75, settingsRepo.getInt("pref_tcp_precheck_concurrency", 50))
         assertEquals(40, settingsRepo.getInt("pref_v2w_core_sockets", 35))
-        assertEquals(true, settingsRepo.getBoolean("pref_v2w_full_verify_mode", false))
+        assertEquals(false, settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
     }
 
     @Test
@@ -500,7 +500,7 @@ class DesktopAppTest {
             customEndpointSub = "https://example.com/ep",
             checkUrl = "https://custom.example/geoip",
             v2wCore = false,
-            v2wFullVerify = true
+            v2wFullVerify = false
         )
         state.personalServersEnabled.value = true
         state.personalSelectedGuid.value = "guid-123"
@@ -514,7 +514,7 @@ class DesktopAppTest {
         assertEquals("", state.customEndpointUrl.value)
         assertEquals("", state.customEndpointSubUrl.value)
         assertEquals(true, state.useV2WCore.value)
-        assertEquals(false, state.v2wFullVerifyMode.value)
+        assertEquals(true, state.v2wFullVerifyMode.value)
         assertEquals(false, state.personalServersEnabled.value)
         assertEquals("", state.personalSelectedGuid.value)
         assertEquals("", state.globalSni.value)

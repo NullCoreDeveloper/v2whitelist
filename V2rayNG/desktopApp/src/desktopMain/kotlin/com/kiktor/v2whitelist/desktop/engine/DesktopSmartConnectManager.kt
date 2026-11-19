@@ -167,7 +167,7 @@ class DesktopSmartConnectManager(
             val verifyConcurrency = settingsRepo.getInt("pref_verify_concurrency", 4).coerceIn(1, 10)
             val tcpPrecheckConcurrency = settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200)
             val v2wCoreSockets = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
-            val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", false)
+            val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", true)
             val testBeforeConnect = settingsRepo.getBoolean("pref_test_before_connect", true)
             // pref_conn_check_url на Desktop по умолчанию указывает на GeoIP API (api.ip.sb/geoip),
             // поэтому передаём в v2w-core только URL, явно предназначенный для HTTP 204-проверки.

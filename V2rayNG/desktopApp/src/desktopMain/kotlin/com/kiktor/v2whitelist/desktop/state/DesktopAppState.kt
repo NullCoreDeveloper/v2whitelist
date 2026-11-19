@@ -333,7 +333,7 @@ class DesktopAppState(
     val useFallbackScanner = MutableStateFlow(settingsRepo.getBoolean("pref_use_fallback_scanner", true))
     val tcpPrecheckConcurrency = MutableStateFlow(settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200))
     val v2wCoreSockets = MutableStateFlow(settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100))
-    val v2wFullVerifyMode = MutableStateFlow(settingsRepo.getBoolean("pref_v2w_full_verify_mode", false))
+    val v2wFullVerifyMode = MutableStateFlow(settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
 
     val removeInsecureProfiles = MutableStateFlow(settingsRepo.getBoolean("pref_remove_insecure_profiles", true))
     val testProfileBeforeConnect = MutableStateFlow(settingsRepo.getBoolean("pref_test_before_connect", true))
@@ -2982,7 +2982,7 @@ class DesktopAppState(
         useFallbackScanner.value = true
         tcpPrecheckConcurrency.value = 50
         v2wCoreSockets.value = 35
-        v2wFullVerifyMode.value = false
+        v2wFullVerifyMode.value = true
 
         removeInsecureProfiles.value = true
         testProfileBeforeConnect.value = true
