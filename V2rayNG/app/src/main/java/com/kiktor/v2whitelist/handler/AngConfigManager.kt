@@ -231,42 +231,53 @@ object AngConfigManager {
      * @param append Whether to append the configurations.
      * @return The number of configurations parsed.
      */
+    private fun parseBatchLines(servers: String?, subid: String): List<ProfileItem> {
+        if (servers == null) {
+            return emptyList()
+        }
+        val subItem = MmkvManager.decodeSubscription(subid)
+        val lines = servers.lines().distinct().reversed()
+        val newConfigs = mutableListOf<ProfileItem>()
+        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
+
+        for (line in lines) {
+            val config = try {
+                identifyConfigType(line) ?: continue
+            } catch (_: Exception) {
+                continue
+            }
+            if (filterInsecure && !config.isSecure()) {
+                continue
+            }
+            if (subItem?.filter != null && subItem.filter?.isNotEmpty() == true && config.remarks.isNotEmpty()) {
+                val matched = Regex(pattern = subItem.filter ?: "")
+                    .containsMatchIn(input = config.remarks)
+                if (!matched) continue
+            }
+            config.subscriptionId = subid
+            config.description = generateDescription(config)
+            newConfigs.add(config)
+        }
+        return newConfigs
+    }
+
     private fun parseBatchConfig(servers: String?, subid: String, append: Boolean): Int {
+        val processedConfigs = try {
+            parseBatchLines(servers, subid)
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to parse batch config", e)
+            return 0
+        }
+        if (processedConfigs.isEmpty() && !append) {
+            Log.w(AppConfig.TAG, "No valid configs found in subscription update for $subid, keeping old configs.")
+            return 0
+        }
+        return applyPreparedBatchConfigs(processedConfigs, subid, append)
+    }
+
+    private fun applyPreparedBatchConfigs(processedConfigs: List<ProfileItem>, subid: String, append: Boolean): Int {
         try {
-            if (servers == null) {
-                return 0
-            }
-
-            val subItem = MmkvManager.decodeSubscription(subid)
-            val lines = servers.lines().distinct().reversed()
-            val newConfigs = mutableListOf<ProfileItem>()
-
-            val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
-
-            for (line in lines) {
-                val config = try {
-                    identifyConfigType(line) ?: continue
-                } catch (e: Exception) {
-                    continue
-                }
-                
-                // Проверка на небезопасные профили
-                if (filterInsecure && !config.isSecure()) {
-                    continue
-                }
-                
-                // Применяем фильтр подписки если есть
-                if (subItem?.filter != null && subItem.filter?.isNotEmpty() == true && config.remarks.isNotEmpty()) {
-                    val matched = Regex(pattern = subItem.filter ?: "")
-                        .containsMatchIn(input = config.remarks)
-                    if (!matched) continue
-                }
-                newConfigs.add(config)
-            }
-
-            // Если не удалось распарсить ни одного конфига — не трогаем старые!
-            if (newConfigs.isEmpty() && !append) {
-                Log.w(AppConfig.TAG, "No valid configs found in subscription update for $subid, keeping old configs.")
+            if (processedConfigs.isEmpty() && !append) {
                 return 0
             }
 
@@ -309,19 +320,12 @@ object AngConfigManager {
             val previousExitNodeUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
             val previousExitNodeName = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_SELECTED_NAME)
 
-            if (!append) {
-                MmkvManager.removeServerViaSubid(subid)
+            val guids = if (!append) {
+                MmkvManager.replaceSubConfigs(subid, processedConfigs)
+            } else {
+                MmkvManager.encodeServerConfigs(processedConfigs)
             }
-
             var count = 0
-            val processedConfigs = mutableListOf<ProfileItem>()
-            for (config in newConfigs) {
-                config.subscriptionId = subid
-                config.description = generateDescription(config)
-                processedConfigs.add(config)
-            }
-            
-            val guids = MmkvManager.encodeServerConfigs(processedConfigs)
             var restoredGuid: String? = null
 
             if (removedSelectedServer != null) {
@@ -579,10 +583,15 @@ object AngConfigManager {
                 subs.map { sub ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
-                            updateConfigViaSub(sub)
+                            updateConfigViaSub(sub, deduplicate = false)
                         }
                     }
                 }.awaitAll().sum()
+            }
+            if (count > 0) {
+                synchronized(AngConfigManager::class.java) {
+                    MmkvManager.removeDuplicateServer()
+                }
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to update config via all subscriptions", e)
@@ -600,7 +609,7 @@ object AngConfigManager {
      *                   Если false — параллельная гонка зеркал (для UI, когда пользователь ждёт).
      * @return The number of configurations updated.
      */
-    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0, sequential: Boolean = false): Int {
+    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0, sequential: Boolean = false, deduplicate: Boolean = true): Int {
         try {
             if (TextUtils.isEmpty(it.guid) || TextUtils.isEmpty(it.subscription.remarks) || TextUtils.isEmpty(it.subscription.url)) {
                 return 0
@@ -718,14 +727,27 @@ object AngConfigManager {
                 return 0
             }
             
+            // Предварительный парсинг и фильтрация выполняются параллельно без удержания блокировки записи
+            val cleanServer = configText.lines().filter { !it.trimStart().startsWith("#") }.joinToString("\n")
+            var parsedBatch = parseBatchLines(Utils.decode(cleanServer), it.guid)
+            if (parsedBatch.isEmpty()) {
+                parsedBatch = parseBatchLines(cleanServer, it.guid)
+            }
+
             val count = synchronized(AngConfigManager::class.java) {
-                val res = parseConfigViaSub(configText, it.guid, false)
+                val res = if (parsedBatch.isNotEmpty()) {
+                    applyPreparedBatchConfigs(parsedBatch, it.guid, append = false)
+                } else {
+                    parseCustomConfigServer(cleanServer, it.guid)
+                }
                 if (res > 0) {
                     it.subscription.lastUpdated = System.currentTimeMillis()
                     it.subscription.lastUpdateFailed = false
                     MmkvManager.encodeSubscription(it.guid, it.subscription)
-                    MmkvManager.removeDuplicateServer() // Авто-очистка дубликатов
-                    Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $res configs (duplicates cleaned)")
+                    if (deduplicate) {
+                        MmkvManager.removeDuplicateServer()
+                    }
+                    Log.i(AppConfig.TAG, "Subscription updated: ${it.subscription.remarks}, $res configs (dedup=$deduplicate)")
                 } else {
                     Log.w(AppConfig.TAG, "Update subscription: parsed 0 configs for ${it.subscription.remarks}")
                     it.subscription.lastUpdateFailed = NetworkManager.shouldReportSubscriptionFailure()

@@ -743,7 +743,7 @@ object SubscriptionHelper {
                     MmkvManager.encodeSubscription(subId, subItem)
                     SubscriptionCache(subId, subItem)
                 }
-                AngConfigManager.updateConfigViaSub(cache, socksPort, sequential)
+                AngConfigManager.updateConfigViaSub(cache, socksPort, sequential, deduplicate = false)
             })
         }
 
@@ -751,7 +751,7 @@ object SubscriptionHelper {
         for (sub in regularSubs) {
             taskList.add(SubTask(sub.subscription.remarks) {
                 Log.d(AppConfig.TAG, "Updating regular subscription: ${sub.subscription.remarks}")
-                AngConfigManager.updateConfigViaSub(sub, socksPort, sequential)
+                AngConfigManager.updateConfigViaSub(sub, socksPort, sequential, deduplicate = false)
             })
         }
 
@@ -772,6 +772,11 @@ object SubscriptionHelper {
                     }
                 }
             }.awaitAll()
+        }
+
+        // Один проход дедупликации по итогам обновления всех подписок (вместо прохода после каждой подписки)
+        synchronized(AngConfigManager::class.java) {
+            MmkvManager.removeDuplicateServer()
         }
 
         // ══════════════════════════════════════════════════════════════════════

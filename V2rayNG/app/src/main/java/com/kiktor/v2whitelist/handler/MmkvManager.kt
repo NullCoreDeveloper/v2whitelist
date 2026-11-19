@@ -270,12 +270,13 @@ object MmkvManager {
         val serverList = decodeServerList()
         val uniqueServers = mutableSetOf<String>() // key = address:port:password
         val toDelete = mutableListOf<String>()
-        val newList = mutableListOf<String>()
+        val newList = ArrayList<String>(serverList.size)
+        val decodedPairs = ArrayList<Pair<String, ProfileItem?>>(serverList.size)
 
-        // 1. Сначала регистрируем ВСЕ личные (доверенные) серверы.
-        // Личные серверы обладают абсолютным приоритетом и НИКОГДА не удаляются фоновой дедупликацией!
+        // 1. Декодируем каждый профиль один раз и сразу регистрируем личные (доверенные) серверы.
         for (guid in serverList) {
             val profile = decodeServerConfig(guid)
+            decodedPairs.add(guid to profile)
             if (profile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(profile.subscriptionId)) {
                 val sniOrHost = profile.sni.orEmpty().ifEmpty { profile.host.orEmpty() }
                 val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
@@ -284,9 +285,8 @@ object MmkvManager {
             }
         }
 
-        // 2. Дедуплицируем остальные серверы (из сторонних/публичных подписок)
-        for (guid in serverList) {
-            val profile = decodeServerConfig(guid)
+        // 2. Дедуплицируем остальные серверы (из сторонних/публичных подписок) по уже декодированным объектам
+        for ((guid, profile) in decodedPairs) {
             if (profile == null) {
                 // Различаем: JSON отсутствует VS JSON повреждён
                 if (serverRawJsonExists(guid)) {
@@ -342,14 +342,8 @@ object MmkvManager {
      *
      * @param subid The subscription ID.
      */
-    fun removeServerViaSubid(subid: String) {
-        if (subid.isBlank()) {
-            return
-        }
-        val serverList = decodeServerList()
-        var changed = false
+    private fun findKeysForSubid(subid: String): Set<String> {
         val keysToRemove = mutableSetOf<String>()
-        
         val targetIds = mutableSetOf(subid)
         if (subid.startsWith("custom_sub_")) {
             targetIds.add(subid.removePrefix("custom_sub_"))
@@ -358,13 +352,97 @@ object MmkvManager {
         }
 
         profileFullStorage.allKeys()?.forEach { key ->
-            decodeServerConfig(key)?.let { config ->
-                if (targetIds.contains(config.subscriptionId)) {
-                    keysToRemove.add(key)
+            val raw = profileFullStorage.decodeString(key) ?: return@forEach
+            // Быстрый строковый отсев без полного JSON-парсинга для чужих подписок
+            var maybeMatches = false
+            for (tid in targetIds) {
+                if (raw.contains(tid)) {
+                    maybeMatches = true
+                    break
+                }
+            }
+            if (!maybeMatches) return@forEach
+
+            val config = try {
+                JsonUtil.fromJson(raw, ProfileItem::class.java)
+            } catch (_: Exception) {
+                null
+            }
+            if (config != null && targetIds.contains(config.subscriptionId)) {
+                keysToRemove.add(key)
+            }
+        }
+        return keysToRemove
+    }
+
+    /**
+     * Атомарно заменяет серверы указанной подписки за одно чтение и одну запись serverList.
+     */
+    fun replaceSubConfigs(subid: String, configs: List<ProfileItem>): List<String> {
+        val serverList = decodeServerList()
+        var listChanged = false
+
+        if (subid.isNotBlank()) {
+            val keysToRemove = findKeysForSubid(subid)
+            val currentSelected = getSelectServer()
+            val isServiceRunning = V2RayServiceManager.isRunning()
+
+            for (key in keysToRemove) {
+                if (currentSelected == key) {
+                    if (!isServiceRunning) {
+                        mainStorage.remove(KEY_SELECTED_SERVER)
+                        profileFullStorage.remove(key)
+                        serverAffStorage.remove(key)
+                    }
+                } else {
+                    profileFullStorage.remove(key)
+                    serverAffStorage.remove(key)
+                }
+                removeVipServer(key)
+            }
+            if (keysToRemove.isNotEmpty() && serverList.removeAll(keysToRemove)) {
+                listChanged = true
+            }
+        }
+
+        val guids = ArrayList<String>(configs.size)
+        for (config in configs) {
+            val key = Utils.getUuid()
+            profileFullStorage.encode(key, JsonUtil.toJson(config))
+            guids.add(key)
+        }
+
+        if (guids.isNotEmpty()) {
+            val existingSet = serverList.toHashSet()
+            val toPrepend = ArrayList<String>(guids.size)
+            for (key in guids) {
+                if (existingSet.add(key)) {
+                    toPrepend.add(key)
+                }
+            }
+            if (toPrepend.isNotEmpty()) {
+                serverList.addAll(0, toPrepend)
+                listChanged = true
+                if (getSelectServer().isNullOrBlank()) {
+                    mainStorage.encode(KEY_SELECTED_SERVER, serverList.first())
                 }
             }
         }
-        
+
+        if (listChanged) {
+            encodeServerList(serverList)
+        }
+        return guids
+    }
+
+    fun removeServerViaSubid(subid: String) {
+        if (subid.isBlank()) {
+            return
+        }
+        val serverList = decodeServerList()
+        var changed = false
+        val keysToRemove = findKeysForSubid(subid)
+
         val currentSelected = getSelectServer()
         val isServiceRunning = V2RayServiceManager.isRunning()
 
@@ -383,11 +461,11 @@ object MmkvManager {
             }
             removeVipServer(key)
         }
-        
+
         if (keysToRemove.isNotEmpty()) {
             if (serverList.removeAll(keysToRemove)) changed = true
         }
-        
+
         if (changed) {
             encodeServerList(serverList)
             if (getSelectServer().isNullOrBlank() && serverList.isNotEmpty()) {
