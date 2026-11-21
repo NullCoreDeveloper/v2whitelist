@@ -947,4 +947,17 @@
     <string name="summary_pref_start_services_notification">Уведомление «Службы успешно запущены» служит индикатором, перекочевавшим из v2rayNG в ПроБел, возможно сделаю в следующем обновлении</string>
     <string name="title_pref_hide_tunnel">Скрывать туннель от приложений вне VPN</string>
     <string name="summary_pref_hide_tunnel">Отключает локальные порты SOCKS/HTTP в режиме TUN, чтобы приложения вне VPN не могли обнаружить или использовать туннель (не действует при включённой раздаче по LAN)</string>
+    <string name="status_updated_neutral">Последнее обновление</string>
+    <string name="title_sub_status_appearance">Статус подписок на главном экране</string>
+    <string name="title_pref_sub_show_staleness">Показывать статус «Актуальна / Устарела»</string>
+    <string name="summary_pref_sub_show_staleness">Если выключено, отображается только время последнего обновления</string>
+    <string name="title_pref_sub_stale_mode">Условие устаревания</string>
+    <string name="sub_stale_mode_calendar_hour">Новый календарный час</string>
+    <string name="sub_stale_mode_relative">Таймер от обновления</string>
+    <string name="title_pref_sub_stale_timeout_min">Интервал устаревания (мин)</string>
+    <string name="summary_pref_sub_stale_timeout_min">%1$d мин</string>
+    <string name="title_pref_sub_show_failed">Показывать ошибки обновления</string>
+    <string name="summary_pref_sub_show_failed">Предупреждать на главном экране, если не все подписки обновились</string>
+    <string name="title_pref_sub_show_elapsed">Показывать прошедшее время</string>
+    <string name="summary_pref_sub_show_elapsed">Добавлять «(прошло X мин)» рядом со временем обновления</string>
 </resources>

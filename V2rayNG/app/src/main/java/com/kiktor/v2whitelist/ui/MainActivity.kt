@@ -1047,15 +1047,48 @@ class MainActivity : HelperBaseActivity() {
 
         // Проверяем подписки, обновление которых завершилось ошибкой (только среди включенных)
         val failedCount = enabledSubs.count { it.subscription.lastUpdateFailed }
-        if (failedCount > 0) {
-            tvStatus.text = getString(R.string.status_update_failed, failedCount)
-            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+        val showStaleness = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_STALENESS, false)
+        val staleMode = com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.fromString(
+            MmkvManager.decodeSettingsString(AppConfig.PREF_SUB_STALE_MODE, "CALENDAR_HOUR")
+        )
+        val staleTimeoutMin = (MmkvManager.decodeSettingsString(AppConfig.PREF_SUB_STALE_TIMEOUT_MIN, "60")?.toIntOrNull() ?: 60)
+            .coerceIn(
+                com.kiktor.v2whitelist.core.subscription.status.SubscriptionStatusEvaluator.MIN_TIMEOUT_MINUTES,
+                com.kiktor.v2whitelist.core.subscription.status.SubscriptionStatusEvaluator.MAX_TIMEOUT_MINUTES
+            )
+        val showFailed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_FAILED, true)
+        val showElapsed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_ELAPSED, true)
 
-            if (lastUpdateTime > 0) {
-                val currentCal = java.util.Calendar.getInstance()
-                val elapsedMs = currentCal.timeInMillis - lastUpdateTime
-                val elapsedMins = elapsedMs / (60 * 1000)
+        val config = com.kiktor.v2whitelist.core.subscription.status.SubStatusDisplayConfig(
+            showStalenessStatus = showStaleness,
+            staleMode = staleMode,
+            staleTimeoutMinutes = staleTimeoutMin,
+            showFailedStatus = showFailed,
+            showElapsedTime = showElapsed
+        )
 
+        val eval = com.kiktor.v2whitelist.core.subscription.status.SubscriptionStatusEvaluator.evaluate(
+            lastUpdateMs = lastUpdateTime,
+            failedCount = failedCount,
+            isUpdating = false,
+            nowMs = System.currentTimeMillis(),
+            isSameCalendarHour = { t1, t2 ->
+                val c1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
+                val c2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+                c1.get(java.util.Calendar.YEAR) == c2.get(java.util.Calendar.YEAR) &&
+                    c1.get(java.util.Calendar.DAY_OF_YEAR) == c2.get(java.util.Calendar.DAY_OF_YEAR) &&
+                    c1.get(java.util.Calendar.HOUR_OF_DAY) == c2.get(java.util.Calendar.HOUR_OF_DAY)
+            },
+            config = config
+        )
+
+        val formattedTime = if (lastUpdateTime > 0) {
+            val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
+            if (!showElapsed) {
+                updateTimeStr
+            } else {
+                val elapsedMins = eval.elapsedMinutes
                 val timeStr = if (elapsedMins < 60) {
                     getString(R.string.time_min, elapsedMins.toString())
                 } else {
@@ -1063,53 +1096,40 @@ class MainActivity : HelperBaseActivity() {
                     val m = elapsedMins % 60
                     getString(R.string.time_h_m, h.toString(), m.toString())
                 }
+                getString(R.string.status_passed_time, updateTimeStr, timeStr)
+            }
+        } else {
+            ""
+        }
 
-                val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
-                tvTime.text = getString(R.string.status_passed_time, updateTimeStr, timeStr)
-            } else {
+        when (eval.kind) {
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.FAILED -> {
+                tvStatus.text = getString(R.string.status_update_failed, eval.failedCount)
+                tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+                tvTime.text = formattedTime
+            }
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.NO_SUBS -> {
+                tvStatus.text = getString(R.string.status_no_subscription)
+                tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
                 tvTime.text = ""
             }
-            return
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.NEUTRAL_UPDATED -> {
+                tvStatus.text = getString(R.string.status_updated_neutral)
+                tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+                tvTime.text = formattedTime
+            }
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.ACTUAL -> {
+                tvStatus.text = getString(R.string.status_actual)
+                tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+                tvTime.text = formattedTime
+            }
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.OUTDATED -> {
+                tvStatus.text = getString(R.string.status_stale)
+                tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_light))
+                tvTime.text = formattedTime
+            }
+            com.kiktor.v2whitelist.core.subscription.status.SubStatusKind.UPDATING -> Unit
         }
-
-        if (lastUpdateTime <= 0) {
-            tvStatus.text = getString(R.string.status_no_subscription)
-            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            tvTime.text = ""
-            return
-        }
-
-        val updateCal = java.util.Calendar.getInstance().apply { timeInMillis = lastUpdateTime }
-        val currentCal = java.util.Calendar.getInstance()
-
-        val isActual = updateCal.get(java.util.Calendar.YEAR) == currentCal.get(java.util.Calendar.YEAR) &&
-                updateCal.get(java.util.Calendar.DAY_OF_YEAR) == currentCal.get(java.util.Calendar.DAY_OF_YEAR) &&
-                updateCal.get(java.util.Calendar.HOUR_OF_DAY) == currentCal.get(java.util.Calendar.HOUR_OF_DAY)
-
-        val elapsedMs = currentCal.timeInMillis - lastUpdateTime
-        val elapsedMins = elapsedMs / (60 * 1000)
-
-        val timeStr = if (elapsedMins < 60) {
-            getString(R.string.time_min, elapsedMins.toString())
-        } else {
-            val h = elapsedMins / 60
-            val m = elapsedMins % 60
-            getString(R.string.time_h_m, h.toString(), m.toString())
-        }
-
-        val formatter = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-        val updateTimeStr = formatter.format(java.util.Date(lastUpdateTime))
-
-        if (isActual) {
-            tvStatus.text = getString(R.string.status_actual)
-            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-        } else {
-            tvStatus.text = getString(R.string.status_stale)
-            tvStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_light))
-        }
-
-        tvTime.text = getString(R.string.status_passed_time, updateTimeStr, timeStr)
     }
 
     private fun checkBatteryOptimization() {

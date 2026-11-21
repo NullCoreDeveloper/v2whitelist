@@ -251,4 +251,14 @@
         <item>reactive</item>
     </string-array>
 
+    <string-array name="sub_stale_mode_entries">
+        <item>@string/sub_stale_mode_calendar_hour</item>
+        <item>@string/sub_stale_mode_relative</item>
+    </string-array>
+
+    <string-array name="sub_stale_mode_values" translatable="false">
+        <item>CALENDAR_HOUR</item>
+        <item>RELATIVE</item>
+    </string-array>
+
 </resources>

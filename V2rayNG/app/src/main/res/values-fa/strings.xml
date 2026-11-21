@@ -910,4 +910,17 @@
     <string name="summary_pref_start_services_notification">اعلان «سرویس‌ها با موفقیت اجرا شدند» یک نشانگر به‌جامانده از v2rayNG به ProBel است که ممکن است در نسخه بعدی حذف شود</string>
     <string name="title_pref_hide_tunnel">پنهان کردن تونل از برنامه‌های خارج از VPN</string>
     <string name="summary_pref_hide_tunnel">پورت‌های محلی SOCKS/HTTP را در حالت TUN غیرفعال می‌کند تا برنامه‌های مستثنی نتوانند تونل VPN را تشخیص دهند یا از آن استفاده کنند (هنگام اشتراک‌گذاری LAN اعمال نمی‌شود)</string>
+    <string name="status_updated_neutral">آخرین به‌روزرسانی</string>
+    <string name="title_sub_status_appearance">نمایش وضعیت اشتراک‌ها</string>
+    <string name="title_pref_sub_show_staleness">نمایش برچسب «به‌روز / منقضی»</string>
+    <string name="summary_pref_sub_show_staleness">در صورت خاموش بودن، فقط زمان آخرین به‌روزرسانی نمایش داده می‌شود</string>
+    <string name="title_pref_sub_stale_mode">شرط منقضی شدن</string>
+    <string name="sub_stale_mode_calendar_hour">شروع ساعت جدید</string>
+    <string name="sub_stale_mode_relative">زمان‌سنج نسبی</string>
+    <string name="title_pref_sub_stale_timeout_min">مدت انقضا (دقیقه)</string>
+    <string name="summary_pref_sub_stale_timeout_min">%1$d دقیقه</string>
+    <string name="title_pref_sub_show_failed">نمایش خطای به‌روزرسانی</string>
+    <string name="summary_pref_sub_show_failed">هشدار در صفحه اصلی هنگام خطای به‌روزرسانی اشتراک</string>
+    <string name="title_pref_sub_show_elapsed">نمایش زمان سپری‌شده</string>
+    <string name="summary_pref_sub_show_elapsed">نمایش دقایق سپری‌شده در کنار زمان به‌روزرسانی</string>
 </resources>

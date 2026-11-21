@@ -93,6 +93,51 @@ class AppearanceActivity : BaseActivity() {
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_HAPTIC)?.onPreferenceChangeListener = premiumListener
             findPreference<SwitchPreference>(AppConfig.PREF_PREMIUM_PULSE)?.onPreferenceChangeListener = premiumListener
 
+            val showStalenessPref = findPreference<SwitchPreference>(AppConfig.PREF_SUB_SHOW_STALENESS)
+            val staleModePref = findPreference<ListPreference>(AppConfig.PREF_SUB_STALE_MODE)
+            val staleTimeoutPref = findPreference<androidx.preference.EditTextPreference>(AppConfig.PREF_SUB_STALE_TIMEOUT_MIN)
+
+            staleTimeoutPref?.setOnBindEditTextListener { editText ->
+                editText.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            }
+
+            fun updateSubStatusDependencies(showStale: Boolean, modeVal: String?) {
+                staleModePref?.isEnabled = showStale
+                val isRelative = modeVal.equals("RELATIVE", ignoreCase = true)
+                staleTimeoutPref?.isEnabled = showStale && isRelative
+            }
+
+            val initialShowStale = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_STALENESS, false)
+            val initialStaleMode = MmkvManager.decodeSettingsString(AppConfig.PREF_SUB_STALE_MODE, "CALENDAR_HOUR")
+            val initialTimeout = (MmkvManager.decodeSettingsString(AppConfig.PREF_SUB_STALE_TIMEOUT_MIN, "60")?.toIntOrNull() ?: 60)
+                .coerceIn(1, 10080)
+            staleTimeoutPref?.summary = getString(R.string.summary_pref_sub_stale_timeout_min, initialTimeout)
+            updateSubStatusDependencies(initialShowStale, initialStaleMode)
+
+            showStalenessPref?.setOnPreferenceChangeListener { _, newValue ->
+                val enabled = newValue as? Boolean ?: false
+                updateSubStatusDependencies(enabled, staleModePref?.value)
+                true
+            }
+
+            staleModePref?.setOnPreferenceChangeListener { pref, newValue ->
+                val str = newValue.toString()
+                (pref as? ListPreference)?.let { lp ->
+                    val idx = lp.findIndexOfValue(str)
+                    lp.summary = if (idx >= 0) lp.entries[idx] else str
+                }
+                updateSubStatusDependencies(showStalenessPref?.isChecked ?: false, str)
+                true
+            }
+
+            staleTimeoutPref?.setOnPreferenceChangeListener { pref, newValue ->
+                val parsed = newValue.toString().trim().toIntOrNull()?.coerceIn(1, 10080) ?: 60
+                MmkvManager.encodeSettings(AppConfig.PREF_SUB_STALE_TIMEOUT_MIN, parsed.toString())
+                (pref as? androidx.preference.EditTextPreference)?.text = parsed.toString()
+                pref.summary = getString(R.string.summary_pref_sub_stale_timeout_min, parsed)
+                false
+            }
+
             findPreference<androidx.preference.Preference>("pref_add_qs_tile")?.setOnPreferenceClickListener {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                     val sbm = requireContext().getSystemService(android.app.StatusBarManager::class.java)

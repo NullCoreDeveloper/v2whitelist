@@ -910,4 +910,17 @@
     <string name="summary_pref_start_services_notification">\"服务已成功启动\" 通知是从 v2rayNG 沿用至 ProBel 的状态提示，可能会在后续更新中移除</string>
     <string name="title_pref_hide_tunnel">对 VPN 外的应用隐藏隧道</string>
     <string name="summary_pref_hide_tunnel">在 TUN 模式下关闭本地 SOCKS/HTTP 代理端口，使未走代理的应用无法检测或使用 VPN 隧道（开启局域网代理共享时不生效）</string>
+    <string name="status_updated_neutral">最近更新</string>
+    <string name="title_sub_status_appearance">主界面订阅状态显示</string>
+    <string name="title_pref_sub_show_staleness">显示“最新 / 已过期”状态</string>
+    <string name="summary_pref_sub_show_staleness">关闭后仅显示最近一次更新时间</string>
+    <string name="title_pref_sub_stale_mode">过期判定方式</string>
+    <string name="sub_stale_mode_calendar_hour">整点小时切换</string>
+    <string name="sub_stale_mode_relative">按更新后时长</string>
+    <string name="title_pref_sub_stale_timeout_min">过期时间间隔（分钟）</string>
+    <string name="summary_pref_sub_stale_timeout_min">%1$d 分钟</string>
+    <string name="title_pref_sub_show_failed">显示更新失败提示</string>
+    <string name="summary_pref_sub_show_failed">当部分订阅更新失败时在主界面提示</string>
+    <string name="title_pref_sub_show_elapsed">显示已过去时间</string>
+    <string name="summary_pref_sub_show_elapsed">在更新时间旁附加已过去分钟数</string>
 </resources>

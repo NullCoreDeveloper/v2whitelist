@@ -68,6 +68,11 @@ object AppConfig {
     const val PREF_DYNAMIC_COLOR = "pref_dynamic_color"
     const val PREF_AMOLED_BLACK = "pref_amoled_black"
     const val PREF_THEME_PALETTE = "pref_theme_palette"
+    const val PREF_SUB_SHOW_STALENESS = "pref_sub_show_staleness"
+    const val PREF_SUB_STALE_MODE = "pref_sub_stale_mode"
+    const val PREF_SUB_STALE_TIMEOUT_MIN = "pref_sub_stale_timeout_min"
+    const val PREF_SUB_SHOW_FAILED = "pref_sub_show_failed"
+    const val PREF_SUB_SHOW_ELAPSED = "pref_sub_show_elapsed"
     const val THEME_PALETTE_MATERIAL_YOU = "material_you"
     const val THEME_PALETTE_CLASSIC = "classic"
 

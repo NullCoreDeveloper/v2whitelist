@@ -954,4 +954,17 @@
     <string name="summary_pref_start_services_notification">The \"Services started successfully\" notification serves as an indicator migrated from v2rayNG to ProBel, might do it in the next update</string>
     <string name="title_pref_hide_tunnel">Hide tunnel from apps outside VPN</string>
     <string name="summary_pref_hide_tunnel">Disable local SOCKS/HTTP proxy ports in TUN mode so bypassed apps cannot detect or use the VPN tunnel (ignored when LAN sharing is enabled)</string>
+    <string name="status_updated_neutral">Last updated</string>
+    <string name="title_sub_status_appearance">Subscription Status Display</string>
+    <string name="title_pref_sub_show_staleness">Show \"Up to date / Stale\" label</string>
+    <string name="summary_pref_sub_show_staleness">When disabled, only the last update time is shown</string>
+    <string name="title_pref_sub_stale_mode">Expiration condition</string>
+    <string name="sub_stale_mode_calendar_hour">New calendar hour</string>
+    <string name="sub_stale_mode_relative">Relative timer</string>
+    <string name="title_pref_sub_stale_timeout_min">Expiration timeout (min)</string>
+    <string name="summary_pref_sub_stale_timeout_min">%1$d min</string>
+    <string name="title_pref_sub_show_failed">Show update failures</string>
+    <string name="summary_pref_sub_show_failed">Show warning on the main screen when a subscription fails to update</string>
+    <string name="title_pref_sub_show_elapsed">Show elapsed time</string>
+    <string name="summary_pref_sub_show_elapsed">Append elapsed minutes next to the last update time</string>
 </resources>

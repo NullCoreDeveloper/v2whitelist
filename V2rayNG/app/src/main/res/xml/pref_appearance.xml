@@ -80,6 +80,40 @@
             android:title="@string/title_pref_premium_haptic" />
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/title_sub_status_appearance">
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="pref_sub_show_staleness"
+            android:summary="@string/summary_pref_sub_show_staleness"
+            android:title="@string/title_pref_sub_show_staleness" />
+
+        <ListPreference
+            android:defaultValue="CALENDAR_HOUR"
+            android:entries="@array/sub_stale_mode_entries"
+            android:entryValues="@array/sub_stale_mode_values"
+            android:key="pref_sub_stale_mode"
+            android:summary="%s"
+            android:title="@string/title_pref_sub_stale_mode" />
+
+        <EditTextPreference
+            android:defaultValue="60"
+            android:key="pref_sub_stale_timeout_min"
+            android:summary="@string/summary_pref_sub_stale_timeout_min"
+            android:title="@string/title_pref_sub_stale_timeout_min" />
+
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_sub_show_failed"
+            android:summary="@string/summary_pref_sub_show_failed"
+            android:title="@string/title_pref_sub_show_failed" />
+
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="pref_sub_show_elapsed"
+            android:summary="@string/summary_pref_sub_show_elapsed"
+            android:title="@string/title_pref_sub_show_elapsed" />
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/title_notifications_category">
         <SwitchPreference
             android:defaultValue="true"
