@@ -191,10 +191,11 @@ object UpdateChecker {
                 isPreRelease = release.prerelease
             )
         } catch (e: Exception) {
-            GeekModeLogger.log("UpdateChecker", "Error checking for update: ${e.message}")
+            val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "Unknown error"
+            GeekModeLogger.log("UpdateChecker", "Error checking for update: $detail")
             CheckUpdateResult(
                 hasUpdate = false,
-                error = e.message ?: "Unknown error"
+                error = detail
             )
         } finally {
             if (closeClientOnFinish) {

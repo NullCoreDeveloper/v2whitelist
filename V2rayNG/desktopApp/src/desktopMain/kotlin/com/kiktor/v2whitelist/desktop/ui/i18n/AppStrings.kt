@@ -363,6 +363,8 @@ interface AppStrings {
     val cardSystemTrayDesc: String
     val minimizeToTrayEnable: String
     val minimizeToTrayEnableDesc: String
+    val stopServiceOnExitTitle: String
+    val stopServiceOnExitDesc: String
     val cardReset: String
     val cardResetDesc: String
     val resetAllSettings: String
@@ -820,6 +822,8 @@ object StringsRu : AppStrings {
     override val cardSystemTrayDesc: String = "Поведение окна приложения и интеграция с ОС"
     override val minimizeToTrayEnable: String = "Сворачивать в системный трей при закрытии окна"
     override val minimizeToTrayEnableDesc: String = "Приложение продолжит работать в фоне"
+    override val stopServiceOnExitTitle: String = "Останавливать службу v2w-service при выходе"
+    override val stopServiceOnExitDesc: String = "Завершает фоновую службу Windows при полном закрытии приложения"
     override val cardReset: String = "Сброс настроек и данных"
     override val cardResetDesc: String = "Возврат всех параметров к исходным значениям по умолчанию"
     override val resetAllSettings: String = "Сбросить все настройки к заводским"
@@ -1263,6 +1267,8 @@ object StringsEn : AppStrings {
     override val cardSystemTrayDesc: String = "Window minimize behavior and OS desktop tray integration"
     override val minimizeToTrayEnable: String = "Minimize to system tray on window close"
     override val minimizeToTrayEnableDesc: String = "App continues protecting connections in the background"
+    override val stopServiceOnExitTitle: String = "Stop v2w-service on exit"
+    override val stopServiceOnExitDesc: String = "Stops the Windows background service when the application exits completely"
     override val cardReset: String = "Reset Settings & Data"
     override val cardResetDesc: String = "Restore all parameters to factory defaults and clear cache"
     override val resetAllSettings: String = "Reset all settings to defaults"
@@ -1703,6 +1709,8 @@ object StringsZh : AppStrings {
     override val cardSystemTrayDesc: String = "窗口关闭/最小化行为及操作系统托盘栏常驻选项"
     override val minimizeToTrayEnable: String = "点击关闭按钮时最小化至系统托盘"
     override val minimizeToTrayEnableDesc: String = "窗口隐藏后仍会在后台守护网络连接"
+    override val stopServiceOnExitTitle: String = "退出时停止 v2w-service 服务"
+    override val stopServiceOnExitDesc: String = "完全关闭应用时同时停止 Windows 后台服务"
     override val cardReset: String = "恢复出厂设置与清理"
     override val cardResetDesc: String = "将所有网络及应用选项还原为出厂默认值"
     override val resetAllSettings: String = "重置所有设置为默认值"
@@ -2146,6 +2154,8 @@ object StringsFa : AppStrings {
     override val cardSystemTrayDesc: String = "رفتار پنجره برنامه و قرارگیری در نوار وظیفه"
     override val minimizeToTrayEnable: String = "کوچک کردن برنامه به سینی سیستم (Tray) هنگام بستن پنجره"
     override val minimizeToTrayEnableDesc: String = "برنامه در پس‌زمینه به کار خود ادامه می‌دهد"
+    override val stopServiceOnExitTitle: String = "توقف سرویس v2w-service هنگام خروج"
+    override val stopServiceOnExitDesc: String = "با بستن کامل برنامه، سرویس پس‌زمینه ویندوز نیز متوقف می‌شود"
     override val cardReset: String = "بازنشانی تنظیمات و پاک‌سازی داده‌ها"
     override val cardResetDesc: String = "بازگرداندن تمام تنظیمات به حالت اولیه"
     override val resetAllSettings: String = "بازنشانی تمام تنظیمات به پیش‌فرض"

@@ -212,6 +212,7 @@ fun SettingsScreen(
     var connCheckUrl by remember { mutableStateOf(state.connectionCheckServiceUrl.value) }
     var betaUpdates by remember { mutableStateOf(state.receiveBetaUpdates.value) }
     var minimizeToTray by remember { mutableStateOf(state.minimizeToTray.value) }
+    var stopServiceOnExit by remember { mutableStateOf(state.stopServiceOnExit.value) }
 
     var isSavedNotice by remember { mutableStateOf(false) }
 
@@ -299,6 +300,7 @@ fun SettingsScreen(
         )
         state.settingsRepo.runBatch {
             state.setMinimizeToTray(minimizeToTray)
+            state.setStopServiceOnExit(stopServiceOnExit)
             state.setAllowLan(allowLan)
             state.personalServersEnabled.value = personalEnabled
             state.settingsRepo.setBoolean("pref_personal_servers_enabled", personalEnabled)
@@ -398,6 +400,7 @@ fun SettingsScreen(
         fragmentInt = state.fragmentInterval.value
         fragmentPack = state.fragmentPackets.value
         minimizeToTray = state.minimizeToTray.value
+        stopServiceOnExit = state.stopServiceOnExit.value
         connCheckUrl = state.connectionCheckServiceUrl.value
         betaUpdates = state.receiveBetaUpdates.value
     }
@@ -494,6 +497,7 @@ fun SettingsScreen(
         fragmentInt != state.fragmentInterval.value ||
         fragmentPack != state.fragmentPackets.value ||
         minimizeToTray != state.minimizeToTray.value ||
+        stopServiceOnExit != state.stopServiceOnExit.value ||
         connCheckUrl != state.connectionCheckServiceUrl.value ||
         betaUpdates != state.receiveBetaUpdates.value ||
         personalEnabled != state.personalServersEnabled.value ||
@@ -1802,6 +1806,13 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                        Spacer(Modifier.height(10.dp))
+                        SettingSwitchRow(
+                            title = strings.stopServiceOnExitTitle,
+                            desc = strings.stopServiceOnExitDesc,
+                            checked = stopServiceOnExit,
+                            onCheckedChange = { stopServiceOnExit = it }
+                        )
                     }
                     Spacer(Modifier.height(14.dp))
                 }

@@ -30,6 +30,7 @@ import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
+import com.kiktor.v2whitelist.desktop.engine.TunStartFailureReason
 import com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
 import io.ktor.client.request.get
@@ -204,6 +205,8 @@ class DesktopAppState(
     val uiTheme = MutableStateFlow(settingsRepo.getString("ui_theme", "CYAN"))
     val uiCompactCards = MutableStateFlow(settingsRepo.getBoolean("ui_compact_cards", false))
     val minimizeToTray = MutableStateFlow(settingsRepo.getBoolean("minimize_to_tray", true))
+    val windowsServiceDisabledByUser = MutableStateFlow(settingsRepo.getBoolean("pref_windows_service_disabled", false))
+    val stopServiceOnExit = MutableStateFlow(settingsRepo.getBoolean("pref_stop_service_on_exit", false))
 
     // TUN & Sudo сессия (хранится только в памяти на время работы приложения)
     private enum class PendingSudoAction {
@@ -563,21 +566,35 @@ class DesktopAppState(
             }
         }
 
-        // Проверка и тихая регистрация службы Windows (если приложение запущено от администратора)
+        // Проверка и тихая регистрация службы Windows (только если пользователь не удалял службу вручную)
         if (DesktopTunManager.isWindows) {
             scope.launch(Dispatchers.IO) {
-                if (!DesktopTunManager.isServiceAvailable()) {
-                    val state = DesktopTunManager.queryServiceState()
+                val state = DesktopTunManager.queryServiceState()
+                val wasInstalled = settingsRepo.getBoolean("pref_service_was_installed", false)
+                if (state == null && wasInstalled && !windowsServiceDisabledByUser.value) {
+                    // Служба была установлена ранее, но удалена пользователем (например, через sc delete)
+                    windowsServiceDisabledByUser.value = true
+                    settingsRepo.setBoolean("pref_windows_service_disabled", true)
+                    GeekModeLogger.log("TUN", "Обнаружено внешнее удаление службы v2w-service — автоустановка отключена.")
+                } else if (state != null) {
+                    settingsRepo.setBoolean("pref_service_was_installed", true)
+                }
+
+                if (!windowsServiceDisabledByUser.value && !DesktopTunManager.isServiceAvailable()) {
                     if (state != null) {
                         // Уже зарегистрирована (ставили заранее) — только дожидаемся/запускаем
                         DesktopTunManager.installOrStartService()
                     } else if (DesktopTunManager.isWindowsAdmin()) {
-                        DesktopTunManager.runSilentServiceInstall()
+                        if (DesktopTunManager.runSilentServiceInstall()) {
+                            settingsRepo.setBoolean("pref_service_was_installed", true)
+                        }
                     } else if (DesktopTunManager.isInstalledDistribution() &&
                         !settingsRepo.getBoolean("pref_service_auto_prompted", false)) {
                         // Установленная (не portable) версия: один раз сами регистрируем службу (один UAC)
                         settingsRepo.setBoolean("pref_service_auto_prompted", true)
-                        DesktopTunManager.installServiceViaUac()
+                        if (DesktopTunManager.installServiceViaUac()) {
+                            settingsRepo.setBoolean("pref_service_was_installed", true)
+                        }
                     }
                 }
                 isWindowsServiceAvailable.value = DesktopTunManager.isServiceAvailable()
@@ -595,16 +612,28 @@ class DesktopAppState(
 
     fun installWindowsService(): Boolean {
         if (!DesktopTunManager.isWindows) return false
+        windowsServiceDisabledByUser.value = false
+        settingsRepo.setBoolean("pref_windows_service_disabled", false)
         val ok = DesktopTunManager.installServiceViaUac()
+        if (ok) {
+            settingsRepo.setBoolean("pref_service_was_installed", true)
+        }
         refreshWindowsServiceStatus()
         return ok
     }
 
     fun uninstallWindowsService(): Boolean {
         if (!DesktopTunManager.isWindows) return false
+        windowsServiceDisabledByUser.value = true
+        settingsRepo.setBoolean("pref_windows_service_disabled", true)
         val ok = DesktopTunManager.uninstallServiceViaUac()
         refreshWindowsServiceStatus()
         return ok
+    }
+
+    fun setStopServiceOnExit(enabled: Boolean) {
+        stopServiceOnExit.value = enabled
+        settingsRepo.setBoolean("pref_stop_service_on_exit", enabled)
     }
 
     private fun loadSubscriptions() {
@@ -1937,6 +1966,8 @@ class DesktopAppState(
     }
 
     fun stopCore() {
+        connectJob?.cancel()
+        connectJob = null
         smartConnectJob?.cancel()
         smartConnectJob = null
         smartConnectManager.stop()
@@ -1953,6 +1984,13 @@ class DesktopAppState(
         if (isSystemProxyActive.value) {
             DesktopProxyManager.disableSystemProxy()
             isSystemProxyActive.value = false
+        }
+    }
+
+    fun shutdownOnExit() {
+        stopCore()
+        if (DesktopTunManager.isWindows && stopServiceOnExit.value) {
+            DesktopTunManager.stopWindowsService()
         }
     }
 
@@ -1994,6 +2032,8 @@ class DesktopAppState(
         DesktopProxyManager.openUri(uri)
     }
 
+    private var connectJob: Job? = null
+
     fun connectCurrent() {
         val guid = _selectedGuid.value ?: scenarioFilteredServers.value.firstOrNull()?.first ?: servers.value.firstOrNull()?.first ?: return
         val rawProfile = serverRepo.getServerConfig(guid) ?: return
@@ -2012,7 +2052,8 @@ class DesktopAppState(
 
         if (!ensureLinuxSudoForTun(PendingSudoAction.CONNECT_CURRENT)) return
 
-        scope.launch {
+        connectJob?.cancel()
+        connectJob = scope.launch {
             val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
             val directDomains = if (domainSplitTunnelingEnabled.value) {
                 customDirectDomains.value.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }
@@ -2117,7 +2158,8 @@ class DesktopAppState(
                                 mode = appSplitTunnelingMode.value,
                                 directApps = appSplitDirectApps.value,
                                 proxyApps = appSplitProxyApps.value
-                            )
+                            ),
+                            allowServiceMode = !windowsServiceDisabledByUser.value
                         )
                     }
                     if (tunStarted) {
@@ -2139,19 +2181,25 @@ class DesktopAppState(
                         }
                         return@launch
                     } else {
-                        val reason = when {
-                            DesktopTunManager.isWindows ->
-                                "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
-                            else ->
-                                "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав sudo)."
+                        val failReason = DesktopTunManager.lastStartFailureReason
+                        val reason = when (failReason) {
+                            TunStartFailureReason.NO_DEFAULT_GATEWAY ->
+                                "Не удалось определить физический шлюз по умолчанию для безопасного запуска TUN."
+                            TunStartFailureReason.BINARY_NOT_FOUND ->
+                                "Исполняемый файл TUN-движка не найден."
+                            TunStartFailureReason.ROUTE_SETUP_FAILED ->
+                                "Не удалось настроить системные маршруты для TUN."
+                            TunStartFailureReason.PROCESS_EXITED ->
+                                "TUN-процесс завершился с ошибкой при старте."
+                            TunStartFailureReason.PRIVILEGE_REQUIRED, TunStartFailureReason.NONE, TunStartFailureReason.SERVICE_SELFTEST_FAILED -> when {
+                                DesktopTunManager.isWindows ->
+                                    "TUN адаптер (Wintun) не может быть запущен на Windows без прав Администратора."
+                                else ->
+                                    "TUN интерфейс не может быть поднят без прав root (драйвер tun не загружен или нет прав администратора)."
+                            }
                         }
                         GeekModeLogger.log("TUN", "$reason Включен системный прокси как резерв.")
-                        clipboardNotice.value = when {
-                            DesktopTunManager.isWindows ->
-                                "Для режима TUN запустите приложение от имени администратора. Включен системный прокси."
-                            else ->
-                                "Для режима TUN требуются root права. Включен системный прокси."
-                        }
+                        clipboardNotice.value = "$reason Включен системный прокси."
                         routingMode.value = "PROXY"
                         if (autoEnableSystemProxy.value) {
                             DesktopProxyManager.enableSystemProxy(currentSocksPort, currentHttpPort)
@@ -2370,7 +2418,8 @@ class DesktopAppState(
                     exitIpError.value = "HTTP ${resp.status.value} через туннель"
                 }
             } catch (e: Exception) {
-                GeekModeLogger.log("GeekMode", "Не удалось определить Exit IP: ${e.message}")
+                val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "Unknown error"
+                GeekModeLogger.log("GeekMode", "Не удалось определить Exit IP: $detail")
                 if (isRunning) {
                     exitIp.value = null
                     val hasEndpoint = useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()
@@ -2964,6 +3013,8 @@ class DesktopAppState(
         uiTheme.value = "CYAN"
         uiCompactCards.value = false
         minimizeToTray.value = true
+        stopServiceOnExit.value = false
+        settingsRepo.setBoolean("pref_stop_service_on_exit", false)
         themeMode.value = "DARK"
         themePalette.value = "CYAN"
         pureBlackAmoled.value = false

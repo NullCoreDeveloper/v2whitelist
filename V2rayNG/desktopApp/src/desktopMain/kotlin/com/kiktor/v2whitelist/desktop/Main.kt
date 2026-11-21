@@ -619,7 +619,7 @@ fun main() {
             Item(
                 label = strings.trayExit,
                 onClick = {
-                    state.stopCore()
+                    state.shutdownOnExit()
                     exitApplication()
                 }
             )
@@ -630,7 +630,7 @@ fun main() {
                 if (minimizeToTray) {
                     isWindowVisible = false
                 } else {
-                    state.stopCore()
+                    state.shutdownOnExit()
                     exitApplication()
                 }
             },
