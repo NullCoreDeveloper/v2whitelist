@@ -2,9 +2,12 @@ package com.kiktor.v2whitelist.core.subscription
 
 import com.kiktor.v2whitelist.core.config.util.Base64Util
 import com.kiktor.v2whitelist.core.model.EConfigType
+import com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetcher
 import com.kiktor.v2whitelist.core.subscription.parser.SubscriptionParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SubscriptionParserTest {
@@ -80,5 +83,18 @@ class SubscriptionParserTest {
         val parsedSecureOnly = SubscriptionParser.parse(raw, filterInsecure = true)
         assertEquals(1, parsedSecureOnly.size)
         assertEquals("RU-Moscow-01", parsedSecureOnly[0].remarks)
+    }
+
+    @Test
+    fun testParseSubscriptionUserInfoHeader() {
+        val info = SubscriptionFetcher.parseSubscriptionUserInfo("upload=1048576; download=2097152; total=10737418240; expire=1800000000")
+        assertNotNull(info)
+        assertEquals(1048576L, info.uploadBytes)
+        assertEquals(2097152L, info.downloadBytes)
+        assertEquals(10737418240L, info.totalBytes)
+        assertEquals(1800000000L, info.expireTimestampSec)
+
+        assertNull(SubscriptionFetcher.parseSubscriptionUserInfo(""))
+        assertNull(SubscriptionFetcher.parseSubscriptionUserInfo("foo=bar"))
     }
 }

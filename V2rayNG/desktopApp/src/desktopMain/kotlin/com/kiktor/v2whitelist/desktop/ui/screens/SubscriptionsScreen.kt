@@ -356,6 +356,36 @@ private fun SubscriptionCard(
                             CategoryBadge(label = strings.scenarioYoutubeSubtitle, color = AccentRose)
                         }
                     }
+
+                    if (sub.hasQuotaInfo) {
+                        Spacer(Modifier.height(8.dp))
+                        val usedText = formatSubBytes(sub.usedBytes)
+                        val quotaText = if (sub.totalBytes > 0L) {
+                            "$usedText / ${formatSubBytes(sub.totalBytes)}"
+                        } else {
+                            usedText
+                        }
+                        val expireText = if (sub.expireTimestampSec > 0L) {
+                            val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
+                                .format(java.util.Date(sub.expireTimestampSec * 1000L))
+                            " • до $dateStr"
+                        } else ""
+                        Text(
+                            text = "Трафик: $quotaText$expireText",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (sub.totalBytes > 0L) {
+                            val progress = (sub.usedBytes.toFloat() / sub.totalBytes.toFloat()).coerceIn(0f, 1f)
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                color = if (progress > 0.9f) AccentRed else AccentCyan,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                        }
+                    }
                 }
             }
 
@@ -586,5 +616,16 @@ private fun SubscriptionEditDialog(
                 }
             }
         }
+    }
+}
+
+private fun formatSubBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 МБ"
+    val gb = 1024.0 * 1024.0 * 1024.0
+    val mb = 1024.0 * 1024.0
+    return when {
+        bytes >= gb -> String.format(java.util.Locale.US, "%.2f ГБ", bytes / gb)
+        bytes >= mb -> String.format(java.util.Locale.US, "%.1f МБ", bytes / mb)
+        else -> "${bytes / 1024L} КБ"
     }
 }
