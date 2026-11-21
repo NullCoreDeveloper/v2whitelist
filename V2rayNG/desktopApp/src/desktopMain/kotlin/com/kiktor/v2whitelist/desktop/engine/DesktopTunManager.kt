@@ -97,7 +97,8 @@ private data class ServiceStartTunRequestDto(
     @SerialName("split_enabled") val splitEnabled: Boolean = false,
     @SerialName("split_mode") val splitMode: String = "bypass",
     @SerialName("direct_apps") val directApps: List<String> = emptyList(),
-    @SerialName("proxy_apps") val proxyApps: List<String> = emptyList()
+    @SerialName("proxy_apps") val proxyApps: List<String> = emptyList(),
+    @SerialName("self_test_url") val selfTestUrl: String = ""
 )
 
 @Serializable
@@ -314,7 +315,8 @@ object DesktopTunManager {
         socksUser: String?,
         socksPass: String?,
         directDns: String?,
-        appSplitConfig: AppSplitTunnelingConfig
+        appSplitConfig: AppSplitTunnelingConfig,
+        selfTestUrl: String? = null
     ): Boolean {
         return try {
             val client = HttpClient.newBuilder()
@@ -342,7 +344,8 @@ object DesktopTunManager {
                     splitEnabled = appSplitConfig.enabled,
                     splitMode = appSplitConfig.mode.toWireValue(),
                     directApps = appSplitConfig.directApps,
-                    proxyApps = appSplitConfig.proxyApps
+                    proxyApps = appSplitConfig.proxyApps,
+                    selfTestUrl = selfTestUrl.orEmpty().trim()
                 )
             )
 
@@ -549,7 +552,8 @@ object DesktopTunManager {
         directDns: String? = null,
         socksUser: String? = null,
         socksPass: String? = null,
-        allowServiceMode: Boolean = true
+        allowServiceMode: Boolean = true,
+        selfTestUrl: String? = null
     ): Boolean {
         if (isTunActive) {
             stop(sudoPassword)
@@ -608,7 +612,8 @@ object DesktopTunManager {
                     socksUser = socksUser,
                     socksPass = socksPass,
                     directDns = resolvedDirectDns,
-                    appSplitConfig = appSplitConfig
+                    appSplitConfig = appSplitConfig,
+                    selfTestUrl = selfTestUrl
                 )
                 if (started) {
                     isTunActive = true

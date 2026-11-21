@@ -69,3 +69,18 @@ func TestBuildServerRouteArgs(t *testing.T) {
 		t.Fatalf("on-link ppp route delete mismatch: got %v, want %v", delPpp, wantDelPpp)
 	}
 }
+
+func TestNormalizeCustomSelfTestURL(t *testing.T) {
+	if got := normalizeCustomSelfTestURL("  https://ya.ru/generate_204  "); got != "https://ya.ru/generate_204" {
+		t.Fatalf("expected trimmed https url, got %q", got)
+	}
+	if got := normalizeCustomSelfTestURL("http://2ip.ru"); got != "http://2ip.ru" {
+		t.Fatalf("expected http url, got %q", got)
+	}
+	if got := normalizeCustomSelfTestURL("ftp://example.com"); got != "" {
+		t.Fatalf("expected empty for non-http scheme, got %q", got)
+	}
+	if got := normalizeCustomSelfTestURL("   "); got != "" {
+		t.Fatalf("expected empty for blank input, got %q", got)
+	}
+}

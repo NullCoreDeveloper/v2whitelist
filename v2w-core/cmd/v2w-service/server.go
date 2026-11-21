@@ -45,6 +45,7 @@ type StartTunRequest struct {
 	SplitMode     string   `json:"split_mode,omitempty"`
 	DirectApps    []string `json:"direct_apps,omitempty"`
 	ProxyApps     []string `json:"proxy_apps,omitempty"`
+	SelfTestURL   string   `json:"self_test_url,omitempty"`
 }
 
 type ApiResponse struct {
@@ -422,7 +423,7 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	exec.Command("ipconfig", "/flushdns").Run()
 
 	// Самопроверка: если через туннель реально нет интернета — не оставляем систему «без соединения»
-	if err := selfTest(dnsServers); err != nil {
+	if err := selfTest(dnsServers, req.SelfTestURL); err != nil {
 		dumpDiagnostics()
 		return fmt.Errorf("SELFTEST_FAILED: через TUN нет интернета (%v). Подробности: %s", err, logDir())
 	}
@@ -521,7 +522,19 @@ func parseNetshDnsServers(output string, tunDNS []string, excludeIPs ...string) 
 	return result
 }
 
-func selfTest(dnsServers []string) error {
+func normalizeCustomSelfTestURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return ""
+	}
+	return trimmed
+}
+
+func selfTest(dnsServers []string, customURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 
@@ -584,12 +597,16 @@ func selfTest(dnsServers []string) error {
 		url    string
 		client *http.Client
 	}
-	probes := []probe{
-		{url: "http://1.1.1.1/", client: ipClient},
-		{url: "http://1.0.0.1/", client: ipClient},
-		{url: "http://cp.cloudflare.com/generate_204", client: ipClient},
-		{url: "http://www.msftconnecttest.com/connecttest.txt", client: domainClient},
+	var probes []probe
+	if custom := normalizeCustomSelfTestURL(customURL); custom != "" {
+		probes = append(probes, probe{url: custom, client: domainClient})
 	}
+	probes = append(probes,
+		probe{url: "http://1.1.1.1/", client: ipClient},
+		probe{url: "http://1.0.0.1/", client: ipClient},
+		probe{url: "http://cp.cloudflare.com/generate_204", client: ipClient},
+		probe{url: "http://www.msftconnecttest.com/connecttest.txt", client: domainClient},
+	)
 
 	var lastErr error
 	for round := 0; round < 2; round++ {
