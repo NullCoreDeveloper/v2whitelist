@@ -19,9 +19,13 @@ import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetcher
 import com.kiktor.v2whitelist.core.subscription.parser.SubscriptionParser
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
+import com.kiktor.v2whitelist.desktop.data.DesktopBackupPayload
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
+import com.kiktor.v2whitelist.desktop.data.ServerRecord
+import com.kiktor.v2whitelist.desktop.data.ServersStorage
+import com.kiktor.v2whitelist.desktop.data.SettingsStorage
 import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
 import com.kiktor.v2whitelist.desktop.engine.AppSplitTunnelingConfig
 import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
@@ -382,6 +386,7 @@ class DesktopAppState(
     val autoCheckUpdates = MutableStateFlow(settingsRepo.getBoolean("pref_auto_check_updates", true))
     val receiveBetaUpdates = MutableStateFlow(settingsRepo.getBoolean("pref_receive_beta_updates", false))
     val connectionCheckServiceUrl = MutableStateFlow(settingsRepo.getString("pref_conn_check_url", "https://api.ip.sb/geoip"))
+    val tunSelfTestUrl = MutableStateFlow(settingsRepo.getString("pref_tun_self_test_url", ""))
 
     // Обновления приложения ПроБел
     val isCheckingAppUpdate = MutableStateFlow(false)
@@ -1369,8 +1374,9 @@ class DesktopAppState(
 
                                 var result = if (useYandex) {
                                     fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                                        .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
                                 } else {
-                                    SubscriptionFetcher.fetchParallel(
+                                    SubscriptionFetcher.fetchParallelWithMeta(
                                         urls = mirrors,
                                         userAgent = ua,
                                         httpProxyHost = "127.0.0.1",
@@ -1382,13 +1388,15 @@ class DesktopAppState(
                                 if (result.isFailure && yandexTranslateUpdateEnabled.value && !useYandex && coreState.value != DesktopCoreState.RUNNING) {
                                     GeekModeLogger.log("Subscriptions", "${sub.name}: прямой запрос не удался, попытка через Яндекс.Переводчик...")
                                     result = fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                                        .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
                                 }
 
                                 // Парсинг и фильтрация выполняются параллельно вне блокировки
+                                val fetchValue = result.getOrNull()
                                 var batch: List<Pair<String, com.kiktor.v2whitelist.core.model.ProfileItem>> = emptyList()
                                 var oldForSub: List<String> = emptyList()
-                                if (result.isSuccess) {
-                                    val content = result.getOrNull().orEmpty()
+                                if (result.isSuccess && fetchValue != null) {
+                                    val content = fetchValue.content
                                     var parsed = SubscriptionParser.parse(content)
 
                                     if (sub.filter.isNotBlank()) {
@@ -1412,21 +1420,32 @@ class DesktopAppState(
 
                                 synchronized(updatedSubsLock) {
                                     val subIdx = updatedSubsList.indexOfFirst { it.id == sub.id }
+                                    val userInfo = fetchValue?.userInfo
                                     if (result.isSuccess) {
                                         if (batch.isNotEmpty()) {
                                             pendingBatches.add(oldForSub to batch)
                                             if (subIdx >= 0) {
-                                                updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                                                val prev = updatedSubsList[subIdx]
+                                                updatedSubsList[subIdx] = prev.copy(
                                                     lastUpdated = System.currentTimeMillis(),
-                                                    lastUpdateFailed = false
+                                                    lastUpdateFailed = false,
+                                                    uploadBytes = userInfo?.uploadBytes ?: prev.uploadBytes,
+                                                    downloadBytes = userInfo?.downloadBytes ?: prev.downloadBytes,
+                                                    totalBytes = userInfo?.totalBytes ?: prev.totalBytes,
+                                                    expireTimestampSec = userInfo?.expireTimestampSec ?: prev.expireTimestampSec
                                                 )
                                             }
                                             GeekModeLogger.log("Subscriptions", "${sub.name}: +${batch.size} узлов")
                                         } else {
                                             GeekModeLogger.log("Subscriptions", "${sub.name}: сервер не вернул узлов (0). Сохранены прежние узлы.")
                                             if (subIdx >= 0) {
-                                                updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
-                                                    lastUpdateFailed = true
+                                                val prev = updatedSubsList[subIdx]
+                                                updatedSubsList[subIdx] = prev.copy(
+                                                    lastUpdateFailed = true,
+                                                    uploadBytes = userInfo?.uploadBytes ?: prev.uploadBytes,
+                                                    downloadBytes = userInfo?.downloadBytes ?: prev.downloadBytes,
+                                                    totalBytes = userInfo?.totalBytes ?: prev.totalBytes,
+                                                    expireTimestampSec = userInfo?.expireTimestampSec ?: prev.expireTimestampSec
                                                 )
                                             }
                                         }
@@ -1498,8 +1517,9 @@ class DesktopAppState(
 
                 var result = if (useYandex) {
                     fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                        .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
                 } else {
-                    SubscriptionFetcher.fetchParallel(
+                    SubscriptionFetcher.fetchParallelWithMeta(
                         urls = mirrors,
                         userAgent = ua,
                         httpProxyHost = "127.0.0.1",
@@ -1511,13 +1531,16 @@ class DesktopAppState(
                 if (result.isFailure && yandexTranslateUpdateEnabled.value && !useYandex && coreState.value != DesktopCoreState.RUNNING) {
                     GeekModeLogger.log("Subscriptions", "${targetSub.name}: прямой запрос не удался, попытка через Яндекс.Переводчик...")
                     result = fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
+                        .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
                 }
 
                 val updatedSubsList = _subscriptions.value.toMutableList()
                 val subIdx = updatedSubsList.indexOfFirst { it.id == subId }
 
                 if (result.isSuccess) {
-                    val content = result.getOrNull().orEmpty()
+                    val fetchValue = result.getOrNull()
+                    val content = fetchValue?.content.orEmpty()
+                    val userInfo = fetchValue?.userInfo
                     var parsed = SubscriptionParser.parse(content)
 
                     if (targetSub.filter.isNotBlank()) {
@@ -1574,9 +1597,14 @@ class DesktopAppState(
                     }
 
                     if (subIdx >= 0) {
-                        updatedSubsList[subIdx] = updatedSubsList[subIdx].copy(
+                        val prev = updatedSubsList[subIdx]
+                        updatedSubsList[subIdx] = prev.copy(
                             lastUpdated = System.currentTimeMillis(),
-                            lastUpdateFailed = false
+                            lastUpdateFailed = false,
+                            uploadBytes = userInfo?.uploadBytes ?: prev.uploadBytes,
+                            downloadBytes = userInfo?.downloadBytes ?: prev.downloadBytes,
+                            totalBytes = userInfo?.totalBytes ?: prev.totalBytes,
+                            expireTimestampSec = userInfo?.expireTimestampSec ?: prev.expireTimestampSec
                         )
                     }
                     _subscriptions.value = updatedSubsList
@@ -2159,7 +2187,8 @@ class DesktopAppState(
                                 directApps = appSplitDirectApps.value,
                                 proxyApps = appSplitProxyApps.value
                             ),
-                            allowServiceMode = !windowsServiceDisabledByUser.value
+                            allowServiceMode = !windowsServiceDisabledByUser.value,
+                            selfTestUrl = tunSelfTestUrl.value
                         )
                     }
                     if (tunStarted) {
@@ -2781,7 +2810,8 @@ class DesktopAppState(
         verifyConcurrencyVal: Int = verifyConcurrency.value,
         tunEnginePrefVal: TunEnginePreference = tunEnginePreference.value,
         appSplitEnabledVal: Boolean = appSplitTunnelingEnabled.value,
-        appSplitModeVal: AppSplitMode = appSplitTunnelingMode.value
+        appSplitModeVal: AppSplitMode = appSplitTunnelingMode.value,
+        tunSelfTestUrlVal: String = tunSelfTestUrl.value
     ) {
         subscriptionUrl.value = subUrl
         xrayBinaryPath.value = xrayPath
@@ -2802,6 +2832,7 @@ class DesktopAppState(
         endpointE2eCheckEnabled.value = endpointE2eCheck
         bypassRussianServices.value = bypassRu
         connectionCheckServiceUrl.value = checkUrl
+        tunSelfTestUrl.value = tunSelfTestUrlVal
 
         smartConnectBatchSize.value = smartBatch
         smartDistributionPreset.value = smartPreset
@@ -2906,6 +2937,7 @@ class DesktopAppState(
             settingsRepo.setBoolean("pref_endpoint_e2e_check_enabled", endpointE2eCheck)
             settingsRepo.setBoolean("pref_bypass_russian_services", bypassRu)
             settingsRepo.setString("pref_conn_check_url", checkUrl)
+            settingsRepo.setString("pref_tun_self_test_url", tunSelfTestUrlVal)
 
             settingsRepo.setInt("pref_smart_batch_size", smartBatch)
             settingsRepo.setString("pref_smart_distribution", smartPreset)
@@ -3089,6 +3121,8 @@ class DesktopAppState(
         autoCheckUpdates.value = true
         receiveBetaUpdates.value = false
         connectionCheckServiceUrl.value = "https://api.ip.sb/geoip"
+        tunSelfTestUrl.value = ""
+        settingsRepo.setString("pref_tun_self_test_url", "")
 
         preferIpv6.value = false
         useLocalDns.value = true
@@ -3286,6 +3320,232 @@ class DesktopAppState(
                 isCheckingAppUpdate.value = false
             }
         }
+    }
+
+    fun exportBackupJson(): String {
+        val settingsSnap = if (settingsRepo is DesktopFileSettingsRepository) {
+            settingsRepo.exportSnapshot()
+        } else {
+            SettingsStorage(
+                appScenario = _scenario.value.name,
+                smartFailover = settingsRepo.isSmartFailoverEnabled(),
+                socksPort = socksPort.value,
+                httpPort = httpPort.value,
+                stringMap = mapOf(
+                    "custom_direct_domains" to customDirectDomains.value,
+                    "custom_proxy_domains" to customProxyDomains.value,
+                    "pref_tun_self_test_url" to tunSelfTestUrl.value,
+                    "pref_conn_check_url" to connectionCheckServiceUrl.value,
+                    "pref_routing_mode" to routingMode.value
+                ),
+                boolMap = mapOf(
+                    "pref_domain_split_tunneling" to domainSplitTunnelingEnabled.value,
+                    "pref_domain_whitelist_mode" to domainWhitelistMode.value,
+                    "pref_bypass_russian_services" to bypassRussianServices.value,
+                    "minimize_to_tray" to minimizeToTray.value,
+                    "pref_stop_service_on_exit" to stopServiceOnExit.value
+                )
+            )
+        }
+        val serversSnap = if (serverRepo is DesktopFileServerRepository) {
+            serverRepo.exportSnapshot()
+        } else {
+            ServersStorage(
+                servers = serverRepo.serversFlow.value.map { ServerRecord(it.first, it.second) },
+                selectedGuid = serverRepo.getSelectedServerGuid(),
+                vipGuids = serverRepo.getVipServerGuids().toList()
+            )
+        }
+        val payload = DesktopBackupPayload(
+            version = 1,
+            exportedAtMs = System.currentTimeMillis(),
+            settings = settingsSnap,
+            servers = serversSnap
+        )
+        val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true; encodeDefaults = true }
+        return prettyJson.encodeToString(payload)
+    }
+
+    fun exportBackupToFile(file: java.io.File): Result<Unit> = runCatching {
+        file.parentFile?.let { if (!it.exists()) it.mkdirs() }
+        file.writeText(exportBackupJson(), Charsets.UTF_8)
+        GeekModeLogger.log("Backup", "Резервная копия сохранена: ${file.absolutePath}")
+        clipboardNotice.value = "Бэкап сохранён: ${file.name}"
+    }.onFailure { err ->
+        GeekModeLogger.log("Backup", "Ошибка экспорта бэкапа: ${err.message}")
+    }
+
+    fun importBackupJson(rawJson: String): Result<Int> = runCatching {
+        val payload = jsonHelper.decodeFromString<DesktopBackupPayload>(rawJson)
+        if (settingsRepo is DesktopFileSettingsRepository) {
+            settingsRepo.importSnapshot(payload.settings)
+        } else {
+            settingsRepo.runBatch {
+                settingsRepo.setAppScenario(
+                    try { AppScenario.valueOf(payload.settings.appScenario) } catch (_: Exception) { AppScenario.AUTO }
+                )
+                settingsRepo.setSmartFailoverEnabled(payload.settings.smartFailover)
+                settingsRepo.setSocksPort(payload.settings.socksPort)
+                settingsRepo.setHttpPort(payload.settings.httpPort)
+                payload.settings.stringMap.forEach { (k, v) -> settingsRepo.setString(k, v) }
+                payload.settings.boolMap.forEach { (k, v) -> settingsRepo.setBoolean(k, v) }
+                payload.settings.intMap.forEach { (k, v) -> settingsRepo.setInt(k, v) }
+            }
+        }
+        if (serverRepo is DesktopFileServerRepository) {
+            serverRepo.importSnapshot(payload.servers)
+        } else {
+            val oldGuids = serverRepo.getAllServerGuids()
+            val newRecords = payload.servers.servers.map { it.guid to it.profile }
+            serverRepo.replaceSubscriptionServers(oldGuids, newRecords)
+            serverRepo.setSelectedServerGuid(payload.servers.selectedGuid)
+            for (vip in payload.servers.vipGuids) {
+                serverRepo.addVipServer(vip)
+            }
+        }
+        reloadStateFromRepositories()
+        GeekModeLogger.log("Backup", "Резервная копия восстановлена (серверов: ${payload.servers.servers.size})")
+        clipboardNotice.value = "Бэкап восстановлен (серверов: ${payload.servers.servers.size})"
+        payload.servers.servers.size
+    }.onFailure { err ->
+        GeekModeLogger.log("Backup", "Ошибка импорта бэкапа: ${err.message}")
+    }
+
+    fun importBackupFromFile(file: java.io.File): Result<Int> {
+        return runCatching { file.readText(Charsets.UTF_8) }.fold(
+            onSuccess = { importBackupJson(it) },
+            onFailure = { Result.failure(it) }
+        )
+    }
+
+    private fun reloadStateFromRepositories() {
+        _scenario.value = settingsRepo.getAppScenario()
+        _selectedGuid.value = serverRepo.getSelectedServerGuid()
+        socksPort.value = settingsRepo.getSocksPort()
+        httpPort.value = settingsRepo.getHttpPort()
+        localProxyPort.value = settingsRepo.getInt("pref_local_proxy_port", socksPort.value)
+        subscriptionUrl.value = settingsRepo.getString("subscription_url")
+        xrayBinaryPath.value = settingsRepo.getString("xray_path")
+        v2wScanPath.value = settingsRepo.getString("v2w_scan_path")
+        autoEnableSystemProxy.value = settingsRepo.getBoolean("auto_enable_system_proxy", false)
+        allowLan.value = settingsRepo.getBoolean("allow_lan", false)
+        routingMode.value = settingsRepo.getString("pref_routing_mode", "TUN").let { if (it == "TUN" || it == "PROXY") it else "TUN" }
+        uiTheme.value = settingsRepo.getString("ui_theme", "CYAN")
+        uiCompactCards.value = settingsRepo.getBoolean("ui_compact_cards", false)
+        minimizeToTray.value = settingsRepo.getBoolean("minimize_to_tray", true)
+        stopServiceOnExit.value = settingsRepo.getBoolean("pref_stop_service_on_exit", false)
+        windowsServiceDisabledByUser.value = settingsRepo.getBoolean("pref_windows_service_disabled", false)
+        themeMode.value = settingsRepo.getString("pref_theme_mode", "DARK")
+        themePalette.value = settingsRepo.getString("pref_theme_palette", "CYAN")
+        pureBlackAmoled.value = settingsRepo.getBoolean("pref_pure_black_amoled", false)
+        appLanguage.value = settingsRepo.getString("pref_app_language", "RU")
+        meshGradientEnabled.value = settingsRepo.getBoolean("pref_mesh_gradient_enabled", false)
+        meshGradientMode.value = settingsRepo.getString("pref_mesh_gradient_mode", "STATIC")
+
+        locationFilterMode.value = LocationFilterMode.fromString(settingsRepo.getString("pref_location_filter_mode", "EXCLUDE"))
+        locationFilterSet.value = try {
+            val s = settingsRepo.getString("pref_location_filter_set", "")
+            if (s.isNotBlank()) jsonHelper.decodeFromString<Set<String>>(s) else ServerTagResolver.getDefaultFilterSet()
+        } catch (_: Exception) { ServerTagResolver.getDefaultFilterSet() }
+
+        subscriptionUserAgent.value = settingsRepo.getString("subscription_user_agent", "v2rayNG/1.10.x")
+        subscriptionUpdateOnlyViaProxy.value = settingsRepo.getBoolean("subscription_update_only_via_proxy", false)
+        subscriptionThreads.value = settingsRepo.getInt("subscription_threads", 15).coerceIn(1, 20)
+        subscriptionAutoUpdate.value = settingsRepo.getBoolean("subscription_auto_update", true)
+        subscriptionUpdateIntervalMinutes.value = settingsRepo.getInt("subscription_update_interval_minutes", 30).coerceAtLeast(15)
+        subscriptionUpdateOnStartup.value = settingsRepo.getBoolean("subscription_update_on_startup", true)
+        yandexTranslateUpdateEnabled.value = settingsRepo.getBoolean("pref_yandex_translate_update", false)
+
+        domainSplitTunnelingEnabled.value = settingsRepo.getBoolean("pref_domain_split_tunneling", true)
+        domainWhitelistMode.value = settingsRepo.getBoolean("pref_domain_whitelist_mode", false)
+        bypassRussianServices.value = settingsRepo.getBoolean("pref_bypass_russian_services", true)
+        customDirectDomains.value = settingsRepo.getString("custom_direct_domains", "")
+        customProxyDomains.value = settingsRepo.getString("custom_proxy_domains", "")
+
+        tunEnginePreference.value = TunEnginePreference.fromString(settingsRepo.getString("pref_tun_engine", TunEnginePreference.AUTO.name))
+        appSplitTunnelingEnabled.value = settingsRepo.getBoolean("pref_app_split_enabled", false)
+        appSplitTunnelingMode.value = AppSplitMode.fromString(settingsRepo.getString("pref_app_split_mode", AppSplitMode.BYPASS.name))
+        appSplitDirectApps.value = parseAppSplitList(settingsRepo.getString("pref_app_split_direct_apps", ""))
+        appSplitProxyApps.value = parseAppSplitList(settingsRepo.getString("pref_app_split_proxy_apps", ""))
+
+        useCustomEndpoint.value = settingsRepo.getBoolean("pref_custom_endpoint_enabled", false)
+        customEndpointUrl.value = settingsRepo.getString("pref_custom_endpoint_url", "")
+        customEndpointSubUrl.value = settingsRepo.getString("pref_custom_endpoint_sub_url", "")
+        endpointE2eCheckEnabled.value = settingsRepo.getBoolean("pref_endpoint_e2e_check_enabled", true)
+
+        personalServersEnabled.value = settingsRepo.getBoolean("pref_personal_servers_enabled", false)
+        personalSelectedGuid.value = settingsRepo.getString("pref_personal_selected_guid", "")
+        personalIgnoreExitNode.value = settingsRepo.getBoolean("pref_personal_ignore_exit_node", true)
+        personalAutoConnectOnStartup.value = settingsRepo.getBoolean("pref_personal_auto_connect", true)
+        personalFallbackPublic.value = settingsRepo.getBoolean("pref_personal_fallback_public", true)
+
+        globalSni.value = settingsRepo.getString("pref_global_sni", "")
+        cloudflareIp.value = settingsRepo.getString("pref_cloudflare_ip", "")
+        customUserAgent.value = settingsRepo.getString("pref_custom_user_agent", "Auto (Default)")
+        vipCacheLimit.value = settingsRepo.getInt("pref_vip_cache_limit", 5).coerceIn(1, 100)
+
+        smartConnectBatchSize.value = settingsRepo.getInt("pref_smart_batch_size", 20)
+        verifyConcurrency.value = settingsRepo.getInt("pref_verify_concurrency", 4).coerceIn(1, 10)
+        smartDistributionPreset.value = settingsRepo.getString("pref_smart_distribution", "EQUAL")
+        useV2WCore.value = settingsRepo.getBoolean("pref_use_v2w_core", true)
+        useFallbackScanner.value = settingsRepo.getBoolean("pref_use_fallback_scanner", true)
+        tcpPrecheckConcurrency.value = settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200)
+        v2wCoreSockets.value = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
+        v2wFullVerifyMode.value = settingsRepo.getBoolean("pref_v2w_full_verify_mode", true)
+
+        removeInsecureProfiles.value = settingsRepo.getBoolean("pref_remove_insecure_profiles", true)
+        testProfileBeforeConnect.value = settingsRepo.getBoolean("pref_test_before_connect", true)
+        serviceCheckEnabled.value = settingsRepo.getBoolean("pref_service_check_enabled", false)
+        servicesList.value = com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem.parseList(
+            settingsRepo.getString("pref_service_check_items", "")
+        )
+        speedTestOnCheck.value = settingsRepo.getBoolean("pref_speed_test_on_check", true)
+        speedTestDownloadBytes.value = settingsRepo.getInt("pref_speed_test_bytes", 2000000).let { if (it < 10000) 2000000 else it }
+        speedTestTimeoutMs.value = settingsRepo.getInt("pref_speed_test_timeout_ms", 3000).let { if (it < 500) 3000 else it }
+        minSpeedThresholdMbps.value = (settingsRepo.getString("pref_min_speed_mbps", "1.0").toDoubleOrNull() ?: 1.0).let { if (it < 0.0) 1.0 else it }
+
+        autoFailover.value = settingsRepo.getBoolean("pref_auto_failover", true)
+        heartbeatIntervalSeconds.value = settingsRepo.getInt("pref_heartbeat_interval", 30)
+        smartFailover.value = settingsRepo.getBoolean("pref_smart_failover", true)
+        failoverDegradationThresholdKb.value = settingsRepo.getInt("pref_failover_degradation_kb", 3)
+        failoverStuckDurationSeconds.value = settingsRepo.getInt("pref_failover_stuck_sec", 3)
+
+        networkCheckEnabled.value = settingsRepo.getBoolean("pref_network_check_enabled", true)
+        networkCheckPrimaryDomain.value = settingsRepo.getString("pref_net_check_primary", "google.com")
+        networkCheckFallbackDomain.value = settingsRepo.getString("pref_net_check_fallback", "ya.ru")
+        autoCheckUpdates.value = settingsRepo.getBoolean("pref_auto_check_updates", true)
+        receiveBetaUpdates.value = settingsRepo.getBoolean("pref_receive_beta_updates", false)
+        connectionCheckServiceUrl.value = settingsRepo.getString("pref_conn_check_url", "https://api.ip.sb/geoip")
+        tunSelfTestUrl.value = settingsRepo.getString("pref_tun_self_test_url", "")
+
+        preferIpv6.value = settingsRepo.getBoolean("pref_prefer_ipv6", false)
+        useLocalDns.value = settingsRepo.getBoolean("pref_use_local_dns", true)
+        useFakeDns.value = settingsRepo.getBoolean("pref_use_fakedns", false)
+        additionalHttpProxy.value = settingsRepo.getBoolean("pref_add_http_proxy", false)
+        vpnDns.value = settingsRepo.getString("pref_vpn_dns", "1.1.1.1")
+        vpnBypassLan.value = settingsRepo.getBoolean("pref_vpn_bypass_lan", true)
+        vpnInterfaceAddress.value = settingsRepo.getString("pref_vpn_address", "10.10.14.1")
+        vpnMtu.value = settingsRepo.getInt("pref_vpn_mtu", 1500)
+        sniffingEnabled.value = settingsRepo.getBoolean("pref_sniffing_enabled", true)
+        routeOnly.value = settingsRepo.getBoolean("pref_route_only", false)
+        allowInsecure.value = settingsRepo.getBoolean("pref_allow_insecure", false)
+        localProxyLogin.value = settingsRepo.getString("pref_local_proxy_login", localProxyLogin.value)
+        localProxyPassword.value = settingsRepo.getString("pref_local_proxy_pass", localProxyPassword.value)
+        remoteDns.value = settingsRepo.getString("pref_remote_dns", "1.1.1.1")
+        internalDns.value = settingsRepo.getString("pref_internal_dns", "223.5.5.5")
+        dnsHosts.value = settingsRepo.getString("pref_dns_hosts", "")
+        muxEnabled.value = settingsRepo.getBoolean("pref_mux_enabled", false)
+        muxTcpConcurrency.value = settingsRepo.getInt("pref_mux_tcp", 8)
+        muxXudpConcurrency.value = settingsRepo.getInt("pref_mux_xudp", 8)
+        fragmentEnabled.value = settingsRepo.getBoolean("pref_fragment_enabled", false)
+        fragmentLength.value = settingsRepo.getString("pref_fragment_length", "50-100")
+        fragmentInterval.value = settingsRepo.getString("pref_fragment_interval", "10-20")
+        fragmentPackets.value = settingsRepo.getString("pref_fragment_packets", "tlshello")
+
+        loadSubscriptions()
+        settingsRevision.value++
+        restartPeriodicSubscriptionUpdates()
+        restartPeriodicAppUpdateCheck()
     }
 
     companion object {

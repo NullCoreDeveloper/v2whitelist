@@ -39,6 +39,14 @@ internal data class SettingsStorage(
     val intMap: Map<String, Int> = emptyMap()
 )
 
+@Serializable
+internal data class DesktopBackupPayload(
+    val version: Int = 1,
+    val exportedAtMs: Long = 0L,
+    val settings: SettingsStorage = SettingsStorage(),
+    val servers: ServersStorage = ServersStorage()
+)
+
 internal object DesktopStorageManager {
     private val json = Json {
         prettyPrint = true
@@ -311,6 +319,27 @@ class DesktopFileServerRepository : ServerRepository {
 
     override fun getServerConfig(guid: String): ProfileItem? = synchronized(repoLock) {
         serverMap[guid]
+    }
+
+    internal fun exportSnapshot(): ServersStorage = synchronized(repoLock) {
+        ServersStorage(
+            servers = serverMap.entries.map { ServerRecord(it.key, it.value) },
+            selectedGuid = selectedGuid,
+            vipGuids = vipList.toList()
+        )
+    }
+
+    internal fun importSnapshot(snapshot: ServersStorage) = synchronized(repoLock) {
+        serverMap.clear()
+        vipList.clear()
+        for (item in snapshot.servers) {
+            serverMap[item.guid] = item.profile
+        }
+        vipList.addAll(snapshot.vipGuids.filter { serverMap.containsKey(it) })
+        val saved = snapshot.selectedGuid
+        selectedGuid = if (saved != null && serverMap.containsKey(saved)) saved else serverMap.keys.firstOrNull()
+        updateFlow()
+        persist()
     }
 
     override fun saveServerConfig(guid: String, profile: ProfileItem) = synchronized(repoLock) {
@@ -652,6 +681,34 @@ class DesktopFileSettingsRepository : SettingsRepository {
             stringMap.clear()
             boolMap.clear()
             intMap.clear()
+        }
+        persist()
+    }
+
+    internal fun exportSnapshot(): SettingsStorage = synchronized(repoLock) {
+        SettingsStorage(
+            appScenario = appScenario.name,
+            smartFailover = smartFailover,
+            socksPort = socksPort,
+            httpPort = httpPort,
+            stringMap = stringMap.toMap(),
+            boolMap = boolMap.toMap(),
+            intMap = intMap.toMap()
+        )
+    }
+
+    internal fun importSnapshot(snapshot: SettingsStorage) {
+        synchronized(repoLock) {
+            appScenario = try { AppScenario.valueOf(snapshot.appScenario) } catch (_: Exception) { AppScenario.AUTO }
+            smartFailover = snapshot.smartFailover
+            socksPort = snapshot.socksPort.coerceIn(1024, 65534)
+            httpPort = if (snapshot.httpPort in 1024..65535 && snapshot.httpPort != socksPort) snapshot.httpPort else socksPort + 1
+            stringMap.clear()
+            stringMap.putAll(snapshot.stringMap)
+            boolMap.clear()
+            boolMap.putAll(snapshot.boolMap)
+            intMap.clear()
+            intMap.putAll(snapshot.intMap)
         }
         persist()
     }

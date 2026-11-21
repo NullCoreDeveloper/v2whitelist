@@ -365,6 +365,12 @@ interface AppStrings {
     val minimizeToTrayEnableDesc: String
     val stopServiceOnExitTitle: String
     val stopServiceOnExitDesc: String
+    val tunSelfTestUrlLabel: String
+    val tunSelfTestUrlDesc: String
+    val cardBackup: String
+    val cardBackupDesc: String
+    val backupExportBtn: String
+    val backupImportBtn: String
     val cardReset: String
     val cardResetDesc: String
     val resetAllSettings: String
@@ -824,6 +830,12 @@ object StringsRu : AppStrings {
     override val minimizeToTrayEnableDesc: String = "Приложение продолжит работать в фоне"
     override val stopServiceOnExitTitle: String = "Останавливать службу v2w-service при выходе"
     override val stopServiceOnExitDesc: String = "Завершает фоновую службу Windows при полном закрытии приложения"
+    override val tunSelfTestUrlLabel: String = "Пользовательский URL для Self-Test (TUN)"
+    override val tunSelfTestUrlDesc: String = "Опциональный URL для проверки интернета в v2w-service (например, https://ya.ru). Пусто — стандартные проверки"
+    override val cardBackup: String = "Резервная копия (Бэкап)"
+    override val cardBackupDesc: String = "Экспорт и импорт всех настроек, подписок, правил маршрутизации и серверов в JSON"
+    override val backupExportBtn: String = "Экспорт бэкапа"
+    override val backupImportBtn: String = "Импорт бэкапа"
     override val cardReset: String = "Сброс настроек и данных"
     override val cardResetDesc: String = "Возврат всех параметров к исходным значениям по умолчанию"
     override val resetAllSettings: String = "Сбросить все настройки к заводским"
@@ -1269,6 +1281,12 @@ object StringsEn : AppStrings {
     override val minimizeToTrayEnableDesc: String = "App continues protecting connections in the background"
     override val stopServiceOnExitTitle: String = "Stop v2w-service on exit"
     override val stopServiceOnExitDesc: String = "Stops the Windows background service when the application exits completely"
+    override val tunSelfTestUrlLabel: String = "Custom Self-Test URL (TUN)"
+    override val tunSelfTestUrlDesc: String = "Optional URL for v2w-service TUN connectivity check (e.g. https://ya.ru). Empty uses defaults"
+    override val cardBackup: String = "Backup & Restore"
+    override val cardBackupDesc: String = "Export and import all settings, subscriptions, routing rules, and servers as JSON"
+    override val backupExportBtn: String = "Export backup"
+    override val backupImportBtn: String = "Import backup"
     override val cardReset: String = "Reset Settings & Data"
     override val cardResetDesc: String = "Restore all parameters to factory defaults and clear cache"
     override val resetAllSettings: String = "Reset all settings to defaults"
@@ -1711,6 +1729,12 @@ object StringsZh : AppStrings {
     override val minimizeToTrayEnableDesc: String = "窗口隐藏后仍会在后台守护网络连接"
     override val stopServiceOnExitTitle: String = "退出时停止 v2w-service 服务"
     override val stopServiceOnExitDesc: String = "完全关闭应用时同时停止 Windows 后台服务"
+    override val tunSelfTestUrlLabel: String = "自定义 TUN 自检 URL"
+    override val tunSelfTestUrlDesc: String = "用于 v2w-service 连通性检测的可选 URL（留空使用默认地址）"
+    override val cardBackup: String = "备份与恢复"
+    override val cardBackupDesc: String = "将所有设置、订阅、分流规则和服务器导出或导入为 JSON 文件"
+    override val backupExportBtn: String = "导出备份"
+    override val backupImportBtn: String = "导入备份"
     override val cardReset: String = "恢复出厂设置与清理"
     override val cardResetDesc: String = "将所有网络及应用选项还原为出厂默认值"
     override val resetAllSettings: String = "重置所有设置为默认值"
@@ -2156,6 +2180,12 @@ object StringsFa : AppStrings {
     override val minimizeToTrayEnableDesc: String = "برنامه در پس‌زمینه به کار خود ادامه می‌دهد"
     override val stopServiceOnExitTitle: String = "توقف سرویس v2w-service هنگام خروج"
     override val stopServiceOnExitDesc: String = "با بستن کامل برنامه، سرویس پس‌زمینه ویندوز نیز متوقف می‌شود"
+    override val tunSelfTestUrlLabel: String = "نشانی سفارشی Self-Test (TUN)"
+    override val tunSelfTestUrlDesc: String = "نشانی دلخواه برای بررسی اتصال در v2w-service (خالی = پیش‌فرض)"
+    override val cardBackup: String = "پشتیبان‌گیری و بازیابی"
+    override val cardBackupDesc: String = "خروجی و ورودی تمام تنظیمات، اشتراک‌ها و سرورها در قالب فایل JSON"
+    override val backupExportBtn: String = "خروجی بکاپ"
+    override val backupImportBtn: String = "ورودی بکاپ"
     override val cardReset: String = "بازنشانی تنظیمات و پاک‌سازی داده‌ها"
     override val cardResetDesc: String = "بازگرداندن تمام تنظیمات به حالت اولیه"
     override val resetAllSettings: String = "بازنشانی تمام تنظیمات به پیش‌فرض"

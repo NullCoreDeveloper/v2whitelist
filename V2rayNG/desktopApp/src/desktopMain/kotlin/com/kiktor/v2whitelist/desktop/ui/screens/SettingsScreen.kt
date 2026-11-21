@@ -210,6 +210,7 @@ fun SettingsScreen(
 
     // Прочее
     var connCheckUrl by remember { mutableStateOf(state.connectionCheckServiceUrl.value) }
+    var tunSelfTestUrl by remember { mutableStateOf(state.tunSelfTestUrl.value) }
     var betaUpdates by remember { mutableStateOf(state.receiveBetaUpdates.value) }
     var minimizeToTray by remember { mutableStateOf(state.minimizeToTray.value) }
     var stopServiceOnExit by remember { mutableStateOf(state.stopServiceOnExit.value) }
@@ -296,7 +297,8 @@ fun SettingsScreen(
             verifyConcurrencyVal = (verifyConcurrencyInput.toIntOrNull() ?: 4).coerceIn(1, 10),
             tunEnginePrefVal = tunEnginePref,
             appSplitEnabledVal = appSplitEnabled,
-            appSplitModeVal = appSplitMode
+            appSplitModeVal = appSplitMode,
+            tunSelfTestUrlVal = tunSelfTestUrl
         )
         state.settingsRepo.runBatch {
             state.setMinimizeToTray(minimizeToTray)
@@ -402,6 +404,7 @@ fun SettingsScreen(
         minimizeToTray = state.minimizeToTray.value
         stopServiceOnExit = state.stopServiceOnExit.value
         connCheckUrl = state.connectionCheckServiceUrl.value
+        tunSelfTestUrl = state.tunSelfTestUrl.value
         betaUpdates = state.receiveBetaUpdates.value
     }
 
@@ -499,6 +502,7 @@ fun SettingsScreen(
         minimizeToTray != state.minimizeToTray.value ||
         stopServiceOnExit != state.stopServiceOnExit.value ||
         connCheckUrl != state.connectionCheckServiceUrl.value ||
+        tunSelfTestUrl != state.tunSelfTestUrl.value ||
         betaUpdates != state.receiveBetaUpdates.value ||
         personalEnabled != state.personalServersEnabled.value ||
         personalIgnoreExit != state.personalIgnoreExitNode.value ||
@@ -1229,48 +1233,33 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Быстрые пресеты (домены/IP через запятую или с новой строки):",
+                        text = "Быстрые шаблоны маршрутизации (добавляют правила в список выше):",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                val additions = listOf("geosite:category-ru", "domain:ru", "geoip:ru")
-                                val existing = customDirect.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
-                                existing.addAll(additions)
-                                customDirect = existing.joinToString("\n")
-                                domainSplit = true
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) { Text("+ Сайты РФ напрямую", fontSize = 11.sp) }
-                        OutlinedButton(
-                            onClick = {
-                                val additions = listOf("geosite:steam", "steampowered.com", "steamcommunity.com", "steamstatic.com")
-                                val existing = customDirect.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
-                                existing.addAll(additions)
-                                customDirect = existing.joinToString("\n")
-                                domainSplit = true
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) { Text("+ Steam напрямую", fontSize = 11.sp) }
-                        OutlinedButton(
-                            onClick = {
-                                val additions = listOf("geosite:youtube", "googlevideo.com", "discord.com", "discord.gg")
-                                val existing = customProxy.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() }.toMutableSet()
-                                existing.addAll(additions)
-                                customProxy = existing.joinToString("\n")
-                                domainSplit = true
-                            },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) { Text("+ YouTube & Discord в VPN", fontSize = 11.sp) }
+                        ROUTING_DOMAIN_PRESETS.forEach { preset ->
+                            OutlinedButton(
+                                onClick = {
+                                    if (preset.target == RoutingPresetTarget.DIRECT) {
+                                        customDirect = mergeDomainRules(customDirect, preset.rules)
+                                    } else {
+                                        customProxy = mergeDomainRules(customProxy, preset.rules)
+                                    }
+                                    domainSplit = true
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(preset.label, fontSize = 11.sp)
+                            }
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                     Surface(
@@ -1813,6 +1802,16 @@ fun SettingsScreen(
                             checked = stopServiceOnExit,
                             onCheckedChange = { stopServiceOnExit = it }
                         )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = tunSelfTestUrl,
+                            onValueChange = { tunSelfTestUrl = it },
+                            label = { Text(strings.tunSelfTestUrlLabel) },
+                            placeholder = { Text("https://ya.ru") },
+                            supportingText = { Text(strings.tunSelfTestUrlDesc, fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                     Spacer(Modifier.height(14.dp))
                 }
@@ -1946,6 +1945,72 @@ fun SettingsScreen(
             }
 
             DesktopSettingsCategory.BACKUP_DATA -> {
+                var backupFeedback by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+
+                SettingsCard(
+                    title = strings.cardBackup,
+                    icon = Icons.Default.Backup,
+                    description = strings.cardBackupDesc
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val dialog = java.awt.FileDialog(null as java.awt.Frame?, strings.backupExportBtn, java.awt.FileDialog.SAVE)
+                                dialog.file = "probel-backup.json"
+                                dialog.isVisible = true
+                                val dir = dialog.directory
+                                val file = dialog.file
+                                if (dir != null && file != null) {
+                                    val target = java.io.File(dir, if (file.endsWith(".json", ignoreCase = true)) file else "$file.json")
+                                    state.exportBackupToFile(target).fold(
+                                        onSuccess = { backupFeedback = true to "Бэкап сохранён: ${target.name}" },
+                                        onFailure = { e -> backupFeedback = false to "Ошибка экспорта: ${e.message}" }
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.backupExportBtn)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val dialog = java.awt.FileDialog(null as java.awt.Frame?, strings.backupImportBtn, java.awt.FileDialog.LOAD)
+                                dialog.isVisible = true
+                                val dir = dialog.directory
+                                val file = dialog.file
+                                if (dir != null && file != null) {
+                                    val target = java.io.File(dir, file)
+                                    state.importBackupFromFile(target).fold(
+                                        onSuccess = { count -> backupFeedback = true to "Бэкап восстановлен (серверов: $count)" },
+                                        onFailure = { e -> backupFeedback = false to "Ошибка импорта: ${e.message}" }
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.backupImportBtn)
+                        }
+                    }
+                    backupFeedback?.let { (ok, msg) ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            fontSize = 12.sp,
+                            color = if (ok) AccentMint else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
                 // 13. Прочее / Системные параметры
                 SettingsCard(
                     title = strings.cardSystemTray,
@@ -2149,4 +2214,32 @@ private fun SettingsChip(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         )
     }
+}
+
+private enum class RoutingPresetTarget { DIRECT, PROXY }
+
+private data class DomainRoutingPreset(
+    val label: String,
+    val target: RoutingPresetTarget,
+    val rules: List<String>
+)
+
+private val ROUTING_DOMAIN_PRESETS = listOf(
+    DomainRoutingPreset("+ Сайты РФ напрямую", RoutingPresetTarget.DIRECT, listOf("geosite:category-ru", "domain:ru", "geoip:ru")),
+    DomainRoutingPreset("+ Банки и Госуслуги РФ", RoutingPresetTarget.DIRECT, listOf("geosite:category-gov-ru", "gosuslugi.ru", "sberbank.ru", "sber.ru", "tbank.ru", "vtb.ru", "alfabank.ru", "nalog.gov.ru")),
+    DomainRoutingPreset("+ Маркетплейсы РФ", RoutingPresetTarget.DIRECT, listOf("ozon.ru", "wildberries.ru", "wb.ru", "market.yandex.ru", "avito.ru", "megamarket.ru")),
+    DomainRoutingPreset("+ Steam напрямую", RoutingPresetTarget.DIRECT, listOf("geosite:steam", "steampowered.com", "steamcommunity.com", "steamstatic.com")),
+    DomainRoutingPreset("+ YouTube в VPN", RoutingPresetTarget.PROXY, listOf("geosite:youtube", "googlevideo.com", "ytimg.com", "youtu.be")),
+    DomainRoutingPreset("+ Telegram в VPN", RoutingPresetTarget.PROXY, listOf("geosite:telegram", "t.me", "telegram.org", "telegram.me", "tdesktop.com")),
+    DomainRoutingPreset("+ Discord в VPN", RoutingPresetTarget.PROXY, listOf("geosite:discord", "discord.com", "discord.gg", "discordapp.com", "discord.media")),
+    DomainRoutingPreset("+ ChatGPT / AI в VPN", RoutingPresetTarget.PROXY, listOf("geosite:openai", "openai.com", "chatgpt.com", "claude.ai", "anthropic.com", "gemini.google.com"))
+)
+
+private fun mergeDomainRules(existingRaw: String, additions: List<String>): String {
+    val existing = existingRaw.split(",", "\n")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toMutableSet()
+    existing.addAll(additions)
+    return existing.joinToString("\n")
 }

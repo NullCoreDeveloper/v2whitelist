@@ -646,5 +646,44 @@ class DesktopAppTest {
         assertTrue(remaining.contains("new-1a"))
         assertTrue(remaining.contains("new-2b"))
     }
+
+    @Test
+    fun testBackupExportAndImportRestoresStateAndServers() {
+        val repo1 = InMemoryServerRepository()
+        val settings1 = InMemorySettingsRepository()
+        val state1 = DesktopAppState(
+            serverRepo = repo1,
+            settingsRepo = settings1,
+            autoCheckNetworkOnStart = false
+        )
+        val profile = ProfileItem(configType = EConfigType.VLESS, remarks = "Backup Node", server = "198.51.100.7", serverPort = "443", password = "uid")
+        repo1.saveServerConfig("g-1", profile)
+        state1.saveSettings(
+            subUrl = "",
+            xrayPath = "",
+            v2wPath = "",
+            httpP = 10809,
+            socksP = 10808,
+            directDomains = "gosuslugi.ru",
+            proxyDomains = "youtube.com",
+            tunSelfTestUrlVal = "https://ya.ru"
+        )
+        val json = state1.exportBackupJson()
+
+        val repo2 = InMemoryServerRepository()
+        val settings2 = InMemorySettingsRepository()
+        val state2 = DesktopAppState(
+            serverRepo = repo2,
+            settingsRepo = settings2,
+            autoCheckNetworkOnStart = false
+        )
+        val imported = state2.importBackupJson(json)
+        assertTrue(imported.isSuccess)
+        assertEquals(1, imported.getOrNull())
+        assertEquals("gosuslugi.ru", state2.customDirectDomains.value)
+        assertEquals("youtube.com", state2.customProxyDomains.value)
+        assertEquals("https://ya.ru", state2.tunSelfTestUrl.value)
+        assertEquals("Backup Node", repo2.getServerConfig("g-1")?.remarks)
+    }
 }
 
