@@ -27,23 +27,24 @@ const (
 )
 
 type StartTunRequest struct {
-	SocksPort    int      `json:"socks_port"`
-	ServerIP     string   `json:"server_ip"`
-	Gateway      string   `json:"gateway"`
-	PhysicalDev  string   `json:"physical_dev"`
-	Tun2Socks    string   `json:"tun2socks_path"`
-	TunIP        string   `json:"tun_ip"`
-	TunMask      string   `json:"tun_mask"`
-	TunGateway   string   `json:"tun_gateway"`
-	DnsServers   []string `json:"dns_servers"`
-	TunEngine    string   `json:"tun_engine,omitempty"`
-	SocksUser    string   `json:"socks_user,omitempty"`
-	SocksPass    string   `json:"socks_pass,omitempty"`
-	DirectDNS    string   `json:"direct_dns,omitempty"`
-	SplitEnabled bool     `json:"split_enabled,omitempty"`
-	SplitMode    string   `json:"split_mode,omitempty"`
-	DirectApps   []string `json:"direct_apps,omitempty"`
-	ProxyApps    []string `json:"proxy_apps,omitempty"`
+	SocksPort     int      `json:"socks_port"`
+	ServerIP      string   `json:"server_ip"`
+	Gateway       string   `json:"gateway"`
+	PhysicalDev   string   `json:"physical_dev"`
+	PhysicalIfIdx int      `json:"physical_if_idx,omitempty"`
+	Tun2Socks     string   `json:"tun2socks_path"`
+	TunIP         string   `json:"tun_ip"`
+	TunMask       string   `json:"tun_mask"`
+	TunGateway    string   `json:"tun_gateway"`
+	DnsServers    []string `json:"dns_servers"`
+	TunEngine     string   `json:"tun_engine,omitempty"`
+	SocksUser     string   `json:"socks_user,omitempty"`
+	SocksPass     string   `json:"socks_pass,omitempty"`
+	DirectDNS     string   `json:"direct_dns,omitempty"`
+	SplitEnabled  bool     `json:"split_enabled,omitempty"`
+	SplitMode     string   `json:"split_mode,omitempty"`
+	DirectApps    []string `json:"direct_apps,omitempty"`
+	ProxyApps     []string `json:"proxy_apps,omitempty"`
 }
 
 type ApiResponse struct {
@@ -92,7 +93,7 @@ func (s *TunServer) Start(addr string) error {
 		Addr:         addr,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 45 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
 	log.Printf("[v2w-service] HTTP IPC server listening on http://%s", addr)
@@ -352,19 +353,19 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 	}
 
 	// Добавляем прямой маршрут к серверу прокси (чтобы трафик Xray не попадал в петлю через TUN)
-	if req.ServerIP != "" && req.Gateway != "" && !isLocalIP(req.ServerIP) {
-		out, err := exec.Command("route", "add", req.ServerIP, "mask", "255.255.255.255", req.Gateway, "metric", "1").CombinedOutput()
+	if addArgs := buildServerRouteAddArgs(req.ServerIP, req.Gateway, req.PhysicalIfIdx); len(addArgs) > 0 {
+		out, err := exec.Command("route", addArgs...).CombinedOutput()
 		if err != nil {
 			log.Printf("[v2w-service] route add server warning: %s (%v)", string(out), err)
 		} else {
-			log.Printf("[v2w-service] Direct route added for proxy server: %s -> %s", req.ServerIP, req.Gateway)
+			log.Printf("[v2w-service] Direct route added for proxy server: %s -> %s (if=%d)", req.ServerIP, req.Gateway, req.PhysicalIfIdx)
 		}
 	}
 
 	// Добавляем прямые маршруты к DNS-серверам физического адаптера (защита от DNS-ловушки провайдера при route 0/1)
 	s.addedDnsRoutes = nil
 	s.addedDnsGateway = req.Gateway
-	if req.Gateway != "" {
+	if req.Gateway != "" && !isOnLinkGateway(req.Gateway) {
 		physDNS := detectWindowsPhysicalDNS(dnsServers, req.ServerIP, req.Gateway)
 		for _, dnsIP := range physDNS {
 			out, err := exec.Command("route", "add", dnsIP, "mask", "255.255.255.255", req.Gateway, "metric", "1").CombinedOutput()
@@ -521,6 +522,9 @@ func parseNetshDnsServers(output string, tunDNS []string, excludeIPs ...string) 
 }
 
 func selfTest(dnsServers []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
 	var targetDNS []string
 	for _, d := range dnsServers {
 		d = strings.TrimSpace(d)
@@ -531,13 +535,14 @@ func selfTest(dnsServers []string) error {
 	if len(targetDNS) == 0 {
 		targetDNS = []string{"1.1.1.1", "8.8.8.8"}
 	}
+
 	tunResolver := &net.Resolver{
 		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		Dial: func(rctx context.Context, network, _ string) (net.Conn, error) {
 			dialer := &net.Dialer{Timeout: 2 * time.Second}
 			var lastErr error
 			for _, dnsIP := range targetDNS {
-				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(dnsIP, "53"))
+				conn, err := dialer.DialContext(rctx, network, net.JoinHostPort(dnsIP, "53"))
 				if err == nil {
 					return conn, nil
 				}
@@ -546,36 +551,83 @@ func selfTest(dnsServers []string) error {
 			return nil, lastErr
 		},
 	}
-	transport := &http.Transport{
+
+	ipTransport := &http.Transport{
+		DisableKeepAlives: true,
+		DialContext: func(dctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err == nil && strings.EqualFold(host, "cp.cloudflare.com") {
+				// Проверяем HTTP через туннель без зависимости от UDP:53
+				addr = net.JoinHostPort("104.16.132.229", port)
+			}
+			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(dctx, network, addr)
+		},
+	}
+	ipClient := &http.Client{
+		Timeout:   3500 * time.Millisecond,
+		Transport: ipTransport,
+	}
+
+	domainTransport := &http.Transport{
 		DisableKeepAlives: true,
 		DialContext: (&net.Dialer{
 			Timeout:  3 * time.Second,
 			Resolver: tunResolver,
 		}).DialContext,
 	}
-	client := &http.Client{
-		Timeout:   5 * time.Second,
-		Transport: transport,
+	domainClient := &http.Client{
+		Timeout:   3500 * time.Millisecond,
+		Transport: domainTransport,
 	}
+
+	type probe struct {
+		url    string
+		client *http.Client
+	}
+	probes := []probe{
+		{url: "http://1.1.1.1/", client: ipClient},
+		{url: "http://1.0.0.1/", client: ipClient},
+		{url: "http://cp.cloudflare.com/generate_204", client: ipClient},
+		{url: "http://www.msftconnecttest.com/connecttest.txt", client: domainClient},
+	}
+
 	var lastErr error
-	for round := 0; round < 5; round++ {
-		if round == 0 {
-			time.Sleep(400 * time.Millisecond)
-		} else {
-			time.Sleep(800 * time.Millisecond)
+	for round := 0; round < 2; round++ {
+		if ctx.Err() != nil {
+			break
 		}
-		for _, u := range []string{"http://www.msftconnecttest.com/connecttest.txt", "http://cp.cloudflare.com/generate_204", "http://1.1.1.1/"} {
-			resp, err := client.Get(u)
+		if round == 0 {
+			time.Sleep(300 * time.Millisecond)
+		} else {
+			time.Sleep(600 * time.Millisecond)
+		}
+		for _, p := range probes {
+			if ctx.Err() != nil {
+				if lastErr == nil {
+					lastErr = ctx.Err()
+				}
+				return lastErr
+			}
+			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
+			if reqErr != nil {
+				continue
+			}
+			resp, err := p.client.Do(req)
 			if err != nil {
-				lastErr = fmt.Errorf("%s: %v", u, err)
-				log.Printf("[v2w-service] selftest (round %d) %s: %v", round+1, u, err)
+				lastErr = fmt.Errorf("%s: %v", p.url, err)
+				log.Printf("[v2w-service] selftest (round %d) %s: %v", round+1, p.url, err)
 				continue
 			}
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
-			log.Printf("[v2w-service] selftest %s: HTTP %d — OK", u, resp.StatusCode)
-			return nil
+			if resp.StatusCode > 0 {
+				log.Printf("[v2w-service] selftest %s: HTTP %d — OK", p.url, resp.StatusCode)
+				return nil
+			}
 		}
+	}
+	if lastErr == nil && ctx.Err() != nil {
+		lastErr = ctx.Err()
 	}
 	return lastErr
 }
@@ -616,8 +668,8 @@ func (s *TunServer) stopTunLocked() {
 	exec.Command("netsh", "interface", "ipv6", "delete", "route", "::/1", fmt.Sprintf("interface=%s", DefaultDeviceName)).Run()
 	exec.Command("netsh", "interface", "ipv6", "delete", "route", "8000::/1", fmt.Sprintf("interface=%s", DefaultDeviceName)).Run()
 
-	if s.activeConfig.ServerIP != "" && s.activeConfig.Gateway != "" {
-		exec.Command("route", "delete", s.activeConfig.ServerIP, "mask", "255.255.255.255", s.activeConfig.Gateway).Run()
+	if delArgs := buildServerRouteDeleteArgs(s.activeConfig.ServerIP, s.activeConfig.Gateway); len(delArgs) > 0 {
+		exec.Command("route", delArgs...).Run()
 	}
 	for _, dnsIP := range s.addedDnsRoutes {
 		if s.addedDnsGateway != "" {
@@ -691,6 +743,38 @@ func isLocalIP(ipStr string) bool {
 		return false
 	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified()
+}
+
+func isOnLinkGateway(gw string) bool {
+	trimmed := strings.TrimSpace(gw)
+	return trimmed == "" || trimmed == "0.0.0.0" || strings.EqualFold(trimmed, "On-link")
+}
+
+func buildServerRouteAddArgs(serverIP, gateway string, physicalIfIdx int) []string {
+	srv := strings.TrimSpace(serverIP)
+	gw := strings.TrimSpace(gateway)
+	if srv == "" || isLocalIP(srv) {
+		return nil
+	}
+	if isOnLinkGateway(gw) {
+		if physicalIfIdx <= 0 {
+			return nil
+		}
+		return []string{"add", srv, "mask", "255.255.255.255", "0.0.0.0", "metric", "1", "if", fmt.Sprintf("%d", physicalIfIdx)}
+	}
+	return []string{"add", srv, "mask", "255.255.255.255", gw, "metric", "1"}
+}
+
+func buildServerRouteDeleteArgs(serverIP, gateway string) []string {
+	srv := strings.TrimSpace(serverIP)
+	gw := strings.TrimSpace(gateway)
+	if srv == "" || isLocalIP(srv) {
+		return nil
+	}
+	if isOnLinkGateway(gw) {
+		return []string{"delete", srv, "mask", "255.255.255.255"}
+	}
+	return []string{"delete", srv, "mask", "255.255.255.255", gw}
 }
 
 func normalizeTunNetwork(rawIP, rawMask, rawGW string) (string, string, string) {

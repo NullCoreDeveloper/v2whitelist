@@ -45,3 +45,27 @@ Configuration for interface "Loopback Pseudo-Interface 1"
 		t.Fatalf("russian netsh parse mismatch: got %v, want %v", gotRu, wantRu)
 	}
 }
+
+func TestBuildServerRouteArgs(t *testing.T) {
+	addStd := buildServerRouteAddArgs("203.0.113.10", "192.168.1.1", 12)
+	wantAddStd := []string{"add", "203.0.113.10", "mask", "255.255.255.255", "192.168.1.1", "metric", "1"}
+	if !reflect.DeepEqual(addStd, wantAddStd) {
+		t.Fatalf("standard route add mismatch: got %v, want %v", addStd, wantAddStd)
+	}
+
+	addPpp := buildServerRouteAddArgs("203.0.113.10", "0.0.0.0", 29)
+	wantAddPpp := []string{"add", "203.0.113.10", "mask", "255.255.255.255", "0.0.0.0", "metric", "1", "if", "29"}
+	if !reflect.DeepEqual(addPpp, wantAddPpp) {
+		t.Fatalf("on-link ppp route add mismatch: got %v, want %v", addPpp, wantAddPpp)
+	}
+
+	if got := buildServerRouteAddArgs("203.0.113.10", "On-link", 0); got != nil {
+		t.Fatalf("expected nil when on-link has no ifIndex, got %v", got)
+	}
+
+	delPpp := buildServerRouteDeleteArgs("203.0.113.10", "0.0.0.0")
+	wantDelPpp := []string{"delete", "203.0.113.10", "mask", "255.255.255.255"}
+	if !reflect.DeepEqual(delPpp, wantDelPpp) {
+		t.Fatalf("on-link ppp route delete mismatch: got %v, want %v", delPpp, wantDelPpp)
+	}
+}
