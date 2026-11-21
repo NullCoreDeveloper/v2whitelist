@@ -38,6 +38,16 @@ fun ProxyModeCard(
     val localIp = remember(allowLan) {
         if (allowLan) DesktopProxyManager.getLocalIpAddress() else null
     }
+    var showLanQr by remember { mutableStateOf(false) }
+
+    if (showLanQr && allowLan && localIp != null) {
+        LanProxyQrDialog(
+            socksUrl = "socks5://$localIp:$socksPort",
+            httpUrl = "http://$localIp:$httpPort",
+            onCopy = { url, label -> state.copyToClipboard(url, label) },
+            onDismiss = { showLanQr = false }
+        )
+    }
 
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -152,6 +162,31 @@ fun ProxyModeCard(
                             )
                         }
                     )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = DarkSurfaceElevated,
+                        border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.4f)),
+                        modifier = Modifier.clickable { showLanQr = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode2,
+                                contentDescription = "QR",
+                                tint = AccentCyan,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "QR",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentCyan
+                            )
+                        }
+                    }
                 }
             }
 
