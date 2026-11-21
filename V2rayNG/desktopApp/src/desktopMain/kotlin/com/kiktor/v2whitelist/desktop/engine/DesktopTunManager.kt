@@ -61,12 +61,30 @@ data class AppSplitTunnelingConfig(
     val proxyApps: List<String> = emptyList()
 )
 
+enum class TunStartFailureReason {
+    NONE,
+    NO_DEFAULT_GATEWAY,
+    SERVICE_SELFTEST_FAILED,
+    BINARY_NOT_FOUND,
+    PRIVILEGE_REQUIRED,
+    ROUTE_SETUP_FAILED,
+    PROCESS_EXITED
+}
+
+data class DefaultGatewayInfo(
+    val gateway: String,
+    val physicalDev: String,
+    val isOnLink: Boolean = false,
+    val ifIndex: Int? = null
+)
+
 @Serializable
 private data class ServiceStartTunRequestDto(
     @SerialName("socks_port") val socksPort: Int,
     @SerialName("server_ip") val serverIp: String,
     @SerialName("gateway") val gateway: String,
     @SerialName("physical_dev") val physicalDev: String,
+    @SerialName("physical_if_idx") val physicalIfIdx: Int = 0,
     @SerialName("tun2socks_path") val tun2socksPath: String,
     @SerialName("tun_ip") val tunIp: String,
     @SerialName("tun_mask") val tunMask: String,
@@ -105,7 +123,8 @@ private data class V2wTunRouterConfigDto(
 data class ConfiguredServerRoute(
     val ip: String,
     val gateway: String,
-    val dev: String
+    val dev: String,
+    val isOnLink: Boolean = false
 )
 
 /**
@@ -145,11 +164,15 @@ object DesktopTunManager {
     private val configuredDnsRoutes = mutableListOf<Pair<String, String>>()
     private var activeTunGw: String = DEFAULT_TUN_GW
     private var activeMacDevice: String = "utun"
+    private var macPrivilegedActive: Boolean = false
 
     var isTunActive: Boolean = false
         private set
 
     var isServiceMode: Boolean = false
+        private set
+
+    var lastStartFailureReason: TunStartFailureReason = TunStartFailureReason.NONE
         private set
 
     /** Служба отработала, но самопроверка интернета через TUN провалилась — резервный режим не нужен. */
@@ -282,6 +305,7 @@ object DesktopTunManager {
         serverIp: String?,
         gateway: String,
         physicalDev: String,
+        physicalIfIdx: Int,
         tun2socksPath: String?,
         tunIp: String,
         tunMask: String,
@@ -305,6 +329,7 @@ object DesktopTunManager {
                     serverIp = serverIp.orEmpty(),
                     gateway = gateway,
                     physicalDev = physicalDev,
+                    physicalIfIdx = physicalIfIdx,
                     tun2socksPath = tun2socksPath.orEmpty(),
                     tunIp = tunIp,
                     tunMask = tunMask,
@@ -324,7 +349,7 @@ object DesktopTunManager {
             val request = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/tun/start"))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(40))
+                .timeout(Duration.ofSeconds(25))
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build()
 
@@ -422,6 +447,31 @@ object DesktopTunManager {
     }
 
     /**
+     * Остановка системной службы v2w-service при выходе из приложения (без UAC).
+     */
+    fun stopWindowsService(): Boolean {
+        if (!isWindows) return false
+        return try {
+            if (isServiceAvailable()) {
+                stopViaService()
+            }
+            val state = queryServiceState()
+            if (state == null || state == "STOPPED") return true
+            val (code, out) = runCommand("sc", "stop", "v2w-service")
+            if (code == 0) {
+                GeekModeLogger.log("TUN", "Служба v2w-service остановлена при выходе.")
+                true
+            } else {
+                GeekModeLogger.log("TUN", "Не удалось остановить службу v2w-service: $out")
+                false
+            }
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Ошибка остановки службы v2w-service: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Попытка инсталляции или запуска службы v2w-service (если не запущена).
      */
     fun installOrStartService() {
@@ -471,14 +521,13 @@ object DesktopTunManager {
     /** Определяет (IP-адрес физического интерфейса) для привязки Xray; вызывать ДО start() TUN. */
     fun detectPhysicalInterfaceNameForBind(): String? {
         if (!isWindows) return null
-        val (_, iface) = detectDefaultGateway()
-        return resolvePhysicalInterfaceName(iface)
+        val gwInfo = detectDefaultGatewayInfo() ?: return null
+        return resolvePhysicalInterfaceName(gwInfo.physicalDev)
     }
 
     /** Проверяет наличие физического шлюза по умолчанию (без TUN-интерфейса). */
     fun hasPhysicalDefaultGateway(): Boolean {
-        val (gw, iface) = detectDefaultGateway()
-        return !gw.isNullOrBlank() && !iface.isNullOrBlank()
+        return detectDefaultGatewayInfo() != null
     }
 
     /**
@@ -499,7 +548,8 @@ object DesktopTunManager {
         appSplitConfig: AppSplitTunnelingConfig = AppSplitTunnelingConfig(),
         directDns: String? = null,
         socksUser: String? = null,
-        socksPass: String? = null
+        socksPass: String? = null,
+        allowServiceMode: Boolean = true
     ): Boolean {
         if (isTunActive) {
             stop(sudoPassword)
@@ -507,6 +557,7 @@ object DesktopTunManager {
 
         currentSudoPassword = sudoPassword
         serviceSelfTestFailed = false
+        lastStartFailureReason = TunStartFailureReason.NONE
         val (resolvedTunIp, resolvedTunMask, resolvedTunGw) = resolveTunNetworkConfig(tunIp)
         activeTunGw = resolvedTunGw
         val effectiveEngine = resolveEffectiveTunEngine(tunEnginePreference, appSplitConfig.enabled)
@@ -516,12 +567,16 @@ object DesktopTunManager {
         )
 
         // 1. Определение шлюза и сетевого интерфейса по умолчанию
-        val (gateway, physicalDev) = detectDefaultGateway()
-        if (gateway == null || physicalDev == null) {
+        val gwInfo = detectDefaultGatewayInfo()
+        if (gwInfo == null) {
+            lastStartFailureReason = TunStartFailureReason.NO_DEFAULT_GATEWAY
             GeekModeLogger.log("TUN", "Не удалось определить физический шлюз по умолчанию. TUN не может быть запущен безопасно.")
             return false
         }
-        GeekModeLogger.log("TUN", "Физический маршрут: шлюз $gateway через интерфейс $physicalDev")
+        val gateway = gwInfo.gateway
+        val physicalDev = gwInfo.physicalDev
+        val gwDesc = if (gwInfo.isOnLink) "On-link (if=${gwInfo.ifIndex ?: "?"})" else gateway
+        GeekModeLogger.log("TUN", "Физический маршрут: шлюз $gwDesc через интерфейс $physicalDev")
 
         // 2. Определение IP адреса целевого сервера (защита от петли трафика)
         val serverIp = if (!serverAddress.isNullOrBlank()) resolveServerIp(serverAddress) else null
@@ -533,7 +588,7 @@ object DesktopTunManager {
             ?: detectUnixPhysicalDns(excludeIps = setOfNotNull(serverIp, "1.1.1.1", "8.8.8.8"))
 
         // 3. Windows Service Mode (Вариант 1)
-        if (isWindows) {
+        if (isWindows && allowServiceMode) {
             if (!isServiceAvailable()) {
                 installOrStartService()
             }
@@ -544,6 +599,7 @@ object DesktopTunManager {
                     serverIp = serverIp,
                     gateway = gateway,
                     physicalDev = physicalDev,
+                    physicalIfIdx = gwInfo.ifIndex ?: 0,
                     tun2socksPath = findTun2SocksExecutable(customPath)?.absolutePath,
                     tunIp = resolvedTunIp,
                     tunMask = resolvedTunMask,
@@ -560,9 +616,12 @@ object DesktopTunManager {
                     return true
                 }
                 if (serviceSelfTestFailed) {
+                    lastStartFailureReason = TunStartFailureReason.SERVICE_SELFTEST_FAILED
                     GeekModeLogger.log("TUN", "TUN поднят, но через него нет интернета — откат. Логи: C:\\ProgramData\\v2whitelist\\logs")
                     return false
                 }
+                // Гарантируем остановку TUN в службе перед резервным запуском, чтобы не было гонки двух tun2socks
+                stopViaService()
                 GeekModeLogger.log("TUN", "Служба v2w-service не смогла запустить TUN. Переход в резервный прямой режим...")
             }
         }
@@ -572,6 +631,7 @@ object DesktopTunManager {
         var binary = if (useV2wTun) findV2wTunExecutable() else findTun2SocksExecutable(customPath)
         if (useV2wTun && binary == null) {
             if (appSplitConfig.enabled || tunEnginePreference == TunEnginePreference.V2W_TUN) {
+                lastStartFailureReason = TunStartFailureReason.BINARY_NOT_FOUND
                 GeekModeLogger.log("TUN", "Исполняемый файл v2w-tun не найден в bin/ и системе.")
                 return false
             }
@@ -580,6 +640,7 @@ object DesktopTunManager {
             binary = findTun2SocksExecutable(customPath)
         }
         if (binary == null) {
+            lastStartFailureReason = TunStartFailureReason.BINARY_NOT_FOUND
             GeekModeLogger.log("TUN", "Исполняемый файл tun2socks не найден в bin/ и системе. Переход в резервный режим.")
             return false
         }
@@ -587,6 +648,7 @@ object DesktopTunManager {
         GeekModeLogger.log("TUN", "Используется ${if (useV2wTun) "v2w-tun" else "tun2socks"}: ${binary.absolutePath}")
 
         if (isWindows && !isWindowsAdmin()) {
+            lastStartFailureReason = TunStartFailureReason.PRIVILEGE_REQUIRED
             GeekModeLogger.log(
                 "TUN",
                 "Предупреждение: для создания интерфейса Wintun и настройки сетевых маршрутов на Windows требуются права Администратора либо работающая служба v2w-service."
@@ -597,6 +659,23 @@ object DesktopTunManager {
             isWindows -> "wintun"
             isMac -> "utun"
             else -> "v2w-tun"
+        }
+
+        if (isMac) {
+            return startMacTunWithOsascript(
+                binary = binary,
+                useV2wTun = useV2wTun,
+                socksPort = socksPort,
+                socksUser = socksUser,
+                socksPass = socksPass,
+                physicalDev = physicalDev,
+                resolvedDirectDns = resolvedDirectDns,
+                appSplitConfig = appSplitConfig,
+                resolvedTunIp = resolvedTunIp,
+                resolvedTunGw = resolvedTunGw,
+                serverIp = serverIp,
+                gateway = gateway
+            )
         }
 
         if (isLinux) {
@@ -713,6 +792,7 @@ object DesktopTunManager {
 
             if (!proc.isAlive) {
                 val code = proc.exitValue()
+                lastStartFailureReason = TunStartFailureReason.PROCESS_EXITED
                 GeekModeLogger.log("TUN", "Процесс $logTag завершился сразу с кодом: $code")
                 cleanupProcess(sudoPassword)
                 return false
@@ -774,12 +854,12 @@ object DesktopTunManager {
                         GeekModeLogger.log("TUN", "Windows: Предупреждение: не удалось определить индекс интерфейса wintun")
                     }
 
-                    // 1. Присваиваем статический IP и шлюз интерфейсу wintun (для NCSI/NLA)
+                    // 1. Присваиваем статический IP и маску интерфейсу wintun (gateway=none, чтобы не плодить persistent route)
                     val netshAddrRes = runCommand(
                         "netsh", "interface", "ipv4", "set", "address",
                         "name=wintun", "source=static",
                         "addr=$resolvedTunIp", "mask=$resolvedTunMask",
-                        "gateway=$resolvedTunGw", "gwmetric=1"
+                        "gateway=none"
                     )
                     if (netshAddrRes.first != 0) {
                         GeekModeLogger.log("TUN", "Windows: netsh set address: ${netshAddrRes.second}")
@@ -795,26 +875,35 @@ object DesktopTunManager {
 
                     // 4. Прямой маршрут до сервера через физический шлюз (защита от зацикливания трафика)
                     if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
-                        val routeRes = runCommand("cmd", "/c", "route add $serverIp mask 255.255.255.255 $gateway metric 1")
-                        if (routeRes.first == 0) {
-                            configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
-                            GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к серверу: $serverIp -> $gateway")
-                        } else {
-                            GeekModeLogger.log("TUN", "Windows: Предупреждение при добавлении маршрута к серверу: ${routeRes.second}")
+                        val routeCmd = if (gwInfo.isOnLink && gwInfo.ifIndex != null) {
+                            "route add $serverIp mask 255.255.255.255 0.0.0.0 metric 1 if ${gwInfo.ifIndex}"
+                        } else if (!gwInfo.isOnLink) {
+                            "route add $serverIp mask 255.255.255.255 $gateway metric 1"
+                        } else null
+                        if (routeCmd != null) {
+                            val routeRes = runCommand("cmd", "/c", routeCmd)
+                            if (routeRes.first == 0) {
+                                configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev, isOnLink = gwInfo.isOnLink)
+                                GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к серверу: $serverIp -> $gwDesc")
+                            } else {
+                                GeekModeLogger.log("TUN", "Windows: Предупреждение при добавлении маршрута к серверу: ${routeRes.second}")
+                            }
                         }
                     }
 
                     // 4b. Прямые маршруты к DNS физического адаптера (защита от DNS-ловушки при route 0/1)
                     configuredDnsRoutes.clear()
-                    val physDnsList = detectWindowsPhysicalDnsServers(
-                        tunDns = setOf("1.1.1.1", "8.8.8.8"),
-                        excludeIps = setOfNotNull(serverIp, gateway)
-                    )
-                    for (dnsIp in physDnsList) {
-                        val dnsRouteRes = runCommand("cmd", "/c", "route add $dnsIp mask 255.255.255.255 $gateway metric 1")
-                        if (dnsRouteRes.first == 0) {
-                            configuredDnsRoutes.add(dnsIp to gateway)
-                            GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к DNS провайдера: $dnsIp -> $gateway")
+                    if (!gwInfo.isOnLink) {
+                        val physDnsList = detectWindowsPhysicalDnsServers(
+                            tunDns = setOf("1.1.1.1", "8.8.8.8"),
+                            excludeIps = setOfNotNull(serverIp, gateway)
+                        )
+                        for (dnsIp in physDnsList) {
+                            val dnsRouteRes = runCommand("cmd", "/c", "route add $dnsIp mask 255.255.255.255 $gateway metric 1")
+                            if (dnsRouteRes.first == 0) {
+                                configuredDnsRoutes.add(dnsIp to gateway)
+                                GeekModeLogger.log("TUN", "Windows: Добавлен прямой маршрут к DNS провайдера: $dnsIp -> $gateway")
+                            }
                         }
                     }
 
@@ -827,6 +916,7 @@ object DesktopTunManager {
                     val r1 = runCommand("cmd", "/c", "route add 0.0.0.0 mask 128.0.0.0 $resolvedTunGw metric 1 $ifPart".trim())
                     val r2 = runCommand("cmd", "/c", "route add 128.0.0.0 mask 128.0.0.0 $resolvedTunGw metric 1 $ifPart".trim())
                     if (r1.first != 0 || r2.first != 0) {
+                        lastStartFailureReason = if (isWindowsAdmin()) TunStartFailureReason.ROUTE_SETUP_FAILED else TunStartFailureReason.PRIVILEGE_REQUIRED
                         GeekModeLogger.log("TUN", "Windows: Сбой установки маршрутов TUN (требуются права Администратора): ${r1.second} / ${r2.second}")
                         stopSync(null)
                         return false
@@ -920,7 +1010,12 @@ object DesktopTunManager {
                 runCommand("netsh", "interface", "ipv6", "delete", "route", "::/1", "interface=wintun")
                 runCommand("netsh", "interface", "ipv6", "delete", "route", "8000::/1", "interface=wintun")
                 configuredRoute?.let { route ->
-                    runCommand("cmd", "/c", "route delete ${route.ip} mask 255.255.255.255 ${route.gateway}")
+                    val delCmd = if (route.isOnLink) {
+                        "route delete ${route.ip} mask 255.255.255.255"
+                    } else {
+                        "route delete ${route.ip} mask 255.255.255.255 ${route.gateway}"
+                    }
+                    runCommand("cmd", "/c", delCmd)
                     configuredRoute = null
                 }
                 for ((dnsIp, gw) in configuredDnsRoutes) {
@@ -931,11 +1026,15 @@ object DesktopTunManager {
             }
 
             isMac -> {
-                runSudoCommand(listOf("route", "delete", "-net", "0.0.0.0/1"), sudoPassword)
-                runSudoCommand(listOf("route", "delete", "-net", "128.0.0.0/1"), sudoPassword)
-                configuredRoute?.let { route ->
-                    runSudoCommand(listOf("route", "delete", "-host", route.ip), sudoPassword)
-                    configuredRoute = null
+                if (macPrivilegedActive) {
+                    stopMacTunWithOsascript()
+                } else {
+                    runSudoCommand(listOf("route", "delete", "-net", "0.0.0.0/1"), sudoPassword)
+                    runSudoCommand(listOf("route", "delete", "-net", "128.0.0.0/1"), sudoPassword)
+                    configuredRoute?.let { route ->
+                        runSudoCommand(listOf("route", "delete", "-host", route.ip), sudoPassword)
+                        configuredRoute = null
+                    }
                 }
             }
         }
@@ -989,10 +1088,214 @@ object DesktopTunManager {
         }.getOrNull()
     }
 
+    private fun shQuote(arg: String): String {
+        return "'" + arg.replace("'", "'\\''") + "'"
+    }
+
+    private fun runMacOsascript(shellCommand: String, timeoutSec: Long = 60): Pair<Int, String> {
+        val escaped = shellCommand
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        val appleScript = "do shell script \"$escaped\" with administrator privileges"
+        return try {
+            val proc = ProcessBuilder("osascript", "-e", appleScript)
+                .redirectErrorStream(true)
+                .start()
+            val output = BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8)).use { it.readText() }
+            val finished = proc.waitFor(timeoutSec, TimeUnit.SECONDS)
+            if (!finished) {
+                proc.destroyForcibly()
+                try { proc.waitFor(1, TimeUnit.SECONDS) } catch (_: Exception) {}
+                -1 to "Timeout"
+            } else {
+                proc.exitValue() to output.trim()
+            }
+        } catch (e: Exception) {
+            -1 to (e.message ?: "osascript error")
+        }
+    }
+
+    private fun startMacTunWithOsascript(
+        binary: File,
+        useV2wTun: Boolean,
+        socksPort: Int,
+        socksUser: String?,
+        socksPass: String?,
+        physicalDev: String,
+        resolvedDirectDns: String?,
+        appSplitConfig: AppSplitTunnelingConfig,
+        resolvedTunIp: String,
+        resolvedTunGw: String,
+        serverIp: String?,
+        gateway: String
+    ): Boolean {
+        val pidFile = "/tmp/v2w-tun-mac.pid"
+        val devFile = "/tmp/v2w-tun-mac.dev"
+        val logFile = "/tmp/v2w-tun-mac.log"
+        val scriptFile = File("/tmp/v2w-tun-mac-start.sh")
+        val logTag = if (useV2wTun) "v2w-tun" else "tun2socks"
+
+        val launchLine = if (useV2wTun) {
+            val cfgDto = V2wTunRouterConfigDto(
+                deviceName = "utun",
+                mtu = 1500,
+                socksAddr = "127.0.0.1:$socksPort",
+                socksUser = socksUser.orEmpty(),
+                socksPass = socksPass.orEmpty(),
+                physicalIface = physicalDev,
+                directDns = resolvedDirectDns.orEmpty(),
+                split = V2wTunSplitConfigDto(
+                    enabled = appSplitConfig.enabled,
+                    mode = appSplitConfig.mode.toWireValue(),
+                    directApps = appSplitConfig.directApps,
+                    proxyApps = appSplitConfig.proxyApps
+                )
+            )
+            val cfgFile = File.createTempFile("v2w_tun_", ".json").apply {
+                deleteOnExit()
+                writeText(jsonCodec.encodeToString(cfgDto))
+            }
+            v2wTunConfigFile = cfgFile
+            "${shQuote(binary.absolutePath)} -config ${shQuote(cfgFile.absolutePath)}"
+        } else {
+            "${shQuote(binary.absolutePath)} -device utun -proxy ${shQuote("socks5://127.0.0.1:$socksPort")} -loglevel warning"
+        }
+
+        val addHostRoute = if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
+            "route -n add -host ${shQuote(serverIp)} ${shQuote(gateway)} >/dev/null 2>&1 || true"
+        } else {
+            ""
+        }
+
+        val scriptContent = """
+            #!/bin/sh
+            set -e
+            if [ -f $pidFile ]; then
+              OLD_PID=${'$'}(cat $pidFile 2>/dev/null || true)
+              if [ -n "${'$'}OLD_PID" ]; then kill "${'$'}OLD_PID" >/dev/null 2>&1 || true; fi
+            fi
+            rm -f $pidFile $devFile $logFile
+            BEFORE=${'$'}(ifconfig -l | tr ' ' '\n' | grep '^utun' || true)
+            nohup $launchLine > $logFile 2>&1 < /dev/null &
+            TUN_PID=${'$'}!
+            echo "${'$'}TUN_PID" > $pidFile
+            DEV=""
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+              if ! kill -0 "${'$'}TUN_PID" >/dev/null 2>&1; then
+                exit 2
+              fi
+              if [ -f $logFile ]; then
+                READY_DEV=${'$'}(grep -o 'device=utun[0-9]*' $logFile | head -n1 | cut -d= -f2 || true)
+                if [ -n "${'$'}READY_DEV" ]; then
+                  DEV="${'$'}READY_DEV"
+                  break
+                fi
+              fi
+              AFTER=${'$'}(ifconfig -l | tr ' ' '\n' | grep '^utun' || true)
+              for d in ${'$'}AFTER; do
+                case "${'$'}BEFORE" in
+                  *"${'$'}d"*) ;;
+                  *) DEV="${'$'}d"; break ;;
+                esac
+              done
+              if [ -n "${'$'}DEV" ]; then break; fi
+              sleep 0.2
+            done
+            if [ -z "${'$'}DEV" ]; then
+              kill "${'$'}TUN_PID" >/dev/null 2>&1 || true
+              exit 3
+            fi
+            echo "${'$'}DEV" > $devFile
+            ifconfig "${'$'}DEV" ${shQuote(resolvedTunIp)} ${shQuote(resolvedTunGw)} up
+            $addHostRoute
+            route -n delete -net 0.0.0.0/1 >/dev/null 2>&1 || true
+            route -n delete -net 128.0.0.0/1 >/dev/null 2>&1 || true
+            route -n add -net 0.0.0.0/1 -interface "${'$'}DEV"
+            route -n add -net 128.0.0.0/1 -interface "${'$'}DEV"
+        """.trimIndent() + "\n"
+
+        return try {
+            scriptFile.writeText(scriptContent)
+            scriptFile.setExecutable(true, false)
+            GeekModeLogger.log("TUN", "macOS: Запрос системных прав для запуска $logTag...")
+            val (code, out) = runMacOsascript("/bin/sh ${shQuote(scriptFile.absolutePath)}")
+            runCatching { scriptFile.delete() }
+            if (code != 0) {
+                val tail = runCatching { File(logFile).takeIf { it.exists() }?.readLines()?.takeLast(5)?.joinToString(" | ") }.getOrNull().orEmpty()
+                lastStartFailureReason = if (out.contains("User canceled", ignoreCase = true) || out.contains("-128")) {
+                    TunStartFailureReason.PRIVILEGE_REQUIRED
+                } else {
+                    TunStartFailureReason.PROCESS_EXITED
+                }
+                GeekModeLogger.log("TUN", "macOS: Сбой запуска TUN (code=$code): $out ${if (tail.isNotBlank()) "[$tail]" else ""}")
+                return false
+            }
+
+            val devName = runCatching { File(devFile).takeIf { it.exists() }?.readText()?.trim() }.getOrNull()?.takeIf { it.isNotBlank() } ?: "utun"
+            activeMacDevice = devName
+            macPrivilegedActive = true
+            if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
+                configuredRoute = ConfiguredServerRoute(serverIp, gateway, physicalDev)
+            }
+
+            logJob?.cancel()
+            logJob = scope.launch(Dispatchers.IO) {
+                try {
+                    val lf = File(logFile)
+                    var offset = 0L
+                    while (isActive && macPrivilegedActive) {
+                        if (lf.exists() && lf.length() > offset) {
+                            java.io.RandomAccessFile(lf, "r").use { raf ->
+                                raf.seek(offset)
+                                var line: String?
+                                while (raf.readLine().also { line = it } != null) {
+                                    val text = line ?: continue
+                                    GeekModeLogger.log(logTag, text)
+                                }
+                                offset = raf.filePointer
+                            }
+                        }
+                        delay(400L)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            isTunActive = true
+            isServiceMode = false
+            GeekModeLogger.log("TUN", "macOS: Адаптер $devName ($logTag) успешно поднят с системными правами.")
+            true
+        } catch (e: Exception) {
+            runCatching { scriptFile.delete() }
+            lastStartFailureReason = TunStartFailureReason.PROCESS_EXITED
+            GeekModeLogger.log("TUN", "macOS: Исключение при запуске TUN: ${e.message}")
+            false
+        }
+    }
+
+    private fun stopMacTunWithOsascript() {
+        val pidFile = "/tmp/v2w-tun-mac.pid"
+        val devFile = "/tmp/v2w-tun-mac.dev"
+        val logFile = "/tmp/v2w-tun-mac.log"
+        val hostDel = configuredRoute?.let { "route -n delete -host ${shQuote(it.ip)} >/dev/null 2>&1 || true" } ?: ""
+        configuredRoute = null
+        val cmd = """
+            route -n delete -net 0.0.0.0/1 >/dev/null 2>&1 || true
+            route -n delete -net 128.0.0.0/1 >/dev/null 2>&1 || true
+            $hostDel
+            if [ -f $pidFile ]; then P=${'$'}(cat $pidFile 2>/dev/null || true); if [ -n "${'$'}P" ]; then kill "${'$'}P" >/dev/null 2>&1 || true; fi; fi
+            rm -f $pidFile $devFile $logFile
+        """.trimIndent().replace("\n", "; ")
+        macPrivilegedActive = false
+        val (code, out) = runMacOsascript(cmd, timeoutSec = 25)
+        if (code != 0) {
+            GeekModeLogger.log("TUN", "macOS: Предупреждение при остановке TUN (code=$code): $out")
+        }
+    }
+
     /**
      * Определение активного шлюза и физического интерфейса.
      */
-    private fun detectDefaultGateway(): Pair<String?, String?> {
+    private fun detectDefaultGatewayInfo(): DefaultGatewayInfo? {
         if (isLinux) {
             val (code, output) = runCommand("ip", "route", "show", "default")
             if (code == 0 && output.isNotBlank()) {
@@ -1004,7 +1307,7 @@ object DesktopTunManager {
                         val gw = viaMatch.groupValues[1]
                         val dev = devMatch.groupValues[1]
                         if (dev != "v2w-tun" && !dev.startsWith("tun")) {
-                            return gw to dev
+                            return DefaultGatewayInfo(gateway = gw, physicalDev = dev)
                         }
                     }
                 }
@@ -1012,19 +1315,12 @@ object DesktopTunManager {
         } else if (isWindows) {
             val (code, output) = runCommand("cmd", "/c", "route print -4 0.0.0.0")
             if (code == 0 && output.isNotBlank()) {
-                // Только активные маршруты (5 колонок: сеть, маска, шлюз, интерфейс, метрика);
-                // выбираем с минимальной метрикой, игнорируя persistent-секцию и наш TUN.
-                var best: Triple<String, String, Int>? = null
-                for (line in output.lines()) {
-                    val tokens = line.trim().split(Regex("""\s+"""))
-                    if (tokens.size < 5 || tokens[0] != "0.0.0.0" || tokens[1] != "0.0.0.0") continue
-                    val gw = tokens[2]
-                    val iface = tokens[3]
-                    val metric = tokens[4].toIntOrNull() ?: continue
-                    if (!gw.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) || gw == "0.0.0.0" || gw.startsWith("198.18.") || gw.startsWith("10.10.14.") || gw == activeTunGw) continue
-                    if (best == null || metric < best.third) best = Triple(gw, iface, metric)
+                val parsed = parseWindowsDefaultGateway(output, activeTunGw) ?: return null
+                return if (parsed.isOnLink && parsed.ifIndex == null) {
+                    parsed.copy(ifIndex = resolveWindowsInterfaceIndexByIp(parsed.physicalDev))
+                } else {
+                    parsed
                 }
-                if (best != null) return best.first to best.second
             }
         } else if (isMac) {
             val (code, output) = runCommand("route", "-n", "get", "default")
@@ -1040,11 +1336,75 @@ object DesktopTunManager {
                     }
                 }
                 if (gw != null && iface != null) {
-                    return gw to iface
+                    return DefaultGatewayInfo(gateway = gw, physicalDev = iface)
                 }
             }
         }
-        return null to null
+        return null
+    }
+
+    internal fun parseWindowsDefaultGateway(output: String, activeTunGw: String = DEFAULT_TUN_GW): DefaultGatewayInfo? {
+        var best: Pair<DefaultGatewayInfo, Int>? = null
+        val ipv4Regex = Regex("""^\d{1,3}(?:\.\d{1,3}){3}$""")
+        for (rawLine in output.lines()) {
+            val trimmed = rawLine.trim()
+            if (trimmed.startsWith("Persistent Routes", ignoreCase = true) ||
+                trimmed.startsWith("Постоянные маршруты", ignoreCase = true) ||
+                trimmed.startsWith("ﭭ", ignoreCase = true)
+            ) {
+                break
+            }
+            val tokens = trimmed.split(Regex("""\s+"""))
+            if (tokens.size < 5 || tokens[0] != "0.0.0.0" || tokens[1] != "0.0.0.0") continue
+
+            var gwToken: String? = null
+            var ifaceToken: String? = null
+            var metric: Int? = null
+            var isOnLink = false
+
+            if (ipv4Regex.matches(tokens[2])) {
+                gwToken = tokens[2]
+                ifaceToken = tokens[3]
+                metric = tokens[4].toIntOrNull()
+            } else if (ipv4Regex.matches(tokens[3])) {
+                // On-link / Привязан (одно слово)
+                gwToken = "0.0.0.0"
+                ifaceToken = tokens[3]
+                metric = tokens[4].toIntOrNull()
+                isOnLink = true
+            } else if (tokens.size >= 6 && ipv4Regex.matches(tokens[4])) {
+                // Локализованное On-link из двух слов (например, "На связи")
+                gwToken = "0.0.0.0"
+                ifaceToken = tokens[4]
+                metric = tokens[5].toIntOrNull()
+                isOnLink = true
+            }
+
+            if (gwToken == null || ifaceToken == null || metric == null) continue
+            if (!ipv4Regex.matches(ifaceToken)) continue
+            if (ifaceToken.startsWith("127.") || ifaceToken.startsWith("198.18.") || ifaceToken.startsWith("10.10.14.")) continue
+            if (!isOnLink && (gwToken == "0.0.0.0" || gwToken.startsWith("198.18.") || gwToken.startsWith("10.10.14.") || gwToken == activeTunGw)) continue
+
+            val candidate = DefaultGatewayInfo(
+                gateway = gwToken,
+                physicalDev = ifaceToken,
+                isOnLink = isOnLink
+            )
+            if (best == null || metric < best.second) {
+                best = candidate to metric
+            }
+        }
+        return best?.first
+    }
+
+    private fun resolveWindowsInterfaceIndexByIp(ip: String): Int? {
+        if (!isWindows || ip.isBlank()) return null
+        val (code, out) = runCommand(
+            "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "(Get-NetIPAddress -AddressFamily IPv4 -IPAddress '$ip' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceIndex"
+        )
+        val idx = out.lines().firstOrNull { it.isNotBlank() }?.trim()?.toIntOrNull()
+        return if (code == 0 && idx != null && idx > 0) idx else null
     }
 
     private fun resolveServerIp(server: String): String? {

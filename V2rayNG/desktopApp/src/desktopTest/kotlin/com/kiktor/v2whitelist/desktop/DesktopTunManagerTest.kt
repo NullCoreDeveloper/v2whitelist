@@ -91,4 +91,38 @@ class DesktopTunManagerTest {
             DesktopInstalledAppsProvider.extractExecutableFromDesktopExec("env STEAM_FORCE_DESKTOPUI_SCALING=1 steam %U")
         )
     }
+
+    @Test
+    fun testParseWindowsDefaultGatewaySupportsOnLinkPppAndIgnoresTun() {
+        val yotaPppOutput = """
+            ===========================================================================
+            Active Routes:
+            Network Destination        Netmask          Gateway       Interface  Metric
+                      0.0.0.0          0.0.0.0          On-link     10.97.142.101     26
+                      0.0.0.0          0.0.0.0       10.10.14.2       10.10.14.1      6
+            ===========================================================================
+            Persistent Routes:
+                      0.0.0.0          0.0.0.0       10.10.14.2  1
+        """.trimIndent()
+
+        val pppGw = DesktopTunManager.parseWindowsDefaultGateway(yotaPppOutput, activeTunGw = "10.10.14.2")
+        assertNotNull(pppGw)
+        assertEquals("0.0.0.0", pppGw.gateway)
+        assertEquals("10.97.142.101", pppGw.physicalDev)
+        assertTrue(pppGw.isOnLink)
+
+        val standardEthOutput = """
+            Active Routes:
+                      0.0.0.0          0.0.0.0   192.168.51.100    192.168.51.50     25
+                      0.0.0.0          0.0.0.0       198.18.0.1       198.18.0.2      1
+            Persistent Routes:
+                      0.0.0.0          0.0.0.0       10.10.14.2  1
+        """.trimIndent()
+
+        val ethGw = DesktopTunManager.parseWindowsDefaultGateway(standardEthOutput)
+        assertNotNull(ethGw)
+        assertEquals("192.168.51.100", ethGw.gateway)
+        assertEquals("192.168.51.50", ethGw.physicalDev)
+        assertFalse(ethGw.isOnLink)
+    }
 }
