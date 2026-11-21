@@ -404,6 +404,7 @@ object XrayConfigGenerator {
         if (!options.remoteDns.isNullOrBlank()) dnsList.add(options.remoteDns)
         if (!options.internalDns.isNullOrBlank()) dnsList.add(options.internalDns)
         if (dnsList.isEmpty()) dnsList.addAll(options.dnsServers)
+        if ("localhost" !in dnsList) dnsList.add("localhost")
 
         return XrayConfig(
             log = XrayLog(loglevel = options.logLevel),

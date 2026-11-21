@@ -38,6 +38,9 @@ class XrayConfigGeneratorTest {
         assertTrue(jsonStr.contains("\"protocol\": \"hysteria\""))
         assertTrue(jsonStr.contains("\"port\": \"20000-40000\""))
         assertTrue(jsonStr.contains("\"auth\": \"authPass\""))
+        assertTrue(jsonStr.contains("\"finalmask\""))
+        assertTrue(jsonStr.contains("\"type\": \"salamander\""), "Hysteria2 finalmask entry must explicitly serialize type=salamander")
+        assertTrue(jsonStr.contains("\"localhost\""), "DNS fallback must include localhost")
     }
 
     @Test

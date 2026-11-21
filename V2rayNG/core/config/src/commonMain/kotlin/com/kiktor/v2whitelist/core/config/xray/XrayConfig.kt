@@ -163,8 +163,10 @@ data class XrayFinalMask(
     val udp: List<XrayFinalMaskEntry>? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class XrayFinalMaskEntry(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val type: String = "salamander",
     val settings: XrayFinalMaskSettings? = null
 )
