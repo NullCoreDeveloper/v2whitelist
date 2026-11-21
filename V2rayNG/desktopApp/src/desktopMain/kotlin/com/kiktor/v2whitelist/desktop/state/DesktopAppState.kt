@@ -18,6 +18,10 @@ import com.kiktor.v2whitelist.core.subscription.defaults.DefaultSubscriptions
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetcher
 import com.kiktor.v2whitelist.core.subscription.parser.SubscriptionParser
+import com.kiktor.v2whitelist.core.subscription.status.SubStaleMode
+import com.kiktor.v2whitelist.core.subscription.status.SubStatusDisplayConfig
+import com.kiktor.v2whitelist.core.subscription.status.SubStatusKind
+import com.kiktor.v2whitelist.core.subscription.status.SubscriptionStatusEvaluator
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopBackupPayload
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
@@ -72,6 +76,7 @@ enum class SubStatusType {
     UPDATING,
     FAILED,
     NO_SUBS,
+    NEUTRAL_UPDATED,
     ACTUAL,
     OUTDATED
 }
@@ -142,16 +147,43 @@ class DesktopAppState(
     // Тикер для периодического пересчёта относительного времени подписки ("прошло X мин")
     private val _statusTick = MutableStateFlow(System.currentTimeMillis())
 
+    // Настройки отображения статуса подписок на главном экране (раздел Оформление)
+    val subShowStalenessStatus = MutableStateFlow(settingsRepo.getBoolean("pref_sub_show_staleness", false))
+    val subStaleMode = MutableStateFlow(SubStaleMode.fromString(settingsRepo.getString("pref_sub_stale_mode", SubStaleMode.CALENDAR_HOUR.name)))
+    val subStaleTimeoutMinutes = MutableStateFlow(
+        settingsRepo.getInt("pref_sub_stale_timeout_min", 60)
+            .coerceIn(SubscriptionStatusEvaluator.MIN_TIMEOUT_MINUTES, SubscriptionStatusEvaluator.MAX_TIMEOUT_MINUTES)
+    )
+    val subShowFailedStatus = MutableStateFlow(settingsRepo.getBoolean("pref_sub_show_failed", true))
+    val subShowElapsedTime = MutableStateFlow(settingsRepo.getBoolean("pref_sub_show_elapsed", true))
+
+    private val subStatusDisplayConfig: StateFlow<SubStatusDisplayConfig> = combine(
+        subShowStalenessStatus,
+        subStaleMode,
+        subStaleTimeoutMinutes,
+        subShowFailedStatus,
+        subShowElapsedTime
+    ) { showStale, mode, timeoutMin, showFailed, showElapsed ->
+        SubStatusDisplayConfig(
+            showStalenessStatus = showStale,
+            staleMode = mode,
+            staleTimeoutMinutes = timeoutMin,
+            showFailedStatus = showFailed,
+            showElapsedTime = showElapsed
+        )
+    }.stateIn(internalStateScope, SharingStarted.Eagerly, SubStatusDisplayConfig())
+
     // Счётчик сохранений/сбросов для синхронизации локального состояния экрана настроек
     val settingsRevision = MutableStateFlow(0L)
 
-    // Статус актуальности подписки на главном экране (актуальна, если час совпадает)
+    // Статус подписок на главном экране
     val subscriptionStatus: StateFlow<SubscriptionStatusInfo> = combine(
         _subscriptions,
         _isUpdatingSub,
-        _statusTick
-    ) { subs, updating, _ ->
-        calculateSubscriptionStatus(subs, updating)
+        _statusTick,
+        subStatusDisplayConfig
+    ) { subs, updating, _, cfg ->
+        calculateSubscriptionStatus(subs, updating, cfg)
     }.stateIn(
         internalStateScope,
         SharingStarted.Eagerly,
@@ -719,82 +751,90 @@ class DesktopAppState(
         }
     }
 
-    private fun calculateSubscriptionStatus(subs: List<CustomSubData>, isUpdating: Boolean): SubscriptionStatusInfo {
-        if (isUpdating) {
-            return SubscriptionStatusInfo(
-                statusText = "Обновление…",
-                timeText = "Загрузка серверов",
-                isActual = true,
-                failedCount = 0,
-                type = SubStatusType.UPDATING
-            )
-        }
+    private fun isSameCalendarHour(t1: Long, t2: Long): Boolean {
+        val c1 = Calendar.getInstance().apply { timeInMillis = t1 }
+        val c2 = Calendar.getInstance().apply { timeInMillis = t2 }
+        return c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
+            c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR) &&
+            c1.get(Calendar.HOUR_OF_DAY) == c2.get(Calendar.HOUR_OF_DAY)
+    }
 
+    private fun calculateSubscriptionStatus(
+        subs: List<CustomSubData>,
+        isUpdating: Boolean,
+        config: SubStatusDisplayConfig = subStatusDisplayConfig.value
+    ): SubscriptionStatusInfo {
         val enabledSubs = subs.filter {
             it.enabled && !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id)
         }
         val failedCount = enabledSubs.count { it.lastUpdateFailed }
         val lastUpdateTime = enabledSubs.filter { it.lastUpdated > 0 }
             .minOfOrNull { it.lastUpdated } ?: 0L
+        val nowMs = System.currentTimeMillis()
 
-        if (failedCount > 0) {
-            val timeStr = formatPassedTime(lastUpdateTime)
-            return SubscriptionStatusInfo(
-                statusText = "Сбой обновления ($failedCount)",
-                timeText = if (timeStr.isNotBlank()) timeStr else "",
+        val eval = SubscriptionStatusEvaluator.evaluate(
+            lastUpdateMs = lastUpdateTime,
+            failedCount = failedCount,
+            isUpdating = isUpdating,
+            nowMs = nowMs,
+            isSameCalendarHour = ::isSameCalendarHour,
+            config = config
+        )
+
+        val formattedTime = formatPassedTime(lastUpdateTime, includeElapsed = config.showElapsedTime)
+
+        return when (eval.kind) {
+            SubStatusKind.UPDATING -> SubscriptionStatusInfo(
+                statusText = "Обновление…",
+                timeText = "Загрузка серверов",
+                isActual = true,
+                failedCount = 0,
+                type = SubStatusType.UPDATING
+            )
+            SubStatusKind.FAILED -> SubscriptionStatusInfo(
+                statusText = "Сбой обновления (${eval.failedCount})",
+                timeText = formattedTime,
                 isActual = false,
-                failedCount = failedCount,
+                failedCount = eval.failedCount,
                 type = SubStatusType.FAILED
             )
-        }
-
-        if (lastUpdateTime <= 0L) {
-            return SubscriptionStatusInfo(
+            SubStatusKind.NO_SUBS -> SubscriptionStatusInfo(
                 statusText = "Нет подписок",
                 timeText = "",
                 isActual = false,
                 failedCount = 0,
                 type = SubStatusType.NO_SUBS
             )
+            SubStatusKind.NEUTRAL_UPDATED -> SubscriptionStatusInfo(
+                statusText = "Последнее обновление",
+                timeText = formattedTime,
+                isActual = true,
+                failedCount = 0,
+                type = SubStatusType.NEUTRAL_UPDATED
+            )
+            SubStatusKind.ACTUAL -> SubscriptionStatusInfo(
+                statusText = "Актуальна",
+                timeText = formattedTime,
+                isActual = true,
+                failedCount = 0,
+                type = SubStatusType.ACTUAL
+            )
+            SubStatusKind.OUTDATED -> SubscriptionStatusInfo(
+                statusText = "Устарела",
+                timeText = formattedTime,
+                isActual = false,
+                failedCount = 0,
+                type = SubStatusType.OUTDATED
+            )
         }
-
-        val updateCal = Calendar.getInstance().apply { timeInMillis = lastUpdateTime }
-        val currentCal = Calendar.getInstance()
-
-        // Правило ui.txt и Android пробел: актуальна ТОЛЬКО если совпадает текущий календарный час!
-        val isActual = updateCal.get(Calendar.YEAR) == currentCal.get(Calendar.YEAR) &&
-                updateCal.get(Calendar.DAY_OF_YEAR) == currentCal.get(Calendar.DAY_OF_YEAR) &&
-                updateCal.get(Calendar.HOUR_OF_DAY) == currentCal.get(Calendar.HOUR_OF_DAY)
-
-        val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val formattedTime = timeFormatter.format(Date(lastUpdateTime))
-        val elapsedMs = (currentCal.timeInMillis - lastUpdateTime).coerceAtLeast(0L)
-        val elapsedMins = elapsedMs / (60 * 1000)
-
-        val passedDetail = if (elapsedMins < 60) {
-            "$elapsedMins мин"
-        } else {
-            val h = elapsedMins / 60
-            val m = elapsedMins % 60
-            "$h ч $m мин"
-        }
-
-        val fullTimeText = "$formattedTime (прошло $passedDetail)"
-
-        return SubscriptionStatusInfo(
-            statusText = if (isActual) "Актуальна" else "Устарела",
-            timeText = fullTimeText,
-            isActual = isActual,
-            failedCount = 0,
-            type = if (isActual) SubStatusType.ACTUAL else SubStatusType.OUTDATED
-        )
     }
 
-    private fun formatPassedTime(lastUpdateTime: Long): String {
+    private fun formatPassedTime(lastUpdateTime: Long, includeElapsed: Boolean = true): String {
         if (lastUpdateTime <= 0) return ""
-        val elapsedMins = (System.currentTimeMillis() - lastUpdateTime).coerceAtLeast(0L) / (60 * 1000)
         val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
         val formattedTime = timeFormatter.format(Date(lastUpdateTime))
+        if (!includeElapsed) return formattedTime
+        val elapsedMins = (System.currentTimeMillis() - lastUpdateTime).coerceAtLeast(0L) / (60 * 1000)
         return if (elapsedMins < 60) {
             "$formattedTime (прошло $elapsedMins мин)"
         } else {
@@ -1054,6 +1094,35 @@ class DesktopAppState(
     fun setMinimizeToTray(enabled: Boolean) {
         minimizeToTray.value = enabled
         settingsRepo.setBoolean("minimize_to_tray", enabled)
+    }
+
+    fun setSubShowStalenessStatus(enabled: Boolean) {
+        subShowStalenessStatus.value = enabled
+        settingsRepo.setBoolean("pref_sub_show_staleness", enabled)
+    }
+
+    fun setSubStaleMode(mode: SubStaleMode) {
+        subStaleMode.value = mode
+        settingsRepo.setString("pref_sub_stale_mode", mode.name)
+    }
+
+    fun setSubStaleTimeoutMinutes(minutes: Int) {
+        val clamped = minutes.coerceIn(
+            SubscriptionStatusEvaluator.MIN_TIMEOUT_MINUTES,
+            SubscriptionStatusEvaluator.MAX_TIMEOUT_MINUTES
+        )
+        subStaleTimeoutMinutes.value = clamped
+        settingsRepo.setInt("pref_sub_stale_timeout_min", clamped)
+    }
+
+    fun setSubShowFailedStatus(enabled: Boolean) {
+        subShowFailedStatus.value = enabled
+        settingsRepo.setBoolean("pref_sub_show_failed", enabled)
+    }
+
+    fun setSubShowElapsedTime(enabled: Boolean) {
+        subShowElapsedTime.value = enabled
+        settingsRepo.setBoolean("pref_sub_show_elapsed", enabled)
     }
 
     // --- Методы управления подписками ---
@@ -3047,6 +3116,11 @@ class DesktopAppState(
         minimizeToTray.value = true
         stopServiceOnExit.value = false
         settingsRepo.setBoolean("pref_stop_service_on_exit", false)
+        subShowStalenessStatus.value = false
+        subStaleMode.value = SubStaleMode.CALENDAR_HOUR
+        subStaleTimeoutMinutes.value = 60
+        subShowFailedStatus.value = true
+        subShowElapsedTime.value = true
         themeMode.value = "DARK"
         themePalette.value = "CYAN"
         pureBlackAmoled.value = false
@@ -3435,6 +3509,12 @@ class DesktopAppState(
         minimizeToTray.value = settingsRepo.getBoolean("minimize_to_tray", true)
         stopServiceOnExit.value = settingsRepo.getBoolean("pref_stop_service_on_exit", false)
         windowsServiceDisabledByUser.value = settingsRepo.getBoolean("pref_windows_service_disabled", false)
+        subShowStalenessStatus.value = settingsRepo.getBoolean("pref_sub_show_staleness", false)
+        subStaleMode.value = SubStaleMode.fromString(settingsRepo.getString("pref_sub_stale_mode", SubStaleMode.CALENDAR_HOUR.name))
+        subStaleTimeoutMinutes.value = settingsRepo.getInt("pref_sub_stale_timeout_min", 60)
+            .coerceIn(SubscriptionStatusEvaluator.MIN_TIMEOUT_MINUTES, SubscriptionStatusEvaluator.MAX_TIMEOUT_MINUTES)
+        subShowFailedStatus.value = settingsRepo.getBoolean("pref_sub_show_failed", true)
+        subShowElapsedTime.value = settingsRepo.getBoolean("pref_sub_show_elapsed", true)
         themeMode.value = settingsRepo.getString("pref_theme_mode", "DARK")
         themePalette.value = settingsRepo.getString("pref_theme_palette", "CYAN")
         pureBlackAmoled.value = settingsRepo.getBoolean("pref_pure_black_amoled", false)

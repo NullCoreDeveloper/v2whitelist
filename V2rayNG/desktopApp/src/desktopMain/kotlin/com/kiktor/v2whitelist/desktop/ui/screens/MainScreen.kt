@@ -141,7 +141,7 @@ fun MainScreen(
                 Column(horizontalAlignment = Alignment.End) {
                     val statusColor = when (subStatus.type) {
                         SubStatusType.FAILED -> AccentRed
-                        SubStatusType.ACTUAL -> AccentMint
+                        SubStatusType.ACTUAL, SubStatusType.NEUTRAL_UPDATED -> AccentMint
                         SubStatusType.NO_SUBS -> MaterialTheme.colorScheme.onSurfaceVariant
                         SubStatusType.UPDATING, SubStatusType.OUTDATED -> AccentAmber
                     }
@@ -150,6 +150,7 @@ fun MainScreen(
                         SubStatusType.UPDATING -> strings.subUpdatingBtn
                         SubStatusType.FAILED -> "${strings.subStatusFailed} (${subStatus.failedCount})"
                         SubStatusType.NO_SUBS -> strings.noSubsText
+                        SubStatusType.NEUTRAL_UPDATED -> strings.subStatusUpdatedNeutral
                         SubStatusType.ACTUAL -> strings.subStatusActual
                         SubStatusType.OUTDATED -> strings.subStatusOutdated
                     }
@@ -160,8 +161,9 @@ fun MainScreen(
                         fontWeight = FontWeight.Bold,
                         color = statusColor
                     )
-                    val failedNames = remember(subscriptions) {
-                        subscriptions.filter {
+                    val failedNames = remember(subscriptions, subStatus.type) {
+                        if (subStatus.type != SubStatusType.FAILED) emptyList()
+                        else subscriptions.filter {
                             it.enabled &&
                                 !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id) &&
                                 it.lastUpdateFailed

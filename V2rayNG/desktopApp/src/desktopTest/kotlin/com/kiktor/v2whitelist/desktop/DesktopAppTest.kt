@@ -685,5 +685,43 @@ class DesktopAppTest {
         assertEquals("https://ya.ru", state2.tunSelfTestUrl.value)
         assertEquals("Backup Node", repo2.getServerConfig("g-1")?.remarks)
     }
+
+    @Test
+    fun testSubscriptionStatusDisplaySettingsBehavior() {
+        val state = DesktopAppState(
+            serverRepo = InMemoryServerRepository(),
+            settingsRepo = InMemorySettingsRepository(),
+            autoCheckNetworkOnStart = false
+        )
+        assertFalse(state.subShowStalenessStatus.value)
+        assertTrue(state.subShowFailedStatus.value)
+        assertTrue(state.subShowElapsedTime.value)
+        assertEquals(60, state.subStaleTimeoutMinutes.value)
+
+        // Проверка дефолтного нейтрального статуса (не помечает как Устарела)
+        val firstId = state.subscriptions.value.first().id
+        val twentyMinAgo = System.currentTimeMillis() - 20 * 60_000L
+        val seeded = state.subscriptions.value.map {
+            if (it.id == firstId) it.copy(enabled = true, lastUpdated = twentyMinAgo, lastUpdateFailed = false)
+            else it.copy(enabled = false)
+        }
+        state.saveSubscription(seeded.first())
+        seeded.drop(1).forEach { if (it.enabled) state.toggleSubscriptionEnabled(it.id) }
+        Thread.sleep(150)
+
+        assertEquals(com.kiktor.v2whitelist.desktop.state.SubStatusType.NEUTRAL_UPDATED, state.subscriptionStatus.value.type)
+
+        // Включаем статус актуальности с таймером 15 мин -> должен стать OUTDATED
+        state.setSubShowStalenessStatus(true)
+        state.setSubStaleMode(com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.RELATIVE)
+        state.setSubStaleTimeoutMinutes(15)
+        Thread.sleep(150)
+        assertEquals(com.kiktor.v2whitelist.desktop.state.SubStatusType.OUTDATED, state.subscriptionStatus.value.type)
+
+        // Меняем таймер на 30 мин -> становится ACTUAL
+        state.setSubStaleTimeoutMinutes(30)
+        Thread.sleep(150)
+        assertEquals(com.kiktor.v2whitelist.desktop.state.SubStatusType.ACTUAL, state.subscriptionStatus.value.type)
+    }
 }
 

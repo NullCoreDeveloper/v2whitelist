@@ -378,7 +378,20 @@ interface AppStrings {
     val resetDialogConfirm: String
     val subStatusActual: String
     val subStatusOutdated: String
+    val subStatusUpdatedNeutral: String
     val subStatusFailed: String
+    val subStatusCardTitle: String
+    val subStatusCardDesc: String
+    val subShowStalenessTitle: String
+    val subShowStalenessDesc: String
+    val subStaleModeLabel: String
+    val subStaleModeCalendarHour: String
+    val subStaleModeRelative: String
+    val subStaleTimeoutLabel: String
+    val subShowFailedTitle: String
+    val subShowFailedDesc: String
+    val subShowElapsedTitle: String
+    val subShowElapsedDesc: String
     val error: String
     val langSystem: String
     val resetSuccess: String
@@ -843,7 +856,20 @@ object StringsRu : AppStrings {
     override val resetDialogConfirm: String = "Вы уверены, что хотите сбросить все параметры приложения к исходным? Пользовательские подписки будут сохранены."
     override val subStatusActual: String = "Актуальна"
     override val subStatusOutdated: String = "Устарела"
+    override val subStatusUpdatedNeutral: String = "Последнее обновление"
     override val subStatusFailed: String = "Сбой обновления"
+    override val subStatusCardTitle: String = "Статус подписок на главном экране"
+    override val subStatusCardDesc: String = "Определяет, как отображается время и актуальность подписок"
+    override val subShowStalenessTitle: String = "Показывать статус «Актуальна / Устарела»"
+    override val subShowStalenessDesc: String = "Если выключено, отображается только время последнего обновления"
+    override val subStaleModeLabel: String = "Условие устаревания"
+    override val subStaleModeCalendarHour: String = "Новый календарный час"
+    override val subStaleModeRelative: String = "Таймер от обновления"
+    override val subStaleTimeoutLabel: String = "Интервал устаревания (мин)"
+    override val subShowFailedTitle: String = "Показывать ошибки обновления"
+    override val subShowFailedDesc: String = "Предупреждать на главном экране, если не все подписки обновились"
+    override val subShowElapsedTitle: String = "Показывать прошедшее время"
+    override val subShowElapsedDesc: String = "Добавлять «(прошло X мин)» рядом со временем обновления"
     override val error: String = "Ошибка"
     override val langSystem: String = "Как в системе"
     override val resetSuccess: String = "Настройки успешно сброшены к значениям по умолчанию!"
@@ -1294,7 +1320,20 @@ object StringsEn : AppStrings {
     override val resetDialogConfirm: String = "Are you sure you want to reset all settings to defaults? Your subscriptions will remain intact."
     override val subStatusActual: String = "Up to date"
     override val subStatusOutdated: String = "Outdated"
+    override val subStatusUpdatedNeutral: String = "Last updated"
     override val subStatusFailed: String = "Update failed"
+    override val subStatusCardTitle: String = "Subscription Status Display"
+    override val subStatusCardDesc: String = "Controls how subscription freshness and errors appear on the main screen"
+    override val subShowStalenessTitle: String = "Show 'Up to date / Outdated' label"
+    override val subShowStalenessDesc: String = "When disabled, only the last update time is shown"
+    override val subStaleModeLabel: String = "Expiration condition"
+    override val subStaleModeCalendarHour: String = "New calendar hour"
+    override val subStaleModeRelative: String = "Relative timer"
+    override val subStaleTimeoutLabel: String = "Expiration timeout (min)"
+    override val subShowFailedTitle: String = "Show update failures"
+    override val subShowFailedDesc: String = "Highlight on the main screen when a subscription fails to update"
+    override val subShowElapsedTitle: String = "Show elapsed time"
+    override val subShowElapsedDesc: String = "Append '(X min ago)' next to the last update time"
     override val error: String = "Error"
     override val langSystem: String = "System Default"
     override val resetSuccess: String = "Settings successfully reset to defaults!"
@@ -1742,7 +1781,20 @@ object StringsZh : AppStrings {
     override val resetDialogConfirm: String = "确定要将所有网络参数恢复为默认状态吗？您的自定义订阅配置将被保留。"
     override val subStatusActual: String = "最新"
     override val subStatusOutdated: String = "已过期"
+    override val subStatusUpdatedNeutral: String = "最近更新"
     override val subStatusFailed: String = "同步失败"
+    override val subStatusCardTitle: String = "主界面订阅状态显示"
+    override val subStatusCardDesc: String = "自定义主界面如何显示订阅更新时间和过期提示"
+    override val subShowStalenessTitle: String = "显示“最新 / 已过期”状态"
+    override val subShowStalenessDesc: String = "关闭后仅显示最近一次更新时间"
+    override val subStaleModeLabel: String = "过期判定方式"
+    override val subStaleModeCalendarHour: String = "整点小时切换"
+    override val subStaleModeRelative: String = "按更新后时长"
+    override val subStaleTimeoutLabel: String = "过期时间间隔（分钟）"
+    override val subShowFailedTitle: String = "显示更新失败提示"
+    override val subShowFailedDesc: String = "当部分订阅更新失败时在主界面提示"
+    override val subShowElapsedTitle: String = "显示已过去时间"
+    override val subShowElapsedDesc: String = "在更新时间旁附加“（已过 X 分钟）”"
     override val error: String = "错误"
     override val langSystem: String = "跟随系统"
     override val resetSuccess: String = "所有配置已成功恢复出厂默认值！"
@@ -2193,7 +2245,20 @@ object StringsFa : AppStrings {
     override val resetDialogConfirm: String = "آیا از بازنشانی تمام تنظیمات اطمینان دارید؟ اشتراک‌های شما حذف نخواهند شد."
     override val subStatusActual: String = "به‌روز"
     override val subStatusOutdated: String = "منقضی‌شده"
+    override val subStatusUpdatedNeutral: String = "آخرین به‌روزرسانی"
     override val subStatusFailed: String = "خطا در به‌روزرسانی"
+    override val subStatusCardTitle: String = "نمایش وضعیت اشتراک‌ها"
+    override val subStatusCardDesc: String = "تنظیم نحوه نمایش زمان و اعتبار اشتراک‌ها در صفحه اصلی"
+    override val subShowStalenessTitle: String = "نمایش برچسب «به‌روز / منقضی»"
+    override val subShowStalenessDesc: String = "در صورت خاموش بودن، فقط زمان آخرین به‌روزرسانی نمایش داده می‌شود"
+    override val subStaleModeLabel: String = "شرط منقضی شدن"
+    override val subStaleModeCalendarHour: String = "شروع ساعت جدید"
+    override val subStaleModeRelative: String = "زمان‌سنج نسبی"
+    override val subStaleTimeoutLabel: String = "مدت انقضا (دقیقه)"
+    override val subShowFailedTitle: String = "نمایش خطای به‌روزرسانی"
+    override val subShowFailedDesc: String = "هشدار در صفحه اصلی هنگام خطای به‌روزرسانی اشتراک"
+    override val subShowElapsedTitle: String = "نمایش زمان سپری‌شده"
+    override val subShowElapsedDesc: String = "نمایش «(X دقیقه پیش)» در کنار زمان به‌روزرسانی"
     override val error: String = "خطا"
     override val langSystem: String = "هماهنگ با سیستم"
     override val resetSuccess: String = "تنظیمات با موفقیت به حالت پیش‌فرض بازگشت!"

@@ -223,6 +223,150 @@ fun AppearanceScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        // 6. Отображение статуса подписок на главном экране
+        val showStaleness by state.subShowStalenessStatus.collectAsState()
+        val staleMode by state.subStaleMode.collectAsState()
+        val staleTimeoutMin by state.subStaleTimeoutMinutes.collectAsState()
+        val showFailed by state.subShowFailedStatus.collectAsState()
+        val showElapsed by state.subShowElapsedTime.collectAsState()
+        var timeoutInput by remember(staleTimeoutMin) { mutableStateOf(staleTimeoutMin.toString()) }
+
+        AppearanceCard(title = strings.subStatusCardTitle, meshEnabled = meshEnabled) {
+            Text(
+                text = strings.subStatusCardDesc,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(10.dp))
+
+            AppearanceSwitchRow(
+                title = strings.subShowStalenessTitle,
+                desc = strings.subShowStalenessDesc,
+                checked = showStaleness,
+                onCheckedChange = { state.setSubShowStalenessStatus(it) }
+            )
+
+            if (showStaleness) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = strings.subStaleModeLabel,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OptionChip(
+                        label = strings.subStaleModeCalendarHour,
+                        selected = staleMode == com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.CALENDAR_HOUR,
+                        onClick = {
+                            state.setSubStaleMode(com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.CALENDAR_HOUR)
+                        }
+                    )
+                    OptionChip(
+                        label = strings.subStaleModeRelative,
+                        selected = staleMode == com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.RELATIVE,
+                        onClick = {
+                            state.setSubStaleMode(com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.RELATIVE)
+                        }
+                    )
+                }
+
+                if (staleMode == com.kiktor.v2whitelist.core.subscription.status.SubStaleMode.RELATIVE) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = strings.subStaleTimeoutLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf(15, 30, 60, 180, 360, 1440).forEach { mins ->
+                            val label = if (mins < 60) "$mins м" else "${mins / 60} ч"
+                            OptionChip(
+                                label = label,
+                                selected = staleTimeoutMin == mins,
+                                onClick = { state.setSubStaleTimeoutMinutes(mins) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = timeoutInput,
+                        onValueChange = { raw ->
+                            val digits = raw.filter { it.isDigit() }
+                            timeoutInput = digits
+                            digits.toIntOrNull()?.takeIf { it > 0 }?.let {
+                                state.setSubStaleTimeoutMinutes(it)
+                            }
+                        },
+                        label = { Text(strings.subStaleTimeoutLabel) },
+                        singleLine = true,
+                        modifier = Modifier.width(220.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(10.dp))
+
+            AppearanceSwitchRow(
+                title = strings.subShowFailedTitle,
+                desc = strings.subShowFailedDesc,
+                checked = showFailed,
+                onCheckedChange = { state.setSubShowFailedStatus(it) }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            AppearanceSwitchRow(
+                title = strings.subShowElapsedTitle,
+                desc = strings.subShowElapsedDesc,
+                checked = showElapsed,
+                onCheckedChange = { state.setSubShowElapsedTime(it) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppearanceSwitchRow(
+    title: String,
+    desc: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = desc,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 
