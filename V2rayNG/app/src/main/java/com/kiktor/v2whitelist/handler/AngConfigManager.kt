@@ -642,15 +642,27 @@ object AngConfigManager {
                             var result = ""
                             // 1. SOCKS5 Proxy
                             if (socksPort > 0) {
-                                try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 6000, socksPort) } catch (_: Exception) {}
+                                try {
+                                    result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 6000, socksPort)
+                                } catch (e: Exception) {
+                                    Log.d(AppConfig.TAG, "Sequential SOCKS5 ($socksPort) failed for $singleUrl: ${e.message}")
+                                }
                             }
                             // 2. HTTP Proxy
                             if (result.isEmpty() && httpPort > 0) {
-                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort) } catch (_: Exception) {}
+                                try {
+                                    result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000, httpPort)
+                                } catch (e: Exception) {
+                                    Log.d(AppConfig.TAG, "Sequential HTTP ($httpPort) failed for $singleUrl: ${e.message}")
+                                }
                             }
                             // 3. Direct (только если не включено обновление исключительно через VPN)
                             if (result.isEmpty() && !onlyViaVpn) {
-                                try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000) } catch (_: Exception) {}
+                                try {
+                                    result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000)
+                                } catch (e: Exception) {
+                                    Log.d(AppConfig.TAG, "Sequential direct failed for $singleUrl: ${e.message}")
+                                }
                             }
                             if (result.isNotEmpty()) {
                                 Log.i(AppConfig.TAG, "Sequential mirror succeeded: $singleUrl")
@@ -683,15 +695,27 @@ object AngConfigManager {
 
                                 // Если VPN активен (socksPort > 0), сразу опрашиваем через локальный прокси
                                 if (socksPort > 0) {
-                                    try { result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 7000, socksPort) } catch (_: Exception) {}
+                                    try {
+                                        result = HttpUtil.getUrlContentViaSocks(urlFixed, userAgent, 7000, socksPort)
+                                    } catch (e: Exception) {
+                                        Log.d(AppConfig.TAG, "Parallel SOCKS5 ($socksPort) failed for $singleUrl: ${e.message}")
+                                    }
                                 }
                                 if (result.isEmpty() && httpPort > 0) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000, httpPort) } catch (_: Exception) {}
+                                    try {
+                                        result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000, httpPort)
+                                    } catch (e: Exception) {
+                                        Log.d(AppConfig.TAG, "Parallel HTTP ($httpPort) failed for $singleUrl: ${e.message}")
+                                    }
                                 }
 
                                 // Если через прокси не удалось или VPN не включен (socksPort == 0) — пробуем напрямую
                                 if (result.isEmpty() && !onlyViaVpn) {
-                                    try { result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000) } catch (_: Exception) {}
+                                    try {
+                                        result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000)
+                                    } catch (e: Exception) {
+                                        Log.d(AppConfig.TAG, "Parallel direct failed for $singleUrl: ${e.message}")
+                                    }
                                     if (result.isEmpty() && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)) {
                                         try { result = YandexTranslateUpdater.fetchContentViaYandex(singleUrl, 8000).orEmpty() } catch (_: Exception) {}
                                     }
