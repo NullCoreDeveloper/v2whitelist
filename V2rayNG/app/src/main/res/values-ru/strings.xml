@@ -960,4 +960,10 @@
     <string name="summary_pref_sub_show_failed">Предупреждать на главном экране, если не все подписки обновились</string>
     <string name="title_pref_sub_show_elapsed">Показывать прошедшее время</string>
     <string name="summary_pref_sub_show_elapsed">Добавлять «(прошло X мин)» рядом со временем обновления</string>
+    <string name="title_pref_doh_mode">Режим DNS over HTTPS (DoH)</string>
+    <string name="doh_mode_off">Выключен (по умолчанию)</string>
+    <string name="doh_mode_wifi_only">Только по Wi-Fi</string>
+    <string name="doh_mode_always">Всегда</string>
+    <string name="title_pref_doh_url">Сервер DoH</string>
+    <string name="summary_pref_doh_url">URL HTTPS-резолвера (например, https://1.1.1.1/dns-query)</string>
 </resources>

@@ -314,10 +314,37 @@ object SettingsManager {
     }
 
     /**
+     * Checks whether DoH (DNS over HTTPS) should be active for the current network.
+     * By default DoH is disabled ("off") because it is often blocked on Russian networks.
+     */
+    fun isDohActive(context: Context): Boolean {
+        val mode = MmkvManager.decodeSettingsString(AppConfig.PREF_DOH_MODE, AppConfig.DOH_MODE_OFF)
+            ?: AppConfig.DOH_MODE_OFF
+        return when (mode) {
+            AppConfig.DOH_MODE_ALWAYS -> true
+            AppConfig.DOH_MODE_WIFI_ONLY -> {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                    ?: return false
+                val network = cm.activeNetwork ?: return false
+                val caps = cm.getNetworkCapabilities(network) ?: return false
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            }
+            else -> false
+        }
+    }
+
+    /**
      * Get remote DNS servers from preference.
      * @return A list of remote DNS servers.
      */
-    fun getRemoteDnsServers(): List<String> {
+    fun getRemoteDnsServers(context: Context? = null): List<String> {
+        if (context != null && isDohActive(context)) {
+            val dohUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_DOH_URL, AppConfig.DNS_DOH_DEFAULT)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() && Utils.isCoreDNSAddress(it) }
+                ?: AppConfig.DNS_DOH_DEFAULT
+            return listOf(dohUrl)
+        }
         val remoteDns =
             MmkvManager.decodeSettingsString(AppConfig.PREF_REMOTE_DNS) ?: AppConfig.DNS_PROXY
         val ret = remoteDns.split(",").filter { Utils.isPureIpAddress(it) || Utils.isCoreDNSAddress(it) }

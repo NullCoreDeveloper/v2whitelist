@@ -282,7 +282,7 @@ object V2rayConfigManager {
 
         getFakeDns(v2rayConfig)
 
-        getDns(v2rayConfig)
+        getDns(context, v2rayConfig)
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED) == true) {
             getCustomLocalDns(v2rayConfig)
@@ -339,7 +339,7 @@ object V2rayConfigManager {
 
         getFakeDns(v2rayConfig)
 
-        getDns(v2rayConfig)
+        getDns(context, v2rayConfig)
 
         getBalance(v2rayConfig, config)
         if (!ignoreCustomEndpoint) {
@@ -827,13 +827,13 @@ object V2rayConfigManager {
      * @param v2rayConfig The V2ray configuration object to be modified
      * @return true if DNS configuration was successful, false otherwise
      */
-    private fun getDns(v2rayConfig: V2rayConfig): Boolean {
+    private fun getDns(context: Context, v2rayConfig: V2rayConfig): Boolean {
         try {
             val hosts = mutableMapOf<String, Any>()
             val servers = ArrayList<Any>()
 
             //remote Dns
-            val remoteDns = SettingsManager.getRemoteDnsServers()
+            val remoteDns = SettingsManager.getRemoteDnsServers(context)
             val proxyDomain = getUserRule2Domain(AppConfig.TAG_PROXY)
             remoteDns.forEach {
                 servers.add(it)
@@ -1319,17 +1319,7 @@ object V2rayConfigManager {
                     length = length,
                     interval = interval
                 ),
-                noises = if (v2rayConfig.outbounds[0].streamSettings?.security == AppConfig.REALITY) {
-                    null
-                } else {
-                    listOf(
-                        OutSettingsBean.NoiseBean(
-                            type = "rand",
-                            packet = "10-20",
-                            delay = "10-16",
-                        )
-                    )
-                },
+                noises = null,
             )
             fragmentOutbound.streamSettings = StreamSettingsBean(
                 sockopt = StreamSettingsBean.SockoptBean(

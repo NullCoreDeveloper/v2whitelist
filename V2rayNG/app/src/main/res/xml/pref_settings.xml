@@ -477,6 +477,20 @@
             android:title="@string/title_pref_dns_hosts" />
 
         <ListPreference
+            android:defaultValue="off"
+            android:entries="@array/doh_mode_entries"
+            android:entryValues="@array/doh_mode_values"
+            android:key="pref_doh_mode"
+            android:summary="%s"
+            android:title="@string/title_pref_doh_mode" />
+
+        <EditTextPreference
+            android:defaultValue="https://1.1.1.1/dns-query"
+            android:key="pref_doh_url"
+            android:summary="@string/summary_pref_doh_url"
+            android:title="@string/title_pref_doh_url" />
+
+        <ListPreference
             android:defaultValue="warning"
             android:entries="@array/core_loglevel"
             android:entryValues="@array/core_loglevel"

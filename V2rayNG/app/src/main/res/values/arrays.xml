@@ -261,4 +261,15 @@
         <item>RELATIVE</item>
     </string-array>
 
+    <string-array name="doh_mode_entries">
+        <item>@string/doh_mode_off</item>
+        <item>@string/doh_mode_wifi_only</item>
+        <item>@string/doh_mode_always</item>
+    </string-array>
+
+    <string-array name="doh_mode_values" translatable="false">
+        <item>off</item>
+        <item>wifi_only</item>
+        <item>always</item>
+    </string-array>
 </resources>

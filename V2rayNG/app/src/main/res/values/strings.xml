@@ -967,4 +967,10 @@
     <string name="summary_pref_sub_show_failed">Show warning on the main screen when a subscription fails to update</string>
     <string name="title_pref_sub_show_elapsed">Show elapsed time</string>
     <string name="summary_pref_sub_show_elapsed">Append elapsed minutes next to the last update time</string>
+    <string name="title_pref_doh_mode">DNS over HTTPS (DoH) mode</string>
+    <string name="doh_mode_off">Disabled (default)</string>
+    <string name="doh_mode_wifi_only">Wi-Fi only</string>
+    <string name="doh_mode_always">Always</string>
+    <string name="title_pref_doh_url">DoH Server URL</string>
+    <string name="summary_pref_doh_url">HTTPS DNS endpoint (e.g. https://1.1.1.1/dns-query)</string>
 </resources>
