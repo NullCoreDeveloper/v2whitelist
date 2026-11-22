@@ -63,6 +63,7 @@ fun MainScreen(
     val smartConnectStatus by state.smartConnectStatus.collectAsState()
     val routingMode by state.routingMode.collectAsState()
     val subStatus by state.subscriptionStatus.collectAsState()
+    val showElapsedTime by state.subShowElapsedTime.collectAsState()
     val subscriptions by state.subscriptions.collectAsState()
     val exitIp by state.exitIp.collectAsState()
     val meshEnabled by state.meshGradientEnabled.collectAsState()
@@ -132,63 +133,65 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ================= 1. ШАПКА =================
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Справа: статус актуальности подписки и время
-                Column(horizontalAlignment = Alignment.End) {
-                    val statusColor = when (subStatus.type) {
-                        SubStatusType.FAILED -> AccentRed
-                        SubStatusType.ACTUAL, SubStatusType.NEUTRAL_UPDATED -> AccentMint
-                        SubStatusType.NO_SUBS -> MaterialTheme.colorScheme.onSurfaceVariant
-                        SubStatusType.UPDATING, SubStatusType.OUTDATED -> AccentAmber
-                    }
+            if (showElapsedTime) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Справа: статус актуальности подписки и время
+                    Column(horizontalAlignment = Alignment.End) {
+                        val statusColor = when (subStatus.type) {
+                            SubStatusType.FAILED -> AccentRed
+                            SubStatusType.ACTUAL, SubStatusType.NEUTRAL_UPDATED -> AccentMint
+                            SubStatusType.NO_SUBS -> MaterialTheme.colorScheme.onSurfaceVariant
+                            SubStatusType.UPDATING, SubStatusType.OUTDATED -> AccentAmber
+                        }
 
-                    val statusTitle = when (subStatus.type) {
-                        SubStatusType.UPDATING -> strings.subUpdatingBtn
-                        SubStatusType.FAILED -> "${strings.subStatusFailed} (${subStatus.failedCount})"
-                        SubStatusType.NO_SUBS -> strings.noSubsText
-                        SubStatusType.NEUTRAL_UPDATED -> strings.subStatusUpdatedNeutral
-                        SubStatusType.ACTUAL -> strings.subStatusActual
-                        SubStatusType.OUTDATED -> strings.subStatusOutdated
-                    }
+                        val statusTitle = when (subStatus.type) {
+                            SubStatusType.UPDATING -> strings.subUpdatingBtn
+                            SubStatusType.FAILED -> "${strings.subStatusFailed} (${subStatus.failedCount})"
+                            SubStatusType.NO_SUBS -> strings.noSubsText
+                            SubStatusType.NEUTRAL_UPDATED -> strings.subStatusUpdatedNeutral
+                            SubStatusType.ACTUAL -> strings.subStatusActual
+                            SubStatusType.OUTDATED -> strings.subStatusOutdated
+                        }
 
-                    Text(
-                        text = statusTitle,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor
-                    )
-                    val failedNames = remember(subscriptions, subStatus.type) {
-                        if (subStatus.type != SubStatusType.FAILED) emptyList()
-                        else subscriptions.filter {
-                            it.enabled &&
-                                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id) &&
-                                it.lastUpdateFailed
-                        }.map { it.name.ifBlank { strings.unknown } }
-                    }
-                    if (failedNames.isNotEmpty()) {
                         Text(
-                            text = "${strings.subFailureBanner}${failedNames.joinToString(", ")}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = AccentRed,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = statusTitle,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
                         )
-                    } else if (subStatus.timeText.isNotBlank()) {
-                        Text(
-                            text = subStatus.timeText,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        val failedNames = remember(subscriptions, subStatus.type) {
+                            if (subStatus.type != SubStatusType.FAILED) emptyList()
+                            else subscriptions.filter {
+                                it.enabled &&
+                                    !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.id) &&
+                                    it.lastUpdateFailed
+                            }.map { it.name.ifBlank { strings.unknown } }
+                        }
+                        if (failedNames.isNotEmpty()) {
+                            Text(
+                                text = "${strings.subFailureBanner}${failedNames.joinToString(", ")}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = AccentRed,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else if (subStatus.timeText.isNotBlank()) {
+                            Text(
+                                text = subStatus.timeText,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
+            }
 
             // ================= БАННЕР ОБНОВЛЕНИЯ =================
             val availableUpdate by state.availableAppUpdate.collectAsState()
