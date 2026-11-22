@@ -519,11 +519,7 @@ class MainActivity : HelperBaseActivity() {
                     binding.tvStatusDetail.text = status
                 }
                 if (isSubscriptionUpdating) {
-                    val tvUpdateStatus = findViewById<android.widget.TextView>(R.id.tv_update_status)
-                    val tvUpdateTime = findViewById<android.widget.TextView>(R.id.tv_update_time)
-                    tvUpdateStatus?.text = "Обновление…"
-                    tvUpdateStatus?.setTextColor(ContextCompat.getColor(this, R.color.color_fab_active))
-                    tvUpdateTime?.text = status
+                    updateSubUpdatingHeader(status, ContextCompat.getColor(this, R.color.color_fab_active))
                 }
             } else if (SmartConnectManager.isScanning.get()) {
                 setConnectingState(status)
@@ -704,11 +700,7 @@ class MainActivity : HelperBaseActivity() {
         binding.ivStatusIcon.setColorFilter(orangeColor)
 
         if (isSubscriptionUpdating && message != null) {
-            findViewById<android.widget.TextView>(R.id.tv_update_status)?.apply {
-                text = "Обновление…"
-                setTextColor(orangeColor)
-            }
-            findViewById<android.widget.TextView>(R.id.tv_update_time)?.text = message
+            updateSubUpdatingHeader(message, orangeColor)
         }
     }
 
@@ -1028,8 +1020,33 @@ class MainActivity : HelperBaseActivity() {
         startV2Ray()
     }
 
+    private fun isSubTopStatusVisible(): Boolean =
+        MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_ELAPSED, true)
+
+    private fun updateSubUpdatingHeader(statusText: String, statusColor: Int) {
+        val layoutLastUpdate = findViewById<android.view.View>(R.id.layout_last_update)
+        if (!isSubTopStatusVisible()) {
+            layoutLastUpdate?.visibility = android.view.View.GONE
+            return
+        }
+        layoutLastUpdate?.visibility = android.view.View.VISIBLE
+        findViewById<android.widget.TextView>(R.id.tv_update_status)?.apply {
+            text = "Обновление…"
+            setTextColor(statusColor)
+        }
+        findViewById<android.widget.TextView>(R.id.tv_update_time)?.text = statusText
+    }
+
     private fun updateSubscriptionStatusUI() {
+        val layoutLastUpdate = findViewById<android.view.View>(R.id.layout_last_update)
+        val showElapsed = isSubTopStatusVisible()
+        if (!showElapsed) {
+            layoutLastUpdate?.visibility = android.view.View.GONE
+            return
+        }
         if (isSubscriptionUpdating) return
+        layoutLastUpdate?.visibility = android.view.View.VISIBLE
+
         val subs = MmkvManager.decodeSubscriptions()
         val validCustomGuids = SubscriptionHelper.loadCustomSubs().map { "custom_sub_${it.id}" }.toSet()
         // minOf только по актуальным подпискам, которые ВКЛЮЧЕНЫ и хоть раз обновлялись.
@@ -1057,7 +1074,6 @@ class MainActivity : HelperBaseActivity() {
                 com.kiktor.v2whitelist.core.subscription.status.SubscriptionStatusEvaluator.MAX_TIMEOUT_MINUTES
             )
         val showFailed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_FAILED, true)
-        val showElapsed = MmkvManager.decodeSettingsBool(AppConfig.PREF_SUB_SHOW_ELAPSED, true)
 
         val config = com.kiktor.v2whitelist.core.subscription.status.SubStatusDisplayConfig(
             showStalenessStatus = showStaleness,
