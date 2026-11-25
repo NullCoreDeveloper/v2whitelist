@@ -426,6 +426,20 @@ class DesktopAppState(
     val showAppUpdateDialog = MutableStateFlow(false)
     val appUpdateCheckMessage = MutableStateFlow<String?>(null)
 
+    // Предупреждение о конфликтах с Zapret / сторонними TUN/VPN
+    val conflictWarning = MutableStateFlow<com.kiktor.v2whitelist.desktop.engine.NetworkConflictWarning?>(null)
+    private var conflictDismissedSignature: String? = null
+
+    // Автообновление geoip.dat / geosite.dat
+    val geoAutoUpdateIntervalDays = MutableStateFlow(settingsRepo.getInt("pref_geo_auto_update_days", 7).coerceIn(0, 30))
+    val geoAssetsLastUpdatedMs = MutableStateFlow(
+        com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.getEffectiveLastUpdatedMillis(
+            settingsRepo.getString("pref_geo_assets_last_update_ms", "").toLongOrNull() ?: 0L
+        )
+    )
+    val isUpdatingGeoAssets = MutableStateFlow(false)
+    val geoUpdateMessage = MutableStateFlow<String?>(null)
+
     // Базовые параметры VPN и ядра
     val preferIpv6 = MutableStateFlow(settingsRepo.getBoolean("pref_prefer_ipv6", false))
     val useLocalDns = MutableStateFlow(settingsRepo.getBoolean("pref_use_local_dns", true))
@@ -573,6 +587,10 @@ class DesktopAppState(
         // Автоматическая фоновая проверка обновлений при старте и периодически (если включено)
         restartPeriodicAppUpdateCheck()
 
+        // Проверка конфликтующего ПО (Zapret / сторонние TUN/VPN) и плановое автообновление geo-баз
+        checkNetworkConflictsAsync()
+        checkGeoAssetsAutoUpdateIfDue()
+
         // Когда VPN подключается (актуально, если GitHub недоступен напрямую при старте),
         // повторно запускаем проверку обновлений при устаревшем/неудачном последнем чеке
         scope.launch {
@@ -586,6 +604,10 @@ class DesktopAppState(
                         if (coreState.value == DesktopCoreState.RUNNING && autoCheckUpdates.value) {
                             checkAppUpdate(manual = false)
                         }
+                    }
+                    delay(1500L)
+                    if (coreState.value == DesktopCoreState.RUNNING) {
+                        checkGeoAssetsAutoUpdateIfDue()
                     }
                 }
                 prevState = currentState
@@ -2149,6 +2171,8 @@ class DesktopAppState(
 
         if (!ensureLinuxSudoForTun(PendingSudoAction.CONNECT_CURRENT)) return
 
+        checkNetworkConflictsAsync()
+
         connectJob?.cancel()
         connectJob = scope.launch {
             val listenAddr = if (allowLan.value) "0.0.0.0" else "127.0.0.1"
@@ -2205,6 +2229,7 @@ class DesktopAppState(
                 muxXudpConcurrency = muxXudpConcurrency.value,
                 customEndpointUrl = endpoint,
                 bypassRussianServices = bypassRussianServices.value,
+                bypassPrivateIps = vpnBypassLan.value,
                 preferIpv6 = preferIpv6.value,
                 fragmentEnabled = fragmentEnabled.value,
                 fragmentPackets = fragmentPackets.value,
@@ -2257,7 +2282,8 @@ class DesktopAppState(
                                 proxyApps = appSplitProxyApps.value
                             ),
                             allowServiceMode = !windowsServiceDisabledByUser.value,
-                            selfTestUrl = tunSelfTestUrl.value
+                            selfTestUrl = tunSelfTestUrl.value,
+                            bypassLan = vpnBypassLan.value
                         )
                     }
                     if (tunStarted) {
@@ -3238,6 +3264,63 @@ class DesktopAppState(
         availableAppUpdate.value = null
     }
 
+    fun dismissConflictWarning() {
+        conflictDismissedSignature = conflictWarning.value?.items?.joinToString("|")
+        conflictWarning.value = null
+    }
+
+    fun checkNetworkConflictsAsync() {
+        scope.launch(Dispatchers.IO) {
+            val detected = com.kiktor.v2whitelist.desktop.engine.DesktopConflictDetector.detectConflicts()
+            if (detected == null) {
+                conflictWarning.value = null
+                return@launch
+            }
+            val sig = detected.items.joinToString("|")
+            if (sig != conflictDismissedSignature) {
+                conflictWarning.value = detected
+            }
+            GeekModeLogger.log("CONFLICT", "${detected.title}. ${detected.details}")
+        }
+    }
+
+    fun setGeoAutoUpdateIntervalDays(days: Int) {
+        val normalized = days.coerceIn(0, 30)
+        geoAutoUpdateIntervalDays.value = normalized
+        settingsRepo.setInt("pref_geo_auto_update_days", normalized)
+        if (normalized > 0) {
+            checkGeoAssetsAutoUpdateIfDue()
+        }
+    }
+
+    fun updateGeoAssetsNow(manual: Boolean = true) {
+        if (isUpdatingGeoAssets.value) return
+        isUpdatingGeoAssets.value = true
+        if (manual) {
+            geoUpdateMessage.value = "Загрузка geoip.dat и geosite.dat…"
+        }
+        scope.launch(Dispatchers.IO) {
+            val proxyPort = if (coreState.value == DesktopCoreState.RUNNING && httpPort.value > 0) httpPort.value else null
+            val res = com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.updateNow(proxyPort)
+            res.updatedAtMs?.let { ts ->
+                geoAssetsLastUpdatedMs.value = ts
+                settingsRepo.setString("pref_geo_assets_last_update_ms", ts.toString())
+            }
+            if (manual || res.success) {
+                geoUpdateMessage.value = res.message
+            }
+            isUpdatingGeoAssets.value = false
+        }
+    }
+
+    fun checkGeoAssetsAutoUpdateIfDue() {
+        val days = geoAutoUpdateIntervalDays.value
+        val lastMs = geoAssetsLastUpdatedMs.value
+        if (com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.isUpdateDue(days, lastMs)) {
+            updateGeoAssetsNow(manual = false)
+        }
+    }
+
     fun openWebUrl(url: String) {
         try {
             if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
@@ -3416,6 +3499,7 @@ class DesktopAppState(
                     "pref_domain_split_tunneling" to domainSplitTunnelingEnabled.value,
                     "pref_domain_whitelist_mode" to domainWhitelistMode.value,
                     "pref_bypass_russian_services" to bypassRussianServices.value,
+                    "pref_vpn_bypass_lan" to vpnBypassLan.value,
                     "minimize_to_tray" to minimizeToTray.value,
                     "pref_stop_service_on_exit" to stopServiceOnExit.value
                 )
@@ -3621,6 +3705,10 @@ class DesktopAppState(
         fragmentLength.value = settingsRepo.getString("pref_fragment_length", "50-100")
         fragmentInterval.value = settingsRepo.getString("pref_fragment_interval", "10-20")
         fragmentPackets.value = settingsRepo.getString("pref_fragment_packets", "tlshello")
+        geoAutoUpdateIntervalDays.value = settingsRepo.getInt("pref_geo_auto_update_days", 7).coerceIn(0, 30)
+        geoAssetsLastUpdatedMs.value = com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.getEffectiveLastUpdatedMillis(
+            settingsRepo.getString("pref_geo_assets_last_update_ms", "").toLongOrNull() ?: 0L
+        )
 
         loadSubscriptions()
         settingsRevision.value++

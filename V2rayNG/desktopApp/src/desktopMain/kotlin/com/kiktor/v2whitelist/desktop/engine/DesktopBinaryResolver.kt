@@ -298,12 +298,35 @@ object DesktopBinaryResolver {
     }
 
     /**
+     * Пользовательский каталог гео-баз (записываемый без прав администратора,
+     * имеет приоритет над встроенными файлами из комплекта поставки).
+     */
+    fun getUserAssetsDir(): File {
+        val userHome = System.getProperty("user.home") ?: "."
+        return when {
+            isWindows -> {
+                val base = System.getenv("LOCALAPPDATA")
+                if (!base.isNullOrBlank()) File(base, "v2whitelist/assets")
+                else File(userHome, "AppData/Local/v2whitelist/assets")
+            }
+            isMac -> File(userHome, "Library/Application Support/v2whitelist/assets")
+            else -> File(userHome, ".local/share/v2whitelist/assets")
+        }
+    }
+
+    /**
      * Поиск директории с базами геоданных (geosite.dat и geoip.dat).
      */
     fun findAssetDirectory(customPath: String? = null, xrayBinary: File? = null): File? {
         if (!customPath.isNullOrBlank()) {
             val cf = File(customPath)
             return if (cf.exists() && hasGeoData(cf)) cf.canonicalFile else null
+        }
+
+        // 1. Сначала проверяем обновляемую пользовательскую папку (приоритет над встроенной в Program Files)
+        val userAssets = getUserAssetsDir()
+        if (hasGeoData(userAssets)) {
+            return userAssets.canonicalFile
         }
 
         val userHome = System.getProperty("user.home") ?: "."

@@ -36,10 +36,15 @@ import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.NetworkBindingRule
 import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
+import com.kiktor.v2whitelist.core.config.xray.DomainRouteTestResult
+import com.kiktor.v2whitelist.core.config.xray.DomainRouteTester
+import com.kiktor.v2whitelist.core.config.xray.RouteVerdict
+import com.kiktor.v2whitelist.core.config.xray.XrayGeneratorOptions
 import com.kiktor.v2whitelist.core.subscription.endpoint.CustomEndpointManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.InetAddress
 
 enum class DesktopSettingsCategory(
     val getTitle: (AppStrings) -> String,
@@ -1122,6 +1127,12 @@ fun SettingsScreen(
                         checked = bypassRu,
                         onCheckedChange = { bypassRu = it }
                     )
+                    SettingSwitchRow(
+                        title = strings.vpnBypassLan,
+                        desc = strings.vpnBypassLanDesc,
+                        checked = bypassLan,
+                        onCheckedChange = { bypassLan = it }
+                    )
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -1274,6 +1285,189 @@ fun SettingsScreen(
                                 text = "${strings.bypassRuEnable}: geoip:ru / geosite:category-ru",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Проверка маршрутизации конкретного домена / IP
+                var domainTestQuery by remember { mutableStateOf("") }
+                var domainTestResult by remember { mutableStateOf<DomainRouteTestResult?>(null) }
+                var domainTestResolvedIps by remember { mutableStateOf<List<String>>(emptyList()) }
+                var isTestingDomain by remember { mutableStateOf(false) }
+
+                SettingsCard(
+                    title = "Проверка домена: куда пойдёт сайт?",
+                    icon = Icons.Default.TravelExplore,
+                    description = "Показывает вердикт (Direct / Proxy) и правило, которое сработает при текущих настройках"
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = domainTestQuery,
+                            onValueChange = { domainTestQuery = it },
+                            label = { Text("Домен, URL или IP (например: youtube.com, sber.ru, 192.168.1.1)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                val query = domainTestQuery.trim()
+                                if (query.isNotBlank() && !isTestingDomain) {
+                                    isTestingDomain = true
+                                    scope.launch {
+                                        val normalized = DomainRouteTester.normalizeInput(query)
+                                        val ips = withContext(Dispatchers.IO) {
+                                            runCatching {
+                                                InetAddress.getAllByName(normalized)
+                                                    .mapNotNull { it.hostAddress }
+                                                    .distinct()
+                                                    .take(4)
+                                            }.getOrDefault(emptyList())
+                                        }
+                                        val opts = XrayGeneratorOptions(
+                                            bypassRussianServices = bypassRu,
+                                            bypassPrivateIps = bypassLan,
+                                            domainWhitelistMode = domainSplit && domainWhitelist,
+                                            customProxyDomains = if (domainSplit) customProxy.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() } else emptyList(),
+                                            customDirectDomains = if (domainSplit) customDirect.split(",", "\n").map { it.trim() }.filter { it.isNotBlank() } else emptyList()
+                                        )
+                                        domainTestResolvedIps = ips
+                                        domainTestResult = DomainRouteTester.test(query, opts, ips)
+                                        isTestingDomain = false
+                                    }
+                                }
+                            },
+                            enabled = domainTestQuery.isNotBlank() && !isTestingDomain,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(if (isTestingDomain) "..." else "Проверить")
+                        }
+                    }
+
+                    domainTestResult?.let { res ->
+                        Spacer(Modifier.height(10.dp))
+                        val isDirect = res.verdict == RouteVerdict.DIRECT
+                        val badgeColor = if (isDirect) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = badgeColor.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Surface(shape = RoundedCornerShape(6.dp), color = badgeColor) {
+                                        Text(
+                                            text = if (isDirect) "DIRECT (Напрямую)" else "PROXY (Через VPN)",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = res.normalizedHost,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                                Text(
+                                    text = "Правило: ${res.matchedRule}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (domainTestResolvedIps.isNotEmpty()) {
+                                    Text(
+                                        text = "DNS: ${domainTestResolvedIps.joinToString(", ")}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                res.note?.let { note ->
+                                    Text(
+                                        text = note,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Автообновление geoip.dat / geosite.dat
+                val geoIntervalDays by state.geoAutoUpdateIntervalDays.collectAsState()
+                val geoLastUpdatedMs by state.geoAssetsLastUpdatedMs.collectAsState()
+                val isUpdatingGeo by state.isUpdatingGeoAssets.collectAsState()
+                val geoMessage by state.geoUpdateMessage.collectAsState()
+                val formattedGeoDate = remember(geoLastUpdatedMs) {
+                    if (geoLastUpdatedMs <= 0L) {
+                        "встроенная база (не обновлялась вручную)"
+                    } else {
+                        java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(geoLastUpdatedMs))
+                    }
+                }
+
+                SettingsCard(
+                    title = "Базы маршрутизации (geoip.dat / geosite.dat)",
+                    icon = Icons.Default.Update,
+                    description = "Используются для Bypass RU (geoip:ru, geosite:category-ru) и правил доменов"
+                ) {
+                    Text(
+                        text = "Последнее обновление: $formattedGeoDate",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Автообновление по расписанию:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(0 to "Выкл", 1 to "1 день", 3 to "3 дня", 7 to "7 дней").forEach { (days, label) ->
+                            SettingsChip(
+                                label = label,
+                                selected = geoIntervalDays == days,
+                                onClick = { state.setGeoAutoUpdateIntervalDays(days) }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { state.updateGeoAssetsNow(manual = true) },
+                            enabled = !isUpdatingGeo,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            if (isUpdatingGeo) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(if (isUpdatingGeo) "Обновление…" else "Обновить geoip / geosite сейчас", fontSize = 12.sp)
+                        }
+                        geoMessage?.let { msg ->
+                            Text(
+                                text = msg,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
