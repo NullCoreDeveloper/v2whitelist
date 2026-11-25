@@ -218,12 +218,25 @@ object AppConfig {
     const val BROADCAST_ACTION_ACTIVITY = "$ANG_PACKAGE.action.activity"
     const val BROADCAST_ACTION_WIDGET_CLICK = "$ANG_PACKAGE.action.widget.click"
 
+    /** External automation actions (MacroDroid / Automate / Tasker). */
+    const val PREF_EXTERNAL_CONTROL_ENABLED = "pref_external_control_enabled"
+    const val ACTION_EXTERNAL_CONNECT = "$ANG_PACKAGE.action.CONNECT"
+    const val ACTION_EXTERNAL_DISCONNECT = "$ANG_PACKAGE.action.DISCONNECT"
+    const val ACTION_EXTERNAL_TOGGLE = "$ANG_PACKAGE.action.TOGGLE"
+    const val ACTION_EXTERNAL_SWITCH_SERVER = "$ANG_PACKAGE.action.SWITCH_SERVER"
+
     /** Tasker extras. */
     const val TASKER_EXTRA_BUNDLE = "com.twofortyfouram.locale.intent.extra.BUNDLE"
     const val TASKER_EXTRA_STRING_BLURB = "com.twofortyfouram.locale.intent.extra.BLURB"
     const val TASKER_EXTRA_BUNDLE_SWITCH = "tasker_extra_bundle_switch"
     const val TASKER_EXTRA_BUNDLE_GUID = "tasker_extra_bundle_guid"
+    const val TASKER_EXTRA_BUNDLE_ACTION = "tasker_extra_bundle_action"
     const val TASKER_DEFAULT_GUID = "Default"
+    const val TASKER_ACTION_CONNECT = "connect"
+    const val TASKER_ACTION_DISCONNECT = "disconnect"
+    const val TASKER_ACTION_TOGGLE = "toggle"
+    const val TASKER_ACTION_SWITCH = "switch"
+    const val TASKER_ACTION_CONNECT_SERVER = "connect_server"
 
     /** Tags for different proxy modes. */
     const val TAG_PROXY = "proxy"

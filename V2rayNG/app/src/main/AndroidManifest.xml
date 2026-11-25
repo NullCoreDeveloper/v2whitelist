@@ -168,6 +168,9 @@
             android:name=".ui.LocationFilterActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.ServerListActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.LanProxySharingActivity"
             android:exported="false" />
         <activity
@@ -273,10 +276,13 @@
         <receiver
             android:name=".receiver.TaskerReceiver"
             android:exported="true"
-            android:process=":RunSoLibV2RayDaemon"
             tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
+                <action android:name="com.kiktor.v2whitelist.action.CONNECT" />
+                <action android:name="com.kiktor.v2whitelist.action.DISCONNECT" />
+                <action android:name="com.kiktor.v2whitelist.action.TOGGLE" />
+                <action android:name="com.kiktor.v2whitelist.action.SWITCH_SERVER" />
             </intent-filter>
         </receiver>
         <!-- =====================Tasker===================== -->

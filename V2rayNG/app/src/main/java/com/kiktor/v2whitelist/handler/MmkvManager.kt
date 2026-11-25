@@ -1033,6 +1033,7 @@ object MmkvManager {
         AppConfig.PREF_START_SCAN_IMMEDIATE,
         AppConfig.PREF_DOUBLE_COLUMN_DISPLAY,
         AppConfig.PREF_PREFER_IPV6,
+        AppConfig.PREF_EXTERNAL_CONTROL_ENABLED,
         AppConfig.PREF_PROXY_SHARING,
         AppConfig.PREF_HIDE_TUNNEL,
         AppConfig.PREF_ALLOW_INSECURE,

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -8,42 +9,105 @@
     android:padding="@dimen/padding_spacing_dp16"
     tools:context=".ui.TaskerActivity">
 
-    <RelativeLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="@dimen/padding_spacing_dp8">
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_start_service"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:checked="true"
-            app:theme="@style/BrandedSwitch" />
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
-            android:layout_toStartOf="@id/switch_start_service"
-            android:text="@string/tasker_start_service"
-            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
-
-    </RelativeLayout>
-
-    <LinearLayout
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:layout_weight="1">
 
-        <ListView
-            android:id="@+id/listview"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:choiceMode="singleChoice" />
-    </LinearLayout>
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_external_disabled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone"
+                app:cardCornerRadius="12dp"
+                app:strokeColor="?attr/colorError"
+                app:strokeWidth="1dp"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/tasker_disabled_warning"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_enable_external_control"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/tasker_btn_enable_now" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <RadioGroup
+                android:id="@+id/rg_tasker_action"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rb_action_connect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/tasker_action_connect" />
+
+                <RadioButton
+                    android:id="@+id/rb_action_disconnect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/tasker_action_disconnect" />
+
+                <RadioButton
+                    android:id="@+id/rb_action_toggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/tasker_action_toggle" />
+
+                <RadioButton
+                    android:id="@+id/rb_action_switch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/tasker_action_switch" />
+
+                <TextView
+                    android:id="@+id/tv_personal_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/tasker_personal_section"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </RadioGroup>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_save_tasker"
+        style="@style/Widget.Material3.Button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/tasker_btn_save" />
 
 </LinearLayout>

@@ -2,114 +2,180 @@ package com.kiktor.v2whitelist.ui
 
 import android.content.Intent
 import android.os.Bundle
-import android.text.TextUtils
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.ListView
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.databinding.ActivityTaskerBinding
 import com.kiktor.v2whitelist.handler.MmkvManager
+import com.kiktor.v2whitelist.handler.PersonalServersManager
 
 class TaskerActivity : BaseActivity() {
     private val binding by lazy { ActivityTaskerBinding.inflate(layoutInflater) }
-
-    private var listview: ListView? = null
-    private var lstData: ArrayList<String> = ArrayList()
-    private var lstGuid: ArrayList<String> = ArrayList()
+    private val personalButtonIds = LinkedHashMap<String, Int>()
+    private val personalNames = LinkedHashMap<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        //setContentView(binding.root)
-        setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = "")
+        setContentViewWithToolbar(binding.root, showHomeAsUp = true, title = getString(R.string.tasker_title))
 
-        //add def value
-        lstData.add("Default")
-        lstGuid.add(AppConfig.TASKER_DEFAULT_GUID)
+        setupExternalControlBanner()
+        populatePersonalServers()
+        restoreSelection()
 
-        MmkvManager.decodeServerList().forEach { key ->
-            MmkvManager.decodeServerConfig(key)?.let { config ->
-                lstData.add(config.remarks)
-                lstGuid.add(key)
-            }
-        }
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_list_item_single_choice, lstData
-        )
-        listview = findViewById<View>(R.id.listview) as ListView
-        listview?.adapter = adapter
-
-        init()
-    }
-
-    private fun init() {
-        try {
-            val bundle = intent?.getBundleExtra(AppConfig.TASKER_EXTRA_BUNDLE)
-            val switch = bundle?.getBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, false)
-            val guid = bundle?.getString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, "")
-
-            if (switch == null || TextUtils.isEmpty(guid)) {
-                return
-            } else {
-                binding.switchStartService.isChecked = switch
-                val pos = lstGuid.indexOf(guid.toString())
-                if (pos >= 0) {
-                    listview?.setItemChecked(pos, true)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to initialize Tasker settings", e)
-
+        binding.btnSaveTasker.setOnClickListener {
+            confirmFinish()
         }
     }
 
-    private fun confirmFinish() {
-        val position = listview?.checkedItemPosition
-        if (position == null || position < 0) {
+    private fun setupExternalControlBanner() {
+        val enabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_EXTERNAL_CONTROL_ENABLED, false)
+        binding.cardExternalDisabled.visibility = if (enabled) View.GONE else View.VISIBLE
+
+        binding.btnEnableExternalControl.setOnClickListener {
+            MmkvManager.encodeSettings(AppConfig.PREF_EXTERNAL_CONTROL_ENABLED, true)
+            binding.cardExternalDisabled.visibility = View.GONE
+        }
+    }
+
+    private fun populatePersonalServers() {
+        val personalServers = PersonalServersManager.getPersonalServers()
+        if (personalServers.isEmpty()) {
+            binding.tvPersonalSection.visibility = View.GONE
             return
         }
 
-        val extraBundle = Bundle()
-        extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, binding.switchStartService.isChecked)
-        extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, lstGuid[position])
-        val intent = Intent()
+        binding.tvPersonalSection.visibility = View.VISIBLE
+        val minHeightPx = (48 * resources.displayMetrics.density).toInt()
+        for ((guid, profile) in personalServers) {
+            val label = profile.remarks.ifBlank { profile.server ?: guid }
+            val rbId = View.generateViewId()
+            val rb = RadioButton(this).apply {
+                id = rbId
+                text = label
+                tag = guid
+                minHeight = minHeightPx
+                layoutParams = RadioGroup.LayoutParams(
+                    RadioGroup.LayoutParams.MATCH_PARENT,
+                    RadioGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            binding.rgTaskerAction.addView(rb)
+            personalButtonIds[guid] = rbId
+            personalNames[guid] = label
+        }
+    }
 
-        val remarks = lstData[position]
-        val blurb = if (binding.switchStartService.isChecked) {
-            "Start $remarks"
-        } else {
-            "Stop $remarks"
+    private fun restoreSelection() {
+        try {
+            val bundle = intent?.getBundleExtra(AppConfig.TASKER_EXTRA_BUNDLE)
+            val action = bundle?.getString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION)
+            val guid = bundle?.getString(AppConfig.TASKER_EXTRA_BUNDLE_GUID).orEmpty()
+
+            if (!action.isNullOrBlank()) {
+                when (action) {
+                    AppConfig.TASKER_ACTION_DISCONNECT -> binding.rgTaskerAction.check(R.id.rb_action_disconnect)
+                    AppConfig.TASKER_ACTION_TOGGLE -> binding.rgTaskerAction.check(R.id.rb_action_toggle)
+                    AppConfig.TASKER_ACTION_SWITCH -> binding.rgTaskerAction.check(R.id.rb_action_switch)
+                    AppConfig.TASKER_ACTION_CONNECT_SERVER -> {
+                        val personalId = personalButtonIds[guid]
+                        if (personalId != null) {
+                            binding.rgTaskerAction.check(personalId)
+                        } else {
+                            binding.rgTaskerAction.check(R.id.rb_action_connect)
+                        }
+                    }
+                    else -> binding.rgTaskerAction.check(R.id.rb_action_connect)
+                }
+                return
+            }
+
+            if (bundle != null && bundle.containsKey(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH)) {
+                val legacySwitch = bundle.getBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, true)
+                if (!legacySwitch) {
+                    binding.rgTaskerAction.check(R.id.rb_action_disconnect)
+                } else {
+                    val personalId = personalButtonIds[guid]
+                    if (personalId != null) {
+                        binding.rgTaskerAction.check(personalId)
+                    } else {
+                        binding.rgTaskerAction.check(R.id.rb_action_connect)
+                    }
+                }
+                return
+            }
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "Failed to initialize Tasker settings", e)
         }
 
-        intent.putExtra(AppConfig.TASKER_EXTRA_BUNDLE, extraBundle)
-        intent.putExtra(AppConfig.TASKER_EXTRA_STRING_BLURB, blurb)
-        setResult(RESULT_OK, intent)
+        binding.rgTaskerAction.check(R.id.rb_action_connect)
+    }
+
+    private fun confirmFinish() {
+        val checkedId = binding.rgTaskerAction.checkedRadioButtonId
+        val extraBundle = Bundle()
+        var blurb: String
+
+        when (checkedId) {
+            R.id.rb_action_disconnect -> {
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION, AppConfig.TASKER_ACTION_DISCONNECT)
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, AppConfig.TASKER_DEFAULT_GUID)
+                extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, false)
+                blurb = getString(R.string.tasker_action_disconnect)
+            }
+            R.id.rb_action_toggle -> {
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION, AppConfig.TASKER_ACTION_TOGGLE)
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, AppConfig.TASKER_DEFAULT_GUID)
+                extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, true)
+                blurb = getString(R.string.tasker_action_toggle)
+            }
+            R.id.rb_action_switch -> {
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION, AppConfig.TASKER_ACTION_SWITCH)
+                extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, AppConfig.TASKER_DEFAULT_GUID)
+                extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, true)
+                blurb = getString(R.string.tasker_action_switch)
+            }
+            else -> {
+                val checkedView = binding.rgTaskerAction.findViewById<RadioButton>(checkedId)
+                val selectedGuid = checkedView?.tag as? String
+                if (!selectedGuid.isNullOrBlank() && personalButtonIds.containsKey(selectedGuid)) {
+                    val serverName = personalNames[selectedGuid] ?: selectedGuid
+                    extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION, AppConfig.TASKER_ACTION_CONNECT_SERVER)
+                    extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, selectedGuid)
+                    extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, true)
+                    blurb = serverName
+                } else {
+                    extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_ACTION, AppConfig.TASKER_ACTION_CONNECT)
+                    extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_GUID, AppConfig.TASKER_DEFAULT_GUID)
+                    extraBundle.putBoolean(AppConfig.TASKER_EXTRA_BUNDLE_SWITCH, true)
+                    blurb = getString(R.string.tasker_action_connect)
+                }
+            }
+        }
+
+        val resultIntent = Intent().apply {
+            putExtra(AppConfig.TASKER_EXTRA_BUNDLE, extraBundle)
+            putExtra(AppConfig.TASKER_EXTRA_STRING_BLURB, blurb)
+        }
+        setResult(RESULT_OK, resultIntent)
         finish()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.action_server, menu)
-        val delConfig = menu.findItem(R.id.del_config)
-        delConfig?.isVisible = false
+        menu.findItem(R.id.del_config)?.isVisible = false
         return super.onCreateOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem) = when (item.itemId) {
-        R.id.del_config -> {
-            true
-        }
-
         R.id.save_config -> {
             confirmFinish()
             true
         }
-
         else -> super.onOptionsItemSelected(item)
     }
-
 }
-

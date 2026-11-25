@@ -393,6 +393,32 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                 true
             }
 
+            // Внешнее управление (Tasker / MacroDroid)
+            findPreference<androidx.preference.Preference>("pref_external_control_help")?.setOnPreferenceClickListener {
+                val pkg = requireContext().packageName
+                val commandsText = buildString {
+                    appendLine("Package: $pkg")
+                    appendLine("Receiver: com.kiktor.v2whitelist.receiver.TaskerReceiver")
+                    appendLine()
+                    appendLine("Actions:")
+                    appendLine("• ${AppConfig.ACTION_EXTERNAL_CONNECT}")
+                    appendLine("• ${AppConfig.ACTION_EXTERNAL_DISCONNECT}")
+                    appendLine("• ${AppConfig.ACTION_EXTERNAL_TOGGLE}")
+                    append("• ${AppConfig.ACTION_EXTERNAL_SWITCH_SERVER}")
+                }
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.external_control_dialog_title)
+                    .setMessage(commandsText)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .setNeutralButton(R.string.external_control_copy_all) { _, _ ->
+                        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("v2whitelist_intents", commandsText))
+                        requireContext().toast(R.string.external_control_copied)
+                    }
+                    .show()
+                true
+            }
+
             // Логи
             findPreference<androidx.preference.Preference>("pref_logcat")?.setOnPreferenceClickListener {
                 startActivity(android.content.Intent(requireContext(), LogcatActivity::class.java))

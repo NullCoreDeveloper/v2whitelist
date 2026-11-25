@@ -564,6 +564,18 @@
             android:summary="@string/summary_pref_is_booted"
             android:title="@string/title_pref_is_booted" />
 
+        <CheckBoxPreference
+            android:key="pref_external_control_enabled"
+            android:defaultValue="false"
+            android:summary="@string/summary_pref_external_control"
+            android:title="@string/title_pref_external_control" />
+
+        <Preference
+            android:dependency="pref_external_control_enabled"
+            android:key="pref_external_control_help"
+            android:summary="@string/summary_pref_external_control_help"
+            android:title="@string/title_pref_external_control_help" />
+
         <EditTextPreference
             android:key="pref_delay_test_url"
             android:summary="@string/summary_pref_delay_test_url"
