@@ -36,6 +36,7 @@ import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
+import com.kiktor.v2whitelist.desktop.engine.NetworkConflictWarning
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.state.SubStatusType
 import com.kiktor.v2whitelist.desktop.ui.components.LocationFilterDialog
@@ -191,6 +192,63 @@ fun MainScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
+            }
+
+            // ================= БАННЕР КОНФЛИКТОВ С ЗАПРЕТ / ДРУГИМ VPN =================
+            val conflictWarning by state.conflictWarning.collectAsState()
+            conflictWarning?.let { conflict ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = AccentAmber.copy(alpha = 0.14f),
+                    border = BorderStroke(1.dp, AccentAmber.copy(alpha = 0.55f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 680.dp)
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = AccentAmber,
+                                modifier = Modifier.size(20.dp).padding(top = 2.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = conflict.title,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = conflict.details,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { state.dismissConflictWarning() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = strings.btnDismiss,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             // ================= БАННЕР ОБНОВЛЕНИЯ =================
