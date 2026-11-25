@@ -4,34 +4,35 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kiktor.v2whitelist.AppConfig
-import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEngine
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEntry
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListFilter
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListStats
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListViewResult
 import com.kiktor.v2whitelist.core.model.EConfigType
-import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
-import com.kiktor.v2whitelist.handler.DefaultSubscriptions
 import com.kiktor.v2whitelist.handler.FullScanManager
 import com.kiktor.v2whitelist.handler.FullScanUiState
 import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NodeTesterManager
+import com.kiktor.v2whitelist.handler.ServerListStore
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.handler.SpeedtestManager
-import com.kiktor.v2whitelist.handler.SubscriptionHelper
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.handler.V2rayConfigManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +54,7 @@ data class SubscriptionFilterOption(
 )
 
 data class ServerListScreenState(
+    val isLoading: Boolean = true,
     val viewResult: ServerListViewResult = ServerListViewResult(
         vipServers = emptyList(),
         regularServers = emptyList(),
@@ -73,181 +75,207 @@ data class ServerListScreenState(
     val speedTestStates: Map<String, SpeedTestRowState> = emptyMap(),
     val reinspectingGuids: Set<String> = emptySet(),
     val isFindingVip: Boolean = false,
-    val isPingingVip: Boolean = false
+    val isPingingVip: Boolean = false,
+    val totalRegularMatching: Int = 0,
+    val hasMoreRegular: Boolean = false,
+    val fallbackFlags: Map<String, String> = emptyMap()
 )
 
+@OptIn(FlowPreview::class)
 class ServerListViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val filterFlow = MutableStateFlow(ServerListFilter())
+    companion object {
+        const val DEFAULT_PAGE_SIZE = 80
+        const val PAGE_INCREMENT = 80
+    }
+
+    private val baseFilterFlow = MutableStateFlow(ServerListFilter())
+    private val searchQueryFlow = MutableStateFlow("")
+    private val effectiveFilterFlow = MutableStateFlow(ServerListFilter())
+
     private val expandedGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val speedTestStatesFlow = MutableStateFlow<Map<String, SpeedTestRowState>>(emptyMap())
     private val reinspectingGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val isFindingVipFlow = MutableStateFlow(false)
     private val isPingingVipFlow = MutableStateFlow(false)
-    private val reloadTriggerFlow = MutableStateFlow(0L)
+    private val visibleRegularLimitFlow = MutableStateFlow(DEFAULT_PAGE_SIZE)
 
-    private val _uiState = MutableStateFlow(ServerListScreenState())
+    private val computedFlow = MutableStateFlow(ComputedState())
+    private val _uiState = MutableStateFlow(
+        ServerListScreenState(
+            isLoading = !ServerListStore.isLoaded.value,
+            scanState = FullScanManager.state.value
+        )
+    )
     val uiState: StateFlow<ServerListScreenState> = _uiState.asStateFlow()
 
-    private data class AuxiliaryState(
+    private data class ComputedState(
+        val isLoading: Boolean = true,
+        val viewResult: ServerListViewResult = ServerListViewResult(
+            vipServers = emptyList(),
+            regularServers = emptyList(),
+            availableCountryCounts = emptyMap(),
+            availableServices = emptyList(),
+            stats = ServerListStats(0, 0, 0, 0, 0, 0, 0)
+        ),
+        val filter: ServerListFilter = ServerListFilter(),
+        val scanState: FullScanUiState = FullScanUiState(),
+        val lastScanMeta: ScanSessionMeta? = null,
+        val networkCheckEnabled: Boolean = true,
+        val endpointEnabled: Boolean = false,
+        val availableSubscriptions: List<SubscriptionFilterOption> = emptyList(),
+        val availableProtocols: List<EConfigType> = emptyList(),
+        val flagsByGuid: Map<String, String> = emptyMap(),
+        val connectedGuid: String? = null,
+        val isVpnRunning: Boolean = false
+    )
+
+    private data class RowOverlayState(
         val expanded: Set<String>,
         val speeds: Map<String, SpeedTestRowState>,
         val reinspecting: Set<String>,
         val isFindingVip: Boolean,
-        val isPingingVip: Boolean,
-        val reloadTick: Long
+        val isPingingVip: Boolean
     )
 
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            ServerListStore.ensureLoaded(getApplication())
+            ServerListStore.reloadBaseIfNeeded(getApplication())
+        }
+
+        // Debounce для поиска, чтобы не пересчитывать список на каждый нажатый символ
         viewModelScope.launch {
-            val auxBaseFlow = combine(
+            combine(
+                baseFilterFlow,
+                searchQueryFlow.debounce(180L).distinctUntilChanged()
+            ) { baseFilter, query ->
+                baseFilter.copy(searchQuery = query)
+            }.collect { combined ->
+                effectiveFilterFlow.value = combined
+            }
+        }
+
+        // Слой 1: фильтрация и сортировка по горячему in-memory кэшу (без чтения MMKV на каждый тик)
+        viewModelScope.launch(Dispatchers.Default) {
+            combine(
+                ServerListStore.isLoaded,
+                ServerListStore.revision,
+                FullScanManager.state,
+                effectiveFilterFlow
+            ) { loaded, _, scanState, filter ->
+                Triple(loaded, scanState, filter)
+            }.collectLatest { (loaded, scanState, filter) ->
+                if (!loaded) {
+                    computedFlow.value = ComputedState(isLoading = true, scanState = scanState, filter = filter)
+                    return@collectLatest
+                }
+
+                val snapshot = ServerListStore.snapshot()
+                val lastMeta = MmkvManager.decodeFullScanMeta()
+                val networkCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
+                val customEpEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
+                val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
+                val endpointEnabled = customEpEnabled && endpointUrl.isNotEmpty()
+
+                val viewResult = ServerListEngine.buildView(
+                    entries = snapshot.entries,
+                    filter = filter,
+                    endpointEnabled = endpointEnabled,
+                    removedDuplicatesCount = snapshot.removedDuplicatesCount
+                )
+
+                val isRunning = V2RayServiceManager.isRunning()
+                val connectedGuid = if (isRunning) MmkvManager.getSelectServer() else null
+
+                computedFlow.value = ComputedState(
+                    isLoading = false,
+                    viewResult = viewResult,
+                    filter = filter,
+                    scanState = scanState,
+                    lastScanMeta = lastMeta,
+                    networkCheckEnabled = networkCheckEnabled,
+                    endpointEnabled = endpointEnabled,
+                    availableSubscriptions = snapshot.availableSubscriptions,
+                    availableProtocols = snapshot.availableProtocols,
+                    flagsByGuid = snapshot.flagsByGuid,
+                    connectedGuid = connectedGuid,
+                    isVpnRunning = isRunning
+                )
+            }
+        }
+
+        // Слой 2: лёгкая нарезка видимого окна + интерактивные состояния карточек (без пересортировки)
+        viewModelScope.launch(Dispatchers.Default) {
+            val baseOverlay = combine(
                 expandedGuidsFlow,
                 speedTestStatesFlow,
-                reinspectingGuidsFlow,
-                reloadTriggerFlow
-            ) { expanded, speeds, reinspecting, tick ->
-                AuxiliaryState(expanded, speeds, reinspecting, false, false, tick)
+                reinspectingGuidsFlow
+            ) { expanded, speeds, reinspecting ->
+                Triple(expanded, speeds, reinspecting)
             }
-            val auxFlow = combine(
-                auxBaseFlow,
+            val fullOverlay = combine(
+                baseOverlay,
                 isFindingVipFlow,
                 isPingingVipFlow
-            ) { base, findingVip, pingingVip ->
-                base.copy(isFindingVip = findingVip, isPingingVip = pingingVip)
+            ) { (expanded, speeds, reinspecting), findingVip, pingingVip ->
+                RowOverlayState(expanded, speeds, reinspecting, findingVip, pingingVip)
             }
 
             combine(
-                FullScanManager.state,
-                filterFlow,
-                auxFlow
-            ) { scanState, filter, aux ->
-                Triple(scanState, filter, aux)
-            }.collect { (scanState, filter, aux) ->
-                val computed = withContext(Dispatchers.IO) {
-                    buildScreenState(scanState, filter, aux)
+                computedFlow,
+                visibleRegularLimitFlow,
+                fullOverlay
+            ) { computed, regularLimit, overlay ->
+                val totalRegular = computed.viewResult.regularServers.size
+                val slicedRegular = if (totalRegular > regularLimit) {
+                    computed.viewResult.regularServers.take(regularLimit)
+                } else {
+                    computed.viewResult.regularServers
                 }
-                _uiState.value = computed
-            }
-        }
-    }
 
-    private fun buildScreenState(
-        scanState: FullScanUiState,
-        filter: ServerListFilter,
-        aux: AuxiliaryState
-    ): ServerListScreenState {
-        val guids = MmkvManager.decodeServerList()
-        val inspections = MmkvManager.decodeAllServerInspections()
-        val vipSet = MmkvManager.getVipCache().toSet()
-        val removedDupes = MmkvManager.decodeLastRemovedDuplicatesCount()
-        val lastMeta = MmkvManager.decodeFullScanMeta()
-        val networkCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
-
-        val customEpEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-        val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
-        val endpointEnabled = customEpEnabled && endpointUrl.isNotEmpty()
-
-        val subNameMap = buildSubscriptionNameMap()
-        val manualLabel = getApplication<Application>().getString(R.string.server_list_manual_sub)
-        val personalLabel = getApplication<Application>().getString(R.string.title_personal_servers)
-
-        val entries = ArrayList<ServerListEntry>(guids.size)
-        val subCountMap = LinkedHashMap<String, Pair<String, Int>>()
-        val protocolSet = LinkedHashSet<EConfigType>()
-
-        for (guid in guids) {
-            val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-            val isPersonal = PersonalServersConfig.isPersonalServer(profile.subscriptionId)
-            val normSubId = when {
-                isPersonal -> "personal"
-                profile.subscriptionId.isBlank() -> "manual"
-                else -> profile.subscriptionId
-            }
-            val subName = when {
-                isPersonal -> personalLabel
-                profile.subscriptionId.isBlank() -> manualLabel
-                else -> subNameMap[profile.subscriptionId]
-                    ?: subNameMap[profile.subscriptionId.removePrefix("custom_sub_")]
-                    ?: profile.subscriptionId
-            }
-
-            val prevCount = subCountMap[normSubId]?.second ?: 0
-            subCountMap[normSubId] = subName to (prevCount + 1)
-            protocolSet.add(profile.configType)
-
-            val fallbackPing = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
-            entries.add(
-                ServerListEntry(
-                    guid = guid,
-                    profile = profile,
-                    subscriptionId = normSubId,
-                    subscriptionName = subName,
-                    isVip = guid in vipSet,
-                    isPersonal = isPersonal,
-                    fallbackPingMs = fallbackPing,
-                    inspection = inspections[guid]
+                ServerListScreenState(
+                    isLoading = computed.isLoading,
+                    viewResult = computed.viewResult.copy(regularServers = slicedRegular),
+                    filter = computed.filter,
+                    scanState = computed.scanState,
+                    lastScanMeta = computed.lastScanMeta,
+                    networkCheckEnabled = computed.networkCheckEnabled,
+                    endpointEnabled = computed.endpointEnabled,
+                    availableSubscriptions = computed.availableSubscriptions,
+                    availableProtocols = computed.availableProtocols,
+                    expandedGuids = overlay.expanded,
+                    connectedGuid = computed.connectedGuid,
+                    isVpnRunning = computed.isVpnRunning,
+                    speedTestStates = overlay.speeds,
+                    reinspectingGuids = overlay.reinspecting,
+                    isFindingVip = overlay.isFindingVip,
+                    isPingingVip = overlay.isPingingVip,
+                    totalRegularMatching = totalRegular,
+                    hasMoreRegular = totalRegular > slicedRegular.size,
+                    fallbackFlags = computed.flagsByGuid
                 )
-            )
-        }
-
-        val viewResult = ServerListEngine.buildView(
-            entries = entries,
-            filter = filter,
-            endpointEnabled = endpointEnabled,
-            removedDuplicatesCount = removedDupes
-        )
-
-        val availableSubscriptions = subCountMap.entries
-            .map { (id, pair) -> SubscriptionFilterOption(id = id, name = pair.first, count = pair.second) }
-            .sortedByDescending { it.count }
-
-        val availableProtocols = protocolSet.sortedBy { it.name }
-        val isRunning = V2RayServiceManager.isRunning()
-        val connectedGuid = if (isRunning) MmkvManager.getSelectServer() else null
-
-        return ServerListScreenState(
-            viewResult = viewResult,
-            filter = filter,
-            scanState = scanState,
-            lastScanMeta = lastMeta,
-            networkCheckEnabled = networkCheckEnabled,
-            endpointEnabled = endpointEnabled,
-            availableSubscriptions = availableSubscriptions,
-            availableProtocols = availableProtocols,
-            expandedGuids = aux.expanded,
-            connectedGuid = connectedGuid,
-            isVpnRunning = isRunning,
-            speedTestStates = aux.speeds,
-            reinspectingGuids = aux.reinspecting,
-            isFindingVip = aux.isFindingVip,
-            isPingingVip = aux.isPingingVip
-        )
-    }
-
-    private fun buildSubscriptionNameMap(): Map<String, String> {
-        val map = LinkedHashMap<String, String>()
-        for (def in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            if (def.name.isNotBlank()) {
-                map["custom_sub_${def.id}"] = def.name
-                map[def.id] = def.name
+            }.collectLatest { state ->
+                _uiState.value = state
             }
         }
-        for (custom in SubscriptionHelper.loadCustomSubs()) {
-            if (custom.name.isNotBlank()) {
-                map["custom_sub_${custom.id}"] = custom.name
-                map[custom.id] = custom.name
-            }
-        }
-        for (sub in MmkvManager.decodeSubscriptions()) {
-            if (sub.subscription.remarks.isNotBlank()) {
-                map[sub.guid] = sub.subscription.remarks
-            }
-        }
-        return map
     }
 
     fun reload() {
-        reloadTriggerFlow.update { it + 1 }
+        viewModelScope.launch(Dispatchers.IO) {
+            ServerListStore.ensureLoaded(getApplication())
+            ServerListStore.reloadBaseIfNeeded(getApplication(), force = false)
+            ServerListStore.bumpRevision()
+        }
+    }
+
+    fun loadMoreRegular() {
+        val currentState = _uiState.value
+        if (!currentState.hasMoreRegular) return
+        visibleRegularLimitFlow.update { current ->
+            val maxNeeded = currentState.totalRegularMatching
+            if (current >= maxNeeded) current else (current + PAGE_INCREMENT)
+        }
     }
 
     fun toggleExpand(guid: String) {
@@ -257,17 +285,21 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun setSearchQuery(query: String) {
-        filterFlow.update { current ->
-            if (current.searchQuery == query) current else current.copy(searchQuery = query)
-        }
+        if (searchQueryFlow.value == query) return
+        visibleRegularLimitFlow.value = DEFAULT_PAGE_SIZE
+        searchQueryFlow.value = query
     }
 
     fun updateFilter(newFilter: ServerListFilter) {
-        filterFlow.value = newFilter
+        visibleRegularLimitFlow.value = DEFAULT_PAGE_SIZE
+        baseFilterFlow.value = newFilter
     }
 
     fun resetFilters() {
-        filterFlow.value = ServerListFilter()
+        visibleRegularLimitFlow.value = DEFAULT_PAGE_SIZE
+        searchQueryFlow.value = ""
+        baseFilterFlow.value = ServerListFilter()
+        effectiveFilterFlow.value = ServerListFilter()
     }
 
     fun startOrStopFullScan(): Boolean {
@@ -287,7 +319,7 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
                 SmartConnectManager.findMoreVipServers(getApplication())
             } finally {
                 isFindingVipFlow.value = false
-                reload()
+                ServerListStore.refreshVipFromMmkv()
             }
         }
     }
@@ -301,28 +333,32 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 GeekModeLogger.log("ServerList", "Pinging ${guids.size} VIP server(s) via isolated cores...")
                 for (guid in guids) {
-                    val name = MmkvManager.decodeServerConfig(guid)?.remarks ?: guid
+                    val name = ServerListStore.getCachedProfile(guid)?.remarks
+                        ?: MmkvManager.decodeServerConfig(guid)?.remarks
+                        ?: guid
                     GeekModeLogger.log("ServerList", "Testing VIP [$name]...")
                     NodeTesterManager.verifyProfile(getApplication(), guid)
-                    reload()
+                    val updatedDelay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: -1L
+                    val existingInsp = ServerListStore.snapshot().entries.firstOrNull { it.guid == guid }?.inspection
+                    if (existingInsp != null) {
+                        ServerListStore.putInspectionInMemory(
+                            guid,
+                            existingInsp.copy(alive = updatedDelay > 0, delayMs = updatedDelay)
+                        )
+                    }
+                    ServerListStore.bumpRevision()
                 }
                 GeekModeLogger.log("ServerList", "VIP ping complete")
             } finally {
                 isPingingVipFlow.value = false
-                reload()
+                ServerListStore.reloadBaseIfNeeded(getApplication(), force = true)
             }
         }
     }
 
     fun toggleVip(guid: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val vipSet = MmkvManager.getVipCache().toSet()
-            if (guid in vipSet) {
-                MmkvManager.removeVipServer(guid)
-            } else {
-                MmkvManager.addVipServer(guid)
-            }
-            reload()
+            ServerListStore.toggleVip(guid)
         }
     }
 
@@ -334,7 +370,6 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
                 FullScanManager.inspectSingleServer(getApplication(), guid)
             } finally {
                 reinspectingGuidsFlow.update { it - guid }
-                reload()
             }
         }
     }

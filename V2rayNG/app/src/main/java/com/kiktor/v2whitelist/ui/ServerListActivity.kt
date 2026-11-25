@@ -64,11 +64,14 @@ class ServerListActivity : BaseActivity() {
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvServers: RecyclerView
     private lateinit var layoutEmpty: LinearLayout
+    private lateinit var tvEmpty: TextView
     private lateinit var btnResetFiltersEmpty: MaterialButton
 
     private lateinit var adapter: ServerListAdapter
     private var latestState: ServerListScreenState = ServerListScreenState()
     private var pendingConnectGuid: String? = null
+    private var lastAliveCount: Int = -1
+    private var lastVipCount: Int = -1
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val guid = pendingConnectGuid
@@ -131,6 +134,7 @@ class ServerListActivity : BaseActivity() {
         etSearch = findViewById(R.id.et_search)
         rvServers = findViewById(R.id.rv_servers)
         layoutEmpty = findViewById(R.id.layout_empty)
+        tvEmpty = findViewById(R.id.tv_empty)
         btnResetFiltersEmpty = findViewById(R.id.btn_reset_filters_empty)
     }
 
@@ -140,11 +144,24 @@ class ServerListActivity : BaseActivity() {
             onConnect = { guid -> handleConnectClick(guid) },
             onSpeedTest = { guid -> viewModel.runSpeedTest(guid) },
             onToggleVip = { guid -> viewModel.toggleVip(guid) },
-            onReinspect = { guid -> viewModel.reinspectServer(guid) }
+            onReinspect = { guid -> viewModel.reinspectServer(guid) },
+            onLoadMore = { viewModel.loadMoreRegular() }
         )
-        rvServers.layoutManager = LinearLayoutManager(this)
+        val layoutManager = LinearLayoutManager(this)
+        rvServers.layoutManager = layoutManager
+        rvServers.setHasFixedSize(true)
         rvServers.adapter = adapter
         (rvServers.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+        rvServers.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dy <= 0) return
+                val totalItems = layoutManager.itemCount
+                val lastVisible = layoutManager.findLastVisibleItemPosition()
+                if (totalItems > 0 && lastVisible >= totalItems - 15) {
+                    viewModel.loadMoreRegular()
+                }
+            }
+        })
     }
 
     private fun setupListeners() {
@@ -257,6 +274,7 @@ class ServerListActivity : BaseActivity() {
         val rows = mutableListOf<ServerListRow>()
         val vipList = state.viewResult.vipServers
         val regularList = state.viewResult.regularServers
+        val fallbackFlags = state.fallbackFlags
 
         if (vipList.isNotEmpty()) {
             rows.add(
@@ -274,7 +292,8 @@ class ServerListActivity : BaseActivity() {
                         isConnected = state.isVpnRunning && state.connectedGuid == entry.guid,
                         endpointEnabled = state.endpointEnabled,
                         speedTestState = state.speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
-                        isReinspecting = entry.guid in state.reinspectingGuids
+                        isReinspecting = entry.guid in state.reinspectingGuids,
+                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
                     )
                 )
             }
@@ -284,7 +303,7 @@ class ServerListActivity : BaseActivity() {
             rows.add(
                 ServerListRow.Header(
                     id = "header_regular",
-                    title = "${getString(R.string.server_list_all_section)} (${regularList.size})",
+                    title = "${getString(R.string.server_list_all_section)} (${state.totalRegularMatching})",
                     isVipHeader = false
                 )
             )
@@ -296,17 +315,40 @@ class ServerListActivity : BaseActivity() {
                         isConnected = state.isVpnRunning && state.connectedGuid == entry.guid,
                         endpointEnabled = state.endpointEnabled,
                         speedTestState = state.speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
-                        isReinspecting = entry.guid in state.reinspectingGuids
+                        isReinspecting = entry.guid in state.reinspectingGuids,
+                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
                     )
                 )
             }
+            if (state.hasMoreRegular) {
+                val remaining = (state.totalRegularMatching - regularList.size).coerceAtLeast(1)
+                rows.add(ServerListRow.LoadMore(remainingCount = remaining))
+            }
         }
 
-        adapter.submitList(rows)
+        val lm = rvServers.layoutManager as? LinearLayoutManager
+        val wasNearTop = lastAliveCount < 0 || (lm?.findFirstVisibleItemPosition() ?: 0) <= 2
+        val grewAliveOrVip = lastAliveCount >= 0 && (stats.aliveCount > lastAliveCount || stats.vipCount > lastVipCount)
+        val shouldPinTop = wasNearTop && grewAliveOrVip
+        lastAliveCount = stats.aliveCount
+        lastVipCount = stats.vipCount
+
+        adapter.submitList(rows) {
+            if (shouldPinTop && rows.isNotEmpty()) {
+                lm?.scrollToPositionWithOffset(0, 0)
+            }
+        }
+
         val isEmpty = rows.isEmpty()
         layoutEmpty.visibility = if (isEmpty) View.VISIBLE else View.GONE
         rvServers.visibility = if (isEmpty) View.GONE else View.VISIBLE
-        btnResetFiltersEmpty.visibility = if (state.filter.isDefault(state.endpointEnabled)) View.GONE else View.VISIBLE
+        if (isEmpty && state.isLoading) {
+            tvEmpty.setText(R.string.server_list_loading)
+            btnResetFiltersEmpty.visibility = View.GONE
+        } else {
+            tvEmpty.setText(R.string.server_list_empty)
+            btnResetFiltersEmpty.visibility = if (state.filter.isDefault(state.endpointEnabled)) View.GONE else View.VISIBLE
+        }
     }
 
     private fun formatScanMetaText(state: ServerListScreenState): String {

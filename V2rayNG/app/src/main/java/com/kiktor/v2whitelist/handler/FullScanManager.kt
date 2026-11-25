@@ -10,11 +10,14 @@ import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
 import com.kiktor.v2whitelist.core.model.inspection.ServerInspectionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -49,6 +52,10 @@ object FullScanManager {
     private val sessionSeq = AtomicLong(0L)
     private val activeStartedAtMs = AtomicLong(0L)
     private val lastUiEmitAtMs = AtomicLong(0L)
+    private val pendingMmkvWrites = ConcurrentHashMap<String, ServerInspectionInfo>()
+    private val pendingFragUpdates = ConcurrentHashMap<String, String>()
+    @Volatile
+    private var flushLoopJob: Job? = null
 
     private fun buildFullScanOptionsHeader(
         tcpConcurrency: Int,
@@ -79,8 +86,8 @@ object FullScanManager {
         val root = JSONObject().apply {
             put("tcp_concurrency", tcpConcurrency)
             put("verify_concurrency", verifyConcurrency)
-            put("timeout_sec", 6)
-            put("frag_timeout_sec", 4)
+            put("timeout_sec", 4)
+            put("frag_timeout_sec", 2)
             put("dest_url", destUrl)
             put("endpoint_url", effectiveEndpoint)
             put("endpoint_e2e", effectiveEndpoint.isNotEmpty())
@@ -105,12 +112,17 @@ object FullScanManager {
         val hostPortMap = LinkedHashMap<String, String>(guids.size)
 
         for (guid in guids) {
-            val url = AngConfigManager.shareConfig(guid).trim()
+            val cachedProfile = ServerListStore.getCachedProfile(guid)
+            val url = if (cachedProfile != null) {
+                AngConfigManager.shareConfig(cachedProfile).trim()
+            } else {
+                AngConfigManager.shareConfig(guid).trim()
+            }
             if (url.isNotEmpty()) {
                 sb.append(url).append("\n")
                 exactMap.putIfAbsent(url, guid)
                 noFragmentMap.putIfAbsent(url.substringBefore('#'), guid)
-                val profile = MmkvManager.decodeServerConfig(guid)
+                val profile = cachedProfile ?: MmkvManager.decodeServerConfig(guid)
                 val host = profile?.server?.trim()?.lowercase()
                 val port = profile?.serverPort?.trim()
                 if (!host.isNullOrEmpty() && !port.isNullOrEmpty()) {
@@ -142,30 +154,52 @@ object FullScanManager {
         }
     }
 
-    private fun applyInspectionResult(guid: String, info: ServerInspectionInfo) {
+    private fun applyFragmentTagIfNeeded(guid: String, fragMode: String) {
+        val profile: ProfileItem = ServerListStore.getCachedProfile(guid)
+            ?: MmkvManager.decodeServerConfig(guid)
+            ?: return
+        var changed = false
+        val targetPackets = if (fragMode == "tcp") "1-3" else "tlshello"
+        val tag = if (fragMode == "tcp") "⚡[FRAG:TCP]" else "⚡[FRAG:RECORD]"
+
+        if (profile.fragmentEnabled != true || profile.fragmentPackets != targetPackets) {
+            profile.fragmentEnabled = true
+            profile.fragmentPackets = targetPackets
+            profile.fragmentLength = "50-100"
+            profile.fragmentInterval = "10-20"
+            changed = true
+        }
+        if (!profile.remarks.contains("[FRAG:")) {
+            profile.remarks = "${profile.remarks} $tag".trim()
+            changed = true
+        }
+        if (changed) {
+            MmkvManager.encodeServerConfig(guid, profile)
+            ServerListStore.updateProfileInMemory(guid, profile)
+        }
+    }
+
+    private fun applyInspectionResultSync(guid: String, info: ServerInspectionInfo) {
+        ServerListStore.putInspectionInMemory(guid, info)
         MmkvManager.encodeServerInspection(guid, info)
         MmkvManager.encodeServerTestDelayMillis(guid, if (info.alive) info.delayMs else -1L)
-
         if (info.alive && (info.fragMode == "tcp" || info.fragMode == "record")) {
-            val profile: ProfileItem = MmkvManager.decodeServerConfig(guid) ?: return
-            var changed = false
-            val targetPackets = if (info.fragMode == "tcp") "1-3" else "tlshello"
-            val tag = if (info.fragMode == "tcp") "⚡[FRAG:TCP]" else "⚡[FRAG:RECORD]"
+            applyFragmentTagIfNeeded(guid, info.fragMode)
+        }
+        ServerListStore.bumpRevision()
+    }
 
-            if (profile.fragmentEnabled != true || profile.fragmentPackets != targetPackets) {
-                profile.fragmentEnabled = true
-                profile.fragmentPackets = targetPackets
-                profile.fragmentLength = "50-100"
-                profile.fragmentInterval = "10-20"
-                changed = true
-            }
-            if (!profile.remarks.contains("[FRAG:")) {
-                profile.remarks = "${profile.remarks} $tag".trim()
-                changed = true
-            }
-            if (changed) {
-                MmkvManager.encodeServerConfig(guid, profile)
-            }
+    private fun flushPendingToMmkv() {
+        val inspKeys = pendingMmkvWrites.keys.toList()
+        for (guid in inspKeys) {
+            val info = pendingMmkvWrites.remove(guid) ?: continue
+            MmkvManager.encodeServerInspection(guid, info)
+            MmkvManager.encodeServerTestDelayMillis(guid, if (info.alive) info.delayMs else -1L)
+        }
+        val fragKeys = pendingFragUpdates.keys.toList()
+        for (guid in fragKeys) {
+            val mode = pendingFragUpdates.remove(guid) ?: continue
+            applyFragmentTagIfNeeded(guid, mode)
         }
     }
 
@@ -206,9 +240,23 @@ object FullScanManager {
             val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
             val endpointEffective = customEpEnabled && endpointUrl.isNotEmpty()
 
-            val guids = targetGuids ?: MmkvManager.decodeServerList()
-            if (targetGuids == null) {
+            ServerListStore.ensureLoaded(appContext)
+            ServerListStore.reloadBaseIfNeeded(appContext)
+
+            val rawGuids = targetGuids ?: MmkvManager.decodeServerList()
+            val guids = if (targetGuids == null) {
+                pendingMmkvWrites.clear()
+                pendingFragUpdates.clear()
+                ServerListStore.clearInspectionsInMemory()
                 MmkvManager.clearAllServerInspections()
+                val vipSet = MmkvManager.getVipCache().toSet()
+                val vipGuids = rawGuids.filter { it in vipSet }
+                // Перемешиваем обычные сервера, чтобы пачки зависающих нод одной подписки
+                // не забивали одновременно все 35 verify-воркеров (устраняет просадку скорости).
+                val regularShuffled = rawGuids.filterNot { it in vipSet }.shuffled()
+                vipGuids + regularShuffled
+            } else {
+                rawGuids
             }
 
             val tcpConcurrency = MmkvManager.getV2wTcpConcurrency()
@@ -276,6 +324,14 @@ object FullScanManager {
                 "Starting full scan: total=$totalCount, condition=$networkCondition, endpoint=$endpointEffective"
             )
 
+            flushLoopJob?.cancel()
+            flushLoopJob = scope.launch {
+                while (isActive && sessionSeq.get() == sessionId) {
+                    delay(1200L)
+                    flushPendingToMmkv()
+                }
+            }
+
             val callback = object : V2WFullScanCallback {
                 override fun onServerResult(resultJson: String?) {
                     if (sessionSeq.get() != sessionId) return
@@ -284,15 +340,22 @@ object FullScanManager {
                     if (!processedGuids.add(guid)) return
 
                     val info = dto.toInspectionInfo(testedAtMs = System.currentTimeMillis())
-                    applyInspectionResult(guid, info)
+                    ServerListStore.putInspectionInMemory(guid, info)
+                    pendingMmkvWrites[guid] = info
+                    if (info.alive && (info.fragMode == "tcp" || info.fragMode == "record")) {
+                        pendingFragUpdates[guid] = info.fragMode
+                    }
 
                     val done = completedCounter.incrementAndGet()
                     val alive = if (info.alive) aliveCounter.incrementAndGet() else aliveCounter.get()
                     val failed = if (!info.alive) failedCounter.incrementAndGet() else failedCounter.get()
 
+                    // Живые сервера показываем почти сразу (120мс), мёртвые троттлим сильнее (500мс)
+                    val minEmitMs = if (info.alive) 120L else 500L
                     val now = System.currentTimeMillis()
                     val prev = lastUiEmitAtMs.get()
-                    if (now - prev >= 350L && lastUiEmitAtMs.compareAndSet(prev, now)) {
+                    if (now - prev >= minEmitMs && lastUiEmitAtMs.compareAndSet(prev, now)) {
+                        ServerListStore.bumpRevision()
                         _state.update {
                             it.copy(
                                 completedCount = done,
@@ -306,6 +369,8 @@ object FullScanManager {
 
                 override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
                     if (sessionSeq.get() != sessionId) return
+                    flushLoopJob?.cancel()
+                    flushPendingToMmkv()
                     val finalAlive = aliveCounter.get()
                     val finalFailed = failedCounter.get()
                     val finalDone = completedCounter.get()
@@ -326,6 +391,7 @@ object FullScanManager {
                         "FullScan",
                         "Full scan complete: scanned=$finalDone, alive=$finalAlive, failed=$finalFailed"
                     )
+                    ServerListStore.bumpRevision()
                     _state.update {
                         it.copy(
                             isScanning = false,
@@ -341,8 +407,11 @@ object FullScanManager {
             try {
                 Libv2ray.runV2WFullScan(payload, verifyConcurrency.toLong(), callback)
             } catch (e: Exception) {
+                flushLoopJob?.cancel()
+                flushPendingToMmkv()
                 GeekModeLogger.log("FullScan", "runV2WFullScan error: ${e.message}")
                 if (sessionSeq.get() == sessionId) {
+                    ServerListStore.bumpRevision()
                     _state.update { it.copy(isScanning = false, revision = it.revision + 1) }
                 }
             }
@@ -353,9 +422,11 @@ object FullScanManager {
     fun stopFullScan() {
         if (!_state.value.isScanning) return
         sessionSeq.incrementAndGet()
+        flushLoopJob?.cancel()
         try {
             Libv2ray.stopV2WFullScan()
         } catch (_: Exception) {}
+        flushPendingToMmkv()
 
         val cur = _state.value
         if (cur.completedCount > 0) {
@@ -429,7 +500,7 @@ object FullScanManager {
 
         val info = resultRef.get()
         if (info != null) {
-            applyInspectionResult(guid, info)
+            applyInspectionResultSync(guid, info)
             _state.update { it.copy(revision = it.revision + 1) }
         }
         return@withContext info

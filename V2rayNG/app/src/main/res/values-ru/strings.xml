@@ -1059,4 +1059,6 @@
     <string name="server_list_finding_vip">Поиск VIP…</string>
     <string name="server_list_pinging_vip">Пинг VIP…</string>
     <string name="server_list_no_vip">Список VIP пуст</string>
+    <string name="server_list_loading">Загрузка списка серверов…</string>
+    <string name="server_list_load_more">Показать ещё (осталось %1$d)</string>
 </resources>

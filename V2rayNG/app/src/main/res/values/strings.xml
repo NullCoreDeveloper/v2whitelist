@@ -1066,4 +1066,6 @@
     <string name="server_list_finding_vip">Searching VIP…</string>
     <string name="server_list_pinging_vip">Pinging VIP…</string>
     <string name="server_list_no_vip">VIP list is empty</string>
+    <string name="server_list_loading">Loading server list…</string>
+    <string name="server_list_load_more">Show more (%1$d remaining)</string>
 </resources>
