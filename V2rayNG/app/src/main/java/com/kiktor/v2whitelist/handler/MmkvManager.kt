@@ -4,6 +4,8 @@ import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.PREF_IS_BOOTED
 import com.kiktor.v2whitelist.AppConfig.PREF_ROUTING_RULESET
+import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
+import com.kiktor.v2whitelist.core.model.inspection.ServerInspectionInfo
 import com.kiktor.v2whitelist.dto.AssetUrlCache
 import com.kiktor.v2whitelist.dto.AssetUrlItem
 import com.kiktor.v2whitelist.dto.ProfileItem
@@ -24,6 +26,7 @@ object MmkvManager {
     private const val ID_PROFILE_FULL_CONFIG = "PROFILE_FULL_CONFIG"
     private const val ID_SERVER_RAW = "SERVER_RAW"
     private const val ID_SERVER_AFF = "SERVER_AFF"
+    private const val ID_SERVER_INSPECTION = "SERVER_INSPECTION"
     private const val ID_SUB = "SUB"
     private const val ID_ASSET = "ASSET"
     private const val ID_SETTING = "SETTING"
@@ -31,6 +34,8 @@ object MmkvManager {
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
     private const val KEY_SUB_IDS = "SUB_IDS"
     private const val KEY_WEBDAV_CONFIG = "WEBDAV_CONFIG"
+    private const val KEY_FULL_SCAN_META = "FULL_SCAN_META"
+    private const val KEY_LAST_REMOVED_DUPLICATES = "LAST_REMOVED_DUPLICATES"
     const val KEY_BATTERY_ASKED = "BATTERY_ASKED"
 
     //private val profileStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_CONFIG, MMKV.MULTI_PROCESS_MODE) }
@@ -38,6 +43,7 @@ object MmkvManager {
     private val profileFullStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_FULL_CONFIG, MMKV.MULTI_PROCESS_MODE) }
     private val serverRawStorage by lazy { MMKV.mmkvWithID(ID_SERVER_RAW, MMKV.MULTI_PROCESS_MODE) }
     private val serverAffStorage by lazy { MMKV.mmkvWithID(ID_SERVER_AFF, MMKV.MULTI_PROCESS_MODE) }
+    private val serverInspectionStorage by lazy { MMKV.mmkvWithID(ID_SERVER_INSPECTION, MMKV.MULTI_PROCESS_MODE) }
     private val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
     private val assetStorage by lazy { MMKV.mmkvWithID(ID_ASSET, MMKV.MULTI_PROCESS_MODE) }
     private val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
@@ -253,6 +259,7 @@ object MmkvManager {
         profileFullStorage.remove(guid)
         //profileStorage.remove(guid)
         serverAffStorage.remove(guid)
+        serverInspectionStorage.remove(guid)
         removeVipServer(guid)
     }
 
@@ -270,6 +277,7 @@ object MmkvManager {
         val serverList = decodeServerList()
         val uniqueServers = mutableSetOf<String>() // key = address:port:password
         val toDelete = mutableListOf<String>()
+        var duplicateCount = 0
         val newList = ArrayList<String>(serverList.size)
         val decodedPairs = ArrayList<Pair<String, ProfileItem?>>(serverList.size)
 
@@ -317,6 +325,7 @@ object MmkvManager {
             val key = "${profile.server}:${profile.serverPort}:${profile.password}:$sniOrHost"
             if (uniqueServers.contains(key)) {
                 toDelete.add(guid)
+                duplicateCount++
             } else {
                 uniqueServers.add(key)
                 newList.add(guid)
@@ -327,12 +336,14 @@ object MmkvManager {
             profileFullStorage.remove(guid)
             serverRawStorage.remove(guid)
             serverAffStorage.remove(guid)
+            serverInspectionStorage.remove(guid)
             removeVipServer(guid)
         }
 
         if (toDelete.isNotEmpty()) {
             encodeServerList(newList)
         }
+        encodeLastRemovedDuplicatesCount(duplicateCount)
 
         return toDelete.size
     }
@@ -393,10 +404,12 @@ object MmkvManager {
                         mainStorage.remove(KEY_SELECTED_SERVER)
                         profileFullStorage.remove(key)
                         serverAffStorage.remove(key)
+                        serverInspectionStorage.remove(key)
                     }
                 } else {
                     profileFullStorage.remove(key)
                     serverAffStorage.remove(key)
+                    serverInspectionStorage.remove(key)
                 }
                 removeVipServer(key)
             }
@@ -454,10 +467,12 @@ object MmkvManager {
                     mainStorage.remove(KEY_SELECTED_SERVER)
                     profileFullStorage.remove(key)
                     serverAffStorage.remove(key)
+                    serverInspectionStorage.remove(key)
                 }
             } else {
                 profileFullStorage.remove(key)
                 serverAffStorage.remove(key)
+                serverInspectionStorage.remove(key)
             }
             removeVipServer(key)
         }
@@ -520,6 +535,53 @@ object MmkvManager {
         }
     }
 
+    fun encodeServerInspection(guid: String, info: ServerInspectionInfo) {
+        if (guid.isBlank()) return
+        serverInspectionStorage.encode(guid, ServerInspectionInfo.toJson(info))
+    }
+
+    fun decodeServerInspection(guid: String): ServerInspectionInfo? {
+        if (guid.isBlank()) return null
+        return ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(guid))
+    }
+
+    fun decodeAllServerInspections(): Map<String, ServerInspectionInfo> {
+        val keys = serverInspectionStorage.allKeys() ?: return emptyMap()
+        val result = LinkedHashMap<String, ServerInspectionInfo>(keys.size)
+        for (key in keys) {
+            val info = ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(key))
+            if (info != null) {
+                result[key] = info
+            }
+        }
+        return result
+    }
+
+    fun removeServerInspection(guid: String) {
+        if (guid.isBlank()) return
+        serverInspectionStorage.remove(guid)
+    }
+
+    fun clearAllServerInspections() {
+        serverInspectionStorage.clearAll()
+    }
+
+    fun encodeFullScanMeta(meta: ScanSessionMeta) {
+        mainStorage.encode(KEY_FULL_SCAN_META, ScanSessionMeta.toJson(meta))
+    }
+
+    fun decodeFullScanMeta(): ScanSessionMeta? {
+        return ScanSessionMeta.fromJson(mainStorage.decodeString(KEY_FULL_SCAN_META))
+    }
+
+    fun encodeLastRemovedDuplicatesCount(count: Int) {
+        mainStorage.encode(KEY_LAST_REMOVED_DUPLICATES, count.coerceAtLeast(0))
+    }
+
+    fun decodeLastRemovedDuplicatesCount(): Int {
+        return mainStorage.decodeInt(KEY_LAST_REMOVED_DUPLICATES, 0).coerceAtLeast(0)
+    }
+
     /**
      * Removes all server configurations.
      *
@@ -531,6 +593,7 @@ object MmkvManager {
         profileFullStorage.clearAll()
         //profileStorage.clearAll()
         serverAffStorage.clearAll()
+        serverInspectionStorage.clearAll()
         clearVipCache()
         return count
     }
@@ -1037,6 +1100,7 @@ object MmkvManager {
         profileFullStorage.clearMemoryCache()
         serverRawStorage.clearMemoryCache()
         serverAffStorage.clearMemoryCache()
+        serverInspectionStorage.clearMemoryCache()
         subStorage.clearMemoryCache()
         assetStorage.clearMemoryCache()
         settingsStorage.clearMemoryCache()
