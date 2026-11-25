@@ -182,4 +182,31 @@ class XrayConfigGeneratorTest {
         assertFalse(jsonStr.contains("\"domain:geoip:ru\""))
         assertFalse(jsonStr.contains("\"domain:8.8.8.8\""))
     }
+
+    @Test
+    fun testTunSniffingRoutingAndBypassRuRulesSerializedExplicitly() {
+        val uri = "vless://a1b2c3d4-e5f6-7890-abcd-ef1234567890@198.51.100.1:443?security=tls&type=tcp#Node"
+        val profile = UniversalConfigParser.parse(uri)!!
+        val options = XrayGeneratorOptions(
+            sniffingEnabled = true,
+            bypassRussianServices = true
+        )
+        val jsonStr = XrayConfigGenerator.generateJson(profile, options)
+
+        // With encodeDefaults = false, default values must still be emitted in JSON
+        assertTrue(jsonStr.contains("\"enabled\": true"), "sniffing.enabled must be serialized")
+        assertTrue(jsonStr.contains("\"quic\""), "sniffing.destOverride must include quic")
+        assertTrue(jsonStr.contains("\"domainStrategy\": \"IPIfNonMatch\""), "routing.domainStrategy must be serialized")
+        assertTrue(jsonStr.contains("\"type\": \"field\""), "rule.type must be serialized")
+
+        // bypassRussianServices must split domain rules and geoip:ru into separate OR rules
+        assertTrue(jsonStr.contains("\"geosite:category-ru\""))
+        assertTrue(jsonStr.contains("\"geoip:ru\""))
+        val compact = jsonStr.replace(Regex("\\s+"), "")
+        assertFalse(
+            compact.contains("\"domain\":[") && compact.contains("\"domain\":[\"geosite:category-ru\"") &&
+                compact.substringAfter("\"geosite:category-ru\"").substringBefore("}").contains("\"ip\":[\"geoip:ru\"]"),
+            "bypassRussianServices must not combine domain and geoip:ru into a single AND rule"
+        )
+    }
 }

@@ -80,7 +80,7 @@ object XrayConfigGenerator {
                 listen = options.listenAddress,
                 settings = socksSettings,
                 sniffing = if (options.sniffingEnabled) {
-                    InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "fakedns"), routeOnly = true)
+                    InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "quic", "fakedns"), routeOnly = true)
                 } else null
             )
         )
@@ -95,7 +95,7 @@ object XrayConfigGenerator {
                     listen = options.listenAddress,
                     settings = null,
                     sniffing = if (options.sniffingEnabled) {
-                        InboundSniffing(enabled = true, destOverride = listOf("http", "tls"), routeOnly = true)
+                        InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "quic"), routeOnly = true)
                     } else null
                 )
             )
@@ -268,7 +268,8 @@ object XrayConfigGenerator {
         // Routing rules
         val rules = mutableListOf<XrayRule>()
 
-        // Банки, Госуслуги, Ozon, WB и сервисы РФ вне VPN (гранулярный роутинг)
+        // Банки, Госуслуги, Ozon, WB и сервисы РФ вне VPN (гранулярный роутинг).
+        // Важно: domain и ip в одном XrayRule работают по логике AND, поэтому должны быть разными правилами (OR).
         if (options.bypassRussianServices) {
             rules.add(
                 XrayRule(
@@ -289,7 +290,12 @@ object XrayConfigGenerator {
                         "domain:ya.ru",
                         "domain:vk.com",
                         "domain:mail.ru"
-                    ),
+                    )
+                )
+            )
+            rules.add(
+                XrayRule(
+                    outboundTag = "direct",
                     ip = listOf("geoip:ru")
                 )
             )

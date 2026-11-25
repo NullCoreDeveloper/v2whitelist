@@ -47,10 +47,13 @@ data class SocksAccount(
     val pass: String
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class InboundSniffing(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val enabled: Boolean = true,
-    val destOverride: List<String> = listOf("http", "tls", "fakedns"),
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    val destOverride: List<String> = listOf("http", "tls", "quic", "fakedns"),
     val routeOnly: Boolean = false
 )
 
@@ -261,14 +264,18 @@ data class XrayMux(
     val xudpProxyUDP443: String? = null
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class XrayRouting(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val domainStrategy: String = "IPIfNonMatch",
     val rules: List<XrayRule> = emptyList()
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class XrayRule(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val type: String = "field",
     val outboundTag: String,
     val ip: List<String>? = null,
