@@ -1056,4 +1056,7 @@
     <string name="toast_geo_updating">Обновление geoip.dat и geosite.dat…</string>
     <string name="toast_geo_update_success">Базы geoip.dat и geosite.dat обновлены</string>
     <string name="toast_geo_update_failed">Не удалось обновить: %1$s</string>
+    <string name="server_list_finding_vip">Поиск VIP…</string>
+    <string name="server_list_pinging_vip">Пинг VIP…</string>
+    <string name="server_list_no_vip">Список VIP пуст</string>
 </resources>

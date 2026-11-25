@@ -1063,4 +1063,7 @@
     <string name="toast_geo_updating">Updating geoip.dat and geosite.dat…</string>
     <string name="toast_geo_update_success">geoip.dat and geosite.dat updated</string>
     <string name="toast_geo_update_failed">Failed to update: %1$s</string>
+    <string name="server_list_finding_vip">Searching VIP…</string>
+    <string name="server_list_pinging_vip">Pinging VIP…</string>
+    <string name="server_list_no_vip">VIP list is empty</string>
 </resources>
