@@ -184,6 +184,19 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
             }
         }
 
+        private fun updateGeoUpdateSummary() {
+            findPreference<androidx.preference.Preference>("pref_geo_update_now")?.let { pref ->
+                val lastMs = com.kiktor.v2whitelist.handler.GeoAssetsAutoUpdater.getLastUpdatedMillis(requireContext())
+                pref.summary = if (lastMs > 0L) {
+                    val formatted = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(lastMs))
+                    getString(R.string.summary_geo_last_update, formatted)
+                } else {
+                    getString(R.string.summary_geo_last_update_never)
+                }
+            }
+        }
+
         override fun onCreatePreferences(bundle: Bundle?, s: String?) {
             // Use MMKV as the storage backend for all Preferences
             // This prevents inconsistencies between SharedPreferences and MMKV
@@ -369,6 +382,25 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                 startActivity(android.content.Intent(requireContext(), UserAssetActivity::class.java))
                 true
             }
+            findPreference<androidx.preference.Preference>("pref_geo_update_now")?.setOnPreferenceClickListener { pref ->
+                pref.isEnabled = false
+                requireContext().toast(getString(R.string.toast_geo_updating))
+                lifecycleScope.launch {
+                    val res = withContext(Dispatchers.IO) {
+                        com.kiktor.v2whitelist.handler.GeoAssetsAutoUpdater.updateNow(requireContext())
+                    }
+                    pref.isEnabled = true
+                    updateGeoUpdateSummary()
+                    val msg = if (res.failureCount == 0 && res.successCount > 0) {
+                        getString(R.string.toast_geo_update_success)
+                    } else {
+                        getString(R.string.toast_geo_update_failed, res.failedAssets.joinToString(", "))
+                    }
+                    requireContext().toast(msg)
+                }
+                true
+            }
+            updateGeoUpdateSummary()
 
             mode?.setOnPreferenceChangeListener { pref, newValue ->
                 val valueStr = newValue.toString()

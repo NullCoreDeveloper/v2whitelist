@@ -125,6 +125,9 @@ class AngApplication : Application(), Configuration.Provider {
 
             // Регистрируем фоновое обновление подписки раз в час
             SubscriptionUpdaterWorker.schedule(this)
+
+            // Плановое фоновое обновление geoip.dat / geosite.dat по расписанию
+            com.kiktor.v2whitelist.handler.GeoAssetsAutoUpdater.updateIfDueAsync(this)
         } else {
             Log.i(AppConfig.TAG, "AngApplication.onCreate: service process, skipping UI/SmartConnect init")
         }

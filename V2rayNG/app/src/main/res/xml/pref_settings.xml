@@ -350,6 +350,19 @@
             android:summary="@string/summary_pref_domain_geo_files"
             android:title="@string/title_pref_domain_geo_files" />
 
+        <ListPreference
+            android:defaultValue="7"
+            android:entries="@array/geo_auto_update_entries"
+            android:entryValues="@array/geo_auto_update_values"
+            android:key="pref_geo_auto_update_days"
+            android:summary="%s"
+            android:title="@string/title_pref_geo_auto_update" />
+
+        <Preference
+            android:key="pref_geo_update_now"
+            android:summary="@string/summary_geo_last_update_never"
+            android:title="@string/title_pref_geo_update_now" />
+
         </PreferenceScreen>
 
         <!-- 6. ⚙️ Параметры VPN и ядра -->

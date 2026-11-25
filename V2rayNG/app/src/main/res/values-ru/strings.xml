@@ -1043,4 +1043,17 @@
     <string name="tasker_action_switch">Сменить сервер</string>
     <string name="tasker_personal_section">Или подключиться к личному серверу:</string>
     <string name="tasker_btn_save">Сохранить</string>
+
+    <!-- Автообновление geoip / geosite -->
+    <string name="title_pref_geo_auto_update">Автообновление geoip / geosite</string>
+    <string name="title_pref_geo_update_now">Обновить geoip / geosite сейчас</string>
+    <string name="summary_geo_last_update">Последнее обновление: %1$s</string>
+    <string name="summary_geo_last_update_never">Встроенная база (ещё не обновлялась)</string>
+    <string name="geo_auto_update_off">Выкл</string>
+    <string name="geo_auto_update_1d">Раз в день</string>
+    <string name="geo_auto_update_3d">Раз в 3 дня</string>
+    <string name="geo_auto_update_7d">Раз в 7 дней</string>
+    <string name="toast_geo_updating">Обновление geoip.dat и geosite.dat…</string>
+    <string name="toast_geo_update_success">Базы geoip.dat и geosite.dat обновлены</string>
+    <string name="toast_geo_update_failed">Не удалось обновить: %1$s</string>
 </resources>

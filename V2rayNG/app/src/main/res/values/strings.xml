@@ -1050,4 +1050,17 @@
     <string name="tasker_action_switch">Switch server</string>
     <string name="tasker_personal_section">Or connect to a personal server:</string>
     <string name="tasker_btn_save">Save</string>
+
+    <!-- Geoip / Geosite auto-update -->
+    <string name="title_pref_geo_auto_update">Auto-update geoip / geosite</string>
+    <string name="title_pref_geo_update_now">Update geoip / geosite now</string>
+    <string name="summary_geo_last_update">Last updated: %1$s</string>
+    <string name="summary_geo_last_update_never">Built-in database (not updated yet)</string>
+    <string name="geo_auto_update_off">Off</string>
+    <string name="geo_auto_update_1d">Every day</string>
+    <string name="geo_auto_update_3d">Every 3 days</string>
+    <string name="geo_auto_update_7d">Every 7 days</string>
+    <string name="toast_geo_updating">Updating geoip.dat and geosite.dat…</string>
+    <string name="toast_geo_update_success">geoip.dat and geosite.dat updated</string>
+    <string name="toast_geo_update_failed">Failed to update: %1$s</string>
 </resources>
