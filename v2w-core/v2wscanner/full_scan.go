@@ -204,8 +204,7 @@ func InspectNode(
 				result.DelayMs = epRes.Latency.Milliseconds()
 			}
 		} else {
-			passed := false
-			result.EndpointPassed = &passed
+			result.EndpointPassed = nil
 		}
 	} else {
 		result.EndpointPassed = nil

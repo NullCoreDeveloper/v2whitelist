@@ -21,8 +21,8 @@ import (
 
 func TestDefaultScanOptionsAndPriority(t *testing.T) {
 	def := DefaultScanOptions()
-	if def.TCPConcurrency != 50 {
-		t.Fatalf("expected default TCPConcurrency=50, got %d", def.TCPConcurrency)
+	if def.TCPConcurrency != 100 {
+		t.Fatalf("expected default TCPConcurrency=100, got %d", def.TCPConcurrency)
 	}
 	if def.VerifyConcurrency != 35 {
 		t.Fatalf("expected default VerifyConcurrency=35, got %d", def.VerifyConcurrency)
@@ -93,12 +93,12 @@ vmess://eyJhZGQiOiI4LjguOC44IiwicG9ydCI6NDQzLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0x
 		t.Fatalf("expected 2 supported links, got %d", len(links))
 	}
 
-	// Без заголовка берется fallbackConcurrency и дефолт tcp=50.
+	// Без заголовка берется fallbackConcurrency и дефолт tcp=100.
 	plainOpts, plainLinks, hasPlainHeader := ParseConfigsWithOptions("vless://abc@1.2.3.4:443#N", 35)
 	if hasPlainHeader {
 		t.Fatal("expected hasPlainHeader=false")
 	}
-	if plainOpts.TCPConcurrency != 50 || plainOpts.VerifyConcurrency != 35 {
+	if plainOpts.TCPConcurrency != 100 || plainOpts.VerifyConcurrency != 35 {
 		t.Fatalf("unexpected plain concurrencies: tcp=%d verify=%d", plainOpts.TCPConcurrency, plainOpts.VerifyConcurrency)
 	}
 	if len(plainLinks) != 1 {

@@ -41,10 +41,10 @@ type ScanOptions struct {
 	StreamMode        bool                    `json:"stream_mode"`
 }
 
-// DefaultScanOptions возвращает стандартные настройки: 50 потоков TCP pre-check, 35 потоков проверки.
+// DefaultScanOptions возвращает стандартные настройки: 100 потоков TCP pre-check, 35 потоков проверки.
 func DefaultScanOptions() ScanOptions {
 	return ScanOptions{
-		TCPConcurrency:    50,
+		TCPConcurrency:    100,
 		VerifyConcurrency: 35,
 		TimeoutSec:        6,
 		FragTimeoutSec:    4,
@@ -54,7 +54,7 @@ func DefaultScanOptions() ScanOptions {
 
 func (o *ScanOptions) normalize() {
 	if o.TCPConcurrency <= 0 {
-		o.TCPConcurrency = 50
+		o.TCPConcurrency = 100
 	}
 	if o.VerifyConcurrency <= 0 {
 		o.VerifyConcurrency = 35
