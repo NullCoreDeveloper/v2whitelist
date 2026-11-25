@@ -98,7 +98,8 @@ private data class ServiceStartTunRequestDto(
     @SerialName("split_mode") val splitMode: String = "bypass",
     @SerialName("direct_apps") val directApps: List<String> = emptyList(),
     @SerialName("proxy_apps") val proxyApps: List<String> = emptyList(),
-    @SerialName("self_test_url") val selfTestUrl: String = ""
+    @SerialName("self_test_url") val selfTestUrl: String = "",
+    @SerialName("bypass_lan") val bypassLan: Boolean = true
 )
 
 @Serializable
@@ -316,7 +317,8 @@ object DesktopTunManager {
         socksPass: String?,
         directDns: String?,
         appSplitConfig: AppSplitTunnelingConfig,
-        selfTestUrl: String? = null
+        selfTestUrl: String? = null,
+        bypassLan: Boolean = true
     ): Boolean {
         return try {
             val client = HttpClient.newBuilder()
@@ -345,7 +347,8 @@ object DesktopTunManager {
                     splitMode = appSplitConfig.mode.toWireValue(),
                     directApps = appSplitConfig.directApps,
                     proxyApps = appSplitConfig.proxyApps,
-                    selfTestUrl = selfTestUrl.orEmpty().trim()
+                    selfTestUrl = selfTestUrl.orEmpty().trim(),
+                    bypassLan = bypassLan
                 )
             )
 
@@ -584,7 +587,8 @@ object DesktopTunManager {
         socksUser: String? = null,
         socksPass: String? = null,
         allowServiceMode: Boolean = true,
-        selfTestUrl: String? = null
+        selfTestUrl: String? = null,
+        bypassLan: Boolean = true
     ): Boolean {
         if (isTunActive) {
             stop(sudoPassword)
@@ -644,7 +648,8 @@ object DesktopTunManager {
                     socksPass = socksPass,
                     directDns = resolvedDirectDns,
                     appSplitConfig = appSplitConfig,
-                    selfTestUrl = selfTestUrl
+                    selfTestUrl = selfTestUrl,
+                    bypassLan = bypassLan
                 )
                 if (started) {
                     isTunActive = true

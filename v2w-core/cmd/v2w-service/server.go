@@ -46,6 +46,18 @@ type StartTunRequest struct {
 	DirectApps    []string `json:"direct_apps,omitempty"`
 	ProxyApps     []string `json:"proxy_apps,omitempty"`
 	SelfTestURL   string   `json:"self_test_url,omitempty"`
+	BypassLan     *bool    `json:"bypass_lan,omitempty"`
+}
+
+type lanRoute struct {
+	network string
+	mask    string
+}
+
+var defaultLanSubnets = []lanRoute{
+	{network: "10.0.0.0", mask: "255.0.0.0"},
+	{network: "172.16.0.0", mask: "255.240.0.0"},
+	{network: "192.168.0.0", mask: "255.255.0.0"},
 }
 
 type ApiResponse struct {
@@ -76,6 +88,8 @@ type TunServer struct {
 	activeTunGW     string
 	addedDnsRoutes  []string
 	addedDnsGateway string
+	addedLanRoutes  []lanRoute
+	addedLanGateway string
 	httpServer      *http.Server
 	shutdownCh      chan struct{}
 	shutdownOnce    sync.Once
@@ -440,6 +454,27 @@ func (s *TunServer) startTunLocked(req StartTunRequest) error {
 		}
 	}
 
+	// Локальная сеть (RFC1918) напрямую через физический шлюз в обход TUN (по умолчанию включено)
+	s.addedLanRoutes = nil
+	s.addedLanGateway = ""
+	bypassLan := req.BypassLan == nil || *req.BypassLan
+	if bypassLan && req.Gateway != "" && !isOnLinkGateway(req.Gateway) {
+		s.addedLanGateway = req.Gateway
+		for _, sub := range defaultLanSubnets {
+			if args := buildLanRouteAddArgs(sub.network, sub.mask, req.Gateway, req.PhysicalIfIdx); len(args) > 0 {
+				out, err := exec.Command("route", args...).CombinedOutput()
+				if err != nil {
+					log.Printf("[v2w-service] route add LAN %s/%s warning: %s (%v)", sub.network, sub.mask, string(out), err)
+				} else {
+					s.addedLanRoutes = append(s.addedLanRoutes, sub)
+				}
+			}
+		}
+		if len(s.addedLanRoutes) > 0 {
+			log.Printf("[v2w-service] Direct LAN routes added via %s (%d subnets)", req.Gateway, len(s.addedLanRoutes))
+		}
+	}
+
 	// Маршрут для loopback: tun2socks работает как SYSTEM и подключается к Xray по 127.0.0.1.
 	// Без явного маршрута 127.0.0.0/8 трафик к loopback может уходить через wintun (метрика 1 < loopback 331),
 	// что приводит к "unsupported method" — tun2socks не может достучаться до Xray SOCKS5.
@@ -758,6 +793,13 @@ func (s *TunServer) stopTunLocked() {
 	}
 	s.addedDnsRoutes = nil
 	s.addedDnsGateway = ""
+	for _, sub := range s.addedLanRoutes {
+		if delArgs := buildLanRouteDeleteArgs(sub.network, sub.mask, s.addedLanGateway); len(delArgs) > 0 {
+			exec.Command("route", delArgs...).Run()
+		}
+	}
+	s.addedLanRoutes = nil
+	s.addedLanGateway = ""
 
 	// Сброс DNS кэша Windows
 	exec.Command("ipconfig", "/flushdns").Run()
@@ -853,6 +895,33 @@ func buildServerRouteDeleteArgs(serverIP, gateway string) []string {
 		return []string{"delete", srv, "mask", "255.255.255.255"}
 	}
 	return []string{"delete", srv, "mask", "255.255.255.255", gw}
+}
+
+func buildLanRouteAddArgs(network, mask, gateway string, physicalIfIdx int) []string {
+	netAddr := strings.TrimSpace(network)
+	netMask := strings.TrimSpace(mask)
+	gw := strings.TrimSpace(gateway)
+	if netAddr == "" || netMask == "" || isOnLinkGateway(gw) {
+		return nil
+	}
+	args := []string{"add", netAddr, "mask", netMask, gw, "metric", "1"}
+	if physicalIfIdx > 0 {
+		args = append(args, "if", fmt.Sprintf("%d", physicalIfIdx))
+	}
+	return args
+}
+
+func buildLanRouteDeleteArgs(network, mask, gateway string) []string {
+	netAddr := strings.TrimSpace(network)
+	netMask := strings.TrimSpace(mask)
+	gw := strings.TrimSpace(gateway)
+	if netAddr == "" || netMask == "" {
+		return nil
+	}
+	if isOnLinkGateway(gw) {
+		return []string{"delete", netAddr, "mask", netMask}
+	}
+	return []string{"delete", netAddr, "mask", netMask, gw}
 }
 
 func normalizeTunNetwork(rawIP, rawMask, rawGW string) (string, string, string) {

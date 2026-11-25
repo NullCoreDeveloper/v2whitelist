@@ -113,3 +113,21 @@ func TestHandleShutdownClosesChannel(t *testing.T) {
 		t.Fatalf("expected 200 OK on repeated shutdown, got %d", rec2.Code)
 	}
 }
+
+func TestBuildLanRouteArgs(t *testing.T) {
+	addArgs := buildLanRouteAddArgs("192.168.0.0", "255.255.0.0", "192.168.1.1", 12)
+	wantAdd := []string{"add", "192.168.0.0", "mask", "255.255.0.0", "192.168.1.1", "metric", "1", "if", "12"}
+	if !reflect.DeepEqual(addArgs, wantAdd) {
+		t.Fatalf("lan route add mismatch: got %v, want %v", addArgs, wantAdd)
+	}
+
+	if got := buildLanRouteAddArgs("192.168.0.0", "255.255.0.0", "On-link", 12); got != nil {
+		t.Fatalf("expected nil for on-link gateway, got %v", got)
+	}
+
+	delArgs := buildLanRouteDeleteArgs("10.0.0.0", "255.0.0.0", "192.168.1.1")
+	wantDel := []string{"delete", "10.0.0.0", "mask", "255.0.0.0", "192.168.1.1"}
+	if !reflect.DeepEqual(delArgs, wantDel) {
+		t.Fatalf("lan route delete mismatch: got %v, want %v", delArgs, wantDel)
+	}
+}
