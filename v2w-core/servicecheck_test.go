@@ -321,3 +321,145 @@ func (c *chainBridgeHandler) Process(ctx context.Context, link *transport.Link, 
 	<-errCh
 	return nil
 }
+
+func TestProbeExitIP(t *testing.T) {
+	scanner := NewScanner()
+	tlsCfg := mustSelfSignedTLSConfig(t)
+
+	t.Run("parses ip and loc", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		handler := &testMockHTTPHandler{
+			tlsCfg: tlsCfg,
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, "fl=12f34\nip=185.10.20.30\nts=1700000000\nloc=de\n"
+			},
+		}
+		info, err := scanner.ProbeExitIP(ctx, handler, &testMockDialer{})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if info.IP != "185.10.20.30" || info.CountryCode != "DE" {
+			t.Fatalf("unexpected ExitIPInfo: %+v", info)
+		}
+	})
+
+	t.Run("non-200 status returns HTTPStatusError", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		handler := &testMockHTTPHandler{
+			tlsCfg: tlsCfg,
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 403, nil, "forbidden"
+			},
+		}
+		_, err := scanner.ProbeExitIP(ctx, handler, &testMockDialer{})
+		if err == nil || !strings.Contains(err.Error(), "status 403") {
+			t.Fatalf("expected status 403 error, got %v", err)
+		}
+	})
+
+	t.Run("empty trace response returns error", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		handler := &testMockHTTPHandler{
+			tlsCfg: tlsCfg,
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				return 200, nil, "fl=12f34\nts=1700000000\n"
+			},
+		}
+		_, err := scanner.ProbeExitIP(ctx, handler, &testMockDialer{})
+		if err == nil || !strings.Contains(err.Error(), "empty cloudflare trace response") {
+			t.Fatalf("expected empty trace error, got %v", err)
+		}
+	})
+}
+
+func TestCheckServicesAllNoFailFastAndKnownLoc(t *testing.T) {
+	scanner := NewScanner()
+	tlsCfg := mustSelfSignedTLSConfig(t)
+
+	services := []ServiceCheckSpec{
+		{ID: "claude", Name: "Claude", URL: "https://claude.ai", Enabled: true, IsCustom: false},
+		{ID: "chatgpt", Name: "ChatGPT", URL: "https://chatgpt.com", Enabled: true, IsCustom: false},
+		{ID: "custom_fail", Name: "BrokenSvc", URL: "https://example.org/fail", Enabled: true, IsCustom: true},
+		{ID: "custom_ok", Name: "OkSvc", URL: "https://example.org/ok", Enabled: true, IsCustom: true},
+		{ID: "disabled", Name: "DisabledSvc", URL: "https://example.org/skip", Enabled: false, IsCustom: true},
+	}
+
+	t.Run("no fail-fast and reuses known US loc without trace request", func(t *testing.T) {
+		var traceCalls int32
+		handler := &testMockHTTPHandler{
+			tlsCfg: tlsCfg,
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				if strings.Contains(host, "cloudflare.com") {
+					atomic.AddInt32(&traceCalls, 1)
+				}
+				if strings.Contains(host, "anthropic.com") {
+					return 401, nil, `{"error":{"type":"authentication_error"}}`
+				}
+				if strings.Contains(host, "openai.com") {
+					return 200, nil, "ok"
+				}
+				if reqPath == "/fail" {
+					return 502, nil, "bad gateway"
+				}
+				return 200, nil, "ok"
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		results := scanner.CheckServicesAll(ctx, handler, &testMockDialer{}, services, 2*time.Second, "US")
+		if len(results) != 4 {
+			t.Fatalf("expected 4 enabled service results, got %d", len(results))
+		}
+		if atomic.LoadInt32(&traceCalls) != 0 {
+			t.Fatalf("expected 0 cloudflare trace calls when knownCFLoc=US, got %d", traceCalls)
+		}
+		if results[0].ID != "claude" || !results[0].Success {
+			t.Fatalf("expected claude success, got %+v", results[0])
+		}
+		if results[1].ID != "chatgpt" || !results[1].Success {
+			t.Fatalf("expected chatgpt success, got %+v", results[1])
+		}
+		if results[2].ID != "custom_fail" || results[2].Success || results[2].LatencyMs != -1 {
+			t.Fatalf("expected custom_fail failure, got %+v", results[2])
+		}
+		if results[3].ID != "custom_ok" || !results[3].Success {
+			t.Fatalf("expected custom_ok success despite previous failure, got %+v", results[3])
+		}
+	})
+
+	t.Run("known blocked RU loc rejects Claude and ChatGPT immediately", func(t *testing.T) {
+		var externalCalls int32
+		handler := &testMockHTTPHandler{
+			tlsCfg: tlsCfg,
+			responder: func(host, reqPath string) (int, map[string]string, string) {
+				if strings.Contains(host, "anthropic.com") || strings.Contains(host, "claude.ai") || strings.Contains(host, "openai.com") || strings.Contains(host, "cloudflare.com") {
+					atomic.AddInt32(&externalCalls, 1)
+				}
+				return 200, nil, "ok"
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		results := scanner.CheckServicesAll(ctx, handler, &testMockDialer{}, services[:2], 2*time.Second, "RU")
+		if len(results) != 2 {
+			t.Fatalf("expected 2 results, got %d", len(results))
+		}
+		if results[0].Success || !strings.Contains(results[0].Error, "region RU blocked") {
+			t.Fatalf("expected claude RU block, got %+v", results[0])
+		}
+		if results[1].Success || !strings.Contains(results[1].Error, "region RU blocked") {
+			t.Fatalf("expected chatgpt RU block, got %+v", results[1])
+		}
+		if atomic.LoadInt32(&externalCalls) != 0 {
+			t.Fatalf("expected 0 requests when knownCFLoc=RU, got %d", externalCalls)
+		}
+	})
+}

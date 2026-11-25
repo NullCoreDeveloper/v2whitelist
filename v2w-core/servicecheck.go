@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -21,6 +22,22 @@ type ServiceCheckSpec struct {
 	IsCustom bool   `json:"isCustom"`
 }
 
+// ExitIPInfo содержит реальный выходной IP, ISO-код страны и задержку, полученные через cdn-cgi/trace.
+type ExitIPInfo struct {
+	IP          string
+	CountryCode string
+	Latency     time.Duration
+}
+
+// SingleServiceResult описывает результат проверки одного сервиса без fail-fast.
+type SingleServiceResult struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Success   bool   `json:"success"`
+	LatencyMs int64  `json:"latency_ms"`
+	Error     string `json:"error,omitempty"`
+}
+
 var (
 	blockedRegions2Letter = map[string]bool{
 		"AF": true, "BY": true, "CN": true, "CU": true, "HK": true,
@@ -30,6 +47,7 @@ var (
 		"AFG": true, "CHN": true, "RUS": true, "BLR": true, "CUB": true,
 		"IRN": true, "PRK": true, "SYR": true, "HKG": true, "MAC": true,
 	}
+	cfTraceIPRegex        = regexp.MustCompile(`(?m)^ip=([^\r\n]+)\r?$`)
 	cfTraceLocRegex       = regexp.MustCompile(`(?m)^loc=([A-Za-z]{2})\r?$`)
 	geminiMarkerRegex     = regexp.MustCompile(`,2,1,200,"([A-Za-z]{3})"`)
 	geminiStatusCodeRegex = regexp.MustCompile(`,2,1,([0-9]+),`)
@@ -114,18 +132,99 @@ func (s *Scanner) CheckServicesParallel(
 	return 0, fmt.Errorf("no services completed")
 }
 
+// CheckServicesAll проверяет все включённые сервисы параллельно без fail-fast и возвращает результат по каждому.
+// Если knownCFLoc задан, проверки Claude/ChatGPT переиспользуют его без повторного запроса к cdn-cgi/trace.
+func (s *Scanner) CheckServicesAll(
+	ctx context.Context,
+	handler ProxyHandler,
+	dialer internet.Dialer,
+	services []ServiceCheckSpec,
+	perServiceTimeout time.Duration,
+	knownCFLoc string,
+) []SingleServiceResult {
+	var enabled []ServiceCheckSpec
+	for _, svc := range services {
+		if svc.Enabled && strings.TrimSpace(svc.URL) != "" {
+			enabled = append(enabled, svc)
+		}
+	}
+	if len(enabled) == 0 {
+		return nil
+	}
+	if perServiceTimeout <= 0 {
+		perServiceTimeout = 5000 * time.Millisecond
+	}
+
+	results := make([]SingleServiceResult, len(enabled))
+	var wg sync.WaitGroup
+
+	for i, svc := range enabled {
+		wg.Add(1)
+		go func(idx int, item ServiceCheckSpec) {
+			defer wg.Done()
+			if ctx.Err() != nil {
+				results[idx] = SingleServiceResult{
+					ID:        item.ID,
+					Name:      item.Name,
+					Success:   false,
+					LatencyMs: -1,
+					Error:     ctx.Err().Error(),
+				}
+				return
+			}
+			itemCtx, cancelItem := context.WithTimeout(ctx, perServiceTimeout)
+			defer cancelItem()
+
+			lat, err := s.checkSingleServiceWithLoc(itemCtx, handler, dialer, item, knownCFLoc)
+			if err != nil {
+				results[idx] = SingleServiceResult{
+					ID:        item.ID,
+					Name:      item.Name,
+					Success:   false,
+					LatencyMs: -1,
+					Error:     err.Error(),
+				}
+				return
+			}
+			ms := lat.Milliseconds()
+			if ms < 0 {
+				ms = 0
+			}
+			results[idx] = SingleServiceResult{
+				ID:        item.ID,
+				Name:      item.Name,
+				Success:   true,
+				LatencyMs: ms,
+			}
+		}(i, svc)
+	}
+
+	wg.Wait()
+	return results
+}
+
 func (s *Scanner) checkSingleService(
 	ctx context.Context,
 	handler ProxyHandler,
 	dialer internet.Dialer,
 	svc ServiceCheckSpec,
 ) (time.Duration, error) {
+	return s.checkSingleServiceWithLoc(ctx, handler, dialer, svc, "")
+}
+
+func (s *Scanner) checkSingleServiceWithLoc(
+	ctx context.Context,
+	handler ProxyHandler,
+	dialer internet.Dialer,
+	svc ServiceCheckSpec,
+	knownLoc string,
+) (time.Duration, error) {
 	if !svc.IsCustom {
 		switch strings.ToLower(strings.TrimSpace(svc.ID)) {
 		case "claude":
-			return s.checkClaudeLite(ctx, handler, dialer)
+			return s.checkClaudeLiteWithLoc(ctx, handler, dialer, knownLoc)
 		case "chatgpt":
-			return s.checkChatGPTLite(ctx, handler, dialer)
+			return s.checkChatGPTLiteWithLoc(ctx, handler, dialer, knownLoc)
 		case "gemini":
 			return s.checkGeminiLite(ctx, handler, dialer)
 		case "discord":
@@ -141,6 +240,14 @@ func (s *Scanner) checkSingleService(
 	return s.checkGenericService(ctx, handler, dialer, svc.URL)
 }
 
+func extractCFIP(body string) string {
+	m := cfTraceIPRegex.FindStringSubmatch(body)
+	if len(m) >= 2 {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
 func extractCFLoc(body string) string {
 	m := cfTraceLocRegex.FindStringSubmatch(body)
 	if len(m) >= 2 {
@@ -152,13 +259,47 @@ func extractCFLoc(body string) string {
 	return ""
 }
 
+// ProbeExitIP проверяет живость прокси и определяет реальный выходной IP и страну через cloudflare cdn-cgi/trace.
+func (s *Scanner) ProbeExitIP(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (*ExitIPInfo, error) {
+	res, err := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
+	if err != nil || res == nil {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("empty probe response")
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, &HTTPStatusError{StatusCode: res.StatusCode, WantCode: http.StatusOK}
+	}
+	ip := extractCFIP(res.Body)
+	loc := extractCFLoc(res.Body)
+	if ip == "" && loc == "" {
+		return nil, fmt.Errorf("empty cloudflare trace response")
+	}
+	return &ExitIPInfo{
+		IP:          ip,
+		CountryCode: loc,
+		Latency:     res.Latency,
+	}, nil
+}
+
 func (s *Scanner) checkClaudeLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (time.Duration, error) {
-	cfRes, _ := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
-	var loc string
-	if cfRes != nil {
-		loc = extractCFLoc(cfRes.Body)
+	return s.checkClaudeLiteWithLoc(ctx, handler, dialer, "")
+}
+
+func (s *Scanner) checkClaudeLiteWithLoc(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, knownLoc string) (time.Duration, error) {
+	loc := strings.ToUpper(strings.TrimSpace(knownLoc))
+	if loc != "" {
 		if blockedRegions2Letter[loc] {
 			return 0, fmt.Errorf("region %s blocked", loc)
+		}
+	} else {
+		cfRes, _ := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
+		if cfRes != nil {
+			loc = extractCFLoc(cfRes.Body)
+			if blockedRegions2Letter[loc] {
+				return 0, fmt.Errorf("region %s blocked", loc)
+			}
 		}
 	}
 
@@ -187,10 +328,21 @@ func (s *Scanner) checkClaudeLite(ctx context.Context, handler ProxyHandler, dia
 }
 
 func (s *Scanner) checkChatGPTLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (time.Duration, error) {
-	cfRes, _ := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
-	if cfRes != nil {
-		if loc := extractCFLoc(cfRes.Body); blockedRegions2Letter[loc] {
+	return s.checkChatGPTLiteWithLoc(ctx, handler, dialer, "")
+}
+
+func (s *Scanner) checkChatGPTLiteWithLoc(ctx context.Context, handler ProxyHandler, dialer internet.Dialer, knownLoc string) (time.Duration, error) {
+	loc := strings.ToUpper(strings.TrimSpace(knownLoc))
+	if loc != "" {
+		if blockedRegions2Letter[loc] {
 			return 0, fmt.Errorf("region %s blocked", loc)
+		}
+	} else {
+		cfRes, _ := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
+		if cfRes != nil {
+			if traceLoc := extractCFLoc(cfRes.Body); blockedRegions2Letter[traceLoc] {
+				return 0, fmt.Errorf("region %s blocked", traceLoc)
+			}
 		}
 	}
 
