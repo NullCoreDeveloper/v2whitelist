@@ -372,6 +372,28 @@ object DesktopTunManager {
     }
 
     /**
+     * Остановка TUN и самой службы v2w-service через HTTP IPC (без UAC).
+     */
+    private fun shutdownViaService(): Boolean {
+        return try {
+            val client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(1000))
+                .build()
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create("$SERVICE_IPC_URL/service/shutdown"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(4))
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build()
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            response.statusCode() == 200
+        } catch (e: Exception) {
+            GeekModeLogger.log("TUN", "Ошибка отправки команды завершения службе v2w-service: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Остановка TUN через службу Windows.
      */
     private fun stopViaService(): Boolean {
@@ -456,7 +478,16 @@ object DesktopTunManager {
         if (!isWindows) return false
         return try {
             if (isServiceAvailable()) {
-                stopViaService()
+                shutdownViaService()
+                // Даём SCM до 1.5 сек, чтобы завершить службу и перевести её в STOPPED
+                repeat(15) {
+                    val current = queryServiceState()
+                    if (current == null || current == "STOPPED") {
+                        GeekModeLogger.log("TUN", "Служба v2w-service остановлена через IPC при выходе.")
+                        return true
+                    }
+                    Thread.sleep(100)
+                }
             }
             val state = queryServiceState()
             if (state == null || state == "STOPPED") return true

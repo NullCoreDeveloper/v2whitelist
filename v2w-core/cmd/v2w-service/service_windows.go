@@ -36,22 +36,31 @@ func (m *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, chan
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 
-	for req := range r {
-		switch req.Cmd {
-		case svc.Interrogate:
-			changes <- req.CurrentStatus
-		case svc.Stop, svc.Shutdown:
+	shutdownCh := m.server.ShutdownChan()
+	for {
+		select {
+		case req, ok := <-r:
+			if !ok {
+				return false, 0
+			}
+			switch req.Cmd {
+			case svc.Interrogate:
+				changes <- req.CurrentStatus
+			case svc.Stop, svc.Shutdown:
+				changes <- svc.Status{State: svc.StopPending}
+				m.server.RequestShutdown()
+				changes <- svc.Status{State: svc.Stopped}
+				return false, 0
+			default:
+				log.Printf("[v2w-service] Unexpected service control request #%d", req.Cmd)
+			}
+		case <-shutdownCh:
+			log.Printf("[v2w-service] Self-shutdown requested via IPC, stopping Windows service")
 			changes <- svc.Status{State: svc.StopPending}
-			m.server.mu.Lock()
-			m.server.stopTunLocked()
-			m.server.mu.Unlock()
 			changes <- svc.Status{State: svc.Stopped}
 			return false, 0
-		default:
-			log.Printf("[v2w-service] Unexpected service control request #%d", req.Cmd)
 		}
 	}
-	return false, 0
 }
 
 func isWindowsService() bool {

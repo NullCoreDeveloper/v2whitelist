@@ -76,10 +76,50 @@ type TunServer struct {
 	activeTunGW     string
 	addedDnsRoutes  []string
 	addedDnsGateway string
+	httpServer      *http.Server
+	shutdownCh      chan struct{}
+	shutdownOnce    sync.Once
 }
 
 func NewTunServer() *TunServer {
-	return &TunServer{}
+	return &TunServer{
+		shutdownCh: make(chan struct{}),
+	}
+}
+
+func (s *TunServer) ShutdownChan() <-chan struct{} {
+	s.mu.Lock()
+	ch := s.shutdownCh
+	s.mu.Unlock()
+	if ch == nil {
+		// На случай прямой инициализации структуры без NewTunServer
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+	return ch
+}
+
+// RequestShutdown останавливает активный TUN, закрывает HTTP IPC сервер
+// и сигнализирует сервис-менеджеру о завершении работы службы.
+func (s *TunServer) RequestShutdown() {
+	s.mu.Lock()
+	s.stopTunLocked()
+	srv := s.httpServer
+	ch := s.shutdownCh
+	s.mu.Unlock()
+
+	if srv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = srv.Shutdown(ctx)
+		cancel()
+	}
+
+	if ch != nil {
+		s.shutdownOnce.Do(func() {
+			close(ch)
+		})
+	}
 }
 
 func (s *TunServer) Start(addr string) error {
@@ -89,6 +129,7 @@ func (s *TunServer) Start(addr string) error {
 	mux.HandleFunc("/tun/status", s.handleStatus)
 	mux.HandleFunc("/tun/start", s.handleStartTun)
 	mux.HandleFunc("/tun/stop", s.handleStopTun)
+	mux.HandleFunc("/service/shutdown", s.handleShutdown)
 
 	server := &http.Server{
 		Addr:         addr,
@@ -97,8 +138,15 @@ func (s *TunServer) Start(addr string) error {
 		WriteTimeout: 30 * time.Second,
 	}
 
+	s.mu.Lock()
+	s.httpServer = server
+	s.mu.Unlock()
+
 	log.Printf("[v2w-service] HTTP IPC server listening on http://%s", addr)
-	return server.ListenAndServe()
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 func (s *TunServer) handlePing(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +238,19 @@ func (s *TunServer) handleStopTun(w http.ResponseWriter, r *http.Request) {
 	s.stopTunLocked()
 	log.Printf("[v2w-service] TUN stopped")
 	writeJSON(w, http.StatusOK, ApiResponse{Success: true, Message: "TUN stopped"})
+}
+
+func (s *TunServer) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, ApiResponse{Success: false, Error: "method not allowed"})
+		return
+	}
+	log.Printf("[v2w-service] Shutdown requested via IPC")
+	s.mu.Lock()
+	s.stopTunLocked()
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, ApiResponse{Success: true, Message: "Service shutting down"})
+	go s.RequestShutdown()
 }
 
 func (s *TunServer) startTunLocked(req StartTunRequest) error {

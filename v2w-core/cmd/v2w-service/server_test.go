@@ -1,8 +1,11 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestParseNetshDnsServers(t *testing.T) {
@@ -82,5 +85,31 @@ func TestNormalizeCustomSelfTestURL(t *testing.T) {
 	}
 	if got := normalizeCustomSelfTestURL("   "); got != "" {
 		t.Fatalf("expected empty for blank input, got %q", got)
+	}
+}
+
+func TestHandleShutdownClosesChannel(t *testing.T) {
+	srv := NewTunServer()
+
+	req := httptest.NewRequest(http.MethodPost, "/service/shutdown", nil)
+	rec := httptest.NewRecorder()
+	srv.handleShutdown(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+
+	select {
+	case <-srv.ShutdownChan():
+	case <-time.After(time.Second):
+		t.Fatalf("expected ShutdownChan to be closed after /service/shutdown")
+	}
+
+	// Повторный вызов не должен паниковать (sync.Once)
+	req2 := httptest.NewRequest(http.MethodPost, "/service/shutdown", nil)
+	rec2 := httptest.NewRecorder()
+	srv.handleShutdown(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on repeated shutdown, got %d", rec2.Code)
 	}
 }
