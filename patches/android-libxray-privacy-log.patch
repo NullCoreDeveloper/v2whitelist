@@ -1,0 +1,37 @@
+--- a/libv2ray_main.go
++++ b/libv2ray_main.go
+@@ -10,6 +10,7 @@
+ 	"net/http"
+ 	"os"
+ 	"path/filepath"
++	"regexp"
+ 	"strconv"
+ 	"strings"
+ 	"sync"
+@@ -370,9 +371,25 @@
+ 	return minDuration, nil
+ }
+ 
++var (
++	coreLogUriPattern   = regexp.MustCompile(`(?i)\b(?:vless|vmess|trojan|ssr?|hysteria2|hy2|tuic|socks5?|https?)://[^\s"'<>]*@[^\s"'<>]+`)
++	coreLogParamPattern = regexp.MustCompile(`(?i)\b(password|passwd|pass|token|secret|authorization|pbk|sid|privatekey|presharedkey)(\s*[:=]\s*)([^\s,;'"&}]+)`)
++	coreLogUuidPattern  = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
++)
++
++func sanitizeCoreLogLine(line string) string {
++	if line == "" {
++		return line
++	}
++	redacted := coreLogUriPattern.ReplaceAllString(line, "<redacted-uri>")
++	redacted = coreLogParamPattern.ReplaceAllString(redacted, "$1$2<redacted>")
++	redacted = coreLogUuidPattern.ReplaceAllString(redacted, "<redacted-uuid>")
++	return redacted
++}
++
+ // Log writer implementation
+ func (w *consoleLogWriter) Write(s string) error {
+-	w.logger.Print(s)
++	w.logger.Print(sanitizeCoreLogLine(s))
+ 	return nil
+ }
+ 

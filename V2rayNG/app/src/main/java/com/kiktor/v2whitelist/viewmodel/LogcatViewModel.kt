@@ -3,6 +3,7 @@ package com.kiktor.v2whitelist.viewmodel
 import androidx.lifecycle.ViewModel
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.ANG_PACKAGE
+import com.kiktor.v2whitelist.util.LogSanitizer
 import java.io.IOException
 
 class LogcatViewModel : ViewModel() {
@@ -22,7 +23,9 @@ class LogcatViewModel : ViewModel() {
             lst.add("-s")
             lst.add("GoLog,${ANG_PACKAGE},AndroidRuntime,System.err")
             val process = Runtime.getRuntime().exec(lst.toTypedArray())
-            val allText = process.inputStream.bufferedReader().use { it.readLines() }.reversed()
+            val allText = process.inputStream.bufferedReader().use { it.readLines() }
+                .map { LogSanitizer.sanitizeLine(it) }
+                .reversed()
 
             logsetsAll.clear()
             logsetsAll.addAll(allText)
