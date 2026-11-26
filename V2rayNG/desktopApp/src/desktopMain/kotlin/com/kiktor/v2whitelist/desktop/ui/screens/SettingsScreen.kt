@@ -121,11 +121,8 @@ fun SettingsScreen(
     // Проверка профилей
     var removeInsecure by remember { mutableStateOf(state.removeInsecureProfiles.value) }
     var testBeforeConnect by remember { mutableStateOf(state.testProfileBeforeConnect.value) }
-    var serviceCheckEnabled by remember { mutableStateOf(state.serviceCheckEnabled.value) }
-    var speedTestOnCheck by remember { mutableStateOf(state.speedTestOnCheck.value) }
     var speedTestBytes by remember { mutableStateOf(state.speedTestDownloadBytes.value.toString()) }
     var speedTestTimeout by remember { mutableStateOf(state.speedTestTimeoutMs.value.toString()) }
-    var minSpeedThreshold by remember { mutableStateOf(state.minSpeedThresholdMbps.value.toString()) }
     var vipCacheLimitInput by remember { mutableStateOf(state.vipCacheLimit.value.toString()) }
 
     // Failover
@@ -257,11 +254,11 @@ fun SettingsScreen(
             v2wFullVerify = v2wFullVerify,
             removeInsecure = removeInsecure,
             testBeforeConnect = testBeforeConnect,
-            serviceCheck = serviceCheckEnabled,
-            speedTestCheck = speedTestOnCheck,
+            serviceCheck = state.serviceCheckEnabled.value,
+            speedTestCheck = state.speedTestOnCheck.value,
             speedTestBytes = (speedTestBytes.toIntOrNull() ?: 2000000).let { if (it < 10000) 2000000 else it },
             speedTestTimeout = (speedTestTimeout.toIntOrNull() ?: 3000).let { if (it < 500) 3000 else it },
-            minSpeed = (minSpeedThreshold.toDoubleOrNull() ?: 1.0).let { if (it < 0.0) 0.0 else it },
+            minSpeed = state.minSpeedThresholdMbps.value,
             autoFailoverEnabled = autoFailover,
             heartbeatSec = heartbeatSec.toIntOrNull() ?: 30,
             smartFailoverEnabled = smartFailover,
@@ -348,11 +345,8 @@ fun SettingsScreen(
         v2wPathInput = state.v2wScanPath.value
         removeInsecure = state.removeInsecureProfiles.value
         testBeforeConnect = state.testProfileBeforeConnect.value
-        serviceCheckEnabled = state.serviceCheckEnabled.value
-        speedTestOnCheck = state.speedTestOnCheck.value
         speedTestBytes = state.speedTestDownloadBytes.value.toString()
         speedTestTimeout = state.speedTestTimeoutMs.value.toString()
-        minSpeedThreshold = state.minSpeedThresholdMbps.value.toString()
         vipCacheLimitInput = state.vipCacheLimit.value.toString()
         autoFailover = state.autoFailover.value
         heartbeatSec = state.heartbeatIntervalSeconds.value.toString()
@@ -446,11 +440,8 @@ fun SettingsScreen(
         v2wPathInput != state.v2wScanPath.value ||
         removeInsecure != state.removeInsecureProfiles.value ||
         testBeforeConnect != state.testProfileBeforeConnect.value ||
-        serviceCheckEnabled != state.serviceCheckEnabled.value ||
-        speedTestOnCheck != state.speedTestOnCheck.value ||
         speedTestBytes != state.speedTestDownloadBytes.value.toString() ||
         speedTestTimeout != state.speedTestTimeoutMs.value.toString() ||
-        minSpeedThreshold != state.minSpeedThresholdMbps.value.toString() ||
         vipCacheLimitInput != state.vipCacheLimit.value.toString() ||
         autoFailover != state.autoFailover.value ||
         heartbeatSec != state.heartbeatIntervalSeconds.value.toString() ||
@@ -825,29 +816,6 @@ fun SettingsScreen(
                         checked = endpointE2eCheck,
                         onCheckedChange = { endpointE2eCheck = it }
                     )
-                    val isExitNodeActive = useCustomEp && customEpConfig.isNotBlank()
-                    SettingSwitchRow(
-                        title = strings.serviceCheckEnable,
-                        desc = if (isExitNodeActive) {
-                            "${strings.serviceCheckEnableDesc}${strings.serviceCheckEndpointDisabledSuffix}"
-                        } else {
-                            strings.serviceCheckEnableDesc
-                        },
-                        checked = serviceCheckEnabled && !isExitNodeActive,
-                        enabled = !isExitNodeActive,
-                        onCheckedChange = { serviceCheckEnabled = it }
-                    )
-                    val currentServices by state.servicesList.collectAsState()
-                    val enabledServicesCount = currentServices.count { it.enabled }
-                    OutlinedButton(
-                        onClick = { state.promptServiceCheckDialog() },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("${strings.servCheckTitle} ($enabledServicesCount/${currentServices.size})", fontSize = 13.sp)
-                    }
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -858,12 +826,6 @@ fun SettingsScreen(
                     icon = Icons.Default.Speed,
                     description = strings.cardSpeedTestDesc
                 ) {
-                    SettingSwitchRow(
-                        title = strings.speedTestEnable,
-                        desc = strings.speedTestEnableDesc,
-                        checked = speedTestOnCheck,
-                        onCheckedChange = { speedTestOnCheck = it }
-                    )
                     OutlinedTextField(
                         value = speedTestBytes,
                         onValueChange = { speedTestBytes = it },
@@ -876,14 +838,6 @@ fun SettingsScreen(
                         value = speedTestTimeout,
                         onValueChange = { speedTestTimeout = it },
                         label = { Text(strings.speedTestTimeoutLabel) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = minSpeedThreshold,
-                        onValueChange = { minSpeedThreshold = it },
-                        label = { Text(strings.minSpeedThresholdLabel) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
