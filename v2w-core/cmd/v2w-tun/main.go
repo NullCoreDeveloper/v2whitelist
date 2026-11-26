@@ -41,10 +41,17 @@ func main() {
 	flag.Parse()
 
 	var cfg tunrouter.RouterConfig
-	if strings.TrimSpace(*configPath) != "" {
-		loaded, err := tunrouter.LoadConfigFile(strings.TrimSpace(*configPath))
+	cfgArg := strings.TrimSpace(*configPath)
+	if cfgArg == "-" {
+		loaded, err := tunrouter.LoadConfigReader(os.Stdin)
 		if err != nil {
-			log.Fatalf("[v2w-tun] failed to load config %s: %v", *configPath, err)
+			log.Fatalf("[v2w-tun] failed to load config from stdin: %v", err)
+		}
+		cfg = loaded
+	} else if cfgArg != "" {
+		loaded, err := tunrouter.LoadConfigFile(cfgArg)
+		if err != nil {
+			log.Fatalf("[v2w-tun] failed to load config %s: %v", cfgArg, err)
 		}
 		cfg = loaded
 	} else {

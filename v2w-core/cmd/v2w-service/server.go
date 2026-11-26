@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -93,11 +94,16 @@ type TunServer struct {
 	httpServer      *http.Server
 	shutdownCh      chan struct{}
 	shutdownOnce    sync.Once
+	ipcToken        string
+	ipcTokenPath    string
 }
 
 func NewTunServer() *TunServer {
+	tok, _ := generateIpcToken()
 	return &TunServer{
-		shutdownCh: make(chan struct{}),
+		shutdownCh:   make(chan struct{}),
+		ipcToken:     tok,
+		ipcTokenPath: defaultIpcTokenPath(),
 	}
 }
 
@@ -121,7 +127,12 @@ func (s *TunServer) RequestShutdown() {
 	s.stopTunLocked()
 	srv := s.httpServer
 	ch := s.shutdownCh
+	tokPath := s.ipcTokenPath
 	s.mu.Unlock()
+
+	if tokPath != "" {
+		_ = os.Remove(tokPath)
+	}
 
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -137,13 +148,33 @@ func (s *TunServer) RequestShutdown() {
 }
 
 func (s *TunServer) Start(addr string) error {
+	s.mu.Lock()
+	if s.ipcToken == "" {
+		tok, err := generateIpcToken()
+		if err != nil {
+			s.mu.Unlock()
+			return fmt.Errorf("failed to generate IPC token: %w", err)
+		}
+		s.ipcToken = tok
+	}
+	if s.ipcTokenPath == "" {
+		s.ipcTokenPath = defaultIpcTokenPath()
+	}
+	tok := s.ipcToken
+	tokPath := s.ipcTokenPath
+	s.mu.Unlock()
+
+	if err := writeIpcTokenFile(tokPath, tok); err != nil {
+		return fmt.Errorf("failed to persist IPC token at %s: %w", tokPath, err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", s.handlePing)
 	mux.HandleFunc("/status", s.handleStatus)
 	mux.HandleFunc("/tun/status", s.handleStatus)
-	mux.HandleFunc("/tun/start", s.handleStartTun)
-	mux.HandleFunc("/tun/stop", s.handleStopTun)
-	mux.HandleFunc("/service/shutdown", s.handleShutdown)
+	mux.HandleFunc("/tun/start", s.requireIpcAuth(s.handleStartTun))
+	mux.HandleFunc("/tun/stop", s.requireIpcAuth(s.handleStopTun))
+	mux.HandleFunc("/service/shutdown", s.requireIpcAuth(s.handleShutdown))
 
 	server := &http.Server{
 		Addr:         addr,
@@ -205,8 +236,19 @@ func (s *TunServer) handleStartTun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes)
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) || strings.Contains(err.Error(), "http: request body too large") {
+			writeJSON(w, http.StatusRequestEntityTooLarge, ApiResponse{Success: false, Error: "Request body too large"})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, ApiResponse{Success: false, Error: "Failed to read body: " + err.Error()})
+		return
+	}
 	var req StartTunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, ApiResponse{Success: false, Error: "Invalid JSON: " + err.Error()})
 		return
 	}
@@ -219,6 +261,10 @@ func (s *TunServer) handleStartTun(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TunMask == "" {
 		req.TunMask = DefaultTunMask
+	}
+	if err := validateStartTunRequest(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ApiResponse{Success: false, Error: err.Error()})
+		return
 	}
 
 	s.mu.Lock()

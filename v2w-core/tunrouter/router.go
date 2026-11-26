@@ -31,10 +31,11 @@ import (
 )
 
 const (
-	tunReadOffset = 16
-	defaultMTU    = 1500
-	udpIdleTTL    = 60 * time.Second
-	dnsIdleTTL    = 15 * time.Second
+	tunReadOffset        = 16
+	defaultMTU           = 1500
+	udpIdleTTL           = 60 * time.Second
+	dnsIdleTTL           = 15 * time.Second
+	maxRouterConfigBytes = 1024 * 1024
 )
 
 // RouterConfig задаёт параметры запуска встроенного TUN-маршрутизатора v2w-tun.
@@ -49,16 +50,29 @@ type RouterConfig struct {
 	Split         SplitConfig `json:"split"`
 }
 
-func LoadConfigFile(path string) (RouterConfig, error) {
-	data, err := os.ReadFile(path)
+func LoadConfigReader(r io.Reader) (RouterConfig, error) {
+	limited := io.LimitReader(r, maxRouterConfigBytes+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
 		return RouterConfig{}, err
+	}
+	if len(data) > maxRouterConfigBytes {
+		return RouterConfig{}, fmt.Errorf("config exceeds max size (%d bytes)", maxRouterConfigBytes)
 	}
 	var cfg RouterConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return RouterConfig{}, err
 	}
 	return cfg, nil
+}
+
+func LoadConfigFile(path string) (RouterConfig, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return RouterConfig{}, err
+	}
+	defer f.Close()
+	return LoadConfigReader(f)
 }
 
 // Router управляет TUN-интерфейсом, gVisor стеком и маршрутизацией потоков (PROXY vs DIRECT).
