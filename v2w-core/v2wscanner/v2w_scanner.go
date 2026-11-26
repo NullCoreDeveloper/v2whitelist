@@ -303,6 +303,9 @@ type vmessRawJson struct {
 
 func parseVmessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destination, error) {
 	trimmed := strings.TrimPrefix(rawURL, "vmess://")
+	if idx := strings.Index(trimmed, "#"); idx != -1 {
+		trimmed = trimmed[:idx]
+	}
 	decoded := decodeBase64Safe(trimmed)
 	var vj vmessRawJson
 	if err := json.Unmarshal([]byte(decoded), &vj); err != nil {
@@ -404,12 +407,14 @@ func parseVmessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 		if sni == "" {
 			sni = serverIP
 		}
+		fp := strings.TrimSpace(vj.Fp)
+		if fp == "" {
+			fp = "chrome"
+		}
 		streamSettings.SecuritySettings = &tls.Config{
 			ServerName:   sni,
 			NextProtocol: nextProtocol,
-		}
-		if vj.Fp != "" {
-			streamSettings.SecuritySettings.(*tls.Config).Fingerprint = vj.Fp
+			Fingerprint:  fp,
 		}
 	}
 
@@ -431,6 +436,234 @@ func parseVmessURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destin
 	}
 
 	return config, streamSettings, dest, nil
+}
+
+func defaultFingerprint(fp string) string {
+	fp = strings.TrimSpace(fp)
+	if fp == "" {
+		return "chrome"
+	}
+	return fp
+}
+
+func parseVlessEncryption(raw string) (enc string, xorMode uint32, seconds uint32, padding string, err error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "none" {
+		return "none", 0, 0, "", nil
+	}
+	s := strings.Split(raw, ".")
+	if len(s) < 4 || s[0] != "mlkem768x25519plus" {
+		return "", 0, 0, "", fmt.Errorf("unsupported vless encryption: %s", raw)
+	}
+	switch s[1] {
+	case "native":
+	case "xorpub":
+		xorMode = 1
+	case "random":
+		xorMode = 2
+	default:
+		return "", 0, 0, "", fmt.Errorf("unsupported vless encryption mode: %s", s[1])
+	}
+	switch s[2] {
+	case "1rtt":
+	case "0rtt":
+		seconds = 1
+	default:
+		return "", 0, 0, "", fmt.Errorf("unsupported vless encryption rtt: %s", s[2])
+	}
+	paddingLen := 0
+	keyCount := 0
+	for _, r := range s[3:] {
+		if len(r) < 20 {
+			paddingLen += len(r) + 1
+			continue
+		}
+		b, decErr := base64.RawURLEncoding.DecodeString(r)
+		if decErr != nil || (len(b) != 32 && len(b) != 1184) {
+			return "", 0, 0, "", fmt.Errorf("invalid vless encryption key length")
+		}
+		keyCount++
+	}
+	if keyCount == 0 {
+		return "", 0, 0, "", fmt.Errorf("missing vless encryption key")
+	}
+	prefixLen := len(s[0]) + 1 + len(s[1]) + 1 + len(s[2]) + 1
+	rest := raw[prefixLen:]
+	if paddingLen > 0 {
+		if paddingLen > len(rest) {
+			return "", 0, 0, "", fmt.Errorf("invalid vless encryption padding")
+		}
+		padding = rest[:paddingLen-1]
+		rest = rest[paddingLen:]
+	}
+	return rest, xorMode, seconds, padding, nil
+}
+
+func parseSplitHTTPRangeString(s string) *splithttp.RangeConfig {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.SplitN(s, "-", 2)
+	if len(parts) == 1 {
+		v, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return nil
+		}
+		return &splithttp.RangeConfig{From: int32(v), To: int32(v)}
+	}
+	from, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	to, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	return &splithttp.RangeConfig{From: int32(from), To: int32(to)}
+}
+
+func parseExtraRange(raw json.RawMessage) *splithttp.RangeConfig {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return nil
+	}
+	var num int32
+	if err := json.Unmarshal(raw, &num); err == nil {
+		return &splithttp.RangeConfig{From: num, To: num}
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		return parseSplitHTTPRangeString(str)
+	}
+	var obj struct {
+		From int32 `json:"from"`
+		To   int32 `json:"to"`
+	}
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		return &splithttp.RangeConfig{From: obj.From, To: obj.To}
+	}
+	return nil
+}
+
+func applySplitHTTPExtra(cfg *splithttp.Config, extraRaw string) {
+	extraRaw = strings.TrimSpace(extraRaw)
+	if cfg == nil || extraRaw == "" {
+		return
+	}
+	var extra struct {
+		Headers              map[string]string `json:"headers"`
+		NoGRPCHeader         *bool             `json:"noGRPCHeader"`
+		NoSSEHeader          *bool             `json:"noSSEHeader"`
+		XPaddingBytes        json.RawMessage   `json:"xPaddingBytes"`
+		ScMaxEachPostBytes   json.RawMessage   `json:"scMaxEachPostBytes"`
+		ScMinPostsIntervalMs json.RawMessage   `json:"scMinPostsIntervalMs"`
+		ScMaxBufferedPosts   *int64            `json:"scMaxBufferedPosts"`
+		ScStreamUpServerSecs json.RawMessage   `json:"scStreamUpServerSecs"`
+		XPaddingObfsMode     *bool             `json:"xPaddingObfsMode"`
+		XPaddingKey          *string           `json:"xPaddingKey"`
+		XPaddingHeader       *string           `json:"xPaddingHeader"`
+		XPaddingPlacement    *string           `json:"xPaddingPlacement"`
+		XPaddingMethod       *string           `json:"xPaddingMethod"`
+		UplinkHTTPMethod     *string           `json:"uplinkHTTPMethod"`
+		SessionIDPlacement   *string           `json:"sessionIDPlacement"`
+		SessionIDKey         *string           `json:"sessionIDKey"`
+		SeqPlacement         *string           `json:"seqPlacement"`
+		SeqKey               *string           `json:"seqKey"`
+		UplinkDataPlacement  *string           `json:"uplinkDataPlacement"`
+		UplinkDataKey        *string           `json:"uplinkDataKey"`
+		Xmux                 *struct {
+			MaxConcurrency   json.RawMessage `json:"maxConcurrency"`
+			MaxConnections   json.RawMessage `json:"maxConnections"`
+			CMaxReuseTimes   json.RawMessage `json:"cMaxReuseTimes"`
+			HMaxRequestTimes json.RawMessage `json:"hMaxRequestTimes"`
+			HMaxReusableSecs json.RawMessage `json:"hMaxReusableSecs"`
+			HKeepAlivePeriod *int64          `json:"hKeepAlivePeriod"`
+		} `json:"xmux"`
+	}
+	if err := json.Unmarshal([]byte(extraRaw), &extra); err != nil {
+		return
+	}
+	if len(extra.Headers) > 0 {
+		cfg.Headers = extra.Headers
+	}
+	if extra.NoGRPCHeader != nil {
+		cfg.NoGRPCHeader = *extra.NoGRPCHeader
+	}
+	if extra.NoSSEHeader != nil {
+		cfg.NoSSEHeader = *extra.NoSSEHeader
+	}
+	if r := parseExtraRange(extra.XPaddingBytes); r != nil {
+		cfg.XPaddingBytes = r
+	}
+	if r := parseExtraRange(extra.ScMaxEachPostBytes); r != nil {
+		cfg.ScMaxEachPostBytes = r
+	}
+	if r := parseExtraRange(extra.ScMinPostsIntervalMs); r != nil {
+		cfg.ScMinPostsIntervalMs = r
+	}
+	if extra.ScMaxBufferedPosts != nil {
+		cfg.ScMaxBufferedPosts = *extra.ScMaxBufferedPosts
+	}
+	if r := parseExtraRange(extra.ScStreamUpServerSecs); r != nil {
+		cfg.ScStreamUpServerSecs = r
+	}
+	if extra.XPaddingObfsMode != nil {
+		cfg.XPaddingObfsMode = *extra.XPaddingObfsMode
+	}
+	if extra.XPaddingKey != nil {
+		cfg.XPaddingKey = *extra.XPaddingKey
+	}
+	if extra.XPaddingHeader != nil {
+		cfg.XPaddingHeader = *extra.XPaddingHeader
+	}
+	if extra.XPaddingPlacement != nil {
+		cfg.XPaddingPlacement = *extra.XPaddingPlacement
+	}
+	if extra.XPaddingMethod != nil {
+		cfg.XPaddingMethod = *extra.XPaddingMethod
+	}
+	if extra.UplinkHTTPMethod != nil {
+		cfg.UplinkHTTPMethod = *extra.UplinkHTTPMethod
+	}
+	if extra.SessionIDPlacement != nil {
+		cfg.SessionIDPlacement = *extra.SessionIDPlacement
+	}
+	if extra.SessionIDKey != nil {
+		cfg.SessionIDKey = *extra.SessionIDKey
+	}
+	if extra.SeqPlacement != nil {
+		cfg.SeqPlacement = *extra.SeqPlacement
+	}
+	if extra.SeqKey != nil {
+		cfg.SeqKey = *extra.SeqKey
+	}
+	if extra.UplinkDataPlacement != nil {
+		cfg.UplinkDataPlacement = *extra.UplinkDataPlacement
+	}
+	if extra.UplinkDataKey != nil {
+		cfg.UplinkDataKey = *extra.UplinkDataKey
+	}
+	if extra.Xmux != nil {
+		if cfg.Xmux == nil {
+			cfg.Xmux = &splithttp.XmuxConfig{}
+		}
+		if r := parseExtraRange(extra.Xmux.MaxConcurrency); r != nil {
+			cfg.Xmux.MaxConcurrency = r
+		}
+		if r := parseExtraRange(extra.Xmux.MaxConnections); r != nil {
+			cfg.Xmux.MaxConnections = r
+		}
+		if r := parseExtraRange(extra.Xmux.CMaxReuseTimes); r != nil {
+			cfg.Xmux.CMaxReuseTimes = r
+		}
+		if r := parseExtraRange(extra.Xmux.HMaxRequestTimes); r != nil {
+			cfg.Xmux.HMaxRequestTimes = r
+		}
+		if r := parseExtraRange(extra.Xmux.HMaxReusableSecs); r != nil {
+			cfg.Xmux.HMaxReusableSecs = r
+		}
+		if extra.Xmux.HKeepAlivePeriod != nil {
+			cfg.Xmux.HKeepAlivePeriod = *extra.Xmux.HKeepAlivePeriod
+		}
+	}
 }
 
 // ParseNodeURL парсит URI узла (VLESS/VMess/Trojan/Shadowsocks/Hysteria2) в конфиг Xray и настройки транспорта.
@@ -529,6 +762,7 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 					HMaxReusableSecs: &splithttp.RangeConfig{From: 1800, To: 3000},
 				},
 			}
+			applySplitHTTPExtra(config, q.Get("extra"))
 			streamSettings.ProtocolSettings = config
 		default:
 			return nil, nil, net.Destination{}, fmt.Errorf("unsupported network type: %s", netType)
@@ -563,9 +797,7 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 			streamSettings.SecuritySettings = &tls.Config{
 				ServerName:   sni,
 				NextProtocol: nextProtocol,
-			}
-			if fp := q.Get("fp"); fp != "" {
-				streamSettings.SecuritySettings.(*tls.Config).Fingerprint = fp
+				Fingerprint:  defaultFingerprint(q.Get("fp")),
 			}
 		}
 
@@ -689,7 +921,7 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 				"Host": host,
 			},
 		}
-	case "xhttp":
+	case "xhttp", "splithttp":
 		streamSettings.ProtocolName = "splithttp"
 		host := q.Get("host")
 		if host == "" {
@@ -709,23 +941,11 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 				HMaxReusableSecs: &splithttp.RangeConfig{From: 1800, To: 3000},
 			},
 		}
-		parseRange := func(s string) *splithttp.RangeConfig {
-			if s == "" {
-				return nil
-			}
-			parts := strings.Split(s, "-")
-			if len(parts) == 1 {
-				v, _ := strconv.Atoi(parts[0])
-				return &splithttp.RangeConfig{From: int32(v), To: int32(v)}
-			}
-			from, _ := strconv.Atoi(parts[0])
-			to, _ := strconv.Atoi(parts[1])
-			return &splithttp.RangeConfig{From: int32(from), To: int32(to)}
-		}
-		config.XPaddingBytes = parseRange(q.Get("x_padding_bytes"))
+		config.XPaddingBytes = parseSplitHTTPRangeString(q.Get("x_padding_bytes"))
 		if config.XPaddingBytes == nil {
-			config.XPaddingBytes = parseRange(q.Get("xPaddingBytes"))
+			config.XPaddingBytes = parseSplitHTTPRangeString(q.Get("xPaddingBytes"))
 		}
+		applySplitHTTPExtra(config, q.Get("extra"))
 		streamSettings.ProtocolSettings = config
 	case "httpupgrade":
 		streamSettings.ProtocolName = "httpupgrade"
@@ -778,9 +998,7 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 		streamSettings.SecuritySettings = &tls.Config{
 			ServerName:   sni,
 			NextProtocol: nextProtocol,
-		}
-		if fp := q.Get("fp"); fp != "" {
-			streamSettings.SecuritySettings.(*tls.Config).Fingerprint = fp
+			Fingerprint:  defaultFingerprint(q.Get("fp")),
 		}
 	case "reality":
 		streamSettings.SecurityType = "reality"
@@ -815,15 +1033,23 @@ func ParseNodeURL(rawURL string) (any, *internet.MemoryStreamConfig, net.Destina
 			ShortIds:    [][]byte{shortId},
 			ShortId:     shortId,
 			PublicKey:   pbkBytes,
-			Fingerprint: q.Get("fp"),
+			Fingerprint: defaultFingerprint(q.Get("fp")),
 			SpiderX:     q.Get("spx"),
 			SpiderY:     []int64{100, 1000, 1, 3, 2, 4, 10, 50, 10, 50},
 		}
 	}
 
+	enc, xorMode, seconds, padding, encErr := parseVlessEncryption(q.Get("encryption"))
+	if encErr != nil {
+		return nil, nil, net.Destination{}, encErr
+	}
+
 	account := &vless.Account{
 		Id:         uuid,
-		Encryption: q.Get("encryption"),
+		Encryption: enc,
+		XorMode:    xorMode,
+		Seconds:    seconds,
+		Padding:    padding,
 		Flow:       q.Get("flow"),
 	}
 

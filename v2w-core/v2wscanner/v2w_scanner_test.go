@@ -3,9 +3,11 @@ package v2wscanner
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,7 +18,10 @@ import (
 	xnet "github.com/kiktor/v2w-core/common/net"
 	"github.com/kiktor/v2w-core/transport"
 	"github.com/kiktor/v2w-core/transport/internet"
+	"github.com/kiktor/v2w-core/transport/internet/reality"
+	"github.com/kiktor/v2w-core/transport/internet/splithttp"
 	"github.com/kiktor/v2w-core/transport/internet/stat"
+	"github.com/kiktor/v2w-core/transport/internet/tls"
 )
 
 func TestDefaultScanOptionsAndPriority(t *testing.T) {
@@ -261,5 +266,93 @@ func TestShouldRetryWithFragmentSkipsHTTPStatusErrors(t *testing.T) {
 	}
 	if shouldRetryWithFragment(fmt.Errorf("timeout"), udpCand) {
 		t.Fatal("expected UDP candidate not to trigger TCP/TLS fragmentation retry")
+	}
+}
+
+func TestParseNodeURLVlessPQEncryption(t *testing.T) {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	b64Key := base64.RawURLEncoding.EncodeToString(key)
+	link := fmt.Sprintf("vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?encryption=mlkem768x25519plus.native.0rtt.%s&security=reality&pbk=%s&sni=example.com#PQ", b64Key, b64Key)
+
+	cfg, stream, _, err := ParseNodeURL(link)
+	if err != nil {
+		t.Fatalf("ParseNodeURL failed for PQ encryption: %v", err)
+	}
+	handler, err := BuildProxyHandler(cfg, stream)
+	if err != nil || handler == nil {
+		t.Fatalf("BuildProxyHandler failed for PQ encryption: %v", err)
+	}
+}
+
+func TestParseVmessURLWithFragmentAndDefaultChromeFP(t *testing.T) {
+	rawJSON := `{"v":"2","ps":"","add":"1.2.3.4","port":"443","id":"11111111-1111-1111-1111-111111111111","aid":"0","net":"ws","type":"none","host":"cdn.example.com","path":"/ws","tls":"tls","sni":"cdn.example.com"}`
+	encoded := base64.StdEncoding.EncodeToString([]byte(rawJSON))
+	link := "vmess://" + encoded + "#%D0%A1%D0%A8%D0%90"
+
+	_, stream, _, err := ParseNodeURL(link)
+	if err != nil {
+		t.Fatalf("ParseNodeURL failed for vmess with fragment: %v", err)
+	}
+	tlsCfg, ok := stream.SecuritySettings.(*tls.Config)
+	if !ok {
+		t.Fatalf("expected *tls.Config, got %T", stream.SecuritySettings)
+	}
+	if tlsCfg.Fingerprint != "chrome" {
+		t.Fatalf("expected default chrome fingerprint for vmess tls, got %q", tlsCfg.Fingerprint)
+	}
+}
+
+func TestParseNodeURLDefaultChromeFingerprint(t *testing.T) {
+	key := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	cases := []struct {
+		name string
+		link string
+	}{
+		{"vless-tls", "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=tls&sni=example.com#VlessTLS"},
+		{"vless-reality", "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=reality&pbk=" + key + "&sni=example.com#VlessReality"},
+		{"trojan-tls", "trojan://secret@1.2.3.4:443?security=tls&sni=example.com#TrojanTLS"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, stream, _, err := ParseNodeURL(tc.link)
+			if err != nil {
+				t.Fatalf("ParseNodeURL failed: %v", err)
+			}
+			switch sec := stream.SecuritySettings.(type) {
+			case *tls.Config:
+				if sec.Fingerprint != "chrome" {
+					t.Fatalf("expected default chrome fingerprint, got %q", sec.Fingerprint)
+				}
+			case *reality.Config:
+				if sec.Fingerprint != "chrome" {
+					t.Fatalf("expected default chrome fingerprint, got %q", sec.Fingerprint)
+				}
+			default:
+				t.Fatalf("unexpected SecuritySettings type %T", stream.SecuritySettings)
+			}
+		})
+	}
+}
+
+func TestParseNodeURLXHTTPExtra(t *testing.T) {
+	extra := url.QueryEscape(`{"noSSEHeader":true,"xmux":{"maxConnections":1}}`)
+	link := "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=tls&sni=example.com&type=xhttp&path=%2F&mode=auto&extra=" + extra + "#XHTTP"
+
+	_, stream, _, err := ParseNodeURL(link)
+	if err != nil {
+		t.Fatalf("ParseNodeURL failed for xhttp extra: %v", err)
+	}
+	shCfg, ok := stream.ProtocolSettings.(*splithttp.Config)
+	if !ok {
+		t.Fatalf("expected *splithttp.Config, got %T", stream.ProtocolSettings)
+	}
+	if !shCfg.NoSSEHeader {
+		t.Fatal("expected NoSSEHeader=true from extra JSON")
+	}
+	if shCfg.Xmux == nil || shCfg.Xmux.MaxConnections == nil || shCfg.Xmux.MaxConnections.From != 1 || shCfg.Xmux.MaxConnections.To != 1 {
+		t.Fatalf("expected Xmux.MaxConnections=1..1, got %+v", shCfg.Xmux)
 	}
 }
