@@ -31,8 +31,8 @@ object DesktopGeoAssetsUpdater {
     private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
 
     private val GEO_FILES = listOf(
-        "geosite.dat" to "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
-        "geoip.dat" to "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
+        "geosite.dat" to "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat",
+        "geoip.dat" to "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat"
     )
 
     fun isUpdateDue(intervalDays: Int, lastUpdatedMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
