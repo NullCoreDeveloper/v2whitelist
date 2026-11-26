@@ -390,7 +390,7 @@ class DesktopAppTest {
             autoCheckNetworkOnStart = false
         )
 
-        assertEquals(50, state.tcpPrecheckConcurrency.value)
+        assertEquals(100, state.tcpPrecheckConcurrency.value)
         assertEquals(35, state.v2wCoreSockets.value)
         assertEquals(true, state.v2wFullVerifyMode.value)
 

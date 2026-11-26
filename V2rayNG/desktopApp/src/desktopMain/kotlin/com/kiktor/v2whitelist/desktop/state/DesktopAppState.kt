@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.desktop.state
 
 import com.kiktor.v2whitelist.core.domain.network.NetworkStatusChecker
 import com.kiktor.v2whitelist.core.domain.ping.NodePingTester
+import com.kiktor.v2whitelist.core.domain.security.BackupSecurityPolicy
 import com.kiktor.v2whitelist.core.domain.selector.LocationFilterMode
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerFilterConfig
 import com.kiktor.v2whitelist.core.domain.selector.SmartServerSelector
@@ -26,6 +27,7 @@ import com.kiktor.v2whitelist.core.subscription.tag.ServerTagResolver
 import com.kiktor.v2whitelist.desktop.data.DesktopBackupPayload
 import com.kiktor.v2whitelist.desktop.data.DesktopFileServerRepository
 import com.kiktor.v2whitelist.desktop.data.DesktopFileSettingsRepository
+import com.kiktor.v2whitelist.desktop.data.DesktopInspectionStore
 import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import com.kiktor.v2whitelist.desktop.data.ServerRecord
 import com.kiktor.v2whitelist.desktop.data.ServersStorage
@@ -34,8 +36,12 @@ import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
 import com.kiktor.v2whitelist.desktop.engine.AppSplitTunnelingConfig
 import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
+import com.kiktor.v2whitelist.desktop.engine.DesktopFullScanManager
+import com.kiktor.v2whitelist.desktop.engine.DesktopFullScanMode
+import com.kiktor.v2whitelist.desktop.engine.DesktopFullScanUiState
 import com.kiktor.v2whitelist.desktop.engine.DesktopProfileVerifier
 import com.kiktor.v2whitelist.desktop.engine.DesktopProxyManager
+import com.kiktor.v2whitelist.desktop.engine.DesktopServerListUiState
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
 import com.kiktor.v2whitelist.desktop.engine.TunStartFailureReason
@@ -66,6 +72,7 @@ import java.util.UUID
 
 enum class DesktopTab {
     MAIN,
+    SERVERS,
     SUBSCRIPTIONS,
     GEEK_MODE,
     APPEARANCE,
@@ -123,9 +130,6 @@ class DesktopAppState(
 
     private val _pingMap = MutableStateFlow<Map<String, Long>>(emptyMap())
     val pingMap: StateFlow<Map<String, Long>> = _pingMap.asStateFlow()
-
-    private val _isPinging = MutableStateFlow(false)
-    val isPinging: StateFlow<Boolean> = _isPinging.asStateFlow()
 
     private val _isUpdatingSub = MutableStateFlow(false)
     val isUpdatingSub: StateFlow<Boolean> = _isUpdatingSub.asStateFlow()
@@ -378,7 +382,7 @@ class DesktopAppState(
     val smartDistributionPreset = MutableStateFlow(settingsRepo.getString("pref_smart_distribution", "EQUAL"))
     val useV2WCore = MutableStateFlow(settingsRepo.getBoolean("pref_use_v2w_core", true))
     val useFallbackScanner = MutableStateFlow(settingsRepo.getBoolean("pref_use_fallback_scanner", true))
-    val tcpPrecheckConcurrency = MutableStateFlow(settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200))
+    val tcpPrecheckConcurrency = MutableStateFlow(settingsRepo.getInt("pref_tcp_precheck_concurrency", 100).coerceIn(1, 200))
     val v2wCoreSockets = MutableStateFlow(settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100))
     val v2wFullVerifyMode = MutableStateFlow(settingsRepo.getBoolean("pref_v2w_full_verify_mode", true))
 
@@ -477,6 +481,49 @@ class DesktopAppState(
         networkStatusProvider = { networkStatus.value },
         scope = scope
     )
+
+    val inspectionStore = DesktopInspectionStore(
+        loadImmediately = autoCheckNetworkOnStart
+    )
+
+    val isSmartConnectActiveFlow: StateFlow<Boolean> = combine(
+        _isV2WScanning,
+        _smartConnectStatus
+    ) { v2wScanning, statusText ->
+        v2wScanning || statusText != null
+    }.stateIn(internalStateScope, SharingStarted.Eagerly, false)
+
+    val fullScanManager = DesktopFullScanManager(
+        serverRepo = serverRepo,
+        settingsRepo = settingsRepo,
+        inspectionStore = inspectionStore,
+        subscriptionsFlow = subscriptions,
+        vipCandidateServersProvider = { scenarioFilteredServers.value },
+        networkStatusProvider = { networkStatus.value },
+        networkCheckEnabledProvider = { networkCheckEnabled.value },
+        useCustomEndpointProvider = { useCustomEndpoint.value },
+        customEndpointUrlProvider = { customEndpointUrl.value },
+        personalIgnoreExitNodeProvider = { personalIgnoreExitNode.value },
+        v2wScanPathProvider = { v2wScanPath.value.takeIf { it.isNotBlank() && java.io.File(it).exists() } },
+        xrayBinaryPathProvider = { xrayBinaryPath.value.takeIf { it.isNotBlank() && java.io.File(it).exists() } },
+        verifyConcurrencyProvider = { v2wCoreSockets.value },
+        tcpConcurrencyProvider = { tcpPrecheckConcurrency.value },
+        destUrlProvider = { V2WCoreScanner.resolveGenerate204DestUrl(connectionCheckServiceUrl.value) },
+        servicesProvider = { servicesList.value },
+        vipCacheLimitProvider = { vipCacheLimit.value },
+        isSmartConnectRunningProvider = { isSmartConnectActiveFlow.value },
+        isSmartConnectRunningFlow = isSmartConnectActiveFlow,
+        selectedGuidFlow = selectedGuid,
+        coreStateFlow = coreState,
+        activeSocksPortProvider = {
+            if (coreState.value == DesktopCoreState.RUNNING) socksPort.value else null
+        },
+        scope = scope
+    )
+
+    val fullScanState: StateFlow<DesktopFullScanUiState> = fullScanManager.scanState
+    val serverListUiState: StateFlow<DesktopServerListUiState> = fullScanManager.uiState
+    val scanCheckServicesEnabled: StateFlow<Boolean> = fullScanManager.scanCheckServicesEnabled
 
     init {
         com.kiktor.v2whitelist.desktop.util.DesktopLogExporter.initFileLogging(
@@ -1564,9 +1611,10 @@ class DesktopAppState(
 
                 if (pendingBatches.isNotEmpty()) {
                     val removed = serverRepo.replaceSubscriptionsBatch(pendingBatches, deduplicate = true)
+                    inspectionStore.setLastRemovedDuplicates(removed)
+                    inspectionStore.flushToDisk()
                     GeekModeLogger.log("Subscriptions", "Пакетное сохранение (${pendingBatches.size} подписок) завершено, устранено дубликатов: $removed")
                     _selectedGuid.value = serverRepo.getSelectedServerGuid()
-                    pingAllServers()
                 }
             } catch (e: Exception) {
                 GeekModeLogger.log("Subscriptions", "Критический сбой обновления: ${e.message}")
@@ -1781,6 +1829,10 @@ class DesktopAppState(
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
             stopCore()
         } else {
+            if (fullScanState.value.isScanning) {
+                GeekModeLogger.log("DesktopApp", "Невозможно подключиться: выполняется полное сканирование серверов.")
+                return
+            }
             if (isManualSelection.value && !_selectedGuid.value.isNullOrBlank()) {
                 if (!ensureLinuxSudoForTun(PendingSudoAction.CONNECT_CURRENT)) return
                 xrayRunner.markStarting()
@@ -1798,6 +1850,10 @@ class DesktopAppState(
     private var smartConnectJob: Job? = null
 
     fun startSmartConnect() {
+        if (fullScanState.value.isScanning) {
+            GeekModeLogger.log("SmartConnect", "Невозможно запустить автопоиск: идёт полное сканирование серверов.")
+            return
+        }
         if (!ensureLinuxSudoForTun(PendingSudoAction.START_SMART_CONNECT)) return
         smartConnectJob?.cancel()
         smartConnectManager.stop()
@@ -2107,6 +2163,7 @@ class DesktopAppState(
     }
 
     fun shutdownOnExit() {
+        fullScanManager.stopFullScan()
         stopCore()
         if (DesktopTunManager.isWindows && stopServiceOnExit.value) {
             DesktopTunManager.stopWindowsService()
@@ -2599,91 +2656,79 @@ class DesktopAppState(
         }
     }
 
+    fun startOrStopFullScan(): Boolean {
+        if (fullScanState.value.isScanning) {
+            fullScanManager.stopFullScan()
+            return true
+        }
+        return fullScanManager.startFullScan()
+    }
+
+    fun stopFullScan() {
+        fullScanManager.stopFullScan()
+    }
+
+    fun setScanCheckServicesEnabled(enabled: Boolean) {
+        fullScanManager.setScanCheckServicesEnabled(enabled)
+    }
+
+    fun toggleServerVip(guid: String) {
+        val current = serverRepo.getVipServerGuids()
+        if (guid in current) {
+            serverRepo.removeVipServer(guid)
+        } else {
+            serverRepo.addVipServer(guid, vipCacheLimit.value)
+        }
+    }
+
+    fun reinspectServer(guid: String) {
+        fullScanManager.reinspectServer(guid)
+    }
+
+    fun runServerSpeedTest(guid: String) {
+        fullScanManager.runSpeedTest(guid)
+    }
+
+    fun connectToServerDirectly(guid: String) {
+        fullScanManager.stopFullScan()
+        selectAndConnectServer(guid)
+    }
+
     fun pingVipServers() {
-        val vips = serverRepo.getVipServerGuids()
-        if (vips.isEmpty()) {
-            GeekModeLogger.log("GeekMode", "VIP кэш пуст")
+        val scan = fullScanState.value
+        if (scan.isScanning && scan.mode == DesktopFullScanMode.VIP_PING) {
+            fullScanManager.stopFullScan()
             return
         }
-        scope.launch {
-            isPingingVip.value = true
-            GeekModeLogger.log("GeekMode", "HTTP 204 верификация ${vips.size} VIP узлов через Xray...")
-            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
-            for (guid in vips) {
-                val profile = serverRepo.getServerConfig(guid) ?: continue
-                val res = DesktopProfileVerifier.verifyProfile(
-                    profile = profile,
-                    xrayBinaryPath = xrayPath,
-                    timeoutMs = 3500L,
-                    speedCheckEnabled = false,
-                    customEndpointUrl = resolveActiveCustomEndpointUrl(profile),
-                    serviceCheckEnabled = serviceCheckEnabled.value,
-                    servicesToCheck = servicesList.value
-                )
-                val latency = if (res.success && res.latencyMs > 0) res.latencyMs else -1L
-                _pingMap.value = _pingMap.value + (guid to latency)
-                GeekModeLogger.log("GeekMode", "VIP 204: ${profile.remarks} -> ${if (latency > 0) "${latency}ms" else "Сбой"}")
+        if (fullScanManager.pingVipNative()) {
+            scope.launch {
+                isPingingVip.value = true
+                fullScanState.collect { st ->
+                    if (!st.isScanning || st.mode != DesktopFullScanMode.VIP_PING) {
+                        isPingingVip.value = false
+                        return@collect
+                    }
+                }
             }
-            isPingingVip.value = false
         }
     }
 
     fun findMoreVipServers() {
-        val all = servers.value
-        if (all.isEmpty()) return
-        scope.launch {
-            isFindingVip.value = true
-            val limit = vipCacheLimit.value
-            GeekModeLogger.log("GeekMode", "Поиск новых VIP узлов (v2w-core + Xray HTTP 204 + скорость, лимит $limit)...")
-            val v2wPath = settingsRepo.getString("v2w_scan_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
-            val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
-
-            val customEpUrl = if (useCustomEndpoint.value) customEndpointUrl.value.ifBlank { null } else null
-            val fullVerify = v2wFullVerifyMode.value
-            V2WCoreScanner.runStreamingScan(
-                servers = all,
-                customBinaryPath = v2wPath,
-                firstOnly = false,
-                concurrency = v2wCoreSockets.value,
-                tcpConcurrency = tcpPrecheckConcurrency.value,
-                fullVerifyMode = fullVerify,
-                destUrl = V2WCoreScanner.resolveGenerate204DestUrl(connectionCheckServiceUrl.value),
-                endpointUrl = customEpUrl,
-                endpointE2e = endpointE2eCheckEnabled.value,
-                serviceCheck = serviceCheckEnabled.value,
-                services = servicesList.value,
-                onNodeHit = { guid: String, profile: ProfileItem, delayMs: Long, checkedByV2W: Boolean ->
-                    if (delayMs in 1..1500) {
-                        // Верификация через Xray ядро (или только скорость, если v2w-core уже проверил профиль)
-                        val verifyRes = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                            DesktopProfileVerifier.verifyProfile(
-                                profile = profile,
-                                xrayBinaryPath = xrayPath,
-                                timeoutMs = speedTestTimeoutMs.value.toLong(),
-                                speedCheckEnabled = speedTestOnCheck.value,
-                                minSpeedMbps = minSpeedThresholdMbps.value,
-                                bytesToDownload = speedTestDownloadBytes.value.toLong(),
-                                customEndpointUrl = customEpUrl,
-                                endpointE2eCheckEnabled = endpointE2eCheckEnabled.value,
-                                serviceCheckEnabled = serviceCheckEnabled.value,
-                                servicesToCheck = servicesList.value,
-                                speedOnlyMode = checkedByV2W && fullVerify,
-                                preMeasuredLatencyMs = delayMs
-                            )
-                        }
-                        if (verifyRes.success) {
-                            serverRepo.addVipServer(guid, limit)
-                            val lat = if (verifyRes.latencyMs > 0) verifyRes.latencyMs else delayMs
-                            _pingMap.value = _pingMap.value + (guid to lat)
-                            GeekModeLogger.log("GeekMode", "Узел принят в VIP: ${profile.remarks} (${lat}ms, скорость: ${verifyRes.speedMbps ?: "—"} Мбит/с)")
-                        } else {
-                            GeekModeLogger.log("GeekMode", "Узел ${profile.remarks} отклонен: ${verifyRes.errorMessage}")
-                        }
+        val scan = fullScanState.value
+        if (scan.isScanning && scan.mode == DesktopFullScanMode.VIP_FIND) {
+            fullScanManager.stopFullScan()
+            return
+        }
+        if (fullScanManager.findVipNative()) {
+            scope.launch {
+                isFindingVip.value = true
+                fullScanState.collect { st ->
+                    if (!st.isScanning || st.mode != DesktopFullScanMode.VIP_FIND) {
+                        isFindingVip.value = false
+                        return@collect
                     }
-                    serverRepo.getVipServerGuids().size >= limit
                 }
-            )
-            isFindingVip.value = false
+            }
         }
     }
 
@@ -2780,37 +2825,8 @@ class DesktopAppState(
         }
     }
 
-    fun pingAllServers() {
-        if (_isPinging.value) return
-        val currentServers = servers.value
-        if (currentServers.isEmpty()) return
-
-        scope.launch {
-            _isPinging.value = true
-            try {
-                val vips = serverRepo.getVipServerGuids().toSet()
-                val results = NodePingTester.testBatchTcp(currentServers)
-                val newMap = _pingMap.value.toMutableMap()
-                for ((g, _, delay) in results) {
-                    // Не затираем реальный e2e замер VIP-узлов сырым TCP рукопожатием к Anycast/прокси
-                    if (!vips.contains(g) || !newMap.containsKey(g) || (newMap[g] ?: -1L) <= 0) {
-                        newMap[g] = delay
-                    }
-                }
-                for ((g, _) in currentServers) {
-                    if (!newMap.containsKey(g)) {
-                        newMap[g] = -1L
-                    }
-                }
-                _pingMap.value = newMap
-            } finally {
-                _isPinging.value = false
-            }
-        }
-    }
-
     fun runSmartConnect(minSpeedMbps: Double = 1.0) {
-        if (_isV2WScanning.value) return
+        if (_isV2WScanning.value || fullScanState.value.isScanning) return
         if (!ensureLinuxSudoForTun(PendingSudoAction.START_SMART_CONNECT)) return
         scope.launch {
             _isV2WScanning.value = true
@@ -2925,6 +2941,7 @@ class DesktopAppState(
         customEndpointUrl.value = customEndpointConfig
         customEndpointSubUrl.value = customEndpointSub
         endpointE2eCheckEnabled.value = endpointE2eCheck
+        fullScanManager.notifyConfigChanged()
         bypassRussianServices.value = bypassRu
         connectionCheckServiceUrl.value = checkUrl
         tunSelfTestUrl.value = tunSelfTestUrlVal
@@ -3196,7 +3213,7 @@ class DesktopAppState(
         smartDistributionPreset.value = "EQUAL"
         useV2WCore.value = true
         useFallbackScanner.value = true
-        tcpPrecheckConcurrency.value = 50
+        tcpPrecheckConcurrency.value = 100
         v2wCoreSockets.value = 35
         v2wFullVerifyMode.value = true
 
@@ -3514,10 +3531,13 @@ class DesktopAppState(
                 vipGuids = serverRepo.getVipServerGuids().toList()
             )
         }
+        val sanitizedSettings = settingsSnap.copy(
+            stringMap = BackupSecurityPolicy.sanitizeDesktopStringSettings(settingsSnap.stringMap)
+        )
         val payload = DesktopBackupPayload(
             version = 1,
             exportedAtMs = System.currentTimeMillis(),
-            settings = settingsSnap,
+            settings = sanitizedSettings,
             servers = serversSnap
         )
         val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true; encodeDefaults = true }
@@ -3533,8 +3553,52 @@ class DesktopAppState(
         GeekModeLogger.log("Backup", "Ошибка экспорта бэкапа: ${err.message}")
     }
 
+    fun inspectBackupSecurityChanges(rawJson: String): BackupSecurityPolicy.BackupSecurityDiff? {
+        if (rawJson.length > BackupSecurityPolicy.MAX_BACKUP_BYTES || !BackupSecurityPolicy.checkJsonDepth(rawJson)) {
+            return null
+        }
+        val payload = runCatching { jsonHelper.decodeFromString<DesktopBackupPayload>(rawJson) }.getOrNull() ?: return null
+        val currentSnap = if (settingsRepo is DesktopFileSettingsRepository) settingsRepo.exportSnapshot() else SettingsStorage()
+        return BackupSecurityPolicy.detectDesktopSecurityChanges(
+            currentStrings = currentSnap.stringMap,
+            currentBools = currentSnap.boolMap,
+            incomingStrings = payload.settings.stringMap,
+            incomingBools = payload.settings.boolMap
+        )
+    }
+
     fun importBackupJson(rawJson: String): Result<Int> = runCatching {
-        val payload = jsonHelper.decodeFromString<DesktopBackupPayload>(rawJson)
+        require(rawJson.length <= BackupSecurityPolicy.MAX_BACKUP_BYTES) {
+            "Файл резервной копии превышает допустимый размер"
+        }
+        require(BackupSecurityPolicy.checkJsonDepth(rawJson)) {
+            "Некорректная или слишком глубокая структура JSON"
+        }
+        val decoded = jsonHelper.decodeFromString<DesktopBackupPayload>(rawJson)
+        require(decoded.servers.servers.size <= BackupSecurityPolicy.MAX_SERVERS) {
+            "Превышено максимальное число серверов в резервной копии"
+        }
+
+        val currentSnap = if (settingsRepo is DesktopFileSettingsRepository) settingsRepo.exportSnapshot() else SettingsStorage()
+        val preservedLocalPaths = currentSnap.stringMap.filterKeys { key ->
+            key.trim().lowercase() in BackupSecurityPolicy.FORBIDDEN_DESKTOP_SETTING_KEYS
+        }
+        val sanitizedStringMap = BackupSecurityPolicy.sanitizeDesktopStringSettings(decoded.settings.stringMap) + preservedLocalPaths
+        val sanitizedSettings = decoded.settings.copy(
+            socksPort = BackupSecurityPolicy.validatePort(decoded.settings.socksPort, 10808),
+            httpPort = BackupSecurityPolicy.validatePort(decoded.settings.httpPort, 10809),
+            stringMap = sanitizedStringMap
+        )
+        val securityDiff = BackupSecurityPolicy.detectDesktopSecurityChanges(
+            currentStrings = currentSnap.stringMap,
+            currentBools = currentSnap.boolMap,
+            incomingStrings = sanitizedSettings.stringMap,
+            incomingBools = sanitizedSettings.boolMap
+        )
+        if (securityDiff.hasChanges) {
+            GeekModeLogger.log("Backup", "Бэкап изменил параметры безопасности: ${securityDiff.warnings.joinToString("; ")}")
+        }
+        val payload = decoded.copy(settings = sanitizedSettings)
         if (settingsRepo is DesktopFileSettingsRepository) {
             settingsRepo.importSnapshot(payload.settings)
         } else {
@@ -3570,7 +3634,13 @@ class DesktopAppState(
     }
 
     fun importBackupFromFile(file: java.io.File): Result<Int> {
-        return runCatching { file.readText(Charsets.UTF_8) }.fold(
+        return runCatching {
+            require(file.exists() && file.isFile) { "Файл резервной копии не найден" }
+            require(file.length() <= BackupSecurityPolicy.MAX_BACKUP_BYTES) {
+                "Файл резервной копии превышает ${BackupSecurityPolicy.MAX_BACKUP_BYTES / (1024 * 1024)} МБ"
+            }
+            file.readText(Charsets.UTF_8)
+        }.fold(
             onSuccess = { importBackupJson(it) },
             onFailure = { Result.failure(it) }
         )
@@ -3653,7 +3723,7 @@ class DesktopAppState(
         smartDistributionPreset.value = settingsRepo.getString("pref_smart_distribution", "EQUAL")
         useV2WCore.value = settingsRepo.getBoolean("pref_use_v2w_core", true)
         useFallbackScanner.value = settingsRepo.getBoolean("pref_use_fallback_scanner", true)
-        tcpPrecheckConcurrency.value = settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200)
+        tcpPrecheckConcurrency.value = settingsRepo.getInt("pref_tcp_precheck_concurrency", 100).coerceIn(1, 200)
         v2wCoreSockets.value = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
         v2wFullVerifyMode.value = settingsRepo.getBoolean("pref_v2w_full_verify_mode", true)
 

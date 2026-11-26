@@ -14,6 +14,8 @@ import java.util.zip.ZipOutputStream
 
 object ZipUtil {
     private const val BUFFER_SIZE = 4096
+    const val MAX_UNZIP_ENTRIES = 256
+    const val MAX_UNZIP_TOTAL_BYTES = 32L * 1024 * 1024
 
     /**
      * Zip the contents of a folder.
@@ -79,21 +81,39 @@ object ZipUtil {
      */
     @Throws(IOException::class)
     fun unzipToFolder(zipFile: File, destDirectory: String): Boolean {
-        File(destDirectory).run {
-            if (!exists()) {
-                mkdirs()
-            }
+        val destDir = File(destDirectory)
+        if (!destDir.exists()) {
+            destDir.mkdirs()
         }
+        val canonicalDest = destDir.canonicalFile
+        val canonicalDestPrefix = canonicalDest.path + File.separator
+        var entryCount = 0
+        var totalBytes = 0L
+
         try {
             ZipFile(zipFile).use { zip ->
-                zip.entries().asSequence().forEach { entry ->
-                    zip.getInputStream(entry).use { input ->
-                        val filePath = destDirectory + File.separator + entry.name
-                        if (!entry.isDirectory) {
-                            extractFile(input, filePath)
-                        } else {
-                            val dir = File(filePath)
-                            dir.mkdir()
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (++entryCount > MAX_UNZIP_ENTRIES) {
+                        throw SecurityException("Too many entries in archive (limit=$MAX_UNZIP_ENTRIES)")
+                    }
+                    val outFile = File(canonicalDest, entry.name).canonicalFile
+                    if (outFile != canonicalDest && !outFile.path.startsWith(canonicalDestPrefix)) {
+                        throw SecurityException("Blocked path traversal zip entry: ${entry.name}")
+                    }
+                    if (entry.isDirectory) {
+                        if (!outFile.exists() && !outFile.mkdirs()) {
+                            throw IOException("Failed to create directory: ${outFile.name}")
+                        }
+                    } else {
+                        outFile.parentFile?.let { parent ->
+                            if (!parent.exists() && !parent.mkdirs()) {
+                                throw IOException("Failed to create parent directory: ${parent.name}")
+                            }
+                        }
+                        zip.getInputStream(entry).use { input ->
+                            totalBytes = extractFileWithLimit(input, outFile, totalBytes)
                         }
                     }
                 }
@@ -106,20 +126,23 @@ object ZipUtil {
     }
 
     /**
-     * Extract a file from an input stream.
-     *
-     * @param inputStream The input stream to read from.
-     * @param destFilePath The destination file path.
-     * @throws IOException If an I/O error occurs.
+     * Extract a file from an input stream with cumulative uncompressed size limit.
      */
     @Throws(IOException::class)
-    private fun extractFile(inputStream: InputStream, destFilePath: String) {
-        val bos = BufferedOutputStream(FileOutputStream(destFilePath))
-        val bytesIn = ByteArray(BUFFER_SIZE)
-        var read: Int
-        while (inputStream.read(bytesIn).also { read = it } != -1) {
-            bos.write(bytesIn, 0, read)
+    private fun extractFileWithLimit(inputStream: InputStream, destFile: File, currentTotalBytes: Long): Long {
+        var total = currentTotalBytes
+        BufferedOutputStream(FileOutputStream(destFile)).use { bos ->
+            val bytesIn = ByteArray(BUFFER_SIZE)
+            var read: Int
+            while (inputStream.read(bytesIn).also { read = it } != -1) {
+                total += read
+                if (total > MAX_UNZIP_TOTAL_BYTES) {
+                    runCatching { destFile.delete() }
+                    throw SecurityException("Archive exceeds maximum uncompressed size ($MAX_UNZIP_TOTAL_BYTES bytes)")
+                }
+                bos.write(bytesIn, 0, read)
+            }
         }
-        bos.close()
+        return total
     }
 }

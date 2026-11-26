@@ -6,6 +6,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.core.domain.security.BackupSecurityPolicy
 import com.kiktor.v2whitelist.core.subscription.model.CustomSubData
 import com.kiktor.v2whitelist.dto.BackupData
 import com.kiktor.v2whitelist.dto.ProfileItem
@@ -101,7 +102,17 @@ object BackupManager {
         return try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 tempFile.outputStream().use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > BackupSecurityPolicy.MAX_BACKUP_BYTES) {
+                            throw SecurityException("Backup file exceeds maximum allowed size")
+                        }
+                        output.write(buffer, 0, read)
+                    }
                 }
             } ?: return false
 
@@ -120,19 +131,22 @@ object BackupManager {
      * Restores backup from a file (can be a JSON backup or a ZIP archive).
      */
     fun restoreFromFile(context: Context, file: File): Boolean {
-        if (!file.exists() || file.length() == 0L) return false
+        if (!file.exists() || file.length() == 0L || file.length() > BackupSecurityPolicy.MAX_BACKUP_BYTES) return false
 
         return if (isZipFile(file)) {
             restoreFromZipFile(context, file)
         } else {
             try {
-                InputStreamReader(FileInputStream(file), StandardCharsets.UTF_8).use { reader ->
-                    val backupData = gson.fromJson(reader, BackupData::class.java)
-                    if (backupData != null) {
-                        restoreFromJson(context, backupData)
-                    } else {
-                        false
-                    }
+                val rawText = file.readText(StandardCharsets.UTF_8)
+                if (!BackupSecurityPolicy.checkJsonDepth(rawText)) {
+                    Log.w(AppConfig.TAG, "Rejected JSON backup due to excessive nesting or malformed structure")
+                    return false
+                }
+                val backupData = gson.fromJson(rawText, BackupData::class.java)
+                if (backupData != null) {
+                    restoreFromJson(context, backupData)
+                } else {
+                    false
                 }
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to parse JSON backup", e)
@@ -173,10 +187,11 @@ object BackupManager {
             // 1. Проверяем, есть ли внутри ZIP распакованный JSON бэкап
             val jsonFiles = unzipDir.walkTopDown().filter { it.isFile && it.extension.lowercase() == "json" }.toList()
             for (jFile in jsonFiles) {
+                if (jFile.length() > BackupSecurityPolicy.MAX_BACKUP_BYTES) continue
                 try {
-                    val parsed = InputStreamReader(FileInputStream(jFile), StandardCharsets.UTF_8).use {
-                        gson.fromJson(it, BackupData::class.java)
-                    }
+                    val rawText = jFile.readText(StandardCharsets.UTF_8)
+                    if (!BackupSecurityPolicy.checkJsonDepth(rawText)) continue
+                    val parsed = gson.fromJson(rawText, BackupData::class.java)
                     if (parsed != null && (parsed.servers != null || parsed.settings != null || parsed.subscriptions != null || parsed.customSubscriptions != null)) {
                         return restoreFromJson(context, parsed)
                     }

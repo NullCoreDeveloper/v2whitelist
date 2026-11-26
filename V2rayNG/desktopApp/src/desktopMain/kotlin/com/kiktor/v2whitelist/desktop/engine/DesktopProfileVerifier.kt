@@ -51,6 +51,82 @@ object DesktopProfileVerifier {
         return ServerSocket(0).use { it.localPort }
     }
 
+    /**
+     * Быстрая E2E-проверка конечного узла через временный инстанс Xray с цепочкой dialerProxy.
+     * Используется полным сканером вместо net.Pipe внутри v2w-core.
+     */
+    suspend fun verifyEndpointChainedOnly(
+        profile: ProfileItem,
+        customEndpointUrl: String,
+        xrayBinaryPath: String? = null,
+        timeoutMs: Long = 7000L
+    ): Pair<Boolean, Long> = withContext(Dispatchers.IO) {
+        if (!isActive) return@withContext false to -1L
+        val epTrimmed = customEndpointUrl.trim()
+        if (epTrimmed.isEmpty()) return@withContext false to -1L
+
+        val runner = XrayDesktopRunner()
+        val binary = runner.findXrayExecutable(xrayBinaryPath) ?: return@withContext false to -1L
+
+        val testPort = findFreePort()
+        val testHttpPort = findFreePort()
+        val options = XrayGeneratorOptions(
+            socksPort = testPort,
+            httpPort = testHttpPort,
+            enableHttpInbound = true,
+            logLevel = "none",
+            bypassRussianServices = false,
+            bypassPrivateIps = false,
+            customEndpointUrl = epTrimmed
+        )
+
+        var tempConfig: File? = null
+        var process: Process? = null
+        try {
+            val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
+            tempConfig = File.createTempFile("v2w_endpoint_e2e_", ".json").apply {
+                deleteOnExit()
+                writeText(jsonConfig)
+            }
+            val pb = ProcessBuilder(binary.absolutePath, "run", "-c", tempConfig.absolutePath)
+                .redirectErrorStream(true)
+            pb.directory(binary.parentFile)
+            val assetDir = runner.findAssetLocation(binary) ?: binary.parentFile
+            if (assetDir != null && assetDir.exists()) {
+                pb.environment()["XRAY_LOCATION_ASSET"] = assetDir.absolutePath
+                pb.environment()["V2RAY_LOCATION_ASSET"] = assetDir.absolutePath
+            }
+            process = pb.start()
+            activeProcesses.add(process)
+
+            delay(if (profile.configType == EConfigType.HYSTERIA2) 750L else 450L)
+            if (!process.isAlive || !isActive) {
+                return@withContext false to -1L
+            }
+
+            val latency = measureE2ELatency(testPort, testHttpPort, timeoutMs)
+            (latency > 0L) to (if (latency > 0L) latency else -1L)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            GeekModeLogger.log("Verifier", "Xray endpoint E2E check error: ${e.message}")
+            false to -1L
+        } finally {
+            process?.let { proc ->
+                activeProcesses.remove(proc)
+                try {
+                    if (proc.isAlive) {
+                        proc.destroyForcibly()
+                        proc.waitFor(1, TimeUnit.SECONDS)
+                    } else {
+                        proc.waitFor()
+                    }
+                } catch (_: Exception) {}
+            }
+            try { tempConfig?.delete() } catch (_: Exception) {}
+        }
+    }
+
     suspend fun verifyProfile(
         profile: ProfileItem,
         xrayBinaryPath: String? = null,
@@ -417,7 +493,7 @@ object DesktopProfileVerifier {
         return (measuredBytes * 8.0) / (elapsedSec * 1_000_000.0)
     }
 
-    private fun measureSpeed(socksPort: Int, bytes: Long, timeoutMs: Long): Double? {
+    internal fun measureSpeed(socksPort: Int, bytes: Long, timeoutMs: Long): Double? {
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
         val targetBytes = maxOf(bytes, 1_500_000L)
         val effectiveTimeoutMs = maxOf(timeoutMs, 3500L).coerceAtMost(15_000L).toInt()

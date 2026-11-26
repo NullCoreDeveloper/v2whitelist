@@ -265,6 +265,7 @@ internal object DesktopStorageManager {
     fun clearDiskStorage() {
         try { serversFile.delete() } catch (_: Exception) {}
         try { settingsFile.delete() } catch (_: Exception) {}
+        try { File(baseDir, "inspections.json").delete() } catch (_: Exception) {}
     }
 }
 

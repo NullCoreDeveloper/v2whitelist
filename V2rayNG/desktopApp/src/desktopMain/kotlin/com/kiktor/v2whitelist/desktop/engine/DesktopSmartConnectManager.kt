@@ -165,7 +165,7 @@ class DesktopSmartConnectManager(
                 if (it < 1000) 4000L else it.toLong()
             }
             val verifyConcurrency = settingsRepo.getInt("pref_verify_concurrency", 4).coerceIn(1, 10)
-            val tcpPrecheckConcurrency = settingsRepo.getInt("pref_tcp_precheck_concurrency", 50).coerceIn(1, 200)
+            val tcpPrecheckConcurrency = settingsRepo.getInt("pref_tcp_precheck_concurrency", 100).coerceIn(1, 200)
             val v2wCoreSockets = settingsRepo.getInt("pref_v2w_core_sockets", 35).coerceIn(1, 100)
             val v2wFullVerifyMode = settingsRepo.getBoolean("pref_v2w_full_verify_mode", true)
             val testBeforeConnect = settingsRepo.getBoolean("pref_test_before_connect", true)

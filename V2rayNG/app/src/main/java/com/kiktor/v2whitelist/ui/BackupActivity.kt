@@ -99,8 +99,9 @@ class BackupActivity : HelperBaseActivity() {
             Locale.getDefault()
         ).format(System.currentTimeMillis())
         val folderName = "${getString(R.string.app_name)}_${dateFormatted}"
-        val backupDir = this.cacheDir.absolutePath + "/$folderName"
-        val outputZipFilePath = "${this.cacheDir.absolutePath}/$folderName.zip"
+        val backupRoot = File(this.cacheDir, "backup").apply { mkdirs() }
+        val backupDir = backupRoot.absolutePath + "/$folderName"
+        val outputZipFilePath = "${backupRoot.absolutePath}/$folderName.zip"
 
         val count = MMKV.backupAllToDirectory(backupDir)
         if (count <= 0) {

@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.desktop.engine
 
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.model.ProfileItem
+import com.kiktor.v2whitelist.core.model.inspection.FullScanNodeResultDto
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.core.model.servicecheck.ServiceCheckItem
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,8 @@ object V2WCoreScanner {
 
     private val processLock = Any()
     private var activeProcess: Process? = null
+    private val fullScanProcessLock = Any()
+    private var activeFullScanProcess: Process? = null
 
     fun stop() {
         synchronized(processLock) {
@@ -43,6 +46,37 @@ object V2WCoreScanner {
             }
             activeProcess = null
         }
+    }
+
+    fun stopFullScan() {
+        synchronized(fullScanProcessLock) {
+            activeFullScanProcess?.let { proc ->
+                try {
+                    if (proc.isAlive) {
+                        proc.destroyForcibly()
+                        proc.waitFor(1, TimeUnit.SECONDS)
+                    } else {
+                        proc.waitFor()
+                    }
+                } catch (_: Exception) {}
+            }
+            activeFullScanProcess = null
+        }
+    }
+
+    internal fun parseFullScanResultLine(line: String): FullScanNodeResultDto? {
+        if (!line.startsWith("RESULT\t")) return null
+        val jsonPart = line.removePrefix("RESULT\t").trim()
+        return FullScanNodeResultDto.fromJson(jsonPart)
+    }
+
+    internal fun parseFullScanCompleteLine(line: String): Pair<Int, Int>? {
+        if (!line.startsWith("COMPLETE\t")) return null
+        val parts = line.split("\t")
+        if (parts.size < 3) return null
+        val ok = parts[1].toIntOrNull() ?: return null
+        val fail = parts[2].toIntOrNull() ?: return null
+        return ok to fail
     }
 
     fun findV2WScanExecutable(customPath: String? = null): File? {
@@ -82,7 +116,8 @@ object V2WCoreScanner {
         endpointE2e: Boolean,
         serviceCheck: Boolean,
         services: List<ServiceCheckItem>,
-        destUrl: String? = null
+        destUrl: String? = null,
+        fragTimeoutSec: Int? = null
     ): String {
         val svcJson = services.joinToString(",") { svc ->
             """{"id":"${escapeJsonString(svc.id)}","name":"${escapeJsonString(svc.name)}","url":"${escapeJsonString(svc.url)}","enabled":${svc.enabled},"isCustom":${svc.isCustom}}"""
@@ -91,7 +126,10 @@ object V2WCoreScanner {
         val destField = destUrl?.trim()?.takeIf { it.isNotEmpty() }?.let {
             ""","dest_url":"${escapeJsonString(it)}""""
         }.orEmpty()
-        return """#v2w-opts:{"tcp_concurrency":$tcpConcurrency,"verify_concurrency":$verifyConcurrency,"timeout_sec":$timeoutSec$destField,"endpoint_url":"${escapeJsonString(ep)}","endpoint_e2e":$endpointE2e,"service_check":$serviceCheck,"services":[$svcJson]}"""
+        val fragField = fragTimeoutSec?.takeIf { it > 0 }?.let {
+            ""","frag_timeout_sec":$it"""
+        }.orEmpty()
+        return """#v2w-opts:{"tcp_concurrency":$tcpConcurrency,"verify_concurrency":$verifyConcurrency,"timeout_sec":$timeoutSec$fragField$destField,"endpoint_url":"${escapeJsonString(ep)}","endpoint_e2e":$endpointE2e,"service_check":$serviceCheck,"services":[$svcJson]}"""
     }
 
     /**
@@ -99,7 +137,7 @@ object V2WCoreScanner {
      * @param servers список серверов (guid -> profile)
      * @param firstOnly если true, процесс v2w-core сам завершается после первого успешного узла
      * @param concurrency количество параллельных проверок профилей (по умолч. 35)
-     * @param tcpConcurrency количество параллельных TCP pre-check (по умолч. 50)
+     * @param tcpConcurrency количество параллельных TCP pre-check (по умолч. 100)
      * @param onNodeSuccess коллбек, вызываемый мгновенно при успехе ноды.
      *                      Если возвращает true — сканирование немедленно прерывается (stateless connect).
      */
@@ -108,7 +146,7 @@ object V2WCoreScanner {
         customBinaryPath: String? = null,
         firstOnly: Boolean = false,
         concurrency: Int = 35,
-        tcpConcurrency: Int = 50,
+        tcpConcurrency: Int = 100,
         timeoutSec: Int = 10,
         fullVerifyMode: Boolean = false,
         destUrl: String? = null,
@@ -360,6 +398,197 @@ object V2WCoreScanner {
 
         GeekModeLogger.log("v2w-core", "Сканирование завершено. Успешно: $successCount, Ошибок: $failCount, Прервано: $stoppedEarly")
         return@withContext V2WScanSummary(
+            totalSuccess = successCount,
+            totalFailed = failCount,
+            stoppedEarly = stoppedEarly
+        )
+    }
+
+    /**
+     * Потоковое полное сканирование серверов с диагностикой (Exit IP, страна, фрагментация, сервисы)
+     * через CLI-режим `v2w-scan -full-scan`.
+     */
+    suspend fun runFullScan(
+        servers: List<Pair<String, ProfileItem>>,
+        customBinaryPath: String? = null,
+        concurrency: Int = 35,
+        tcpConcurrency: Int = 100,
+        timeoutSec: Int = 4,
+        fragTimeoutSec: Int = 2,
+        destUrl: String? = null,
+        serviceCheck: Boolean = false,
+        services: List<ServiceCheckItem> = emptyList(),
+        onResult: suspend (guid: String, profile: ProfileItem, dto: FullScanNodeResultDto) -> Boolean
+    ): V2WScanSummary = withContext(Dispatchers.IO) {
+        val validCustom = customBinaryPath?.takeIf { File(it).exists() }
+        val binary = (validCustom?.let { findV2WScanExecutable(it) }) ?: findV2WScanExecutable(null)
+        if (binary == null) {
+            GeekModeLogger.log("FullScan", "Бинарник v2w-scan не найден ни по указанному пути, ни в каталогах приложения")
+            return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
+        }
+
+        val exactMap = LinkedHashMap<String, Pair<String, ProfileItem>>(servers.size)
+        val noFragmentMap = LinkedHashMap<String, Pair<String, ProfileItem>>(servers.size)
+        val endpointToNode = LinkedHashMap<String, Pair<String, ProfileItem>>(servers.size)
+        val linksList = ArrayList<String>(servers.size)
+
+        for (server in servers) {
+            val cleanUri = UniversalConfigParser.toUri(server.second)?.trim().orEmpty()
+            if (cleanUri.isEmpty()) continue
+            linksList.add(cleanUri)
+            exactMap.putIfAbsent(cleanUri, server)
+            noFragmentMap.putIfAbsent(cleanUri.substringBefore('#'), server)
+            val host = server.second.server.orEmpty().trim().lowercase()
+            val port = server.second.serverPort.orEmpty().trim()
+            if (host.isNotEmpty() && port.isNotEmpty()) {
+                endpointToNode.putIfAbsent("$host:$port", server)
+            }
+        }
+
+        if (linksList.isEmpty()) {
+            return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
+        }
+
+        val cmd = listOf(
+            binary.absolutePath,
+            "-stdin",
+            "-full-scan",
+            "-concurrency", concurrency.coerceAtLeast(1).toString(),
+            "-tcp-concurrency", tcpConcurrency.coerceAtLeast(1).toString(),
+            "-timeout", timeoutSec.coerceAtLeast(1).toString(),
+            "-frag-timeout", fragTimeoutSec.coerceAtLeast(1).toString()
+        )
+
+        stopFullScan()
+        var stoppedEarly = false
+        var successCount = 0
+        var failCount = 0
+
+        val pb = ProcessBuilder(cmd).redirectErrorStream(false)
+        binary.parentFile?.let { pDir ->
+            if (pDir.exists()) pb.directory(pDir)
+        }
+
+        val process: Process
+        try {
+            process = pb.start()
+        } catch (e: Exception) {
+            GeekModeLogger.log("FullScan", "Ошибка запуска v2w-scan --full-scan: ${e.message}")
+            return@withContext V2WScanSummary(0, 0, stoppedEarly = false)
+        }
+
+        synchronized(fullScanProcessLock) {
+            activeFullScanProcess = process
+        }
+
+        // Важно: endpoint E2E выполняется через реальный Xray после отбора в v2w-scan (как на Android)
+        val optionsHeader = buildOptionsHeaderLine(
+            tcpConcurrency = tcpConcurrency,
+            verifyConcurrency = concurrency,
+            timeoutSec = timeoutSec,
+            endpointUrl = "",
+            endpointE2e = false,
+            serviceCheck = serviceCheck,
+            services = if (serviceCheck) services else emptyList(),
+            destUrl = destUrl,
+            fragTimeoutSec = fragTimeoutSec
+        )
+
+        val stdinWriter = Thread({
+            try {
+                OutputStreamWriter(process.outputStream, Charsets.UTF_8).use { writer ->
+                    if (process.isAlive) {
+                        writer.write(optionsHeader)
+                        writer.write("\n")
+                    }
+                    for (link in linksList) {
+                        if (!process.isAlive) break
+                        writer.write(link)
+                        writer.write("\n")
+                    }
+                    writer.flush()
+                }
+            } catch (_: Exception) {}
+        }, "v2w-fullscan-stdin-feeder").apply {
+            isDaemon = true
+            start()
+        }
+
+        val stderrReader = Thread({
+            try {
+                BufferedReader(InputStreamReader(process.errorStream, Charsets.UTF_8)).use { errReader ->
+                    var errLine: String? = null
+                    while (process.isAlive && errReader.readLine().also { errLine = it } != null) {
+                        val el = errLine?.trim().orEmpty()
+                        if (el.isNotEmpty()) {
+                            GeekModeLogger.log("v2w-core-err", el)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }, "v2w-fullscan-stderr-drainer").apply {
+            isDaemon = true
+            start()
+        }
+
+        try {
+            BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8)).use { reader ->
+                var line: String? = null
+                while (isActive && reader.readLine().also { line = it } != null) {
+                    val l = line?.trim().orEmpty()
+                    if (l.isEmpty()) continue
+
+                    val dto = parseFullScanResultLine(l)
+                    if (dto != null) {
+                        val trimmedLink = dto.link.trim()
+                        val matched = exactMap[trimmedLink]
+                            ?: noFragmentMap[trimmedLink.substringBefore('#')]
+                            ?: runCatching {
+                                val u = java.net.URI(trimmedLink)
+                                val hp = "${u.host?.lowercase()}:${u.port}"
+                                endpointToNode[hp]
+                            }.getOrNull()
+
+                        if (matched != null) {
+                            if (dto.alive) successCount++ else failCount++
+                            val shouldAbort = onResult(matched.first, matched.second, dto)
+                            if (shouldAbort) {
+                                stoppedEarly = true
+                                break
+                            }
+                        }
+                        continue
+                    }
+
+                    val complete = parseFullScanCompleteLine(l)
+                    if (complete != null) {
+                        successCount = complete.first
+                        failCount = complete.second
+                    }
+                }
+                if (!isActive && !stoppedEarly) {
+                    stoppedEarly = true
+                }
+            }
+        } finally {
+            stdinWriter.interrupt()
+            stderrReader.interrupt()
+            synchronized(fullScanProcessLock) {
+                if (activeFullScanProcess == process) {
+                    activeFullScanProcess = null
+                }
+            }
+            try {
+                if (process.isAlive) {
+                    process.destroyForcibly()
+                    process.waitFor(1, TimeUnit.SECONDS)
+                } else {
+                    process.waitFor()
+                }
+            } catch (_: Exception) {}
+        }
+
+        V2WScanSummary(
             totalSuccess = successCount,
             totalFailed = failCount,
             stoppedEarly = stoppedEarly
