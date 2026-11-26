@@ -9,6 +9,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.BuildConfig
 import com.kiktor.v2whitelist.core.domain.update.UpdateChecker
+import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import com.kiktor.v2whitelist.dto.CheckUpdateResult
 import com.kiktor.v2whitelist.dto.GitHubRelease
 import com.kiktor.v2whitelist.extension.concatUrl
@@ -30,12 +31,86 @@ object UpdateCheckerManager {
             abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a",
             isFdroid = isFdroid
         )
-        com.kiktor.v2whitelist.core.domain.update.UpdateChecker.checkForUpdate(
-            apiUrl = AppConfig.APP_API_URL,
-            currentVersion = BuildConfig.VERSION_NAME,
-            targetPlatform = platform,
-            includePreRelease = includePreRelease
-        )
+        val targetUrl = if (includePreRelease) {
+            AppConfig.APP_API_URL
+        } else {
+            "${AppConfig.APP_API_URL.trimEnd('/')}/latest"
+        }
+
+        // Используем системный HttpURLConnection (Conscrypt) вместо Ktor CIO,
+        // чтобы на Android соблюдался hostname-aware checkServerTrusted при <domain-config>
+        // в network_security_config.xml и поддерживался локальный прокси при активном VPN.
+        var lastError: String? = null
+        for (port in getGithubConnectionPorts(preferProxy = false)) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = HttpUtil.createProxyConnection(targetUrl, port, 6000, 6000, true)
+                if (connection == null) {
+                    lastError = "Unable to create connection (port=$port)"
+                    continue
+                }
+                connection.requestMethod = "GET"
+                connection.setRequestProperty("Connection", "close")
+                connection.setRequestProperty("User-Agent", "v2whitelist-updater")
+                connection.setRequestProperty("Accept", "application/vnd.github+json")
+                connection.connect()
+
+                val code = connection.responseCode
+                if (code !in 200..299) {
+                    lastError = "HTTP error: $code"
+                    continue
+                }
+
+                val responseBody = connection.inputStream.use {
+                    HttpUtil.readStreamLimited(it, UpdateChecker.MAX_RELEASE_JSON_BYTES.toLong())
+                }
+                val release = if (includePreRelease) {
+                    UpdateChecker.parseReleases(responseBody).firstOrNull()
+                } else {
+                    UpdateChecker.parseLatestRelease(responseBody)
+                }
+                if (release == null) {
+                    return@withContext CheckUpdateResult(hasUpdate = false, error = "Release not found")
+                }
+
+                val latestVersion = release.tagName.trim().removePrefix("v").removePrefix("V")
+                val hasUpdate = UpdateChecker.compareVersions(latestVersion, BuildConfig.VERSION_NAME) > 0
+                if (!hasUpdate) {
+                    return@withContext CheckUpdateResult(
+                        hasUpdate = false,
+                        latestVersion = latestVersion,
+                        isPreRelease = release.prerelease
+                    )
+                }
+
+                val compatibleAsset = UpdateChecker.findCompatibleAsset(release, platform)
+                val safeDownloadUrl = compatibleAsset?.browserDownloadUrl?.takeIf { UpdateChecker.isAllowedUpdateUrl(it) }
+                val safeChecksumUrl = release.assets.firstOrNull { it.name == "sha256sum.txt" }
+                    ?.browserDownloadUrl?.takeIf { UpdateChecker.isAllowedUpdateUrl(it) }
+
+                GeekModeLogger.log("UpdateChecker", "Found new version: $latestVersion (current: ${BuildConfig.VERSION_NAME})")
+                return@withContext CheckUpdateResult(
+                    hasUpdate = true,
+                    latestVersion = latestVersion,
+                    releaseNotes = release.body,
+                    downloadUrl = safeDownloadUrl,
+                    checksumUrl = safeChecksumUrl,
+                    apkFileName = compatibleAsset?.name,
+                    fileName = compatibleAsset?.name,
+                    isPreRelease = release.prerelease
+                )
+            } catch (e: Exception) {
+                lastError = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "Unknown error"
+            } finally {
+                try {
+                    connection?.disconnect()
+                } catch (_: Exception) {}
+            }
+        }
+
+        val detail = lastError ?: "Unknown error"
+        GeekModeLogger.log("UpdateChecker", "Error checking for update: $detail")
+        CheckUpdateResult(hasUpdate = false, error = detail)
     }
 
     suspend fun downloadApk(context: Context, downloadUrl: String, onProgress: ((Int) -> Unit)? = null): File? = withContext(Dispatchers.IO) {
