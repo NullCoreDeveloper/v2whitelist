@@ -313,7 +313,6 @@ fun ModeSettingsDialog(state: DesktopAppState) {
 
                             OutlinedButton(
                                 onClick = { state.promptServiceCheckDialog() },
-                                enabled = !isExitNodeActive,
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {

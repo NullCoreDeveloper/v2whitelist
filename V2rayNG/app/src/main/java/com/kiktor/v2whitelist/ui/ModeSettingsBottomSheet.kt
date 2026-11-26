@@ -222,9 +222,7 @@ class ModeSettingsBottomSheet(
         }
 
         btnOpenServicesConfig?.setOnClickListener {
-            if (!isExitNodeActive()) {
-                onOpenServiceCheck(Intent(activity, ServiceCheckActivity::class.java))
-            }
+            onOpenServiceCheck(Intent(activity, ServiceCheckActivity::class.java))
         }
 
         // --- Отображение ---
@@ -291,8 +289,8 @@ class ModeSettingsBottomSheet(
         }
 
         btnOpenServicesConfig?.apply {
-            isEnabled = !exitNodeActive
-            alpha = if (exitNodeActive) 0.5f else 1.0f
+            isEnabled = true
+            alpha = 1.0f
         }
 
         tvEndpointNotice?.visibility = if (exitNodeActive) View.VISIBLE else View.GONE
