@@ -1342,7 +1342,7 @@ class MainActivity : HelperBaseActivity() {
 
             if (dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SUB) || host == com.kiktor.v2whitelist.handler.DeepLinkManager.HOST_SUB) {
                 val sub = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSubscription::class.java)
-                if (sub != null) {
+                if (sub != null && com.kiktor.v2whitelist.handler.DeepLinkManager.validateSharedSubscription(sub)) {
                     androidx.appcompat.app.AlertDialog.Builder(this)
                         .setTitle(R.string.dialog_add_custom_sub_title)
                         .setMessage(getString(R.string.dialog_add_custom_sub_msg, sub.name, sub.url))
@@ -1373,7 +1373,7 @@ class MainActivity : HelperBaseActivity() {
                 }
             } else if (dataString.startsWith(com.kiktor.v2whitelist.handler.DeepLinkManager.SCHEME_SPLIT) || host == com.kiktor.v2whitelist.handler.DeepLinkManager.HOST_SPLIT) {
                 val split = com.kiktor.v2whitelist.handler.DeepLinkManager.decodeFromDeepLinkData(data, com.kiktor.v2whitelist.handler.DeepLinkManager.SharedSplitTunneling::class.java)
-                if (split != null) {
+                if (split != null && com.kiktor.v2whitelist.handler.DeepLinkManager.validateSharedSplitTunneling(split)) {
                     androidx.appcompat.app.AlertDialog.Builder(this)
                         .setTitle(R.string.dialog_apply_routing_preset_title)
                         .setMessage(getString(R.string.dialog_apply_routing_preset_msg, split.name, split.packages.size))

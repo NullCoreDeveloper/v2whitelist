@@ -1,19 +1,24 @@
 package com.kiktor.v2whitelist.handler
 
 import android.util.Base64
+import android.util.Log
 import com.google.gson.Gson
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.core.config.security.ParseGuard
+import com.kiktor.v2whitelist.core.subscription.network.NetworkSecurityGuard
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
-import android.util.Log
-
-//dGJ6cGouZnZiYWJpbC5qdnQvZGhham8/Yz1qcUNNa3FyZ0gyNA
 
 object DeepLinkManager {
 
     private val gson = Gson()
+
+    const val MAX_ENCODED_CHARS = 64 * 1024
+    const val MAX_DECOMPRESSED_BYTES = 256 * 1024
+    const val MAX_SPLIT_PACKAGES = 500
+    private val PACKAGE_NAME_REGEX = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
 
     /**
      * Сжимает и кодирует любой объект в Base64 для передачи через DeepLink.
@@ -23,8 +28,7 @@ object DeepLinkManager {
             val json = gson.toJson(obj)
             val bos = ByteArrayOutputStream()
             GZIPOutputStream(bos).bufferedWriter(Charsets.UTF_8).use { it.write(json) }
-            val base64 = Base64.encodeToString(bos.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
-            base64
+            Base64.encodeToString(bos.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to encode deep link data", e)
             ""
@@ -32,16 +36,55 @@ object DeepLinkManager {
     }
 
     /**
-     * Распаковывает и парсит данные из Base64 GZIP в нужный класс.
+     * Распаковывает и парсит данные из Base64 GZIP в нужный класс с защитой от GZIP/JSON-бомб.
      */
     fun <T> decodeFromDeepLinkData(data: String, clazz: Class<T>): T? {
+        if (data.isBlank() || data.length > MAX_ENCODED_CHARS) {
+            return null
+        }
         return try {
             val bytes = Base64.decode(data, Base64.URL_SAFE or Base64.NO_WRAP)
-            val json = GZIPInputStream(ByteArrayInputStream(bytes)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val decompressed = ByteArrayOutputStream()
+            GZIPInputStream(ByteArrayInputStream(bytes)).use { gzip ->
+                val buffer = ByteArray(4096)
+                var total = 0
+                while (true) {
+                    val read = gzip.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > MAX_DECOMPRESSED_BYTES) {
+                        throw SecurityException("DeepLink GZIP payload exceeds size limit")
+                    }
+                    decompressed.write(buffer, 0, read)
+                }
+            }
+            val json = decompressed.toString(Charsets.UTF_8.name())
+            if (!ParseGuard.checkJsonBudget(json)) {
+                return null
+            }
             gson.fromJson(json, clazz)
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Failed to decode deep link data", e)
             null
+        }
+    }
+
+    fun validateSharedSubscription(sub: SharedSubscription?): Boolean {
+        if (sub == null) return false
+        val name = sub.name.trim()
+        if (name.isEmpty() || name.length > 200 || name.any(Char::isISOControl)) return false
+        val mirrors = sub.url.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+        if (mirrors.isEmpty() || mirrors.size > 32) return false
+        return mirrors.all { NetworkSecurityGuard.validateExternalUrlString(it, allowHttp = true) != null }
+    }
+
+    fun validateSharedSplitTunneling(split: SharedSplitTunneling?): Boolean {
+        if (split == null) return false
+        val name = split.name.trim()
+        if (name.length > 200 || name.any(Char::isISOControl)) return false
+        if (split.packages.size > MAX_SPLIT_PACKAGES) return false
+        return split.packages.all { pkg ->
+            pkg.length <= 255 && PACKAGE_NAME_REGEX.matches(pkg)
         }
     }
 
