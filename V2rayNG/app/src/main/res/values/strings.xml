@@ -1078,4 +1078,36 @@
     <string name="server_list_scan_stale_suffix">" • outdated"</string>
     <string name="status_full_scan_running">Full server scan in progress…</string>
     <string name="status_full_scan_progress">Checked %1$d/%2$d • working: %3$d</string>
+
+    <!-- Mode settings sheet -->
+    <string name="btn_mode_short">Mode</string>
+    <string name="btn_mode_label">Mode: %1$s</string>
+    <string name="mode_sheet_title">Connection Mode</string>
+    <string name="mode_section_network">Network Mode</string>
+    <string name="mode_option_auto">Auto</string>
+    <string name="mode_option_wl">WL</string>
+    <string name="mode_option_bl">BL</string>
+    <string name="mode_desc_auto">Automatic selection: when mobile internet is restricted (whitelist-only), it switches to WL servers; on regular internet, it uses fast BL servers.</string>
+    <string name="mode_desc_wl">Whitelist (WL): only servers that work during mobile operator whitelist restrictions. Use when regular internet is blocked.</string>
+    <string name="mode_desc_bl">Blacklist (BL): regular VPN servers for bypassing blocked sites and services on normal internet.</string>
+
+    <string name="mode_section_speed">Minimum Speed</string>
+    <string name="mode_speed_to_custom">Custom</string>
+    <string name="mode_speed_to_presets">Presets</string>
+    <string name="mode_speed_preset_min">Min.\n1 Mbps</string>
+    <string name="mode_speed_preset_balance">Balance\n10 Mbps</string>
+    <string name="mode_speed_preset_max">Max.\n30 Mbps</string>
+    <string name="mode_speed_custom_hint">Minimum speed</string>
+    <string name="mode_speed_unit_mbps">Mbps</string>
+    <string name="mode_speed_desc_min">Minimum (1 Mbps): connects quickly and accepts almost any working server. Great for messengers and light browsing.</string>
+    <string name="mode_speed_desc_balance">Balance (10 Mbps): optimal choice for YouTube, music, and daily use without long server searches.</string>
+    <string name="mode_speed_desc_max">Maximum (30 Mbps): picks only the fastest servers. Searching may take longer, and fewer servers will match in WL mode.</string>
+    <string name="mode_speed_desc_custom_value">Custom threshold: at least %1$s Mbps. Servers below this speed are skipped during verification.</string>
+    <string name="mode_speed_desc_custom_disabled">Speed check disabled (0 Mbps): connects to the first responsive server without throughput testing.</string>
+
+    <string name="mode_section_services">Service Check</string>
+    <string name="mode_services_toggle_title">Check service availability</string>
+    <string name="mode_services_toggle_desc">Before connecting, verifies that selected sites and apps (Telegram, YouTube, AI, etc.) actually open through the server.</string>
+    <string name="mode_services_configure_btn">Select services (%1$d/%2$d)</string>
+    <string name="mode_services_disabled_by_endpoint">Disabled while an exit node is active — traffic is routed through your custom server.</string>
 </resources>

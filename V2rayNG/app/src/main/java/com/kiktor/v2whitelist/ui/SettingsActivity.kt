@@ -261,10 +261,6 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                 startActivity(android.content.Intent(requireContext(), PersonalServersActivity::class.java))
                 true
             }
-            findPreference<androidx.preference.Preference>("pref_service_check_config")?.setOnPreferenceClickListener {
-                startActivity(android.content.Intent(activity, ServiceCheckActivity::class.java))
-                true
-            }
             findPreference<androidx.preference.Preference>("pref_add_qs_tile")?.setOnPreferenceClickListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val sbm = requireContext().getSystemService(android.app.StatusBarManager::class.java)
@@ -419,12 +415,6 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                 true
             }
 
-            // Мастер настройки подписок (пресеты)
-            findPreference<androidx.preference.Preference>("pref_subscription_setup_wizard")?.setOnPreferenceClickListener {
-                com.kiktor.v2whitelist.handler.SubscriptionHelper.showSetupWizard(requireActivity())
-                true
-            }
-
             // Внешнее управление (Tasker / MacroDroid)
             findPreference<androidx.preference.Preference>("pref_external_control_help")?.setOnPreferenceClickListener {
                 val ctx = requireContext()
@@ -526,28 +516,6 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
                                         false
                                     } else {
                                         p.summary = formatTimeout(raw)
-                                        true
-                                    }
-                                }
-                            }
-                            AppConfig.PREF_PROFILE_MIN_SPEED_MBPS -> {
-                                fun formatMinSpeed(raw: String?): String {
-                                    val mbps = raw?.toDoubleOrNull() ?: 1.0
-                                    return if (mbps <= 0.0) {
-                                        getString(R.string.pref_min_speed_disabled)
-                                    } else {
-                                        getString(R.string.pref_min_speed_summary, String.format(java.util.Locale.US, "%.1f", mbps))
-                                    }
-                                }
-                                pref.summary = formatMinSpeed(pref.text)
-                                pref.setOnPreferenceChangeListener { p, newValue ->
-                                    val raw = newValue as? String
-                                    val mbps = raw?.toDoubleOrNull()
-                                    if (mbps == null || mbps < 0.0) {
-                                        requireContext().toast(getString(R.string.toast_invalid_value))
-                                        false
-                                    } else {
-                                        p.summary = formatMinSpeed(raw)
                                         true
                                     }
                                 }

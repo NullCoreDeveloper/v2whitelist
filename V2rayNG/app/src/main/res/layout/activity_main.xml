@@ -252,13 +252,32 @@
                     app:iconSize="24dp"
                     app:iconGravity="textStart" />
 
-                <!-- QR / Scan button (right-aligned above bottom panel) -->
+                <!-- Mode (left) & QR / Scan (right) above bottom panel -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="4dp"
-                    android:gravity="end"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_mode_quick"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:text="@string/btn_mode_short"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_tune_24dp"
+                        app:iconGravity="textStart" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
 
                     <!-- Показывается когда подключён: показать QR текущего сервера -->
                     <com.google.android.material.button.MaterialButton

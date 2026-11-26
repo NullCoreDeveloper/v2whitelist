@@ -1071,4 +1071,36 @@
     <string name="server_list_scan_stale_suffix">" • устарело"</string>
     <string name="status_full_scan_running">Идёт полное сканирование серверов…</string>
     <string name="status_full_scan_progress">Проверено %1$d/%2$d • рабочих: %3$d</string>
+
+    <!-- Шторка настроек режима -->
+    <string name="btn_mode_short">Режим</string>
+    <string name="btn_mode_label">Режим: %1$s</string>
+    <string name="mode_sheet_title">Режим работы</string>
+    <string name="mode_section_network">Режим сети</string>
+    <string name="mode_option_auto">Авто</string>
+    <string name="mode_option_wl">БС</string>
+    <string name="mode_option_bl">ЧС</string>
+    <string name="mode_desc_auto">Автоматический выбор: при глушилках и белых списках подбирает узлы БС, а на обычном интернете — быстрые серверы ЧС.</string>
+    <string name="mode_desc_wl">Белые списки (БС): использует только серверы для обхода жёстких ограничений операторов. Включайте при глушилках.</string>
+    <string name="mode_desc_bl">Чёрные списки (ЧС): обычный VPN для обхода блокировок сайтов, YouTube и сервисов на стабильном интернете.</string>
+
+    <string name="mode_section_speed">Минимальная скорость</string>
+    <string name="mode_speed_to_custom">Свой</string>
+    <string name="mode_speed_to_presets">Пресеты</string>
+    <string name="mode_speed_preset_min">Мин.\n1 Мбит/с</string>
+    <string name="mode_speed_preset_balance">Баланс\n10 Мбит/с</string>
+    <string name="mode_speed_preset_max">Макс.\n30 Мбит/с</string>
+    <string name="mode_speed_custom_hint">Минимальная скорость</string>
+    <string name="mode_speed_unit_mbps">Мбит/с</string>
+    <string name="mode_speed_desc_min">Минимальный (1 Мбит/с): быстрый поиск, подойдёт почти любой рабочий сервер. Хорошо для мессенджеров и сайтов.</string>
+    <string name="mode_speed_desc_balance">Баланс (10 Мбит/с): оптимально для YouTube, музыки и повседневной работы без долгого ожидания поиска.</string>
+    <string name="mode_speed_desc_max">Максимальный (30 Мбит/с): только самые быстрые серверы. Поиск займёт больше времени, а в режиме БС подходящих узлов может быть мало.</string>
+    <string name="mode_speed_desc_custom_value">Свой порог: не ниже %1$s Мбит/с. Серверы медленнее этого значения пропускаются при проверке.</string>
+    <string name="mode_speed_desc_custom_disabled">Проверка скорости отключена (0 Мбит/с): подключается к первому откликнувшемуся серверу без замера скорости.</string>
+
+    <string name="mode_section_services">Проверка сервисов</string>
+    <string name="mode_services_toggle_title">Проверять ли сервисы</string>
+    <string name="mode_services_toggle_desc">Перед подключением проверяет, что через сервер реально открываются выбранные сайты и приложения (Telegram, YouTube, AI и др.).</string>
+    <string name="mode_services_configure_btn">Выбрать сервисы (%1$d/%2$d)</string>
+    <string name="mode_services_disabled_by_endpoint">Отключено, пока активен конечный узел — трафик идёт через ваш сервер.</string>
 </resources>

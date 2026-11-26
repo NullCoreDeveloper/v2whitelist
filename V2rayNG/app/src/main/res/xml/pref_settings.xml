@@ -10,11 +10,6 @@
             android:title="@string/title_pref_manage_subs" />
 
         <Preference
-            android:key="pref_subscription_setup_wizard"
-            android:summary="@string/summary_subscription_setup_wizard"
-            android:title="@string/title_subscription_setup_wizard" />
-
-        <Preference
             android:key="pref_lan_proxy_sharing_screen"
             android:summary="@string/summary_lan_sharing"
             android:title="@string/title_lan_sharing" />
@@ -108,27 +103,10 @@
             android:title="@string/title_pref_profile_check" />
 
         <CheckBoxPreference
-            android:key="pref_service_check_enabled"
-            android:defaultValue="false"
-            android:summary="@string/summary_pref_service_check"
-            android:title="@string/title_pref_service_check" />
-
-        <Preference
-            android:key="pref_service_check_config"
-            android:summary="@string/summary_pref_service_check_config"
-            android:title="@string/title_pref_service_check_config" />
-
-        <CheckBoxPreference
             android:key="pref_endpoint_e2e_check_enabled"
             android:defaultValue="true"
             android:summary="@string/summary_pref_endpoint_e2e_check_enabled"
             android:title="@string/title_pref_endpoint_e2e_check_enabled" />
-
-        <CheckBoxPreference
-            android:key="pref_profile_speed_check_enabled"
-            android:defaultValue="true"
-            android:summary="@string/summary_pref_profile_speed_check"
-            android:title="@string/title_pref_profile_speed_check" />
 
         <EditTextPreference
             android:inputType="number"
@@ -143,13 +121,6 @@
             android:defaultValue="3000"
             android:summary="@string/summary_pref_profile_speed_check_timeout"
             android:title="@string/title_pref_profile_speed_check_timeout" />
-
-        <EditTextPreference
-            android:inputType="numberDecimal"
-            android:key="pref_profile_min_speed_mbps"
-            android:defaultValue="1.0"
-            android:summary="@string/summary_pref_profile_min_speed_mbps"
-            android:title="@string/title_pref_profile_min_speed_mbps" />
 
         <EditTextPreference
             android:inputType="number"

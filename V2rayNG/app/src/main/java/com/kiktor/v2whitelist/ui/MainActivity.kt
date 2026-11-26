@@ -87,6 +87,12 @@ class MainActivity : HelperBaseActivity() {
     private var lastNightMode: String? = null
     private var lastAmoled: Boolean = false
     private var lastPalette: String? = null
+    private var activeModeBottomSheet: ModeSettingsBottomSheet? = null
+
+    private val serviceCheckLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        activeModeBottomSheet?.refreshServicesState()
+        updateModeButtonUI()
+    }
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isVpnPermissionPending = false
@@ -179,6 +185,15 @@ class MainActivity : HelperBaseActivity() {
         binding.btnBigConnect.setOnClickListener { handleConnectAction() }
         binding.btnSwitchServer.setOnClickListener { handleSwitchServer() }
         binding.btnSettingsQuick.setOnClickListener { requestActivityLauncher.launch(Intent(this, SettingsActivity::class.java)) }
+        binding.btnModeQuick.setOnClickListener {
+            val sheet = ModeSettingsBottomSheet(
+                activity = this,
+                onOpenServiceCheck = { intent -> serviceCheckLauncher.launch(intent) },
+                onStateChanged = { updateModeButtonUI() }
+            )
+            activeModeBottomSheet = sheet
+            sheet.show()
+        }
         binding.btnLogcatQuick.setOnClickListener { startActivity(Intent(this, GeekModeActivity::class.java)) }
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
@@ -255,12 +270,14 @@ class MainActivity : HelperBaseActivity() {
         setupViewModel()
         mainViewModel.reloadServerList()
 
+        SubscriptionHelper.migrateLegacyModeIfNeeded()
+        updateModeButtonUI()
+
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {
         }
         
         checkBatteryOptimization()
         checkAppUpdate()
-        checkAndShowOnboardingPurpose()
 
         // Периодически обновляем отображение прошедшего времени ("прошло X мин") пока экран активен
         lifecycleScope.launch {
@@ -273,17 +290,13 @@ class MainActivity : HelperBaseActivity() {
         }
     }
 
-    private fun checkAndShowOnboardingPurpose() {
-        val alreadyShown = com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, false)
-        if (alreadyShown) return
-
-        binding.root.post {
-            if (!isFinishing && !isDestroyed) {
-                com.kiktor.v2whitelist.handler.SubscriptionHelper.showSetupWizard(this) {
-                    mainViewModel.reloadServerList()
-                }
-            }
+    private fun updateModeButtonUI() {
+        val label = when (SubscriptionHelper.getCurrentScenario()) {
+            com.kiktor.v2whitelist.core.model.AppScenario.WHITELIST -> getString(R.string.mode_option_wl)
+            com.kiktor.v2whitelist.core.model.AppScenario.VPN_BLACKLIST -> getString(R.string.mode_option_bl)
+            else -> getString(R.string.mode_option_auto)
         }
+        binding.btnModeQuick.text = getString(R.string.btn_mode_label, label)
     }
 
     private fun checkAppUpdate() {
@@ -1033,6 +1046,8 @@ class MainActivity : HelperBaseActivity() {
 
         PersonalServersManager.sanitizeExitNode()
         updateSubscriptionStatusUI()
+        updateModeButtonUI()
+        activeModeBottomSheet?.refreshServicesState()
 
         if (SmartConnectManager.isScanning.get()) {
             setConnectingState(mainViewModel.uiStatus.value)
