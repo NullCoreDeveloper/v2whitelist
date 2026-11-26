@@ -1,10 +1,14 @@
 package com.kiktor.v2whitelist.handler
 
 import android.content.Context
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.BuildConfig
+import com.kiktor.v2whitelist.core.domain.update.UpdateChecker
 import com.kiktor.v2whitelist.dto.CheckUpdateResult
 import com.kiktor.v2whitelist.dto.GitHubRelease
 import com.kiktor.v2whitelist.extension.concatUrl
@@ -15,8 +19,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
+import java.security.MessageDigest
+import java.util.Locale
 
 object UpdateCheckerManager {
+    const val MAX_APK_BYTES = 256L * 1024 * 1024
     suspend fun checkForUpdate(includePreRelease: Boolean = false): CheckUpdateResult = withContext(Dispatchers.IO) {
         val isFdroid = BuildConfig.APPLICATION_ID.endsWith(".fdroid")
         val platform = com.kiktor.v2whitelist.core.model.update.TargetPlatform.Android(
@@ -54,6 +61,10 @@ object UpdateCheckerManager {
         port: Int,
         onProgress: ((Int) -> Unit)?
     ): File? {
+        if (!UpdateChecker.isAllowedUpdateUrl(downloadUrl)) {
+            Log.e(AppConfig.TAG, "Rejected untrusted update URL")
+            return null
+        }
         val connection = HttpUtil.createProxyConnection(downloadUrl, port, 30_000, 30_000, true)
         if (connection == null) {
             Log.w(AppConfig.TAG, "Unable to create GitHub APK connection (port=$port)")
@@ -61,14 +72,20 @@ object UpdateCheckerManager {
         }
 
         try {
-            val cacheFolder = context.externalCacheDir ?: context.cacheDir
-            val fileName = downloadUrl.substringAfterLast("/", "update.apk")
-            cacheFolder.listFiles { file -> file.name.endsWith(".apk") && file.name != fileName }?.forEach { it.delete() }
+            val updatesDir = File(context.cacheDir, "updates").apply { mkdirs() }
+            val rawName = downloadUrl.substringAfterLast("/", "update.apk")
+            val safeName = rawName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "update.apk" }
+                .let { if (it.endsWith(".apk", ignoreCase = true)) it else "$it.apk" }
+            updatesDir.listFiles { file -> file.name.endsWith(".apk") && file.name != safeName }?.forEach { it.delete() }
 
-            val apkFile = File(cacheFolder, fileName)
-            Log.i(AppConfig.TAG, "Downloading APK to: ${apkFile.absolutePath} (port=$port)")
+            val apkFile = File(updatesDir, safeName)
+            Log.i(AppConfig.TAG, "Downloading APK to private cache: ${apkFile.name} (port=$port)")
 
-            var downloadedBytes = apkFile.takeIf { it.exists() }?.length() ?: 0L
+            var downloadedBytes = apkFile.takeIf { it.exists() && it.length() <= MAX_APK_BYTES }?.length() ?: 0L
+            if (apkFile.exists() && apkFile.length() > MAX_APK_BYTES) {
+                apkFile.delete()
+                downloadedBytes = 0L
+            }
             if (downloadedBytes > 0) {
                 connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
                 Log.i(AppConfig.TAG, "Requesting range: bytes=$downloadedBytes-")
@@ -95,8 +112,13 @@ object UpdateCheckerManager {
                 }
             }
 
-            val contentLength = connection.contentLength
-            val fileLength = if (append) downloadedBytes + contentLength else contentLength.toLong()
+            val contentLength = connection.contentLengthLong
+            if (contentLength > MAX_APK_BYTES || (append && contentLength > 0 && downloadedBytes + contentLength > MAX_APK_BYTES)) {
+                Log.e(AppConfig.TAG, "APK exceeds max allowed size ($MAX_APK_BYTES)")
+                apkFile.delete()
+                return null
+            }
+            val fileLength = if (append && contentLength > 0) downloadedBytes + contentLength else contentLength
 
             var lastProgress = 0
             var totalRead = downloadedBytes
@@ -106,8 +128,12 @@ object UpdateCheckerManager {
                     val buffer = ByteArray(8 * 1024)
                     var bytesRead: Int
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        outputStream.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
+                        if (totalRead > MAX_APK_BYTES) {
+                            apkFile.delete()
+                            throw SecurityException("Downloaded APK exceeds size limit")
+                        }
+                        outputStream.write(buffer, 0, bytesRead)
                         if (fileLength > 0) {
                             val progress = (totalRead * 100 / fileLength).toInt()
                             if (progress > lastProgress) {
@@ -182,6 +208,74 @@ object UpdateCheckerManager {
         
         return asset?.browserDownloadUrl
             ?: throw IllegalStateException("No compatible APK found")
+    }
+
+    suspend fun verifyDownloadedUpdate(
+        context: Context,
+        apkFile: File,
+        checksumUrl: String?,
+        apkFileName: String?
+    ): Boolean {
+        if (checksumUrl.isNullOrBlank() || apkFileName.isNullOrBlank()) {
+            Log.e(AppConfig.TAG, "Missing checksum metadata for downloaded APK")
+            return false
+        }
+        if (!UpdateChecker.isAllowedUpdateUrl(checksumUrl)) {
+            Log.e(AppConfig.TAG, "Rejected untrusted checksum URL")
+            return false
+        }
+        if (!verifyChecksum(apkFile, checksumUrl, apkFileName)) {
+            return false
+        }
+        return verifyApkPackageAndSignature(context, apkFile)
+    }
+
+    @Suppress("DEPRECATION")
+    fun verifyApkPackageAndSignature(context: Context, apkFile: File): Boolean {
+        return try {
+            val pm = context.packageManager
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES
+            } else {
+                PackageManager.GET_SIGNATURES
+            }
+            val archiveInfo = pm.getPackageArchiveInfo(apkFile.path, flags) ?: run {
+                Log.e(AppConfig.TAG, "Failed to parse downloaded APK archive")
+                return false
+            }
+            if (archiveInfo.packageName != context.packageName) {
+                Log.e(AppConfig.TAG, "APK packageName mismatch: ${archiveInfo.packageName}")
+                return false
+            }
+            val installedInfo = pm.getPackageInfo(context.packageName, flags)
+            if (PackageInfoCompat.getLongVersionCode(archiveInfo) < PackageInfoCompat.getLongVersionCode(installedInfo)) {
+                Log.e(AppConfig.TAG, "APK versionCode downgrade rejected")
+                return false
+            }
+            val expectedSigners = extractSignerDigests(installedInfo)
+            val archiveSigners = extractSignerDigests(archiveInfo)
+            if (expectedSigners.isEmpty() || archiveSigners != expectedSigners) {
+                Log.e(AppConfig.TAG, "APK signing certificate mismatch")
+                return false
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(AppConfig.TAG, "APK signature verification error: ${e.message}", e)
+            false
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun extractSignerDigests(info: PackageInfo): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.signingInfo?.apkContentsSigners ?: info.signatures
+        } else {
+            info.signatures
+        }
+        val sha256 = MessageDigest.getInstance("SHA-256")
+        return signatures.orEmpty().map { sig ->
+            sha256.digest(sig.toByteArray()).joinToString("") { "%02x".format(Locale.ROOT, it) }
+        }.toSet()
     }
 
     suspend fun verifyChecksum(apkFile: File, checksumUrl: String, apkFileName: String): Boolean = withContext(Dispatchers.IO) {

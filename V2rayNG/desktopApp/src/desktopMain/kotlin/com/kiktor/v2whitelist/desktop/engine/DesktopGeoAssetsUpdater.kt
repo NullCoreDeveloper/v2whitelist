@@ -9,7 +9,9 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.security.MessageDigest
 import java.time.Duration
+import java.util.Locale
 
 data class GeoAssetsUpdateResult(
     val success: Boolean,
@@ -25,6 +27,8 @@ data class GeoAssetsUpdateResult(
 object DesktopGeoAssetsUpdater {
 
     const val MIN_VALID_GEO_SIZE_BYTES = 100_000L
+    const val MAX_GEO_FILE_BYTES = 64L * 1024 * 1024
+    private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
 
     private val GEO_FILES = listOf(
         "geosite.dat" to "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
@@ -128,15 +132,40 @@ object DesktopGeoAssetsUpdater {
                 return false
             }
 
+            val expectedHash = fetchExpectedSha256(client, "$url.sha256sum", target.name)
+            val digest = MessageDigest.getInstance("SHA-256")
+            var totalBytes = 0L
+
             response.body().use { input ->
                 FileOutputStream(tempFile).use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(16 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        totalBytes += read
+                        if (totalBytes > MAX_GEO_FILE_BYTES) {
+                            tempFile.delete()
+                            GeekModeLogger.log("GeoAssets", "Файл ${target.name} превышает лимит $MAX_GEO_FILE_BYTES байт")
+                            return false
+                        }
+                        output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                    }
                 }
             }
 
             if (!isValidGeoFile(tempFile)) {
                 tempFile.delete()
                 return false
+            }
+
+            if (expectedHash != null) {
+                val actualHash = digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }
+                if (!actualHash.equals(expectedHash, ignoreCase = true)) {
+                    tempFile.delete()
+                    GeekModeLogger.log("GeoAssets", "Несовпадение SHA-256 для ${target.name}")
+                    return false
+                }
             }
 
             if (target.exists() && !target.delete()) {
@@ -155,5 +184,26 @@ object DesktopGeoAssetsUpdater {
             runCatching { tempFile.delete() }
             false
         }
+    }
+
+    private fun fetchExpectedSha256(client: HttpClient, shaUrl: String, fileName: String): String? {
+        return runCatching {
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create(shaUrl))
+                .timeout(Duration.ofSeconds(15))
+                .header("User-Agent", "v2whitelist-desktop")
+                .GET()
+                .build()
+            val resp = client.send(req, HttpResponse.BodyHandlers.ofString())
+            if (resp.statusCode() !in 200..299) return@runCatching null
+            for (line in resp.body().lines()) {
+                val parts = line.trim().split(Regex("\\s+"), limit = 2)
+                if (parts.size == 2 && SHA256_REGEX.matches(parts[0])) {
+                    val entry = parts[1].trim().removePrefix("*").substringAfterLast('/')
+                    if (entry == fileName) return@runCatching parts[0].lowercase()
+                }
+            }
+            null
+        }.getOrNull()
     }
 }

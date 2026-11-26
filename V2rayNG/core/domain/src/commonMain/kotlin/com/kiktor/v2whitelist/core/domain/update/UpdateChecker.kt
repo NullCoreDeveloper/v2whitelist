@@ -19,9 +19,33 @@ import kotlinx.serialization.json.Json
  */
 object UpdateChecker {
 
+    const val MAX_RELEASE_JSON_BYTES = 2 * 1024 * 1024
+
+    val ALLOWED_DOWNLOAD_HOSTS = setOf(
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "raw.githubusercontent.com"
+    )
+
+    private val SHA256_HEX_REGEX = Regex("^[0-9a-fA-F]{64}$")
+
     val jsonParser = Json {
         ignoreUnknownKeys = true
         isLenient = true
+    }
+
+    /**
+     * Проверяет, что URL обновления использует HTTPS и указывает на доверенный хост GitHub Releases.
+     */
+    fun isAllowedUpdateUrl(url: String?): Boolean {
+        val trimmed = url?.trim() ?: return false
+        if (!trimmed.startsWith("https://", ignoreCase = true)) return false
+        val withoutScheme = trimmed.substring(8)
+        val authority = withoutScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (authority.isEmpty() || '@' in authority) return false
+        val host = authority.substringBefore(':').lowercase().trimEnd('.')
+        return host in ALLOWED_DOWNLOAD_HOSTS
     }
 
     /**
@@ -104,12 +128,18 @@ object UpdateChecker {
      * Извлекает ожидаемый sha256 хеш для файла из содержимого sha256sum.txt.
      */
     fun extractExpectedChecksum(sha256sumText: String, fileName: String): String? {
+        val targetName = fileName.trim().substringAfterLast('/')
+        if (targetName.isEmpty()) return null
         for (line in sha256sumText.lines()) {
-            if (line.contains(fileName)) {
-                val parts = line.trim().split(Regex("\\s+"))
-                if (parts.isNotEmpty()) {
-                    return parts[0]
-                }
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+            val parts = trimmed.split(Regex("\\s+"), limit = 2)
+            if (parts.size != 2) continue
+            val hash = parts[0]
+            if (!SHA256_HEX_REGEX.matches(hash)) continue
+            val entryName = parts[1].trim().removePrefix("*").substringAfterLast('/')
+            if (entryName == targetName) {
+                return hash.lowercase()
             }
         }
         return null
@@ -154,6 +184,12 @@ object UpdateChecker {
             }
 
             val responseBody = response.bodyAsText()
+            if (responseBody.length > MAX_RELEASE_JSON_BYTES) {
+                return CheckUpdateResult(
+                    hasUpdate = false,
+                    error = "Release metadata exceeds size limit"
+                )
+            }
             val release = if (includePreRelease) {
                 parseReleases(responseBody).firstOrNull()
             } else {
@@ -176,7 +212,9 @@ object UpdateChecker {
             }
 
             val compatibleAsset = findCompatibleAsset(release, targetPlatform)
-            val checksumUrl = release.assets.firstOrNull { it.name == "sha256sum.txt" }?.browserDownloadUrl
+            val safeDownloadUrl = compatibleAsset?.browserDownloadUrl?.takeIf { isAllowedUpdateUrl(it) }
+            val safeChecksumUrl = release.assets.firstOrNull { it.name == "sha256sum.txt" }
+                ?.browserDownloadUrl?.takeIf { isAllowedUpdateUrl(it) }
 
             GeekModeLogger.log("UpdateChecker", "Found new version: $latestVersion (current: $currentVersion)")
 
@@ -184,8 +222,8 @@ object UpdateChecker {
                 hasUpdate = true,
                 latestVersion = latestVersion,
                 releaseNotes = release.body,
-                downloadUrl = compatibleAsset?.browserDownloadUrl,
-                checksumUrl = checksumUrl,
+                downloadUrl = safeDownloadUrl,
+                checksumUrl = safeChecksumUrl,
                 apkFileName = compatibleAsset?.name,
                 fileName = compatibleAsset?.name,
                 isPreRelease = release.prerelease
