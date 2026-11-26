@@ -249,7 +249,7 @@ fun SettingsScreen(
             smartPreset = smartPreset,
             v2wCore = useV2w,
             fallbackScanner = useFallback,
-            tcpPrecheck = (tcpPrecheckInput.toIntOrNull() ?: 50).coerceIn(1, 200),
+            tcpPrecheck = (tcpPrecheckInput.toIntOrNull() ?: 100).coerceIn(1, 200),
             v2wSockets = (v2wSockets.toIntOrNull() ?: 35).coerceIn(1, 100),
             v2wFullVerify = v2wFullVerify,
             removeInsecure = removeInsecure,

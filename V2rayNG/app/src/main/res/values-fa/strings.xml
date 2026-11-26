@@ -836,7 +836,7 @@
     <string name="pref_chunk_size_summary">%1$d سرور</string>
     <string name="pref_concurrency_summary">%1$d رشته</string>
     <string name="title_pref_v2w_tcp_concurrency">همزمانی پیش‌بررسی TCP</string>
-    <string name="summary_pref_v2w_tcp_concurrency">حداکثر سوکت‌های همزمان پیش‌بررسی TCP پیش از آزمایش پروفایل‌ها (پیش‌فرض: ۵۰)</string>
+    <string name="summary_pref_v2w_tcp_concurrency">حداکثر سوکت‌های همزمان پیش‌بررسی TCP پیش از آزمایش پروفایل‌ها (پیش‌فرض: ۱۰۰)</string>
     <string name="title_pref_v2w_full_verify_mode">بررسی کامل در v2w-core</string>
     <string name="summary_pref_v2w_full_verify_mode">آزمایش ۲۰۴، سرویس‌ها و نود خروجی به صورت ناهمزمان در v2w-core؛ هسته Xray فقط سرعت را می‌سنجد</string>
     <string name="geek_mode_btn_share_logs">اشتراک‌گذاری گزارش‌ها (ZIP)</string>

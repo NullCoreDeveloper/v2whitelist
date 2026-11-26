@@ -271,7 +271,7 @@ interface AppStrings {
     val v2wFallback: String
     val v2wFallbackDesc: String
     val v2wSocketsLabel: String
-    val tcpPrecheckLabel: String get() = "TCP pre-check concurrency (default 50)"
+    val tcpPrecheckLabel: String get() = "TCP pre-check concurrency (default 100)"
     val v2wFullVerifyTitle: String get() = "Full verification in v2w-core"
     val v2wFullVerifyDesc: String get() = "v2w-core handles HTTP 204, service & endpoint checks; Xray only measures speed"
     val xrayPathLabel: String
@@ -836,7 +836,7 @@ object StringsRu : AppStrings {
     override val v2wFallback: String = "Fallback на старый сканер"
     override val v2wFallbackDesc: String = "Резервный механизм при сбоях нативного бинарника"
     override val v2wSocketsLabel: String = "Потоки проверки профилей v2w-core (по умолч. 35)"
-    override val tcpPrecheckLabel: String = "Потоки TCP pre-check (по умолч. 50)"
+    override val tcpPrecheckLabel: String = "Потоки TCP pre-check (по умолч. 100)"
     override val v2wFullVerifyTitle: String = "Полная проверка в v2w-core (Xray только скорость)"
     override val v2wFullVerifyDesc: String = "204, сервисы и конечный узел проверяются асинхронно в v2w-core; Xray замеряет только скорость"
     override val xrayPathLabel: String = "Путь к бинарнику Xray (оставьте пустым для автопоиска)"
@@ -1387,7 +1387,7 @@ object StringsEn : AppStrings {
     override val v2wFallback: String = "Fallback to legacy scanner"
     override val v2wFallbackDesc: String = "Fallback probing mechanism if the native binary encounters errors"
     override val v2wSocketsLabel: String = "v2w-core profile check concurrency (default 35)"
-    override val tcpPrecheckLabel: String = "TCP pre-check concurrency (default 50)"
+    override val tcpPrecheckLabel: String = "TCP pre-check concurrency (default 100)"
     override val v2wFullVerifyTitle: String = "Full verification in v2w-core (Xray speed-only)"
     override val v2wFullVerifyDesc: String = "Run 204, service & exit-node checks asynchronously in v2w-core; Xray only measures speed"
     override val xrayPathLabel: String = "Xray binary path (leave empty for auto-detection)"
@@ -2127,7 +2127,7 @@ object StringsZh : AppStrings {
     override val traySystemProxyOn: String = "✔ 系统代理: 已开启 (点击关闭)"
     override val traySystemProxyOff: String = "系统代理: 已关闭 (点击开启)"
     override val trayExit: String = "退出"
-    override val tcpPrecheckLabel: String = "TCP 预检并发上限（默认 50）"
+    override val tcpPrecheckLabel: String = "TCP 预检并发上限（默认 100）"
     override val v2wFullVerifyTitle: String = "在 v2w-core 中执行完整校验（Xray 仅测速）"
     override val v2wFullVerifyDesc: String = "204、服务与出口节点校验均在 v2w-core 中异步执行；Xray 仅用于测速"
     override val smartConnectScanning: String = "正在扫描并检测服务器…"
@@ -2623,7 +2623,7 @@ object StringsFa : AppStrings {
     override val traySystemProxyOn: String = "✔ پروکسی سیستم: روشن (برای خاموش کردن کلیک کنید)"
     override val traySystemProxyOff: String = "پروکسی سیستم: خاموش (برای روشن کردن کلیک کنید)"
     override val trayExit: String = "خروج"
-    override val tcpPrecheckLabel: String = "سقف همزمانی پیش‌بررسی TCP (پیش‌فرض ۵۰)"
+    override val tcpPrecheckLabel: String = "سقف همزمانی پیش‌بررسی TCP (پیش‌فرض ۱۰۰)"
     override val v2wFullVerifyTitle: String = "بررسی کامل در v2w-core (Xray فقط سرعت)"
     override val v2wFullVerifyDesc: String = "تست ۲۰۴، سرویس‌ها و نود خروجی در v2w-core انجام می‌شود؛ Xray فقط سرعت را می‌سنجد"
     override val smartConnectScanning: String = "در حال اسکن و بررسی سرورها…"

@@ -836,7 +836,7 @@
     <string name="pref_chunk_size_summary">%1$d 个节点</string>
     <string name="pref_concurrency_summary">%1$d 线程</string>
     <string name="title_pref_v2w_tcp_concurrency">TCP 预检并发数</string>
-    <string name="summary_pref_v2w_tcp_concurrency">配置文件检测前允许的最大并发 TCP 预检连接数（默认：50）</string>
+    <string name="summary_pref_v2w_tcp_concurrency">配置文件检测前允许的最大并发 TCP 预检连接数（默认：100）</string>
     <string name="title_pref_v2w_full_verify_mode">在 v2w-core 中执行完整校验</string>
     <string name="summary_pref_v2w_full_verify_mode">204、服务与出口节点校验均在 v2w-core 中异步完成；Xray 仅用于测速</string>
     <string name="geek_mode_btn_share_logs">分享日志 (ZIP)</string>
