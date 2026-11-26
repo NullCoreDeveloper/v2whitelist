@@ -81,6 +81,7 @@ class AngApplication : Application(), Configuration.Provider {
         Log.i(AppConfig.TAG, "AngApplication.onCreate: pid=${Process.myPid()}, isMainProcess=$isMain")
 
         MMKV.initialize(this)
+        com.kiktor.v2whitelist.handler.MmkvManager.initializeEncryption(this)
 
         // Ensure critical preference defaults are present in MMKV early
         SettingsManager.ensureDefaultSettings()

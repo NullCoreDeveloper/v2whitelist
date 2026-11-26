@@ -1,5 +1,6 @@
 package com.kiktor.v2whitelist.handler
 
+import android.content.Context
 import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.PREF_IS_BOOTED
@@ -41,14 +42,39 @@ object MmkvManager {
     const val KEY_BATTERY_ASKED = "BATTERY_ASKED"
 
     //private val profileStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_CONFIG, MMKV.MULTI_PROCESS_MODE) }
-    private val mainStorage by lazy { MMKV.mmkvWithID(ID_MAIN, MMKV.MULTI_PROCESS_MODE) }
-    private val profileFullStorage by lazy { MMKV.mmkvWithID(ID_PROFILE_FULL_CONFIG, MMKV.MULTI_PROCESS_MODE) }
-    private val serverRawStorage by lazy { MMKV.mmkvWithID(ID_SERVER_RAW, MMKV.MULTI_PROCESS_MODE) }
-    private val serverAffStorage by lazy { MMKV.mmkvWithID(ID_SERVER_AFF, MMKV.MULTI_PROCESS_MODE) }
-    private val serverInspectionStorage by lazy { MMKV.mmkvWithID(ID_SERVER_INSPECTION, MMKV.MULTI_PROCESS_MODE) }
-    private val subStorage by lazy { MMKV.mmkvWithID(ID_SUB, MMKV.MULTI_PROCESS_MODE) }
-    private val assetStorage by lazy { MMKV.mmkvWithID(ID_ASSET, MMKV.MULTI_PROCESS_MODE) }
-    private val settingsStorage by lazy { MMKV.mmkvWithID(ID_SETTING, MMKV.MULTI_PROCESS_MODE) }
+    private val ALL_STORAGE_IDS = listOf(
+        ID_MAIN,
+        ID_PROFILE_FULL_CONFIG,
+        ID_SERVER_RAW,
+        ID_SERVER_AFF,
+        ID_SERVER_INSPECTION,
+        ID_SUB,
+        ID_ASSET,
+        ID_SETTING
+    )
+
+    @Volatile
+    private var cryptKey: String? = null
+
+    fun initializeEncryption(context: Context) {
+        val key = MmkvKeyManager.getOrCreateCryptKey(context)
+        if (key != null) {
+            MmkvKeyManager.migratePlainStoragesIfNeeded(context, key, ALL_STORAGE_IDS)
+            cryptKey = key
+        }
+    }
+
+    private fun openStorage(id: String): MMKV =
+        MMKV.mmkvWithID(id, MMKV.MULTI_PROCESS_MODE, cryptKey)
+
+    private val mainStorage by lazy { openStorage(ID_MAIN) }
+    private val profileFullStorage by lazy { openStorage(ID_PROFILE_FULL_CONFIG) }
+    private val serverRawStorage by lazy { openStorage(ID_SERVER_RAW) }
+    private val serverAffStorage by lazy { openStorage(ID_SERVER_AFF) }
+    private val serverInspectionStorage by lazy { openStorage(ID_SERVER_INSPECTION) }
+    private val subStorage by lazy { openStorage(ID_SUB) }
+    private val assetStorage by lazy { openStorage(ID_ASSET) }
+    private val settingsStorage by lazy { openStorage(ID_SETTING) }
 
     //endregion
 
