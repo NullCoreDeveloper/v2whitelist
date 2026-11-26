@@ -462,6 +462,46 @@ object V2RayServiceManager {
         return true
     }
 
+    private val queryAllStatsMethod: java.lang.reflect.Method? by lazy {
+        runCatching { coreController.javaClass.getMethod("queryAllOutboundTrafficStats") }.getOrNull()
+    }
+
+    private val legacyQueryStatsMethod: java.lang.reflect.Method? by lazy {
+        runCatching {
+            coreController.javaClass.getMethod("queryStats", String::class.java, String::class.java)
+        }.getOrNull()
+    }
+
+    /**
+     * Queries and resets uplink/downlink traffic statistics for outbound tags in one call
+     * when supported by the native core, falling back to legacy per-tag queries otherwise.
+     */
+    fun queryOutboundTrafficStats(tags: Collection<String>): Map<Pair<String, String>, Long> {
+        queryAllStatsMethod?.let { method ->
+            val raw = runCatching { method.invoke(coreController) as? String }.getOrNull().orEmpty()
+            if (raw.isEmpty()) return emptyMap()
+            val result = HashMap<Pair<String, String>, Long>()
+            for (entry in raw.split(';')) {
+                if (entry.isEmpty()) continue
+                val parts = entry.split(',')
+                if (parts.size != 3) continue
+                val value = parts[2].toLongOrNull() ?: continue
+                result[parts[0] to parts[1]] = value
+            }
+            return result
+        }
+
+        val legacy = legacyQueryStatsMethod ?: return emptyMap()
+        val result = HashMap<Pair<String, String>, Long>(tags.size * 2)
+        for (tag in tags) {
+            val up = runCatching { (legacy.invoke(coreController, tag, AppConfig.UPLINK) as? Number)?.toLong() }.getOrNull() ?: 0L
+            val down = runCatching { (legacy.invoke(coreController, tag, AppConfig.DOWNLINK) as? Number)?.toLong() }.getOrNull() ?: 0L
+            result[tag to AppConfig.UPLINK] = up
+            result[tag to AppConfig.DOWNLINK] = down
+        }
+        return result
+    }
+
     /**
      * Queries the statistics for a given tag and link.
      * @param tag The tag to query.
@@ -469,7 +509,10 @@ object V2RayServiceManager {
      * @return The statistics value.
      */
     fun queryStats(tag: String, link: String): Long {
-        return coreController.queryStats(tag, link)
+        legacyQueryStatsMethod?.let { legacy ->
+            return runCatching { (legacy.invoke(coreController, tag, link) as? Number)?.toLong() }.getOrNull() ?: 0L
+        }
+        return queryOutboundTrafficStats(listOf(tag))[tag to link] ?: 0L
     }
 
     /**

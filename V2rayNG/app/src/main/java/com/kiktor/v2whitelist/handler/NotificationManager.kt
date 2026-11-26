@@ -75,9 +75,14 @@ object NotificationManager {
                 var proxyUpSum = 0L
                 var proxyDownSum = 0L
                 val text = StringBuilder()
+                val allStatsTags = buildList {
+                    outboundTags?.let { addAll(it) }
+                    add(AppConfig.TAG_DIRECT)
+                }
+                val stats = V2RayServiceManager.queryOutboundTrafficStats(allStatsTags)
                 outboundTags?.forEach {
-                    val up = V2RayServiceManager.queryStats(it, AppConfig.UPLINK)
-                    val down = V2RayServiceManager.queryStats(it, AppConfig.DOWNLINK)
+                    val up = stats[it to AppConfig.UPLINK] ?: 0L
+                    val down = stats[it to AppConfig.DOWNLINK] ?: 0L
                     if (up + down > 0) {
                         if (showSpeedNotification) {
                             appendSpeedString(text, it, up / sinceLastQueryInSeconds, down / sinceLastQueryInSeconds)
@@ -87,8 +92,8 @@ object NotificationManager {
                     proxyUpSum += up
                     proxyDownSum += down
                 }
-                val directUplink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.UPLINK)
-                val directDownlink = V2RayServiceManager.queryStats(AppConfig.TAG_DIRECT, AppConfig.DOWNLINK)
+                val directUplink = stats[AppConfig.TAG_DIRECT to AppConfig.UPLINK] ?: 0L
+                val directDownlink = stats[AppConfig.TAG_DIRECT to AppConfig.DOWNLINK] ?: 0L
                 val zeroSpeed = proxyTotal == 0L && directUplink == 0L && directDownlink == 0L
 
                 val proxyUpRate = proxyUpSum / sinceLastQueryInSeconds

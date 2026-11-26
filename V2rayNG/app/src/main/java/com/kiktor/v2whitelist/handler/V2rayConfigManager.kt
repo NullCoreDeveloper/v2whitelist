@@ -1675,10 +1675,11 @@ object V2rayConfigManager {
 
         streamSettings.security = streamSecurity.nullIfBlank()
         if (streamSettings.security == null) return
-        val defaultFp = if (streamSettings.security == AppConfig.REALITY || streamSettings.security == AppConfig.TLS) "chrome" else null
+        val isHysteria = streamSettings.network == NetworkType.HYSTERIA.type
+        val defaultFp = if (!isHysteria && (streamSettings.security == AppConfig.REALITY || streamSettings.security == AppConfig.TLS)) "chrome" else null
         val tlsSetting = StreamSettingsBean.TlsSettingsBean(
             serverName = sni.nullIfBlank(),
-            fingerprint = profileItem.fingerPrint.nullIfBlank() ?: defaultFp,
+            fingerprint = if (isHysteria) null else (profileItem.fingerPrint.nullIfBlank() ?: defaultFp),
             alpn =  profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },
             echConfigList = profileItem.echConfigList.nullIfBlank(),
             echForceQuery = profileItem.echForceQuery.nullIfBlank(),
