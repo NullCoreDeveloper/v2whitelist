@@ -3,7 +3,6 @@ package v2wscanner
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	stdnet "net"
 	"strings"
 	"sync"
@@ -13,6 +12,8 @@ import (
 	core "github.com/kiktor/v2w-core"
 	"github.com/kiktor/v2w-core/common/net"
 	"github.com/kiktor/v2w-core/transport/internet"
+	"github.com/kiktor/v2w-core/transport/internet/reality"
+	"github.com/kiktor/v2w-core/transport/internet/tls"
 )
 
 // V2WFullScanCallback — gomobile-совместимый интерфейс потоковой передачи результатов полного сканирования.
@@ -137,16 +138,34 @@ func InspectNode(
 	}
 
 	var fallbackDelayMs int64
-	if err != nil {
-		var httpStatusErr *core.HTTPStatusError
-		if errors.As(err, &httpStatusErr) && ctx.Err() == nil {
-			fbCtx, cancelFb := context.WithTimeout(ctx, time.Duration(opts.TimeoutSec)*time.Second)
-			fbRes := scanner.TestNode(fbCtx, handler, dialer, targetDest)
-			cancelFb()
-			if fbRes.Error == nil {
-				err = nil
-				exitInfo = nil
-				fallbackDelayMs = fbRes.Latency.Milliseconds()
+	if err != nil && ctx.Err() == nil {
+		fbCtx, cancelFb := context.WithTimeout(ctx, time.Duration(opts.TimeoutSec)*time.Second)
+		fbRes := scanner.TestNode(fbCtx, handler, dialer, targetDest)
+		cancelFb()
+		if fbRes.Error == nil {
+			err = nil
+			exitInfo = nil
+			fragMode = ""
+			fallbackDelayMs = fbRes.Latency.Milliseconds()
+		} else if shouldRetryWithFragment(fbRes.Error, cand) && ctx.Err() == nil {
+			for _, fragStep := range []struct {
+				mode internet.FragmentMode
+				tag  string
+			}{
+				{internet.FragmentTCP, "tcp"},
+				{internet.FragmentRecord, "record"},
+			} {
+				fragCtx, cancelFrag := context.WithTimeout(ctx, time.Duration(opts.FragTimeoutSec)*time.Second)
+				fragCtx = internet.ContextWithFragment(fragCtx, fragStep.mode)
+				fRes := scanner.TestNode(fragCtx, handler, dialer, targetDest)
+				cancelFrag()
+				if fRes.Error == nil {
+					err = nil
+					exitInfo = nil
+					fragMode = fragStep.tag
+					fallbackDelayMs = fRes.Latency.Milliseconds()
+					break
+				}
 			}
 		}
 	}
@@ -233,6 +252,60 @@ func InspectNode(
 	return result
 }
 
+type keyedGatePool struct {
+	limit int
+	mu    sync.Mutex
+	gates map[string]chan struct{}
+}
+
+func newKeyedGatePool(limit int) *keyedGatePool {
+	return &keyedGatePool{
+		limit: limit,
+		gates: make(map[string]chan struct{}),
+	}
+}
+
+func (p *keyedGatePool) gateFor(key string) chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ch, ok := p.gates[key]
+	if !ok {
+		ch = make(chan struct{}, p.limit)
+		p.gates[key] = ch
+	}
+	return ch
+}
+
+func (p *keyedGatePool) acquire(ctx context.Context, key string) (func(), bool) {
+	ch := p.gateFor(key)
+	select {
+	case ch <- struct{}{}:
+		return func() { <-ch }, true
+	case <-ctx.Done():
+		return nil, false
+	}
+}
+
+func candidateHostAndSNI(cand parsedCandidate) (string, string) {
+	hostKey := ""
+	if cand.dest.Address != nil {
+		hostKey = strings.ToLower(strings.TrimSpace(cand.dest.Address.String()))
+	}
+	sniKey := ""
+	if cand.stream != nil {
+		switch sec := cand.stream.SecuritySettings.(type) {
+		case *tls.Config:
+			sniKey = strings.ToLower(strings.TrimSpace(sec.ServerName))
+		case *reality.Config:
+			sniKey = strings.ToLower(strings.TrimSpace(sec.ServerName))
+		}
+	}
+	if sniKey == "" {
+		sniKey = hostKey
+	}
+	return hostKey, sniKey
+}
+
 // RunFullScanPipeline запускает двухступенчатый пайплайн полного сканирования:
 // 1) TCP pre-check (ошибки сразу отправляются в onResult с Alive=false).
 // 2) Полная диагностика через InspectNode.
@@ -311,7 +384,7 @@ func RunFullScanPipeline(
 
 				if dest.Network == net.Network_TCP {
 					targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
-					tcpDialer := stdnet.Dialer{Timeout: 1800 * time.Millisecond}
+					tcpDialer := stdnet.Dialer{Timeout: 2500 * time.Millisecond}
 					network := "tcp"
 					if dest.Address.Family().IsDomain() {
 						network = "tcp4"
@@ -355,6 +428,13 @@ func RunFullScanPipeline(
 		verifyWorkers = len(links)
 	}
 
+	const (
+		maxPerHost = 3
+		maxPerSNI  = 6
+	)
+	hostGates := newKeyedGatePool(maxPerHost)
+	sniGates := newKeyedGatePool(maxPerSNI)
+
 	for i := 0; i < verifyWorkers; i++ {
 		verifyWg.Add(1)
 		go func() {
@@ -382,7 +462,21 @@ func RunFullScanPipeline(
 				}
 				dialer := &customDialer{streamSettings: cand.stream}
 
+				hostKey, sniKey := candidateHostAndSNI(cand)
+				releaseHost, ok := hostGates.acquire(ctx, hostKey)
+				if !ok {
+					return
+				}
+				releaseSNI, ok := sniGates.acquire(ctx, sniKey)
+				if !ok {
+					releaseHost()
+					return
+				}
+
 				res := InspectNode(ctx, coreScanner, cand, handler, dialer, opts, exitCompiled, targetDest, enabledServices)
+				releaseSNI()
+				releaseHost()
+
 				if res.Alive {
 					atomic.AddInt64(&successCount, 1)
 				} else {

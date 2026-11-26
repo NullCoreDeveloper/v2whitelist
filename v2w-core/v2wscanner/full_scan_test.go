@@ -341,6 +341,49 @@ func TestInspectNodeFallback204WhenCFTraceFails(t *testing.T) {
 	}
 }
 
+type failCFTraceHandler struct {
+	tlsCfg *tls.Config
+}
+
+func (f *failCFTraceHandler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target xnet.Destination) error {
+	if strings.Contains(target.Address.String(), "cloudflare.com") && target.Port == 443 {
+		if cl, ok := link.Writer.(io.Closer); ok {
+			_ = cl.Close()
+		}
+		return fmt.Errorf("simulated cloudflare trace network failure")
+	}
+	mock := &tlsMockHTTPHandler{
+		tlsCfg: f.tlsCfg,
+		responder: func(host, reqPath string) (int, map[string]string, string) {
+			if reqPath == "/generate_204" {
+				return 204, nil, ""
+			}
+			return 404, nil, ""
+		},
+	}
+	return mock.Process(ctx, link, dialer, target)
+}
+
+func TestInspectNodeFallback204WhenCFTraceNetworkError(t *testing.T) {
+	scanner := core.NewScanner()
+	tlsCfg := mustTestTLSConfig(t)
+	handler := &failCFTraceHandler{tlsCfg: tlsCfg}
+
+	cand := parsedCandidate{
+		link:   "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443#FBNet",
+		stream: &internet.MemoryStreamConfig{SecurityType: "none"},
+		dest:   xnet.TCPDestination(xnet.DomainAddress("1.2.3.4"), 443),
+	}
+	opts := DefaultScanOptions()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res := InspectNode(ctx, scanner, cand, handler, &mockDialer{}, opts, nil, parseTargetDest(opts.DestURL), nil)
+	if !res.Alive {
+		t.Fatalf("expected Alive=true via 204 fallback on network error, got error: %s", res.Error)
+	}
+}
+
 func TestRunFullScanPipelineReportsInvalidAndComplete(t *testing.T) {
 	links := []string{
 		"invalid://bad-node",

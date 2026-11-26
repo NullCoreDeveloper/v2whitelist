@@ -330,7 +330,7 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 
 				if dest.Network == net.Network_TCP {
 					targetAddr := stdnet.JoinHostPort(dest.Address.String(), dest.Port.String())
-					tcpDialer := stdnet.Dialer{Timeout: 1800 * time.Millisecond}
+					tcpDialer := stdnet.Dialer{Timeout: 2500 * time.Millisecond}
 					network := "tcp"
 					if dest.Address.Family().IsDomain() {
 						network = "tcp4"

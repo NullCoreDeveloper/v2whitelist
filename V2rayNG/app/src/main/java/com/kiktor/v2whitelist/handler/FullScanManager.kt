@@ -128,8 +128,8 @@ object FullScanManager {
         val root = JSONObject().apply {
             put("tcp_concurrency", tcpConcurrency)
             put("verify_concurrency", verifyConcurrency)
-            put("timeout_sec", 4)
-            put("frag_timeout_sec", 2)
+            put("timeout_sec", 7)
+            put("frag_timeout_sec", 4)
             put("dest_url", destUrl)
             put("endpoint_url", "")
             put("endpoint_e2e", false)
