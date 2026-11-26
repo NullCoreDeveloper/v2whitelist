@@ -1,8 +1,11 @@
 package com.kiktor.v2whitelist.desktop
 
+import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
 import com.kiktor.v2whitelist.desktop.util.DesktopInstalledAppsProvider
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,11 +16,28 @@ class DesktopTunManagerTest {
 
     @Test
     fun testTun2SocksExecutableDiscovery() {
-        // tun2socks был скопирован в bin/ и также присутствует в системе
-        val exec = DesktopTunManager.findTun2SocksExecutable()
-        assertNotNull(exec, "tun2socks executable should be found in bin/ or system PATH")
-        assertTrue(exec.exists())
-        assertTrue(exec.canExecute())
+        val tempDir = Files.createTempDirectory("tun2socks-discovery-").toFile()
+        val prevAppDir = System.getProperty("app.dir")
+        try {
+            val binDir = File(tempDir, "bin").apply { mkdirs() }
+            val fakeBin = File(binDir, DesktopBinaryResolver.tun2socksBinaryNames.first()).apply {
+                writeText("#!/bin/sh\nexit 0\n")
+                setExecutable(true)
+            }
+            System.setProperty("app.dir", tempDir.absolutePath)
+
+            val exec = DesktopTunManager.findTun2SocksExecutable()
+            assertNotNull(exec, "tun2socks executable should be found via app.dir")
+            assertEquals(fakeBin.canonicalFile, exec)
+            assertTrue(exec.exists())
+            assertTrue(exec.canExecute())
+
+            val customExec = DesktopTunManager.findTun2SocksExecutable(fakeBin.absolutePath)
+            assertEquals(fakeBin.canonicalFile, customExec)
+        } finally {
+            if (prevAppDir == null) System.clearProperty("app.dir") else System.setProperty("app.dir", prevAppDir)
+            tempDir.deleteRecursively()
+        }
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.repository.InMemoryServerRepository
 import com.kiktor.v2whitelist.core.repository.InMemorySettingsRepository
+import com.kiktor.v2whitelist.desktop.engine.DesktopBinaryResolver
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
@@ -16,6 +17,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -120,12 +123,40 @@ class DesktopAppTest {
         assertEquals(1080, settingsRepo.getSocksPort())
     }
 
+    private inline fun withTempAppDir(prefix: String, block: (File) -> Unit) {
+        val tempDir = Files.createTempDirectory(prefix).toFile()
+        val prevAppDir = System.getProperty("app.dir")
+        try {
+            System.setProperty("app.dir", tempDir.absolutePath)
+            block(tempDir)
+        } finally {
+            if (prevAppDir == null) {
+                System.clearProperty("app.dir")
+            } else {
+                System.setProperty("app.dir", prevAppDir)
+            }
+            tempDir.deleteRecursively()
+        }
+    }
+
     @Test
     fun testV2WCoreScannerExecutableDiscovery() {
-        val bin = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable()
-        assertNotNull(bin, "Бинарник v2w-scan должен быть обнаружен в репозитории")
-        assertTrue(bin.exists())
-        assertTrue(bin.canExecute())
+        withTempAppDir("v2w-scan-discovery-") { tempDir ->
+            val binDir = File(tempDir, "bin").apply { mkdirs() }
+            val fakeBin = File(binDir, DesktopBinaryResolver.v2wBinaryNames.first()).apply {
+                writeText("#!/bin/sh\nexit 0\n")
+                setExecutable(true)
+            }
+
+            val bin = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable()
+            assertNotNull(bin, "Бинарник v2w-scan должен быть обнаружен через app.dir")
+            assertEquals(fakeBin.canonicalFile, bin)
+            assertTrue(bin.exists())
+            assertTrue(bin.canExecute())
+
+            val customBin = com.kiktor.v2whitelist.desktop.engine.V2WCoreScanner.findV2WScanExecutable(fakeBin.absolutePath)
+            assertEquals(fakeBin.canonicalFile, customBin)
+        }
     }
 
     @Test
@@ -138,14 +169,29 @@ class DesktopAppTest {
 
     @Test
     fun testXrayAndAssetDiscovery() {
-        val runner = com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner()
-        val xrayBin = runner.findXrayExecutable()
-        assertNotNull(xrayBin, "Xray бинарник должен быть обнаружен")
-        assertTrue(xrayBin.exists())
+        withTempAppDir("xray-discovery-") { tempDir ->
+            val binDir = File(tempDir, "bin").apply { mkdirs() }
+            val fakeXray = File(binDir, DesktopBinaryResolver.xrayBinaryNames.first()).apply {
+                writeText("#!/bin/sh\nexit 0\n")
+                setExecutable(true)
+            }
+            File(binDir, "geoip.dat").writeBytes(byteArrayOf(1, 2, 3))
+            File(binDir, "geosite.dat").writeBytes(byteArrayOf(1, 2, 3))
 
-        val assetDir = runner.findAssetLocation(xrayBin)
-        assertNotNull(assetDir, "Каталог геофайлов должен быть обнаружен")
-        assertTrue(assetDir.exists())
+            val runner = com.kiktor.v2whitelist.desktop.engine.XrayDesktopRunner()
+            val xrayBin = runner.findXrayExecutable()
+            assertNotNull(xrayBin, "Xray бинарник должен быть обнаружен через app.dir")
+            assertEquals(fakeXray.canonicalFile, xrayBin)
+            assertTrue(xrayBin.exists())
+            assertTrue(xrayBin.canExecute())
+
+            val customXray = runner.findXrayExecutable(fakeXray.absolutePath)
+            assertEquals(fakeXray.canonicalFile, customXray)
+
+            val assetDir = runner.findAssetLocation(xrayBin)
+            assertNotNull(assetDir, "Каталог геофайлов должен быть обнаружен")
+            assertTrue(assetDir.exists())
+        }
     }
 
     @Test
