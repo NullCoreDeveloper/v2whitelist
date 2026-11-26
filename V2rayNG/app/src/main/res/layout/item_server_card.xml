@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/card_server"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="12dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="12dp"
+    android:layout_marginBottom="4dp"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Summary Row (always visible, tap to expand) -->
+        <LinearLayout
+            android:id="@+id/layout_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <!-- Row 1: Flag, VIP star, Name, Connected, Ping, Arrow -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_flag"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:textSize="16sp"
+                    tools:text="🇩🇪" />
+
+                <TextView
+                    android:id="@+id/tv_vip_star"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="4dp"
+                    android:text="★"
+                    android:textColor="#D4AF37"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/tv_server_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textStyle="bold"
+                    tools:text="Frankfurt Premium #12" />
+
+                <TextView
+                    android:id="@+id/tv_connected_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/server_list_connected_badge"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                    android:textColor="?attr/colorPrimary"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <TextView
+                    android:id="@+id/tv_ping"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                    android:textStyle="bold"
+                    tools:text="112ms" />
+
+                <ImageView
+                    android:id="@+id/iv_expand_arrow"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="4dp"
+                    android:importantForAccessibility="no"
+                    app:srcCompat="@drawable/ic_expand_more_24dp"
+                    app:tint="?android:attr/textColorSecondary" />
+            </LinearLayout>
+
+            <!-- Row 2: Protocol, Subscription, Service/Endpoint status -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tv_protocol_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                    android:textColor="?attr/colorPrimary"
+                    android:textStyle="bold"
+                    tools:text="VLESS" />
+
+                <TextView
+                    android:id="@+id/tv_subscription"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?android:attr/textColorSecondary"
+                    tools:text="• Main Subscription" />
+
+                <TextView
+                    android:id="@+id/tv_status_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                    android:textStyle="bold"
+                    tools:text="Сервисы 6/7" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Expanded Details -->
+        <LinearLayout
+            android:id="@+id/layout_details"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginBottom="8dp"
+                android:background="?attr/colorOutlineVariant" />
+
+            <TextView
+                android:id="@+id/tv_exit_ip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:visibility="gone"
+                tools:text="Выходной IP: 🇩🇪 Германия • 185.10.20.30"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/tv_endpoint_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="Конечный узел ✔"
+                tools:visibility="gone" />
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chip_group_services"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone"
+                app:chipSpacingHorizontal="6dp"
+                app:chipSpacingVertical="6dp"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/tv_error_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="#E53935"
+                android:visibility="gone"
+                tools:text="dial tcp timeout"
+                tools:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_speed_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="Скорость: 42.50 Мбит/с"
+                tools:visibility="visible" />
+
+            <!-- Action buttons row 1 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_connect"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:text="@string/server_list_btn_connect"
+                    app:icon="@drawable/ic_play_24dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_speed_test"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/server_list_btn_speed_test"
+                    app:icon="@drawable/ic_speed_24dp" />
+            </LinearLayout>
+
+            <!-- Action buttons row 2 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_toggle_vip"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:text="@string/server_list_btn_add_vip" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_retest"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/server_list_btn_retest"
+                    app:icon="@drawable/ic_check_update_24dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
