@@ -554,10 +554,11 @@ object SettingsManager {
             MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_SPEED_CHECK_TIMEOUT, "3000")
         }
 
-        // 3. Минимальный порог скорости (дефолт: 1.0 Мбит/с)
+        // 3. Минимальный порог скорости (дефолт: 1.0 Мбит/с; 0 допустимо, если замер скорости отключён)
         val minSpeedStr = MmkvManager.decodeSettingsString(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS)
         val minSpeedVal = minSpeedStr?.toDoubleOrNull()
-        if (minSpeedVal == null || minSpeedStr == "0" || minSpeedVal < 0.0) {
+        val speedCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
+        if (minSpeedVal == null || minSpeedVal < 0.0 || (minSpeedVal == 0.0 && speedCheckEnabled)) {
             MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "1.0")
         }
 

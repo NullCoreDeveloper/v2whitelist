@@ -199,6 +199,9 @@ class DesktopAppState(
         filterServersByScenario(serverList, sc, subList)
     }.stateIn(internalStateScope, SharingStarted.Eagerly, emptyList())
 
+    // Диалог настройки режима работы, скорости и проверки сервисов
+    val showModeSettingsDialog = MutableStateFlow(false)
+
     // Фильтр локаций серверов (1-в-1 как в Android версии)
     val showLocationFilterDialog = MutableStateFlow(false)
     val locationFilterMode = MutableStateFlow(LocationFilterMode.fromString(settingsRepo.getString("pref_location_filter_mode", "EXCLUDE")))
@@ -585,6 +588,7 @@ class DesktopAppState(
 
         // Загрузка и инициализация подписок
         loadSubscriptions()
+        migrateLegacyModeAndSubscriptionsIfNeeded()
 
         // Проверка сети при старте (если разрешено)
         if (autoCheckNetworkOnStart) {
@@ -1814,13 +1818,93 @@ class DesktopAppState(
         connectCurrent()
     }
 
+    private fun migrateLegacyModeAndSubscriptionsIfNeeded() {
+        when (_scenario.value) {
+            AppScenario.YOUTUBE -> {
+                _scenario.value = AppScenario.VPN_BLACKLIST
+                settingsRepo.setAppScenario(AppScenario.VPN_BLACKLIST)
+                minSpeedThresholdMbps.value = 10.0
+                speedTestOnCheck.value = true
+                settingsRepo.setString("pref_min_speed_mbps", "10.0")
+                settingsRepo.setBoolean("pref_speed_test_on_check", true)
+            }
+            AppScenario.KEEP_CURRENT -> {
+                _scenario.value = AppScenario.AUTO
+                settingsRepo.setAppScenario(AppScenario.AUTO)
+            }
+            else -> Unit
+        }
+
+        val migrationKey = "pref_mode_redesign_v1_migrated"
+        if (!settingsRepo.getBoolean(migrationKey, false)) {
+            val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+            val removed = _removedSubIds.value
+            val currentSubs = _subscriptions.value.toMutableList()
+            var changed = false
+
+            for (defSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+                if (removed.contains(defSub.id)) continue
+                val idx = currentSubs.indexOfFirst { it.id == defSub.id }
+                if (idx >= 0) {
+                    if (!currentSubs[idx].enabled) {
+                        currentSubs[idx] = currentSubs[idx].copy(enabled = true)
+                        changed = true
+                    }
+                } else {
+                    currentSubs.add(defSub.copy(enabled = true))
+                    changed = true
+                }
+            }
+            // На всякий случай убедимся, что все дефолтные подписки в списке включены
+            for (i in currentSubs.indices) {
+                val sub = currentSubs[i]
+                if (defaultIds.contains(sub.id) && !removed.contains(sub.id) && !sub.enabled) {
+                    currentSubs[i] = sub.copy(enabled = true)
+                    changed = true
+                }
+            }
+
+            if (changed) {
+                _subscriptions.value = currentSubs
+                saveSubscriptionsToStorage(currentSubs)
+            }
+            settingsRepo.setBoolean(migrationKey, true)
+        }
+    }
+
+    fun promptModeSettingsDialog() {
+        showModeSettingsDialog.value = true
+    }
+
+    fun dismissModeSettingsDialog() {
+        showModeSettingsDialog.value = false
+    }
+
+    fun setMinSpeedMbps(mbps: Double) {
+        val clean = mbps.coerceAtLeast(0.0)
+        val formatted = if (clean % 1.0 == 0.0) "${clean.toInt()}.0" else clean.toString()
+        minSpeedThresholdMbps.value = clean
+        val speedEnabled = clean > 0.0
+        speedTestOnCheck.value = speedEnabled
+        settingsRepo.runBatch {
+            settingsRepo.setString("pref_min_speed_mbps", formatted)
+            settingsRepo.setBoolean("pref_speed_test_on_check", speedEnabled)
+        }
+        settingsRevision.value++
+    }
+
     fun setScenario(sc: AppScenario) {
-        _scenario.value = sc
-        settingsRepo.setAppScenario(sc)
+        val normalized = when (sc) {
+            AppScenario.YOUTUBE -> AppScenario.VPN_BLACKLIST
+            AppScenario.KEEP_CURRENT -> AppScenario.AUTO
+            else -> sc
+        }
+        _scenario.value = normalized
+        settingsRepo.setAppScenario(normalized)
         isManualSelection.value = false
         settingsRepo.setBoolean("pref_manual_server_selected", false)
         if (coreState.value == DesktopCoreState.RUNNING || coreState.value == DesktopCoreState.STARTING) {
-            // Запуск автопоиска узлов под выбранный сценарий (Авто / БС / ЧС / YouTube)
+            // Запуск автопоиска узлов под выбранный сценарий (Авто / БС / ЧС)
             startSmartConnect()
         }
     }
@@ -2044,6 +2128,7 @@ class DesktopAppState(
     fun setServiceCheckEnabled(enabled: Boolean) {
         serviceCheckEnabled.value = enabled
         settingsRepo.setBoolean("pref_service_check_enabled", enabled)
+        settingsRevision.value++
     }
 
     fun toggleService(id: String, enabled: Boolean) {
@@ -3137,6 +3222,7 @@ class DesktopAppState(
 
         // Сброс всех StateFlow-параметров к дефолтным значениям
         _scenario.value = AppScenario.AUTO
+        showModeSettingsDialog.value = false
         _selectedGuid.value = null
         _pingMap.value = emptyMap()
         _removedSubIds.value = emptySet()

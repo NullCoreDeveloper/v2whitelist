@@ -290,313 +290,106 @@ object SubscriptionHelper {
     typealias AppScenario = com.kiktor.v2whitelist.core.model.AppScenario
 
     /**
-     * Применяет выбранный сценарий подписок из стартового опросника.
+     * Нормализует устаревшие сценарии (YOUTUBE -> VPN_BLACKLIST, KEEP_CURRENT -> AUTO).
      */
-    suspend fun applyScenario(context: Context, scenario: AppScenario) = withContext(Dispatchers.IO) {
-        MmkvManager.encodeSettings(AppConfig.PREF_CURRENT_APP_SCENARIO, scenario.name)
-        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
-
-        if (scenario == AppScenario.KEEP_CURRENT) {
-            return@withContext
+    fun normalizeScenario(scenario: AppScenario): AppScenario {
+        return when (scenario) {
+            AppScenario.YOUTUBE -> AppScenario.VPN_BLACKLIST
+            AppScenario.KEEP_CURRENT -> AppScenario.AUTO
+            else -> scenario
         }
-
-        val targetScenarioKey = when (scenario) {
-            AppScenario.AUTO -> null
-            AppScenario.WHITELIST -> CustomSubData.SCENARIO_WHITELIST
-            AppScenario.VPN_BLACKLIST -> CustomSubData.SCENARIO_BLACKLIST
-            AppScenario.YOUTUBE -> CustomSubData.SCENARIO_YOUTUBE
-            AppScenario.KEEP_CURRENT -> return@withContext
-        }
-
-        val targetSubIds = when (scenario) {
-            AppScenario.AUTO -> {
-                // В режиме АВТО включаются ВСЕ предустановленные подписки
-                DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
-            }
-            AppScenario.WHITELIST -> {
-                DefaultSubscriptions.PREPOPULATED_SUBS
-                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST) }
-                    .map { it.id }
-                    .toSet()
-            }
-            AppScenario.VPN_BLACKLIST -> {
-                DefaultSubscriptions.PREPOPULATED_SUBS
-                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST) }
-                    .map { it.id }
-                    .toSet()
-            }
-            AppScenario.YOUTUBE -> {
-                DefaultSubscriptions.PREPOPULATED_SUBS
-                    .filter { it.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE) }
-                    .map { it.id }
-                    .toSet()
-            }
-            AppScenario.KEEP_CURRENT -> emptySet()
-        }
-
-        val customSubs = loadCustomSubs().toMutableList()
-        val allSubs = MmkvManager.decodeSubscriptions()
-
-        // Добавляем целевые подписки из DefaultSubscriptions, если их еще не было в customSubs
-        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            if (targetSubIds.contains(defaultSub.id) && customSubs.none { it.id == defaultSub.id }) {
-                customSubs.add(defaultSub.copy(enabled = true))
-            }
-        }
-
-        // Если выбранные подписки были в списке удаленных, возвращаем их
-        val removedSet = getRemovedSubIds().toMutableSet()
-        var removedModified = false
-        for (id in targetSubIds) {
-            if (removedSet.remove(id)) {
-                removedModified = true
-            }
-        }
-        if (removedModified) {
-            MmkvManager.encodeSettings(AppConfig.PREF_REMOVED_CUSTOM_SUB_IDS, com.kiktor.v2whitelist.util.JsonUtil.toJson(removedSet.toList()))
-        }
-
-        val defaultSubIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
-        val disabledSubIdsToPurge = mutableSetOf<String>()
-
-        for (sub in customSubs) {
-            val isDefault = defaultSubIds.contains(sub.id)
-            val shouldEnable = when {
-                scenario == AppScenario.AUTO -> true // АВТО включает абсолютно все подписки
-                isDefault -> targetSubIds.contains(sub.id)
-                else -> {
-                    // Кастомная подписка пользователя: проверяем висящие на ней теги/сценарии
-                    val scenarios = if (sub.targetScenarios.isNotEmpty()) {
-                        sub.targetScenarios
-                    } else {
-                        DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == sub.id }?.targetScenarios ?: emptyList()
-                    }
-                    if (targetScenarioKey == null) {
-                        true
-                    } else if (scenarios.isNotEmpty()) {
-                        scenarios.contains(targetScenarioKey)
-                    } else {
-                        sub.enabled
-                    }
-                }
-            }
-            sub.enabled = shouldEnable
-            val guid = "custom_sub_${sub.id}"
-            val matchingSubs = allSubs.filter {
-                it.guid == guid || it.guid == sub.id || it.subscription.remarks.equals(sub.name, ignoreCase = true)
-            }
-
-            if (!shouldEnable) {
-                sub.lastUpdated = 0L
-                sub.lastUpdateFailed = false
-                disabledSubIdsToPurge.add(guid)
-                disabledSubIdsToPurge.add(sub.id)
-                matchingSubs.forEach { disabledSubIdsToPurge.add(it.guid) }
-
-                for (realSub in matchingSubs) {
-                    realSub.subscription.lastUpdated = 0L
-                    realSub.subscription.enabled = false
-                    realSub.subscription.lastUpdateFailed = false
-                    MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
-                }
-
-                val direct = MmkvManager.decodeSubscription(guid)
-                if (direct != null) {
-                    direct.lastUpdated = 0L
-                    direct.enabled = false
-                    direct.lastUpdateFailed = false
-                    MmkvManager.encodeSubscription(guid, direct)
-                }
-            } else {
-                if (matchingSubs.isEmpty()) {
-                    val subItem = SubscriptionItem().apply {
-                        remarks = sub.name
-                        url = sub.url
-                        filter = sub.filter
-                        enabled = true
-                        sharePercent = sub.sharePercent
-                    }
-                    MmkvManager.encodeSubscription(guid, subItem)
-                } else {
-                    for (realSub in matchingSubs) {
-                        realSub.subscription.enabled = true
-                        MmkvManager.encodeSubscription(realSub.guid, realSub.subscription)
-                    }
-                }
-            }
-        }
-
-        // Также гарантируем отключение любых предустановленных подписок в allSubs, не входящих в целевой сценарий
-        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            if (!targetSubIds.contains(defaultSub.id)) {
-                val guid = "custom_sub_${defaultSub.id}"
-                disabledSubIdsToPurge.add(guid)
-                disabledSubIdsToPurge.add(defaultSub.id)
-                allSubs.filter {
-                    it.guid == guid || it.guid == defaultSub.id || it.subscription.remarks.equals(defaultSub.name, ignoreCase = true)
-                }.forEach { match ->
-                    disabledSubIdsToPurge.add(match.guid)
-                    match.subscription.lastUpdated = 0L
-                    match.subscription.enabled = false
-                    match.subscription.lastUpdateFailed = false
-                    MmkvManager.encodeSubscription(match.guid, match.subscription)
-                }
-            }
-        }
-
-        MmkvManager.encodeSettings(AppConfig.PREF_CUSTOM_SUB_URLS, com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs))
-
-        // Удаляем серверы отключенных подписок до обновления
-        for (id in disabledSubIdsToPurge) {
-            MmkvManager.removeServerViaSubid(id)
-        }
-
-        try {
-            updateSubscription(context)
-        } catch (e: Exception) {
-            Log.e(AppConfig.TAG, "Failed to update subscriptions after applying scenario: ${e.message}")
-        }
-
-        // Повторная очистка серверов отключенных подписок после обновления
-        for (id in disabledSubIdsToPurge) {
-            MmkvManager.removeServerViaSubid(id)
-        }
-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
     }
 
     /**
-     * Отображает диалог с мастером выбора сценария (пресета) подписок.
-     * На ТВ-устройствах отображается как центрированный диалог с поддержкой D-pad пульта.
+     * Возвращает текущий активный сценарий с учётом нормализации устаревших значений.
      */
-    fun showSetupWizard(activity: Activity, onApplied: (() -> Unit)? = null) {
-        val view = activity.layoutInflater.inflate(R.layout.layout_onboarding_purpose_bottom_sheet, null)
-        val isTvMode = Utils.isTv(activity)
+    fun getCurrentScenario(): AppScenario {
+        val raw = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_CURRENT_APP_SCENARIO,
+            AppScenario.AUTO.name
+        ) ?: AppScenario.AUTO.name
+        val parsed = try {
+            AppScenario.valueOf(raw)
+        } catch (_: Exception) {
+            AppScenario.AUTO
+        }
+        return normalizeScenario(parsed)
+    }
 
-        val cardAuto = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_auto)
-        val cardVpn = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_vpn)
-        val cardWhitelist = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_whitelist)
-        val cardYoutube = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_youtube)
-        val cardKeep = view.findViewById<com.google.android.material.card.MaterialCardView>(R.id.card_scenario_keep)
+    /**
+     * Сохраняет выбранный режим работы (Авто / БС / ЧС) без изменения статуса подписок.
+     */
+    fun setScenario(scenario: AppScenario) {
+        val normalized = normalizeScenario(scenario)
+        MmkvManager.encodeSettings(AppConfig.PREF_CURRENT_APP_SCENARIO, normalized.name)
+        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+    }
 
-        val cards = listOfNotNull(cardAuto, cardVpn, cardWhitelist, cardYoutube, cardKeep)
+    /**
+     * Одноразовая миграция для пользователей со старым визардом и сценарием YouTube:
+     * - YOUTUBE -> VPN_BLACKLIST (ЧС) + скорость 10 Мбит/с (Баланс)
+     * - KEEP_CURRENT -> AUTO
+     * - Все предустановленные подписки (кроме удалённых пользователем) включаются по умолчанию.
+     */
+    fun migrateLegacyModeIfNeeded() {
+        val rawScenario = MmkvManager.decodeSettingsString(
+            AppConfig.PREF_CURRENT_APP_SCENARIO,
+            null
+        )
+        if (rawScenario == AppScenario.YOUTUBE.name) {
+            MmkvManager.encodeSettings(AppConfig.PREF_CURRENT_APP_SCENARIO, AppScenario.VPN_BLACKLIST.name)
+            MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_MIN_SPEED_MBPS, "10.0")
+            MmkvManager.encodeSettings(AppConfig.PREF_PROFILE_SPEED_CHECK_ENABLED, true)
+        } else if (rawScenario == AppScenario.KEEP_CURRENT.name) {
+            MmkvManager.encodeSettings(AppConfig.PREF_CURRENT_APP_SCENARIO, AppScenario.AUTO.name)
+        }
 
-        // На ТВ настраиваем D-pad фокус и убираем полоску свайпа
-        if (isTvMode) {
-            view.findViewById<View>(R.id.drag_handle)?.visibility = View.GONE
-            for (card in cards) {
-                card.isFocusable = true
-                card.isFocusableInTouchMode = true
-                card.setOnFocusChangeListener { _, hasFocus ->
-                    card.strokeWidth = Utils.dp2px(activity, if (hasFocus) 3 else 1)
-                    card.cardElevation = Utils.dp2px(activity, if (hasFocus) 6 else 1).toFloat()
-                }
+        val migrationKey = "pref_mode_redesign_v1_migrated"
+        if (MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            return
+        }
+
+        MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
+
+        val removedIds = getRemovedSubIds()
+        val customSubs = loadCustomSubs().toMutableList()
+        var customSubsChanged = false
+
+        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+            if (removedIds.contains(defaultSub.id)) continue
+            val existing = customSubs.find { it.id == defaultSub.id }
+            if (existing == null) {
+                customSubs.add(defaultSub.copy(enabled = true))
+                customSubsChanged = true
+            } else if (!existing.enabled) {
+                existing.enabled = true
+                customSubsChanged = true
+            }
+
+            val guid = "custom_sub_${defaultSub.id}"
+            val storedSub = MmkvManager.decodeSubscription(guid)
+            if (storedSub != null && !storedSub.enabled) {
+                storedSub.enabled = true
+                MmkvManager.encodeSubscription(guid, storedSub)
             }
         }
 
-        val wasAlreadyShown = MmkvManager.decodeSettingsBool(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, false)
-        var isExplicitlySelected = false
-        var dismissAction: () -> Unit = {}
-
-        val handleDismissOrCancel = {
-            MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
-            if (!isExplicitlySelected && !wasAlreadyShown) {
-                isExplicitlySelected = true
-                Toast.makeText(activity, R.string.scenario_toast_auto_applied, Toast.LENGTH_SHORT).show()
-                CoroutineScope(Dispatchers.Main).launch {
-                    applyScenario(activity, AppScenario.AUTO)
-                    onApplied?.invoke()
-                }
-            }
+        if (customSubsChanged) {
+            MmkvManager.encodeSettings(
+                AppConfig.PREF_CUSTOM_SUB_URLS,
+                com.kiktor.v2whitelist.util.JsonUtil.toJson(customSubs)
+            )
         }
 
-        cardAuto?.setOnClickListener {
-            isExplicitlySelected = true
-            dismissAction()
-            Toast.makeText(activity, R.string.scenario_toast_auto_applied, Toast.LENGTH_SHORT).show()
-            CoroutineScope(Dispatchers.Main).launch {
-                applyScenario(activity, AppScenario.AUTO)
-                onApplied?.invoke()
-            }
-        }
+        MmkvManager.encodeSettings(migrationKey, true)
+    }
 
-        cardVpn?.setOnClickListener {
-            isExplicitlySelected = true
-            dismissAction()
-            Toast.makeText(activity, R.string.scenario_toast_vpn_applied, Toast.LENGTH_SHORT).show()
-            CoroutineScope(Dispatchers.Main).launch {
-                applyScenario(activity, AppScenario.VPN_BLACKLIST)
-                onApplied?.invoke()
-            }
-        }
-
-        cardWhitelist?.setOnClickListener {
-            isExplicitlySelected = true
-            dismissAction()
-            Toast.makeText(activity, R.string.scenario_toast_whitelist_applied, Toast.LENGTH_SHORT).show()
-            CoroutineScope(Dispatchers.Main).launch {
-                applyScenario(activity, AppScenario.WHITELIST)
-                onApplied?.invoke()
-            }
-        }
-
-        cardYoutube?.setOnClickListener {
-            isExplicitlySelected = true
-            dismissAction()
-            Toast.makeText(activity, R.string.scenario_toast_youtube_applied, Toast.LENGTH_SHORT).show()
-            CoroutineScope(Dispatchers.Main).launch {
-                applyScenario(activity, AppScenario.YOUTUBE)
-                onApplied?.invoke()
-            }
-        }
-
-        cardKeep?.setOnClickListener {
-            isExplicitlySelected = true
-            dismissAction()
-            CoroutineScope(Dispatchers.Main).launch {
-                applyScenario(activity, AppScenario.KEEP_CURRENT)
-                onApplied?.invoke()
-            }
-            Toast.makeText(
-                activity,
-                R.string.scenario_toast_manual_hint,
-                Toast.LENGTH_LONG
-            ).show()
-        }
-
-        if (isTvMode) {
-            val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                .setView(view)
-                .setCancelable(true)
-                .setOnDismissListener {
-                    handleDismissOrCancel()
-                }
-                .create()
-
-            dismissAction = { dialog.dismiss() }
-            dialog.show()
-
-            dialog.window?.let { window ->
-                val displayMetrics = activity.resources.displayMetrics
-                val targetWidth = (displayMetrics.widthPixels * 0.7).toInt().coerceAtMost(Utils.dp2px(activity, 640))
-                window.setLayout(targetWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-            }
-
-            view.post {
-                cardAuto?.requestFocus()
-            }
-        } else {
-            val bottomSheetDialog = BottomSheetDialog(activity)
-            bottomSheetDialog.setCancelable(true)
-            bottomSheetDialog.setCanceledOnTouchOutside(true)
-            bottomSheetDialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
-            bottomSheetDialog.behavior.skipCollapsed = true
-            bottomSheetDialog.setOnDismissListener {
-                handleDismissOrCancel()
-            }
-            dismissAction = { bottomSheetDialog.dismiss() }
-            bottomSheetDialog.setContentView(view)
-            bottomSheetDialog.show()
-        }
+    /**
+     * Применяет выбранный сценарий подписок.
+     * Не отключает подписки — режим влияет только на выбор узлов в SmartConnect.
+     */
+    suspend fun applyScenario(context: Context, scenario: AppScenario) = withContext(Dispatchers.IO) {
+        setScenario(scenario)
     }
 
     /**
