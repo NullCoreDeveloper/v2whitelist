@@ -1,13 +1,11 @@
 package com.kiktor.v2whitelist.ui
 
 import android.os.Bundle
-import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.material.chip.Chip
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.databinding.ActivityGeekModeBinding
@@ -47,14 +45,6 @@ class GeekModeActivity : BaseActivity() {
 
         binding.btnForcePing.setOnClickListener {
             viewModel.forcePingTest()
-        }
-
-        binding.btnFindMoreVip.setOnClickListener {
-            viewModel.findAdditionalVipServers()
-        }
-
-        binding.btnPingVip.setOnClickListener {
-            viewModel.pingVipServers()
         }
 
         binding.btnCheckServices.setOnClickListener {
@@ -206,53 +196,12 @@ class GeekModeActivity : BaseActivity() {
                         }
                     }
                 }
-
-                launch {
-                    viewModel.vipServersFlow.collect { vipList ->
-                        binding.vipContainer.removeAllViews()
-                        for (vip in vipList) {
-                            val chip = Chip(this@GeekModeActivity).apply {
-                                text = "${vip.name} (${vip.ping}ms)"
-                                isCloseIconVisible = true
-                                setOnCloseIconClickListener {
-                                    viewModel.removeVipServer(vip.guid)
-                                }
-                                setOnClickListener {
-                                    val changed = MmkvManager.getSelectServer() != vip.guid
-                                    MmkvManager.setSelectServer(vip.guid)
-                                    updateNodeInfo()
-                                    
-                                    if (V2RayServiceManager.isRunning() == true) {
-                                        if (changed) {
-                                            // Останавливаем сервис и запускаем заново для применения нового конфига
-                                            V2RayServiceManager.stopVService(this@GeekModeActivity)
-                                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                                V2RayServiceManager.startVService(this@GeekModeActivity)
-                                            }, 300L) // Небольшая задержка перед стартом
-                                        }
-                                    } else {
-                                        // Включаем VPN, если он был выключен
-                                        V2RayServiceManager.startVService(this@GeekModeActivity)
-                                    }
-                                }
-                                layoutParams = LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                                    LinearLayout.LayoutParams.WRAP_CONTENT
-                                ).apply {
-                                    marginEnd = 8
-                                }
-                            }
-                            binding.vipContainer.addView(chip)
-                        }
-                    }
-                }
             }
         }
     }
 
     override fun onStart() {
         super.onStart()
-        viewModel.loadVipServers()
         if (V2RayServiceManager.isRunning() == true) {
             viewModel.fetchExitIp()
         }
