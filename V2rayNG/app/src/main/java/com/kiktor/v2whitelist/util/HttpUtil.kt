@@ -4,10 +4,13 @@ import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.LOOPBACK
 import com.kiktor.v2whitelist.BuildConfig
+import com.kiktor.v2whitelist.core.subscription.network.NetworkSecurityGuard
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.util.Utils.encode
 import com.kiktor.v2whitelist.util.Utils.urlDecode
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.IDN
 import java.net.Inet6Address
@@ -100,6 +103,29 @@ object HttpUtil {
     }
 
 
+    fun isLocalOrRestrictedAddress(address: InetAddress): Boolean =
+        address.isLoopbackAddress || address.isAnyLocalAddress || address.isLinkLocalAddress || address.isMulticastAddress
+
+    @Throws(IOException::class)
+    fun readStreamLimited(
+        input: InputStream,
+        maxBytes: Long = NetworkSecurityGuard.MAX_RESPONSE_BYTES
+    ): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > maxBytes) {
+                throw IOException("Response exceeds size limit ($maxBytes bytes)")
+            }
+            output.write(buffer, 0, read)
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
     /**
      * Retrieves the content of a URL as a string.
      *
@@ -111,7 +137,7 @@ object HttpUtil {
     fun getUrlContent(url: String, timeout: Int, httpPort: Int = 0): String? {
         val conn = createProxyConnection(url, httpPort, timeout, timeout) ?: return null
         try {
-            return conn.inputStream.bufferedReader().readText()
+            return conn.inputStream.use { readStreamLimited(it) }
         } catch (_: Exception) {
         } finally {
             conn.disconnect()
@@ -121,53 +147,17 @@ object HttpUtil {
 
     /**
      * Retrieves the content of a URL as a string with a custom User-Agent header.
-     *
-     * @param url The URL to fetch content from.
-     * @param timeout The timeout value in milliseconds.
-     * @param httpPort The HTTP port to use.
-     * @return The content of the URL as a string.
-     * @throws IOException If an I/O error occurs.
      */
     @Throws(IOException::class)
-    fun getUrlContentWithUserAgent(url: String?, userAgent: String?,  timeout: Int = 15000, httpPort: Int = 0): String {
-        var currentUrl = url
-        var redirects = 0
-        val maxRedirects = 3
-
-        while (redirects++ < maxRedirects) {
-            if (currentUrl == null) continue
-            val conn = createProxyConnection(currentUrl, httpPort, timeout, timeout) ?: continue
-            val customUserAgent = MmkvManager.decodeSettingsString("pref_custom_user_agent", "")
-            val finalUserAgent = if (!customUserAgent.isNullOrBlank()) {
-                customUserAgent
-            } else if (userAgent.isNullOrBlank()) {
-                "v2rayNG/${BuildConfig.VERSION_NAME}"
-            } else {
-                userAgent
-            }
-            conn.setRequestProperty("User-agent", finalUserAgent)
-            conn.connect()
-
-            val responseCode = conn.responseCode
-            when (responseCode) {
-                in 300..399 -> {
-                    val location = resolveLocation(conn)
-                    conn.disconnect()
-                    if (location.isNullOrEmpty()) {
-                        throw IOException("Redirect location not found")
-                    }
-                    currentUrl = location
-                    continue
-                }
-
-                else -> try {
-                    return conn.inputStream.use { it.bufferedReader().readText() }
-                } finally {
-                    conn.disconnect()
-                }
-            }
-        }
-        throw IOException("Too many redirects")
+    fun getUrlContentWithUserAgent(url: String?, userAgent: String?, timeout: Int = 15000, httpPort: Int = 0): String {
+        return fetchUrlWithRedirects(
+            url = url,
+            userAgent = userAgent,
+            timeout = timeout,
+            proxyPort = httpPort,
+            proxyType = Proxy.Type.HTTP,
+            allowCustomUserAgent = true
+        )
     }
 
     /**
@@ -192,7 +182,18 @@ object HttpUtil {
 
         var conn: HttpURLConnection? = null
         try {
-            val url = URL(urlStr)
+            val validated = NetworkSecurityGuard.validateExternalUrlString(urlStr, allowHttp = true)
+                ?: throw SecurityException("Blocked or invalid external URL")
+            val url = URL(validated)
+
+            // При прямом подключении защищаемся от DNS Rebinding на локальные/служебные IP
+            if (port == 0 && !NetworkSecurityGuard.isBlockedHost(url.host)) {
+                val resolved = InetAddress.getAllByName(url.host)
+                if (resolved.isEmpty() || resolved.any(::isLocalOrRestrictedAddress)) {
+                    throw SecurityException("Host resolved to a local or restricted address")
+                }
+            }
+
             // Create a connection
             conn = if (port == 0) {
                 url.openConnection()
@@ -268,20 +269,46 @@ object HttpUtil {
      */
     @Throws(IOException::class)
     fun getUrlContentViaSocks(url: String?, userAgent: String?, timeout: Int = 10000, socksPort: Int): String {
-        var currentUrl = url
-        var redirects = 0
-        val maxRedirects = 3
+        return fetchUrlWithRedirects(
+            url = url,
+            userAgent = userAgent,
+            timeout = timeout,
+            proxyPort = socksPort,
+            proxyType = Proxy.Type.SOCKS,
+            allowCustomUserAgent = false
+        )
+    }
 
-        while (redirects++ < maxRedirects) {
-            if (currentUrl == null) continue
+    @Throws(IOException::class)
+    private fun fetchUrlWithRedirects(
+        url: String?,
+        userAgent: String?,
+        timeout: Int,
+        proxyPort: Int,
+        proxyType: Proxy.Type,
+        allowCustomUserAgent: Boolean
+    ): String {
+        var current = NetworkSecurityGuard.validateExternalUrlString(url, allowHttp = true)
+            ?: throw IOException("Invalid or blocked URL")
+
+        repeat(NetworkSecurityGuard.MAX_REDIRECTS + 1) {
             val conn = createProxyConnection(
-                currentUrl, socksPort, timeout, timeout,
-                proxyType = Proxy.Type.SOCKS
-            ) ?: continue
-            val finalUserAgent = if (userAgent.isNullOrBlank()) {
-                "v2rayNG/${BuildConfig.VERSION_NAME}"
+                urlStr = current,
+                port = proxyPort,
+                connectTimeout = timeout,
+                readTimeout = timeout,
+                proxyType = proxyType
+            ) ?: throw IOException("Unable to create proxy connection")
+
+            val customUserAgent = if (allowCustomUserAgent) {
+                MmkvManager.decodeSettingsString("pref_custom_user_agent", "")
             } else {
-                userAgent
+                null
+            }
+            val finalUserAgent = when {
+                !customUserAgent.isNullOrBlank() -> customUserAgent
+                !userAgent.isNullOrBlank() -> userAgent
+                else -> "v2rayNG/${BuildConfig.VERSION_NAME}"
             }
             conn.setRequestProperty("User-agent", finalUserAgent)
             conn.connect()
@@ -291,15 +318,19 @@ object HttpUtil {
                 in 300..399 -> {
                     val location = resolveLocation(conn)
                     conn.disconnect()
-                    if (location.isNullOrEmpty()) {
-                        throw IOException("Redirect location not found")
+                    current = try {
+                        NetworkSecurityGuard.validateRedirectString(current, location, allowHttp = true)
+                    } catch (e: IllegalArgumentException) {
+                        throw IOException(e.message ?: "Unsafe redirect blocked", e)
                     }
-                    currentUrl = location
-                    continue
                 }
 
                 else -> try {
-                    return conn.inputStream.use { it.bufferedReader().readText() }
+                    val contentLen = conn.contentLengthLong
+                    if (contentLen > NetworkSecurityGuard.MAX_RESPONSE_BYTES) {
+                        throw IOException("Response exceeds size limit")
+                    }
+                    return conn.inputStream.use { readStreamLimited(it) }
                 } finally {
                     conn.disconnect()
                 }

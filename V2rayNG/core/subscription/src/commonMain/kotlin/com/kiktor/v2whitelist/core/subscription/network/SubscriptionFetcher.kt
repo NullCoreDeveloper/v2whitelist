@@ -7,9 +7,11 @@ import io.ktor.client.engine.http
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +84,7 @@ object SubscriptionFetcher {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS
     ): HttpClient {
         return HttpClient(CIO) {
+            followRedirects = false
             engine {
                 if (httpProxyPort > 0) {
                     proxy = ProxyBuilder.http("http://$httpProxyHost:$httpProxyPort")
@@ -96,27 +99,55 @@ object SubscriptionFetcher {
     }
 
     /**
-     * Fetches raw content and metadata (such as subscription-userinfo) from a single URL.
+     * Fetches raw content and metadata (such as subscription-userinfo) from a single URL
+     * with SSRF, redirect-downgrade and response-size protections.
      */
     suspend fun fetchSingleWithMeta(
         client: HttpClient,
         url: String,
         userAgent: String? = null
     ): Result<SubscriptionFetchResult> = runCatching {
-        val response = client.get(url) {
-            val ua = userAgent?.takeIf { it.isNotBlank() } ?: DEFAULT_USER_AGENT
-            header(HttpHeaders.UserAgent, ua)
-        }
-        if (response.status.isSuccess()) {
+        var currentUrl = NetworkSecurityGuard.validateExternalUrl(url, allowHttp = true)
+            ?: error("Blocked or invalid subscription URL")
+        val ua = userAgent?.takeIf { it.isNotBlank() } ?: DEFAULT_USER_AGENT
+
+        repeat(NetworkSecurityGuard.MAX_REDIRECTS + 1) {
+            val response = client.get(currentUrl) {
+                header(HttpHeaders.UserAgent, ua)
+            }
+            val code = response.status.value
+            if (code in setOf(301, 302, 303, 307, 308)) {
+                currentUrl = NetworkSecurityGuard.validateRedirect(
+                    currentUrl,
+                    response.headers[HttpHeaders.Location],
+                    allowHttp = true
+                )
+                return@repeat
+            }
+
+            if (!response.status.isSuccess()) {
+                error("HTTP error: $code ${response.status.description}")
+            }
+
+            val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+            if (contentLength != null && contentLength > NetworkSecurityGuard.MAX_RESPONSE_BYTES) {
+                error("Subscription response exceeds size limit")
+            }
+
+            val packet = response.bodyAsChannel().readRemaining(NetworkSecurityGuard.MAX_RESPONSE_BYTES + 1)
+            val bytes = packet.readByteArray()
+            if (bytes.size.toLong() > NetworkSecurityGuard.MAX_RESPONSE_BYTES) {
+                error("Subscription response exceeds size limit")
+            }
+
             val userInfoHeader = response.headers["subscription-userinfo"]
                 ?: response.headers["Subscription-Userinfo"]
-            SubscriptionFetchResult(
-                content = response.bodyAsText(),
+            return@runCatching SubscriptionFetchResult(
+                content = bytes.decodeToString(),
                 userInfo = parseSubscriptionUserInfo(userInfoHeader)
             )
-        } else {
-            error("HTTP error: ${response.status.value} ${response.status.description}")
         }
+        error("Too many redirects")
     }
 
     /**
