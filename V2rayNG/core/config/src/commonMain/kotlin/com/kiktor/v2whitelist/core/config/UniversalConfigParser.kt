@@ -7,6 +7,7 @@ import com.kiktor.v2whitelist.core.config.parser.SocksParser
 import com.kiktor.v2whitelist.core.config.parser.TrojanParser
 import com.kiktor.v2whitelist.core.config.parser.VlessParser
 import com.kiktor.v2whitelist.core.config.parser.VmessParser
+import com.kiktor.v2whitelist.core.config.security.ParseGuard
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 
@@ -19,7 +20,12 @@ object UniversalConfigParser {
      */
     fun parse(rawUri: String?, allowInsecure: Boolean = false): ProfileItem? {
         val str = rawUri?.trim() ?: return null
-        if (str.isEmpty()) return null
+        if (str.isEmpty() || !ParseGuard.checkLinkLength(str)) return null
+        val qIdx = str.indexOf('?')
+        if (qIdx >= 0) {
+            val queryPart = str.substring(qIdx + 1).substringBefore('#')
+            if (!ParseGuard.checkQueryParamCount(queryPart)) return null
+        }
 
         return when {
             str.startsWith("vless://", ignoreCase = true) -> VlessParser.parse(str, allowInsecure)

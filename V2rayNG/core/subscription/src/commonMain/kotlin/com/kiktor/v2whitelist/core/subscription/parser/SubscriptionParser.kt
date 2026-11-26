@@ -1,6 +1,7 @@
 package com.kiktor.v2whitelist.core.subscription.parser
 
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
+import com.kiktor.v2whitelist.core.config.security.ParseGuard
 import com.kiktor.v2whitelist.core.config.util.Base64Util
 import com.kiktor.v2whitelist.core.model.ProfileItem
 
@@ -23,14 +24,20 @@ object SubscriptionParser {
         allowInsecureUrl: Boolean = false
     ): List<ProfileItem> {
         if (content.isNullOrBlank()) return emptyList()
+        if (content.length > ParseGuard.MAX_SUBSCRIPTION_CHARS) return emptyList()
 
         // 1. Remove comment lines starting with #
-        val cleanContent = content.lines()
+        val cleanContent = content.lineSequence()
+            .take(ParseGuard.MAX_SCAN_LINES * 2)
             .filter { !it.trimStart().startsWith("#") }
             .joinToString("\n")
 
         // 2. Try Base64 decode first, then fallback to raw plain-text
-        val decoded = Base64Util.decode(cleanContent)
+        val decoded = if (cleanContent.length <= ParseGuard.MAX_BASE64_CHARS) {
+            Base64Util.decode(cleanContent)?.takeIf { it.length <= ParseGuard.MAX_SUBSCRIPTION_CHARS }
+        } else {
+            null
+        }
         var configs = parseLines(decoded, subscriptionId, filter, filterInsecure, allowInsecureUrl)
         if (configs.isEmpty()) {
             configs = parseLines(cleanContent, subscriptionId, filter, filterInsecure, allowInsecureUrl)
@@ -48,17 +55,19 @@ object SubscriptionParser {
     ): List<ProfileItem> {
         if (text.isNullOrBlank()) return emptyList()
 
-        val lines = text.lines()
+        val lines = text.lineSequence()
+            .take(ParseGuard.MAX_SCAN_LINES)
             .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .filter { it.isNotEmpty() && !it.startsWith("#") && ParseGuard.checkLinkLength(it) }
             .distinct()
 
         val result = mutableListOf<ProfileItem>()
-        val filterRegex = if (!filter.isNullOrBlank()) {
+        val filterRegex = if (!filter.isNullOrBlank() && filter.length <= 512) {
             try { Regex(filter) } catch (_: Exception) { null }
         } else null
 
         for (line in lines) {
+            if (result.size >= ParseGuard.MAX_PARSED_NODES) break
             val config = try {
                 UniversalConfigParser.parse(line, allowInsecure = allowInsecureUrl) ?: continue
             } catch (_: Exception) {
