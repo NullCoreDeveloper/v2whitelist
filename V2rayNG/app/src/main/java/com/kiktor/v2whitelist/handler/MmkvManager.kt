@@ -4,6 +4,8 @@ import com.tencent.mmkv.MMKV
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.PREF_IS_BOOTED
 import com.kiktor.v2whitelist.AppConfig.PREF_ROUTING_RULESET
+import com.kiktor.v2whitelist.core.domain.inspection.ServerFingerprint
+import com.kiktor.v2whitelist.core.domain.inspection.ServerInspectionCachePolicy
 import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
 import com.kiktor.v2whitelist.core.model.inspection.ServerInspectionInfo
 import com.kiktor.v2whitelist.dto.AssetUrlCache
@@ -467,12 +469,10 @@ object MmkvManager {
                     mainStorage.remove(KEY_SELECTED_SERVER)
                     profileFullStorage.remove(key)
                     serverAffStorage.remove(key)
-                    serverInspectionStorage.remove(key)
                 }
             } else {
                 profileFullStorage.remove(key)
                 serverAffStorage.remove(key)
-                serverInspectionStorage.remove(key)
             }
             removeVipServer(key)
         }
@@ -535,22 +535,39 @@ object MmkvManager {
         }
     }
 
+    fun encodeServerInspectionByKey(cacheKey: String, info: ServerInspectionInfo) {
+        if (cacheKey.isBlank()) return
+        serverInspectionStorage.encode(cacheKey, ServerInspectionInfo.toJson(info))
+    }
+
     fun encodeServerInspection(guid: String, info: ServerInspectionInfo) {
         if (guid.isBlank()) return
-        serverInspectionStorage.encode(guid, ServerInspectionInfo.toJson(info))
+        val cacheKey = decodeServerConfig(guid)?.let { ServerFingerprint.compute(it) } ?: guid
+        serverInspectionStorage.encode(cacheKey, ServerInspectionInfo.toJson(info))
     }
 
     fun decodeServerInspection(guid: String): ServerInspectionInfo? {
         if (guid.isBlank()) return null
-        return ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(guid))
+        val nowMs = System.currentTimeMillis()
+        val fpKey = decodeServerConfig(guid)?.let { ServerFingerprint.compute(it) }
+        val info = (if (!fpKey.isNullOrBlank()) {
+            ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(fpKey))
+        } else null) ?: ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(guid))
+        return info?.takeUnless { ServerInspectionCachePolicy.isExpired(it.testedAtMs, nowMs) }
     }
 
     fun decodeAllServerInspections(): Map<String, ServerInspectionInfo> {
+        return decodeAllServerInspectionsPruned()
+    }
+
+    fun decodeAllServerInspectionsPruned(nowMs: Long = System.currentTimeMillis()): Map<String, ServerInspectionInfo> {
         val keys = serverInspectionStorage.allKeys() ?: return emptyMap()
         val result = LinkedHashMap<String, ServerInspectionInfo>(keys.size)
         for (key in keys) {
             val info = ServerInspectionInfo.fromJson(serverInspectionStorage.decodeString(key))
-            if (info != null) {
+            if (info == null || ServerInspectionCachePolicy.isExpired(info.testedAtMs, nowMs)) {
+                serverInspectionStorage.remove(key)
+            } else {
                 result[key] = info
             }
         }
@@ -559,7 +576,16 @@ object MmkvManager {
 
     fun removeServerInspection(guid: String) {
         if (guid.isBlank()) return
+        decodeServerConfig(guid)?.let { serverInspectionStorage.remove(ServerFingerprint.compute(it)) }
         serverInspectionStorage.remove(guid)
+    }
+
+    fun removeServerInspectionByKeys(keys: Collection<String>) {
+        for (key in keys) {
+            if (key.isNotBlank()) {
+                serverInspectionStorage.remove(key)
+            }
+        }
     }
 
     fun clearAllServerInspections() {

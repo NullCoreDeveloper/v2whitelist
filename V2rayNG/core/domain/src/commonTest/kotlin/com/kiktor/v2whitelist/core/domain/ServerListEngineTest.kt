@@ -1,6 +1,8 @@
 package com.kiktor.v2whitelist.core.domain
 
 import com.kiktor.v2whitelist.core.domain.inspection.EndpointFilterMode
+import com.kiktor.v2whitelist.core.domain.inspection.ServerFingerprint
+import com.kiktor.v2whitelist.core.domain.inspection.ServerInspectionCachePolicy
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEngine
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEntry
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListFilter
@@ -12,6 +14,8 @@ import com.kiktor.v2whitelist.core.model.inspection.ServerInspectionInfo
 import com.kiktor.v2whitelist.core.model.inspection.ServiceProbeStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ServerListEngineTest {
@@ -249,5 +253,55 @@ class ServerListEngineTest {
         )
         assertEquals(listOf("n2"), byIp.regularServers.map { it.guid })
         assertTrue(filtered.stats.filteredServers == 1)
+    }
+
+    @Test
+    fun fingerprintIgnoresRemarksAndSubButDiffersOnTransportAndEndpoint() {
+        val base = ProfileItem(
+            configType = EConfigType.VLESS,
+            subscriptionId = "sub_old",
+            addedTime = 1000L,
+            remarks = "🇩🇪 Germany #1",
+            server = "Node.Example.COM",
+            serverPort = "443",
+            password = "uuid-1234",
+            network = "tcp",
+            sni = "cdn.example.com",
+            publicKey = "pubkey-abc",
+            shortId = "01ab",
+            fragmentEnabled = true
+        )
+        val sameServerNewSub = base.copy(
+            subscriptionId = "sub_new",
+            addedTime = 9999L,
+            remarks = "Updated Remarks ⚡[FRAG:TCP]",
+            server = "node.example.com",
+            fragmentEnabled = false
+        )
+        val fpBase = ServerFingerprint.compute(base)
+        assertTrue(fpBase.startsWith("fp_"))
+        assertEquals(35, fpBase.length)
+        assertEquals(fpBase, ServerFingerprint.compute(sameServerNewSub))
+
+        assertNotEquals(fpBase, ServerFingerprint.compute(base.copy(server = "other.example.com")))
+        assertNotEquals(fpBase, ServerFingerprint.compute(base.copy(serverPort = "8443")))
+        assertNotEquals(fpBase, ServerFingerprint.compute(base.copy(password = "uuid-9999")))
+        assertNotEquals(fpBase, ServerFingerprint.compute(base.copy(path = "/ws")))
+        assertNotEquals(fpBase, ServerFingerprint.compute(base.copy(publicKey = "pubkey-xyz")))
+    }
+
+    @Test
+    fun inspectionCachePolicyBoundaries() {
+        val testedAt = 10_000_000L
+        assertFalse(ServerInspectionCachePolicy.isStale(0L, testedAt))
+        assertFalse(ServerInspectionCachePolicy.isExpired(0L, testedAt))
+
+        val staleAt = testedAt + ServerInspectionCachePolicy.STALE_AFTER_MS
+        assertFalse(ServerInspectionCachePolicy.isStale(testedAt, staleAt))
+        assertTrue(ServerInspectionCachePolicy.isStale(testedAt, staleAt + 1L))
+
+        val expireAt = testedAt + ServerInspectionCachePolicy.EXPIRE_AFTER_MS
+        assertFalse(ServerInspectionCachePolicy.isExpired(testedAt, expireAt))
+        assertTrue(ServerInspectionCachePolicy.isExpired(testedAt, expireAt + 1L))
     }
 }

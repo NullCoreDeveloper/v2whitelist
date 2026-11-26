@@ -67,7 +67,8 @@ object FullScanManager {
 
     private val sessionSeq = AtomicLong(0L)
     private val activeStartedAtMs = AtomicLong(0L)
-    private val lastUiEmitAtMs = AtomicLong(0L)
+    private val lastProgressEmitAtMs = AtomicLong(0L)
+    private val lastListBumpAtMs = AtomicLong(0L)
     private val pendingMmkvWrites = ConcurrentHashMap<String, ServerInspectionInfo>()
     private val pendingFragUpdates = ConcurrentHashMap<String, String>()
     private val activeEndpointJobs = CopyOnWriteArrayList<Job>()
@@ -221,7 +222,8 @@ object FullScanManager {
 
     private fun applyInspectionResultSync(guid: String, info: ServerInspectionInfo) {
         ServerListStore.putInspectionInMemory(guid, info)
-        MmkvManager.encodeServerInspection(guid, info)
+        val cacheKey = ServerListStore.getCachedFingerprint(guid) ?: guid
+        MmkvManager.encodeServerInspectionByKey(cacheKey, info)
         MmkvManager.encodeServerTestDelayMillis(guid, if (info.alive) info.delayMs else -1L)
         if (info.alive && (info.fragMode == "tcp" || info.fragMode == "record")) {
             applyFragmentTagIfNeeded(guid, info.fragMode)
@@ -233,7 +235,8 @@ object FullScanManager {
         val inspKeys = pendingMmkvWrites.keys.toList()
         for (guid in inspKeys) {
             val info = pendingMmkvWrites.remove(guid) ?: continue
-            MmkvManager.encodeServerInspection(guid, info)
+            val cacheKey = ServerListStore.getCachedFingerprint(guid) ?: guid
+            MmkvManager.encodeServerInspectionByKey(cacheKey, info)
             MmkvManager.encodeServerTestDelayMillis(guid, if (info.alive) info.delayMs else -1L)
         }
         val fragKeys = pendingFragUpdates.keys.toList()
@@ -386,9 +389,12 @@ object FullScanManager {
                 }
                 FullScanMode.VIP_PING -> {
                     ServerListStore.clearInspectionsAndPingsForGuids(rawGuids.toSet())
+                    val keysToRemove = LinkedHashSet<String>(rawGuids.size * 2)
                     for (g in rawGuids) {
-                        MmkvManager.removeServerInspection(g)
+                        ServerListStore.getCachedFingerprint(g)?.let { keysToRemove.add(it) }
+                        keysToRemove.add(g)
                     }
+                    MmkvManager.removeServerInspectionByKeys(keysToRemove)
                     MmkvManager.clearAllTestDelayResults(rawGuids)
                     rawGuids
                 }
@@ -451,7 +457,9 @@ object FullScanManager {
                     revision = it.revision + 1
                 )
             }
-            lastUiEmitAtMs.set(System.currentTimeMillis())
+            val nowInit = System.currentTimeMillis()
+            lastProgressEmitAtMs.set(nowInit)
+            lastListBumpAtMs.set(nowInit)
 
             val completedCounter = AtomicInteger(0)
             val aliveCounter = AtomicInteger(0)
@@ -537,12 +545,10 @@ object FullScanManager {
                     val alive = if (baseInfo.alive) aliveCounter.incrementAndGet() else aliveCounter.get()
                     val failed = if (!baseInfo.alive) failedCounter.incrementAndGet() else failedCounter.get()
 
-                    // Живые показываем через 100мс, мёртвые помечаем сразу (через 250мс)
-                    val minEmitMs = if (baseInfo.alive) 100L else 250L
                     val now = System.currentTimeMillis()
-                    val prev = lastUiEmitAtMs.get()
-                    if (now - prev >= minEmitMs && lastUiEmitAtMs.compareAndSet(prev, now)) {
-                        ServerListStore.bumpRevision()
+                    // Лёгкое обновление счётчиков прогресс-бара (без пересортировки списка)
+                    val prevProg = lastProgressEmitAtMs.get()
+                    if (now - prevProg >= 180L && lastProgressEmitAtMs.compareAndSet(prevProg, now)) {
                         _state.update {
                             it.copy(
                                 completedCount = done,
@@ -551,6 +557,13 @@ object FullScanManager {
                                 revision = it.revision + 1
                             )
                         }
+                    }
+
+                    // Пересчёт и сортировка списка: первые 12 живых — быстро (150мс), далее — раз в 400мс для снижения GC
+                    val listBumpMinMs = if (baseInfo.alive && alive <= 12) 150L else 400L
+                    val prevBump = lastListBumpAtMs.get()
+                    if (now - prevBump >= listBumpMinMs && lastListBumpAtMs.compareAndSet(prevBump, now)) {
+                        ServerListStore.bumpRevision()
                     }
                 }
 

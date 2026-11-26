@@ -2,6 +2,8 @@ package com.kiktor.v2whitelist.handler
 
 import android.content.Context
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.core.domain.inspection.ServerFingerprint
+import com.kiktor.v2whitelist.core.domain.inspection.ServerInspectionCachePolicy
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEntry
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.PersonalServersConfig
@@ -29,7 +31,9 @@ object ServerListStore {
 
     data class CachedBaseServer(
         val guid: String,
+        val fingerprint: String,
         val profile: ProfileItem,
+        val remarksLower: String,
         val subscriptionId: String,
         val subscriptionName: String,
         val isPersonal: Boolean,
@@ -111,9 +115,12 @@ object ServerListStore {
 
                 val fallbackPing = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: 0L
                 val fallbackFlag = ServerTagResolver.extractFirstFlagEmoji(profile.remarks).orEmpty()
+                val fingerprint = ServerFingerprint.compute(profile)
                 val item = CachedBaseServer(
                     guid = guid,
+                    fingerprint = fingerprint,
                     profile = profile,
+                    remarksLower = profile.remarks.lowercase(),
                     subscriptionId = normSubId,
                     subscriptionName = subName,
                     isPersonal = isPersonal,
@@ -127,13 +134,32 @@ object ServerListStore {
                 }
             }
 
+            val nowMs = System.currentTimeMillis()
             if (!alreadyLoaded) {
-                val persisted = MmkvManager.decodeAllServerInspections()
+                val persisted = MmkvManager.decodeAllServerInspectionsPruned(nowMs)
                 inspections.clear()
-                inspections.putAll(persisted)
+                for ((key, info) in persisted) {
+                    if (key.startsWith("fp_") && !ServerInspectionCachePolicy.isExpired(info.testedAtMs, nowMs)) {
+                        inspections[key] = info
+                    }
+                }
+                for (item in newBase) {
+                    if (inspections[item.fingerprint] == null) {
+                        val legacy = persisted[item.guid]
+                        if (legacy != null && !ServerInspectionCachePolicy.isExpired(legacy.testedAtMs, nowMs)) {
+                            inspections[item.fingerprint] = legacy
+                        }
+                    }
+                }
             } else {
-                val validSet = newByGuid.keys
-                inspections.keys.retainAll(validSet)
+                // Не очищаем инспекции отсутствующих GUID: кэш привязан к fingerprint и переживает перегенерацию UUID.
+                val iter = inspections.entries.iterator()
+                while (iter.hasNext()) {
+                    val entry = iter.next()
+                    if (ServerInspectionCachePolicy.isExpired(entry.value.testedAtMs, nowMs)) {
+                        iter.remove()
+                    }
+                }
             }
 
             baseListRef.set(newBase)
@@ -157,9 +183,13 @@ object ServerListStore {
 
     fun getCachedProfile(guid: String): ProfileItem? = baseByGuid[guid]?.profile
 
+    fun getCachedFingerprint(guid: String): String? = baseByGuid[guid]?.fingerprint
+
     fun putInspectionInMemory(guid: String, info: ServerInspectionInfo) {
-        inspections[guid] = info
-        baseByGuid[guid]?.let { prev ->
+        val base = baseByGuid[guid]
+        val cacheKey = base?.fingerprint ?: guid
+        inspections[cacheKey] = info
+        base?.let { prev ->
             val newPing = if (info.alive) info.delayMs else -1L
             if (prev.fallbackPingMs != newPing) {
                 val updated = prev.copy(fallbackPingMs = newPing)
@@ -171,7 +201,18 @@ object ServerListStore {
     fun updateProfileInMemory(guid: String, profile: ProfileItem) {
         val prev = baseByGuid[guid] ?: return
         val newFlag = ServerTagResolver.extractFirstFlagEmoji(profile.remarks).orEmpty()
-        val updated = prev.copy(profile = profile, fallbackFlagEmoji = newFlag)
+        val newFp = ServerFingerprint.compute(profile)
+        if (newFp != prev.fingerprint) {
+            inspections.remove(prev.fingerprint)?.let { oldInsp ->
+                inspections.putIfAbsent(newFp, oldInsp)
+            }
+        }
+        val updated = prev.copy(
+            fingerprint = newFp,
+            profile = profile,
+            remarksLower = profile.remarks.lowercase(),
+            fallbackFlagEmoji = newFlag
+        )
         baseByGuid[guid] = updated
     }
 
@@ -197,12 +238,13 @@ object ServerListStore {
     fun clearInspectionsAndPingsForGuids(targetGuids: Set<String>) {
         if (targetGuids.isEmpty()) return
         for (g in targetGuids) {
-            inspections.remove(g)
             baseByGuid[g]?.let { prev ->
+                inspections.remove(prev.fingerprint)
                 if (prev.fallbackPingMs != 0L) {
                     baseByGuid[g] = prev.copy(fallbackPingMs = 0L)
                 }
             }
+            inspections.remove(g)
         }
         val oldList = baseListRef.get()
         if (oldList.isNotEmpty()) {
@@ -243,9 +285,12 @@ object ServerListStore {
     fun snapshot(): StoreSnapshot {
         val baseList = baseListRef.get()
         val vipSet = vipSetRef.get()
+        val nowMs = System.currentTimeMillis()
         val entries = ArrayList<ServerListEntry>(baseList.size)
         for (item in baseList) {
             val latest = baseByGuid[item.guid] ?: item
+            val insp = inspections[latest.fingerprint]
+                ?.takeUnless { ServerInspectionCachePolicy.isExpired(it.testedAtMs, nowMs) }
             entries.add(
                 ServerListEntry(
                     guid = latest.guid,
@@ -255,7 +300,8 @@ object ServerListStore {
                     isVip = latest.guid in vipSet,
                     isPersonal = latest.isPersonal,
                     fallbackPingMs = latest.fallbackPingMs,
-                    inspection = inspections[latest.guid]
+                    inspection = insp,
+                    remarksLower = latest.remarksLower
                 )
             )
         }

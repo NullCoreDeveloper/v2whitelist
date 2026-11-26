@@ -1065,6 +1065,10 @@
     <string name="server_list_switch_services_disabled_by_endpoint">Проверка сервисов отключена (активен конечный узел)</string>
     <string name="server_list_smart_connect_busy">Идёт поиск сервера…</string>
     <string name="server_list_btn_stop_vip">Остановить</string>
+    <string name="server_list_btn_disconnect">Отключиться</string>
+    <string name="server_list_long_press_hint">Подсказка: зажмите сервер для быстрого подключения</string>
+    <string name="server_list_connecting_to">Подключение к %1$s…</string>
+    <string name="server_list_scan_stale_suffix">" • устарело"</string>
     <string name="status_full_scan_running">Идёт полное сканирование серверов…</string>
     <string name="status_full_scan_progress">Проверено %1$d/%2$d • рабочих: %3$d</string>
 </resources>

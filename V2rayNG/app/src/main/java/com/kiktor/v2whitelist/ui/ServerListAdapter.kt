@@ -1,9 +1,11 @@
 package com.kiktor.v2whitelist.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,6 +25,7 @@ import com.kiktor.v2whitelist.core.model.inspection.countryCodeToFlagEmoji
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.viewmodel.SpeedTestRowState
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 sealed class ServerListRow {
     data class Header(
@@ -49,6 +52,8 @@ sealed class ServerListRow {
 class ServerListAdapter(
     private val onToggleExpand: (String) -> Unit,
     private val onConnect: (String) -> Unit,
+    private val onDisconnect: () -> Unit,
+    private val onLongPressConnect: (ServerListRow.Server) -> Unit,
     private val onSpeedTest: (String) -> Unit,
     private val onToggleVip: (String) -> Unit,
     private val onReinspect: (String) -> Unit,
@@ -63,16 +68,20 @@ class ServerListAdapter(
         private val GREEN_COLOR = Color.parseColor("#2E7D32")
         private val AMBER_COLOR = Color.parseColor("#F57C00")
         private val RED_COLOR = Color.parseColor("#D32F2F")
+        private val countryNameCache = ConcurrentHashMap<String, String>()
 
         fun getLocalizedCountryName(code: String): String {
             val norm = code.trim().uppercase()
             if (norm.isEmpty()) return ""
-            return try {
-                val locale = SettingsManager.getLocale()
-                val name = Locale.Builder().setRegion(norm).build().getDisplayCountry(locale)
-                if (name.isNotBlank() && !name.equals(norm, ignoreCase = true)) name else norm
-            } catch (_: Exception) {
-                norm
+            val locale = SettingsManager.getLocale()
+            val cacheKey = "${locale.language}_$norm"
+            return countryNameCache.getOrPut(cacheKey) {
+                try {
+                    val name = Locale.Builder().setRegion(norm).build().getDisplayCountry(locale)
+                    if (name.isNotBlank() && !name.equals(norm, ignoreCase = true)) name else norm
+                } catch (_: Exception) {
+                    norm
+                }
             }
         }
     }
@@ -184,11 +193,48 @@ class ServerListAdapter(
             Color.GRAY
         )
         private val density = itemView.context.resources.displayMetrics.density
+        private val defaultConnectBgTint: ColorStateList? = btnConnect.backgroundTintList
+        private val defaultConnectTextColor: ColorStateList? = btnConnect.textColors
+        private val defaultConnectIconTint: ColorStateList? = btnConnect.iconTint
+        private var currentItem: ServerListRow.Server? = null
+
+        init {
+            layoutSummary.setOnClickListener {
+                currentItem?.let { onToggleExpand(it.entry.guid) }
+            }
+            layoutSummary.setOnLongClickListener {
+                val item = currentItem ?: return@setOnLongClickListener false
+                layoutSummary.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                if (item.isConnected) {
+                    onToggleExpand(item.entry.guid)
+                } else {
+                    onLongPressConnect(item)
+                }
+                true
+            }
+            btnConnect.setOnClickListener {
+                val item = currentItem ?: return@setOnClickListener
+                if (item.isConnected) {
+                    onDisconnect()
+                } else {
+                    onConnect(item.entry.guid)
+                }
+            }
+            btnSpeedTest.setOnClickListener {
+                currentItem?.let { onSpeedTest(it.entry.guid) }
+            }
+            btnToggleVip.setOnClickListener {
+                currentItem?.let { onToggleVip(it.entry.guid) }
+            }
+            btnRetest.setOnClickListener {
+                currentItem?.let { onReinspect(it.entry.guid) }
+            }
+        }
 
         fun bind(item: ServerListRow.Server) {
+            currentItem = item
             val ctx = itemView.context
             val entry = item.entry
-            val insp = entry.inspection
 
             card.alpha = if (entry.isDead) 0.65f else 1.0f
 
@@ -235,10 +281,6 @@ class ServerListAdapter(
             tvSubscription.text = "• ${entry.subscriptionName}"
 
             bindSummaryStatusBadge(ctx, item)
-
-            layoutSummary.setOnClickListener {
-                onToggleExpand(entry.guid)
-            }
 
             if (item.isExpanded) {
                 layoutDetails.visibility = View.VISIBLE
@@ -402,10 +444,19 @@ class ServerListAdapter(
                 btnRetest.text = ctx.getString(R.string.server_list_btn_retest)
             }
 
-            btnConnect.setOnClickListener { onConnect(entry.guid) }
-            btnSpeedTest.setOnClickListener { onSpeedTest(entry.guid) }
-            btnToggleVip.setOnClickListener { onToggleVip(entry.guid) }
-            btnRetest.setOnClickListener { onReinspect(entry.guid) }
+            if (item.isConnected) {
+                btnConnect.text = ctx.getString(R.string.server_list_btn_disconnect)
+                btnConnect.setIconResource(R.drawable.ic_stop_24dp)
+                btnConnect.backgroundTintList = ColorStateList.valueOf(RED_COLOR)
+                btnConnect.setTextColor(Color.WHITE)
+                btnConnect.iconTint = ColorStateList.valueOf(Color.WHITE)
+            } else {
+                btnConnect.text = ctx.getString(R.string.server_list_btn_connect)
+                btnConnect.setIconResource(R.drawable.ic_play_24dp)
+                btnConnect.backgroundTintList = defaultConnectBgTint
+                defaultConnectTextColor?.let { btnConnect.setTextColor(it) }
+                btnConnect.iconTint = defaultConnectIconTint
+            }
         }
 
         private fun createServiceBadge(ctx: Context, name: String, success: Boolean, latencyMs: Long): TextView {

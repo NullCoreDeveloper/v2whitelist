@@ -1072,6 +1072,10 @@
     <string name="server_list_switch_services_disabled_by_endpoint">Service check disabled (exit node active)</string>
     <string name="server_list_smart_connect_busy">Server search in progress…</string>
     <string name="server_list_btn_stop_vip">Stop</string>
+    <string name="server_list_btn_disconnect">Disconnect</string>
+    <string name="server_list_long_press_hint">Tip: hold a server to connect quickly</string>
+    <string name="server_list_connecting_to">Connecting to %1$s…</string>
+    <string name="server_list_scan_stale_suffix">" • outdated"</string>
     <string name="status_full_scan_running">Full server scan in progress…</string>
     <string name="status_full_scan_progress">Checked %1$d/%2$d • working: %3$d</string>
 </resources>

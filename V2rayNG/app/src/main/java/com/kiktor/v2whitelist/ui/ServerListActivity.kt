@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.net.VpnService
 import android.os.Bundle
 import android.text.Editable
@@ -25,11 +26,13 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.textfield.TextInputEditText
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.core.domain.inspection.EndpointFilterMode
+import com.kiktor.v2whitelist.core.domain.inspection.ServerInspectionCachePolicy
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListFilter
 import com.kiktor.v2whitelist.core.domain.inspection.ServerSortOrder
 import com.kiktor.v2whitelist.core.domain.inspection.ServerStatusFilter
@@ -41,6 +44,7 @@ import com.kiktor.v2whitelist.handler.FullScanManager
 import com.kiktor.v2whitelist.handler.FullScanMode
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
+import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.util.Utils
 import com.kiktor.v2whitelist.viewmodel.ServerListScreenState
 import com.kiktor.v2whitelist.viewmodel.ServerListViewModel
@@ -74,6 +78,7 @@ class ServerListActivity : BaseActivity() {
     private var pendingConnectGuid: String? = null
     private var lastAliveCount: Int = -1
     private var lastVipCount: Int = -1
+    private var lastSubmittedRows: List<ServerListRow>? = null
 
     private val requestVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val guid = pendingConnectGuid
@@ -91,7 +96,7 @@ class ServerListActivity : BaseActivity() {
                 AppConfig.MSG_STATE_START_SUCCESS,
                 AppConfig.MSG_STATE_STOP_SUCCESS,
                 AppConfig.MSG_STATE_SWITCH_SERVER -> {
-                    viewModel.reload()
+                    viewModel.refreshVpnState()
                 }
             }
         }
@@ -145,6 +150,8 @@ class ServerListActivity : BaseActivity() {
         adapter = ServerListAdapter(
             onToggleExpand = { guid -> viewModel.toggleExpand(guid) },
             onConnect = { guid -> handleConnectClick(guid) },
+            onDisconnect = { handleDisconnectClick() },
+            onLongPressConnect = { row -> handleLongPressConnect(row) },
             onSpeedTest = { guid -> viewModel.runSpeedTest(guid) },
             onToggleVip = { guid -> viewModel.toggleVip(guid) },
             onReinspect = { guid -> viewModel.reinspectServer(guid) },
@@ -153,6 +160,7 @@ class ServerListActivity : BaseActivity() {
         val layoutManager = LinearLayoutManager(this)
         rvServers.layoutManager = layoutManager
         rvServers.setHasFixedSize(true)
+        rvServers.setItemViewCacheSize(16)
         rvServers.adapter = adapter
         (rvServers.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         rvServers.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -256,6 +264,7 @@ class ServerListActivity : BaseActivity() {
             progressFullScan.visibility = View.VISIBLE
             progressFullScan.isIndeterminate = true
             tvScanMeta.text = getString(R.string.server_list_smart_connect_busy)
+            tvScanMeta.setTextColor(MaterialColors.getColor(tvScanMeta, android.R.attr.textColorSecondary, Color.GRAY))
             btnFindMoreVip.isEnabled = false
             btnFindMoreVip.text = getString(R.string.geek_mode_btn_find_vip)
             btnPingVip.isEnabled = false
@@ -275,6 +284,7 @@ class ServerListActivity : BaseActivity() {
                 scan.totalCount,
                 scan.aliveCount
             )
+            tvScanMeta.setTextColor(MaterialColors.getColor(tvScanMeta, android.R.attr.textColorSecondary, Color.GRAY))
 
             btnFullScan.isEnabled = scan.mode == FullScanMode.FULL
             if (scan.mode == FullScanMode.FULL) {
@@ -303,7 +313,22 @@ class ServerListActivity : BaseActivity() {
             btnFullScan.text = getString(R.string.server_list_btn_full_scan)
             btnFullScan.setIconResource(R.drawable.ic_check_update_24dp)
             progressFullScan.visibility = View.GONE
-            tvScanMeta.text = formatScanMetaText(state)
+            val meta = state.lastScanMeta
+            val isStale = meta != null && meta.finishedAtMs > 0L &&
+                ServerInspectionCachePolicy.isStale(meta.finishedAtMs, System.currentTimeMillis())
+            val baseMetaText = formatScanMetaText(state)
+            tvScanMeta.text = if (isStale) {
+                baseMetaText + getString(R.string.server_list_scan_stale_suffix)
+            } else {
+                baseMetaText
+            }
+            tvScanMeta.setTextColor(
+                if (isStale) {
+                    Color.parseColor("#F57C00")
+                } else {
+                    MaterialColors.getColor(tvScanMeta, android.R.attr.textColorSecondary, Color.GRAY)
+                }
+            )
             btnFindMoreVip.isEnabled = true
             btnFindMoreVip.text = getString(R.string.geek_mode_btn_find_vip)
             btnPingVip.isEnabled = true
@@ -327,71 +352,20 @@ class ServerListActivity : BaseActivity() {
             else R.string.server_list_switch_check_services
         )
 
-        val rows = mutableListOf<ServerListRow>()
-        val vipList = state.viewResult.vipServers
-        val regularList = state.viewResult.regularServers
-        val fallbackFlags = state.fallbackFlags
+        val rows = state.rows
+        if (rows !== lastSubmittedRows) {
+            lastSubmittedRows = rows
+            val lm = rvServers.layoutManager as? LinearLayoutManager
+            val wasNearTop = lastAliveCount < 0 || (lm?.findFirstVisibleItemPosition() ?: 0) <= 2
+            val grewAliveOrVip = lastAliveCount >= 0 && (stats.aliveCount > lastAliveCount || stats.vipCount > lastVipCount)
+            val shouldPinTop = wasNearTop && grewAliveOrVip
+            lastAliveCount = stats.aliveCount
+            lastVipCount = stats.vipCount
 
-        if (vipList.isNotEmpty()) {
-            rows.add(
-                ServerListRow.Header(
-                    id = "header_vip",
-                    title = "★ ${getString(R.string.server_list_vip_section)} (${vipList.size})",
-                    isVipHeader = true
-                )
-            )
-            for (entry in vipList) {
-                rows.add(
-                    ServerListRow.Server(
-                        entry = entry,
-                        isExpanded = entry.guid in state.expandedGuids,
-                        isConnected = state.isVpnRunning && state.connectedGuid == entry.guid,
-                        endpointEnabled = state.endpointEnabled,
-                        speedTestState = state.speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
-                        isReinspecting = entry.guid in state.reinspectingGuids,
-                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
-                    )
-                )
-            }
-        }
-
-        if (regularList.isNotEmpty()) {
-            rows.add(
-                ServerListRow.Header(
-                    id = "header_regular",
-                    title = "${getString(R.string.server_list_all_section)} (${state.totalRegularMatching})",
-                    isVipHeader = false
-                )
-            )
-            for (entry in regularList) {
-                rows.add(
-                    ServerListRow.Server(
-                        entry = entry,
-                        isExpanded = entry.guid in state.expandedGuids,
-                        isConnected = state.isVpnRunning && state.connectedGuid == entry.guid,
-                        endpointEnabled = state.endpointEnabled,
-                        speedTestState = state.speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
-                        isReinspecting = entry.guid in state.reinspectingGuids,
-                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
-                    )
-                )
-            }
-            if (state.hasMoreRegular) {
-                val remaining = (state.totalRegularMatching - regularList.size).coerceAtLeast(1)
-                rows.add(ServerListRow.LoadMore(remainingCount = remaining))
-            }
-        }
-
-        val lm = rvServers.layoutManager as? LinearLayoutManager
-        val wasNearTop = lastAliveCount < 0 || (lm?.findFirstVisibleItemPosition() ?: 0) <= 2
-        val grewAliveOrVip = lastAliveCount >= 0 && (stats.aliveCount > lastAliveCount || stats.vipCount > lastVipCount)
-        val shouldPinTop = wasNearTop && grewAliveOrVip
-        lastAliveCount = stats.aliveCount
-        lastVipCount = stats.vipCount
-
-        adapter.submitList(rows) {
-            if (shouldPinTop && rows.isNotEmpty()) {
-                lm?.scrollToPositionWithOffset(0, 0)
+            adapter.submitList(rows) {
+                if (shouldPinTop && rows.isNotEmpty()) {
+                    lm?.scrollToPositionWithOffset(0, 0)
+                }
             }
         }
 
@@ -459,6 +433,17 @@ class ServerListActivity : BaseActivity() {
             SmartConnectManager.connectDirectlyTo(this@ServerListActivity, guid)
             viewModel.reload()
         }
+    }
+
+    private fun handleDisconnectClick() {
+        V2RayServiceManager.stopVService(this)
+        viewModel.refreshVpnState()
+    }
+
+    private fun handleLongPressConnect(row: ServerListRow.Server) {
+        val name = row.entry.profile.remarks.ifBlank { row.entry.profile.server ?: row.entry.guid }
+        toast(getString(R.string.server_list_connecting_to, name))
+        handleConnectClick(row.entry.guid)
     }
 
     private fun openFiltersBottomSheet(state: ServerListScreenState) {

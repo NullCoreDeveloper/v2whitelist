@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEngine
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListEntry
 import com.kiktor.v2whitelist.core.domain.inspection.ServerListFilter
@@ -21,6 +22,7 @@ import com.kiktor.v2whitelist.handler.SpeedtestManager
 import com.kiktor.v2whitelist.handler.V2RayNativeManager
 import com.kiktor.v2whitelist.handler.V2RayServiceManager
 import com.kiktor.v2whitelist.handler.V2rayConfigManager
+import com.kiktor.v2whitelist.ui.ServerListRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
@@ -76,7 +78,8 @@ data class ServerListScreenState(
     val scanCheckServicesEnabled: Boolean = false,
     val totalRegularMatching: Int = 0,
     val hasMoreRegular: Boolean = false,
-    val fallbackFlags: Map<String, String> = emptyMap()
+    val fallbackFlags: Map<String, String> = emptyMap(),
+    val rows: List<ServerListRow> = emptyList()
 )
 
 @OptIn(FlowPreview::class)
@@ -98,8 +101,11 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         MmkvManager.decodeSettingsBool(AppConfig.PREF_FULL_SCAN_CHECK_SERVICES, false)
     )
     private val visibleRegularLimitFlow = MutableStateFlow(DEFAULT_PAGE_SIZE)
+    private val metaRefreshTickFlow = MutableStateFlow(0L)
+    private val vpnTickFlow = MutableStateFlow(0L)
 
     private val computedFlow = MutableStateFlow(ComputedState())
+    private val listPresentationFlow = MutableStateFlow(ListPresentationState())
     private val _uiState = MutableStateFlow(
         ServerListScreenState(
             isLoading = !ServerListStore.isLoaded.value,
@@ -120,7 +126,6 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
             stats = ServerListStats(0, 0, 0, 0, 0, 0, 0)
         ),
         val filter: ServerListFilter = ServerListFilter(),
-        val scanState: FullScanUiState = FullScanUiState(),
         val lastScanMeta: ScanSessionMeta? = null,
         val networkCheckEnabled: Boolean = true,
         val endpointEnabled: Boolean = false,
@@ -131,12 +136,15 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         val isVpnRunning: Boolean = false
     )
 
-    private data class RowOverlayState(
-        val expanded: Set<String>,
-        val speeds: Map<String, SpeedTestRowState>,
-        val reinspecting: Set<String>,
-        val isSmartConnectScanning: Boolean,
-        val scanCheckServices: Boolean
+    private data class ListPresentationState(
+        val computed: ComputedState = ComputedState(),
+        val viewResult: ServerListViewResult = ComputedState().viewResult,
+        val rows: List<ServerListRow> = emptyList(),
+        val expandedGuids: Set<String> = emptySet(),
+        val speedTestStates: Map<String, SpeedTestRowState> = emptyMap(),
+        val reinspectingGuids: Set<String> = emptySet(),
+        val totalRegularMatching: Int = 0,
+        val hasMoreRegular: Boolean = false
     )
 
     init {
@@ -157,18 +165,19 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        // Слой 1: фильтрация и сортировка по горячему in-memory кэшу (без чтения MMKV на каждый тик)
+        // Слой 1: фильтрация и сортировка по горячему кэшу (отделена от тиков прогресс-бара FullScan)
         viewModelScope.launch(Dispatchers.Default) {
             combine(
                 ServerListStore.isLoaded,
                 ServerListStore.revision,
-                FullScanManager.state,
-                effectiveFilterFlow
-            ) { loaded, _, scanState, filter ->
-                Triple(loaded, scanState, filter)
-            }.collectLatest { (loaded, scanState, filter) ->
+                effectiveFilterFlow,
+                vpnTickFlow,
+                metaRefreshTickFlow
+            ) { loaded, _, filter, _, _ ->
+                loaded to filter
+            }.collectLatest { (loaded, filter) ->
                 if (!loaded) {
-                    computedFlow.value = ComputedState(isLoading = true, scanState = scanState, filter = filter)
+                    computedFlow.value = ComputedState(isLoading = true, filter = filter)
                     return@collectLatest
                 }
 
@@ -191,7 +200,6 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
                     isLoading = false,
                     viewResult = viewResult,
                     filter = filter,
-                    scanState = scanState,
                     lastScanMeta = lastMeta,
                     networkCheckEnabled = networkCheckEnabled,
                     endpointEnabled = endpointEnabled,
@@ -204,55 +212,97 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        // Слой 2: лёгкая нарезка видимого окна + интерактивные состояния карточек (без пересортировки)
+        // Слой 2: нарезка видимого окна + построение ServerListRow в фоне (без нагрузки на UI-поток)
         viewModelScope.launch(Dispatchers.Default) {
-            val baseOverlay = combine(
-                expandedGuidsFlow,
-                speedTestStatesFlow,
-                reinspectingGuidsFlow
-            ) { expanded, speeds, reinspecting ->
-                Triple(expanded, speeds, reinspecting)
-            }
-            val fullOverlay = combine(
-                baseOverlay,
-                SmartConnectManager.isScanning.flow,
-                scanCheckServicesFlow
-            ) { (expanded, speeds, reinspecting), smartScanning, scanServices ->
-                RowOverlayState(expanded, speeds, reinspecting, smartScanning, scanServices)
-            }
-
             combine(
                 computedFlow,
                 visibleRegularLimitFlow,
-                fullOverlay
-            ) { computed, regularLimit, overlay ->
+                expandedGuidsFlow,
+                speedTestStatesFlow,
+                reinspectingGuidsFlow
+            ) { computed, regularLimit, expanded, speeds, reinspecting ->
+                if (computed.isLoading) {
+                    return@combine ListPresentationState(
+                        computed = computed,
+                        viewResult = computed.viewResult,
+                        rows = emptyList(),
+                        expandedGuids = expanded,
+                        speedTestStates = speeds,
+                        reinspectingGuids = reinspecting
+                    )
+                }
+
                 val totalRegular = computed.viewResult.regularServers.size
                 val slicedRegular = if (totalRegular > regularLimit) {
                     computed.viewResult.regularServers.take(regularLimit)
                 } else {
                     computed.viewResult.regularServers
                 }
+                val slicedView = computed.viewResult.copy(regularServers = slicedRegular)
+                val rows = buildServerRows(
+                    viewResult = slicedView,
+                    totalRegularMatching = totalRegular,
+                    hasMoreRegular = totalRegular > slicedRegular.size,
+                    expandedGuids = expanded,
+                    connectedGuid = computed.connectedGuid,
+                    isVpnRunning = computed.isVpnRunning,
+                    endpointEnabled = computed.endpointEnabled,
+                    speedTestStates = speeds,
+                    reinspectingGuids = reinspecting,
+                    fallbackFlags = computed.flagsByGuid
+                )
 
+                ListPresentationState(
+                    computed = computed,
+                    viewResult = slicedView,
+                    rows = rows,
+                    expandedGuids = expanded,
+                    speedTestStates = speeds,
+                    reinspectingGuids = reinspecting,
+                    totalRegularMatching = totalRegular,
+                    hasMoreRegular = totalRegular > slicedRegular.size
+                )
+            }.collectLatest { presentation ->
+                listPresentationFlow.value = presentation
+            }
+        }
+
+        // Слой 3: лёгкое объединение готовых строк со статусом сканирования/тумблеров
+        viewModelScope.launch(Dispatchers.Default) {
+            var prevScanning = false
+            combine(
+                listPresentationFlow,
+                FullScanManager.state,
+                SmartConnectManager.isScanning.flow,
+                scanCheckServicesFlow
+            ) { presentation, scanState, smartScanning, scanServices ->
+                if (prevScanning && !scanState.isScanning) {
+                    metaRefreshTickFlow.update { it + 1 }
+                }
+                prevScanning = scanState.isScanning
+
+                val computed = presentation.computed
                 ServerListScreenState(
                     isLoading = computed.isLoading,
-                    viewResult = computed.viewResult.copy(regularServers = slicedRegular),
+                    viewResult = presentation.viewResult,
                     filter = computed.filter,
-                    scanState = computed.scanState,
+                    scanState = scanState,
                     lastScanMeta = computed.lastScanMeta,
                     networkCheckEnabled = computed.networkCheckEnabled,
                     endpointEnabled = computed.endpointEnabled,
                     availableSubscriptions = computed.availableSubscriptions,
                     availableProtocols = computed.availableProtocols,
-                    expandedGuids = overlay.expanded,
+                    expandedGuids = presentation.expandedGuids,
                     connectedGuid = computed.connectedGuid,
                     isVpnRunning = computed.isVpnRunning,
-                    speedTestStates = overlay.speeds,
-                    reinspectingGuids = overlay.reinspecting,
-                    isSmartConnectScanning = overlay.isSmartConnectScanning,
-                    scanCheckServicesEnabled = overlay.scanCheckServices,
-                    totalRegularMatching = totalRegular,
-                    hasMoreRegular = totalRegular > slicedRegular.size,
-                    fallbackFlags = computed.flagsByGuid
+                    speedTestStates = presentation.speedTestStates,
+                    reinspectingGuids = presentation.reinspectingGuids,
+                    isSmartConnectScanning = smartScanning,
+                    scanCheckServicesEnabled = scanServices,
+                    totalRegularMatching = presentation.totalRegularMatching,
+                    hasMoreRegular = presentation.hasMoreRegular,
+                    fallbackFlags = computed.flagsByGuid,
+                    rows = presentation.rows
                 )
             }.collectLatest { state ->
                 _uiState.value = state
@@ -260,12 +310,89 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private fun buildServerRows(
+        viewResult: ServerListViewResult,
+        totalRegularMatching: Int,
+        hasMoreRegular: Boolean,
+        expandedGuids: Set<String>,
+        connectedGuid: String?,
+        isVpnRunning: Boolean,
+        endpointEnabled: Boolean,
+        speedTestStates: Map<String, SpeedTestRowState>,
+        reinspectingGuids: Set<String>,
+        fallbackFlags: Map<String, String>
+    ): List<ServerListRow> {
+        val vipList = viewResult.vipServers
+        val regularList = viewResult.regularServers
+        if (vipList.isEmpty() && regularList.isEmpty()) return emptyList()
+
+        val app = getApplication<Application>()
+        val rows = ArrayList<ServerListRow>(vipList.size + regularList.size + 4)
+
+        if (vipList.isNotEmpty()) {
+            rows.add(
+                ServerListRow.Header(
+                    id = "header_vip",
+                    title = "★ ${app.getString(R.string.server_list_vip_section)} (${vipList.size})",
+                    isVipHeader = true
+                )
+            )
+            for (entry in vipList) {
+                rows.add(
+                    ServerListRow.Server(
+                        entry = entry,
+                        isExpanded = entry.guid in expandedGuids,
+                        isConnected = isVpnRunning && connectedGuid == entry.guid,
+                        endpointEnabled = endpointEnabled,
+                        speedTestState = speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
+                        isReinspecting = entry.guid in reinspectingGuids,
+                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
+                    )
+                )
+            }
+        }
+
+        if (regularList.isNotEmpty()) {
+            rows.add(
+                ServerListRow.Header(
+                    id = "header_regular",
+                    title = "${app.getString(R.string.server_list_all_section)} ($totalRegularMatching)",
+                    isVipHeader = false
+                )
+            )
+            for (entry in regularList) {
+                rows.add(
+                    ServerListRow.Server(
+                        entry = entry,
+                        isExpanded = entry.guid in expandedGuids,
+                        isConnected = isVpnRunning && connectedGuid == entry.guid,
+                        endpointEnabled = endpointEnabled,
+                        speedTestState = speedTestStates[entry.guid] ?: SpeedTestRowState.Idle,
+                        isReinspecting = entry.guid in reinspectingGuids,
+                        fallbackFlagEmoji = fallbackFlags[entry.guid].orEmpty()
+                    )
+                )
+            }
+            if (hasMoreRegular) {
+                val remaining = (totalRegularMatching - regularList.size).coerceAtLeast(1)
+                rows.add(ServerListRow.LoadMore(remainingCount = remaining))
+            }
+        }
+        return rows
+    }
+
     fun reload() {
         viewModelScope.launch(Dispatchers.IO) {
             ServerListStore.ensureLoaded(getApplication())
             ServerListStore.reloadBaseIfNeeded(getApplication(), force = false)
+            vpnTickFlow.update { it + 1 }
+            metaRefreshTickFlow.update { it + 1 }
             ServerListStore.bumpRevision()
         }
+    }
+
+    fun refreshVpnState() {
+        vpnTickFlow.update { it + 1 }
     }
 
     fun loadMoreRegular() {

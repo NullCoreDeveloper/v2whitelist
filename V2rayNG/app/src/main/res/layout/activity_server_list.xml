@@ -136,6 +136,19 @@
             android:maxLines="1" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <TextView
+        android:id="@+id/tv_long_press_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp"
+        android:text="@string/server_list_long_press_hint"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="11sp" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

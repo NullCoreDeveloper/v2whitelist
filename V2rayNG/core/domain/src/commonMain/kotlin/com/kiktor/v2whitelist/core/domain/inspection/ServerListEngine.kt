@@ -12,7 +12,8 @@ data class ServerListEntry(
     val isVip: Boolean,
     val isPersonal: Boolean,
     val fallbackPingMs: Long = 0L,
-    val inspection: ServerInspectionInfo? = null
+    val inspection: ServerInspectionInfo? = null,
+    val remarksLower: String = profile.remarks.lowercase()
 ) {
     val isInspected: Boolean
         get() = inspection != null
@@ -32,6 +33,9 @@ data class ServerListEntry(
 
     val effectiveCountryCode: String
         get() = inspection?.countryCode?.trim()?.uppercase().orEmpty()
+
+    val okServicesCount: Int = inspection?.okServicesCount ?: 0
+    val serviceSuccessRatio: Double = inspection?.serviceSuccessRatio ?: 0.0
 }
 
 enum class ServerSortOrder {
@@ -168,59 +172,77 @@ object ServerListEngine {
         val normalizedCountries = filter.selectedCountryCodes.map { it.trim().uppercase() }.filter { it.isNotEmpty() }.toSet()
         val normalizedReqServices = filter.requiredServiceIds.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
-        val filtered = entries.filter { entry ->
+        val vipServers = ArrayList<ServerListEntry>()
+        val regularServers = ArrayList<ServerListEntry>()
+
+        for (entry in entries) {
             if (normalizedQuery.isNotEmpty()) {
-                val matchesQuery = entry.profile.remarks.lowercase().contains(normalizedQuery) ||
-                    entry.subscriptionName.lowercase().contains(normalizedQuery) ||
-                    entry.inspection?.exitIp?.lowercase()?.contains(normalizedQuery) == true ||
-                    entry.effectiveCountryCode.lowercase().contains(normalizedQuery) ||
-                    entry.profile.configType.name.lowercase().contains(normalizedQuery) ||
-                    entry.profile.server?.lowercase()?.contains(normalizedQuery) == true
-                if (!matchesQuery) return@filter false
+                val matchesQuery = entry.remarksLower.contains(normalizedQuery) ||
+                    entry.subscriptionName.contains(normalizedQuery, ignoreCase = true) ||
+                    entry.inspection?.exitIp?.contains(normalizedQuery, ignoreCase = true) == true ||
+                    entry.effectiveCountryCode.contains(normalizedQuery, ignoreCase = true) ||
+                    entry.profile.configType.name.contains(normalizedQuery, ignoreCase = true) ||
+                    entry.profile.server?.contains(normalizedQuery, ignoreCase = true) == true
+                if (!matchesQuery) continue
             }
 
             when (filter.statusFilter) {
                 ServerStatusFilter.ALL -> Unit
-                ServerStatusFilter.ALIVE_ONLY -> if (!entry.isAlive) return@filter false
-                ServerStatusFilter.HIDE_DEAD -> if (entry.isDead) return@filter false
+                ServerStatusFilter.ALIVE_ONLY -> if (!entry.isAlive) continue
+                ServerStatusFilter.HIDE_DEAD -> if (entry.isDead) continue
             }
 
             if (normalizedCountries.isNotEmpty() && entry.effectiveCountryCode !in normalizedCountries) {
-                return@filter false
+                continue
             }
 
             if (filter.selectedSubscriptionIds.isNotEmpty() && entry.subscriptionId !in filter.selectedSubscriptionIds) {
-                return@filter false
+                continue
             }
 
             if (filter.selectedProtocols.isNotEmpty() && entry.profile.configType !in filter.selectedProtocols) {
-                return@filter false
+                continue
             }
 
             if (endpointEnabled) {
                 when (filter.endpointFilter) {
                     EndpointFilterMode.ANY -> Unit
-                    EndpointFilterMode.PASSED_ONLY -> if (entry.inspection?.endpointPassed != true) return@filter false
-                    EndpointFilterMode.FAILED_ONLY -> if (entry.inspection?.endpointPassed != false) return@filter false
+                    EndpointFilterMode.PASSED_ONLY -> if (entry.inspection?.endpointPassed != true) continue
+                    EndpointFilterMode.FAILED_ONLY -> if (entry.inspection?.endpointPassed != false) continue
                 }
             } else if (normalizedReqServices.isNotEmpty()) {
-                val services = entry.inspection?.services ?: return@filter false
-                val okIds = services.filter { it.success }.map { it.id.trim().lowercase() }.toSet()
-                if (!normalizedReqServices.all { it in okIds }) {
-                    return@filter false
+                val services = entry.inspection?.services ?: continue
+                var allMatched = true
+                for (req in normalizedReqServices) {
+                    var found = false
+                    for (svc in services) {
+                        if (svc.success && svc.id.trim().equals(req, ignoreCase = true)) {
+                            found = true
+                            break
+                        }
+                    }
+                    if (!found) {
+                        allMatched = false
+                        break
+                    }
                 }
+                if (!allMatched) continue
             }
 
-            true
+            if (entry.isVip) {
+                vipServers.add(entry)
+            } else {
+                regularServers.add(entry)
+            }
         }
 
         val comparator = buildComparator(filter.sortOrder, endpointEnabled)
-        val vipServers = filtered.filter { it.isVip }.sortedWith(comparator)
-        val regularServers = filtered.filter { !it.isVip }.sortedWith(comparator)
+        vipServers.sortWith(comparator)
+        regularServers.sortWith(comparator)
 
         val stats = ServerListStats(
             totalServers = entries.size,
-            filteredServers = filtered.size,
+            filteredServers = vipServers.size + regularServers.size,
             vipCount = vipServers.size,
             aliveCount = aliveTotal,
             deadCount = deadTotal,
@@ -253,7 +275,7 @@ object ServerListEngine {
             when (statusRank(a)) {
                 0 -> compareAlive(a, b, sortOrder, endpointEnabled)
                 1 -> compareUntested(a, b, sortOrder)
-                else -> a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                else -> a.remarksLower.compareTo(b.remarksLower)
             }
         }
     }
@@ -271,36 +293,33 @@ object ServerListEngine {
                     val epB = if (b.inspection?.endpointPassed == true) 0 else 1
                     if (epA != epB) return epA - epB
                 } else {
-                    val cntA = a.inspection?.okServicesCount ?: 0
-                    val cntB = b.inspection?.okServicesCount ?: 0
-                    if (cntA != cntB) return cntB - cntA
+                    val cntDiff = b.okServicesCount - a.okServicesCount
+                    if (cntDiff != 0) return cntDiff
 
-                    val ratioA = a.inspection?.serviceSuccessRatio ?: 0.0
-                    val ratioB = b.inspection?.serviceSuccessRatio ?: 0.0
-                    val ratioDiff = ratioB.compareTo(ratioA)
+                    val ratioDiff = b.serviceSuccessRatio.compareTo(a.serviceSuccessRatio)
                     if (ratioDiff != 0) return ratioDiff
                 }
                 val pingDiff = sortablePing(a.effectivePingMs).compareTo(sortablePing(b.effectivePingMs))
                 if (pingDiff != 0) return pingDiff
-                a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                a.remarksLower.compareTo(b.remarksLower)
             }
 
             ServerSortOrder.PING_ASC -> {
                 val pingDiff = sortablePing(a.effectivePingMs).compareTo(sortablePing(b.effectivePingMs))
                 if (pingDiff != 0) return pingDiff
-                val cntDiff = (b.inspection?.okServicesCount ?: 0) - (a.inspection?.okServicesCount ?: 0)
+                val cntDiff = b.okServicesCount - a.okServicesCount
                 if (cntDiff != 0) return cntDiff
-                a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                a.remarksLower.compareTo(b.remarksLower)
             }
 
             ServerSortOrder.SERVICES_DESC -> {
-                val cntDiff = (b.inspection?.okServicesCount ?: 0) - (a.inspection?.okServicesCount ?: 0)
+                val cntDiff = b.okServicesCount - a.okServicesCount
                 if (cntDiff != 0) return cntDiff
-                val ratioDiff = (b.inspection?.serviceSuccessRatio ?: 0.0).compareTo(a.inspection?.serviceSuccessRatio ?: 0.0)
+                val ratioDiff = b.serviceSuccessRatio.compareTo(a.serviceSuccessRatio)
                 if (ratioDiff != 0) return ratioDiff
                 val pingDiff = sortablePing(a.effectivePingMs).compareTo(sortablePing(b.effectivePingMs))
                 if (pingDiff != 0) return pingDiff
-                a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                a.remarksLower.compareTo(b.remarksLower)
             }
 
             ServerSortOrder.COUNTRY_ASC -> {
@@ -310,11 +329,11 @@ object ServerListEngine {
                 if (ccDiff != 0) return ccDiff
                 val pingDiff = sortablePing(a.effectivePingMs).compareTo(sortablePing(b.effectivePingMs))
                 if (pingDiff != 0) return pingDiff
-                a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                a.remarksLower.compareTo(b.remarksLower)
             }
 
             ServerSortOrder.NAME_ASC -> {
-                val nameDiff = a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+                val nameDiff = a.remarksLower.compareTo(b.remarksLower)
                 if (nameDiff != 0) return nameDiff
                 sortablePing(a.effectivePingMs).compareTo(sortablePing(b.effectivePingMs))
             }
@@ -327,10 +346,10 @@ object ServerListEngine {
         sortOrder: ServerSortOrder
     ): Int {
         if (sortOrder == ServerSortOrder.NAME_ASC) {
-            return a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+            return a.remarksLower.compareTo(b.remarksLower)
         }
         val pingDiff = sortablePing(a.fallbackPingMs).compareTo(sortablePing(b.fallbackPingMs))
         if (pingDiff != 0) return pingDiff
-        return a.profile.remarks.lowercase().compareTo(b.profile.remarks.lowercase())
+        return a.remarksLower.compareTo(b.remarksLower)
     }
 }
