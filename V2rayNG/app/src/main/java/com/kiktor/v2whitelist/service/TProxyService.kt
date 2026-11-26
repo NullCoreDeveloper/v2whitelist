@@ -26,6 +26,9 @@ class TProxyService(
         private external fun TProxyStartService(configPath: String, fd: Int)
         @JvmStatic
         @Suppress("FunctionName")
+        private external fun TProxyStartServiceFromStr(configContent: String, fd: Int)
+        @JvmStatic
+        @Suppress("FunctionName")
         private external fun TProxyStopService()
         @JvmStatic
         @Suppress("FunctionName")
@@ -40,19 +43,17 @@ class TProxyService(
      * Starts the tun2socks process with the appropriate parameters.
      */
     override fun startTun2Socks() {
-//        Log.i(AppConfig.TAG, "Starting HevSocks5Tunnel via JNI")
-
         val configContent = buildConfig()
-        val configFile = File(context.filesDir, "hev-socks5-tunnel.yaml").apply {
-            writeText(configContent)
+        // Удаляем устаревший файл конфига, если остался от прошлых версий
+        runCatching {
+            val legacyFile = File(context.filesDir, "hev-socks5-tunnel.yaml")
+            if (legacyFile.exists()) legacyFile.delete()
         }
-//        Log.i(AppConfig.TAG, "Config file created: ${configFile.absolutePath}")
-//        Log.d(AppConfig.TAG, "HevSocks5Tunnel Config content:\n$configContent")
 
         Thread {
             try {
-                // Блокируется, пока туннель работает; возврат при isRunning==true = туннель упал
-                TProxyStartService(configFile.absolutePath, vpnInterface.fd)
+                // Конфигурация (включая временные SOCKS5-учётные данные) передаётся только в память
+                TProxyStartServiceFromStr(configContent, vpnInterface.fd)
                 if (isRunningProvider()) {
                     Log.e(AppConfig.TAG, "HevSocks5Tunnel неожиданно завершился при работающем VPN")
                     onFailure?.invoke()

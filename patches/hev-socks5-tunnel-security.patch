@@ -1,0 +1,197 @@
+--- a/src/hev-jni.c
++++ b/src/hev-jni.c
+@@ -38,8 +38,10 @@
+ 
+ struct _ThreadData
+ {
+-    char *path;
++    char *config;
++    unsigned int config_len;
+     int fd;
++    int is_str;
+ };
+ 
+ static int is_working;
+@@ -50,12 +52,16 @@
+ 
+ static void native_start_service (JNIEnv *env, jobject thiz, jstring conig_path,
+                                   jint fd);
++static void native_start_service_from_str (JNIEnv *env, jobject thiz,
++                                           jstring config_str, jint fd);
+ static void native_stop_service (JNIEnv *env, jobject thiz);
+ static jlongArray native_get_stats (JNIEnv *env, jobject thiz);
+ 
+ static JNINativeMethod native_methods[] = {
+     { "TProxyStartService", "(Ljava/lang/String;I)V",
+       (void *)native_start_service },
++    { "TProxyStartServiceFromStr", "(Ljava/lang/String;I)V",
++      (void *)native_start_service_from_str },
+     { "TProxyStopService", "()V", (void *)native_stop_service },
+     { "TProxyGetStats", "()[J", (void *)native_get_stats },
+ };
+@@ -88,14 +94,30 @@
+     return JNI_VERSION_1_4;
+ }
+ 
++static void
++secure_zero (void *ptr, size_t len)
++{
++    volatile unsigned char *p = (volatile unsigned char *)ptr;
++    if (!p)
++        return;
++    while (len--)
++        *p++ = 0;
++}
++
+ static void *
+ thread_handler (void *data)
+ {
+     ThreadData *tdata = data;
+ 
+-    hev_socks5_tunnel_main (tdata->path, tdata->fd);
+-
+-    free (tdata->path);
++    if (tdata->is_str) {
++        hev_socks5_tunnel_main_from_str ((const unsigned char *)tdata->config,
++                                         tdata->config_len, tdata->fd);
++    } else {
++        hev_socks5_tunnel_main (tdata->config, tdata->fd);
++    }
++
++    secure_zero (tdata->config, tdata->config_len);
++    free (tdata->config);
+     free (tdata);
+ 
+     return NULL;
+@@ -114,15 +136,80 @@
+         goto exit;
+ 
+     tdata = malloc (sizeof (ThreadData));
++    if (!tdata)
++        goto exit;
+     tdata->fd = fd;
++    tdata->is_str = 0;
+ 
+     bytes = (const jbyte *)(*env)->GetStringUTFChars (env, config_path, NULL);
+-    tdata->path = strdup ((const char *)bytes);
++    if (!bytes) {
++        free (tdata);
++        goto exit;
++    }
++    tdata->config = strdup ((const char *)bytes);
++    tdata->config_len = tdata->config ? (unsigned int)strlen (tdata->config) : 0;
+     (*env)->ReleaseStringUTFChars (env, config_path, (const char *)bytes);
++    if (!tdata->config) {
++        free (tdata);
++        goto exit;
++    }
+ 
+     res = pthread_create (&work_thread, NULL, thread_handler, tdata);
+     if (res != 0) {
+-        free (tdata->path);
++        secure_zero (tdata->config, tdata->config_len);
++        free (tdata->config);
++        free (tdata);
++        goto exit;
++    }
++
++    is_working = 1;
++exit:
++    pthread_mutex_unlock (&mutex);
++}
++
++static void
++native_start_service_from_str (JNIEnv *env, jobject thiz, jstring config_str,
++                               jint fd)
++{
++    const char *utf;
++    ThreadData *tdata;
++    size_t len;
++    int res;
++
++    if (!config_str)
++        return;
++
++    pthread_mutex_lock (&mutex);
++
++    if (is_working)
++        goto exit;
++
++    utf = (*env)->GetStringUTFChars (env, config_str, NULL);
++    if (!utf)
++        goto exit;
++
++    len = strlen (utf);
++    tdata = malloc (sizeof (ThreadData));
++    if (!tdata) {
++        (*env)->ReleaseStringUTFChars (env, config_str, utf);
++        goto exit;
++    }
++    tdata->config = malloc (len + 1);
++    if (!tdata->config) {
++        free (tdata);
++        (*env)->ReleaseStringUTFChars (env, config_str, utf);
++        goto exit;
++    }
++    memcpy (tdata->config, utf, len + 1);
++    tdata->config_len = (unsigned int)len;
++    tdata->fd = fd;
++    tdata->is_str = 1;
++    (*env)->ReleaseStringUTFChars (env, config_str, utf);
++
++    res = pthread_create (&work_thread, NULL, thread_handler, tdata);
++    if (res != 0) {
++        secure_zero (tdata->config, tdata->config_len);
++        free (tdata->config);
+         free (tdata);
+         goto exit;
+     }
+--- a/src/hev-socks5-session-udp.c
++++ b/src/hev-socks5-session-udp.c
+@@ -8,6 +8,8 @@
+  */
+ 
+ #include <errno.h>
++#include <arpa/inet.h>
++#include <netinet/in.h>
+ #include <string.h>
+ 
+ #include <lwip/udp.h>
+@@ -244,6 +246,37 @@
+             return -1;
+     }
+ 
++    if (dest) {
++        if (dest->sa_family == AF_INET) {
++            const struct sockaddr_in *d4 = (const struct sockaddr_in *)dest;
++            if (d4->sin_addr.s_addr == htonl (INADDR_LOOPBACK)) {
++                struct sockaddr_in b4;
++                memset (&b4, 0, sizeof (b4));
++                b4.sin_family = AF_INET;
++                b4.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
++                b4.sin_port = 0;
++                if (bind (fd, (const struct sockaddr *)&b4, sizeof (b4)) < 0)
++                    return -1;
++            }
++        } else if (dest->sa_family == AF_INET6) {
++            const struct sockaddr_in6 *d6 = (const struct sockaddr_in6 *)dest;
++            uint32_t loopback_nbo = htonl (INADDR_LOOPBACK);
++            int is_v6_loopback = IN6_IS_ADDR_LOOPBACK (&d6->sin6_addr);
++            int is_v4_mapped_loopback =
++                IN6_IS_ADDR_V4MAPPED (&d6->sin6_addr) &&
++                memcmp (&d6->sin6_addr.s6_addr[12], &loopback_nbo, 4) == 0;
++            if (is_v6_loopback || is_v4_mapped_loopback) {
++                struct sockaddr_in6 b6;
++                memset (&b6, 0, sizeof (b6));
++                b6.sin6_family = AF_INET6;
++                b6.sin6_addr = d6->sin6_addr;
++                b6.sin6_port = 0;
++                if (bind (fd, (const struct sockaddr *)&b6, sizeof (b6)) < 0)
++                    return -1;
++            }
++        }
++    }
++
+     return 0;
+ }
+ 
