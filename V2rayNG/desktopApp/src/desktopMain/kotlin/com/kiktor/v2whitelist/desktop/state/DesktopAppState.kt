@@ -807,6 +807,12 @@ class DesktopAppState(
                     existingMap[defSub.id] = defSub
                 }
             }
+            for ((id, sub) in existingMap) {
+                val normalized = CustomSubData.normalizeScenarios(sub.targetScenarios)
+                if (normalized != sub.targetScenarios) {
+                    existingMap[id] = sub.copy(targetScenarios = normalized)
+                }
+            }
             val merged = existingMap.values.toList()
             saveSubscriptionsToStorage(merged)
             merged
@@ -945,14 +951,9 @@ class DesktopAppState(
                     isMatchingSub(p.subscriptionId, CustomSubData.SCENARIO_WHITELIST)
                 }
             }
-            AppScenario.VPN_BLACKLIST -> {
+            AppScenario.VPN_BLACKLIST, AppScenario.YOUTUBE -> {
                 allServers.filter { (_, p) ->
                     isMatchingSub(p.subscriptionId, CustomSubData.SCENARIO_BLACKLIST)
-                }
-            }
-            AppScenario.YOUTUBE -> {
-                allServers.filter { (_, p) ->
-                    isMatchingSub(p.subscriptionId, CustomSubData.SCENARIO_YOUTUBE)
                 }
             }
             else -> allServers
@@ -1836,12 +1837,26 @@ class DesktopAppState(
         }
 
         val migrationKey = "pref_mode_redesign_v1_migrated"
-        if (!settingsRepo.getBoolean(migrationKey, false)) {
-            val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
-            val removed = _removedSubIds.value
-            val currentSubs = _subscriptions.value.toMutableList()
-            var changed = false
+        val ytSubsMigrationKey = "pref_subs_youtube_migrated_v1"
+        val needRedesignMigration = !settingsRepo.getBoolean(migrationKey, false)
+        val needYtSubsMigration = !settingsRepo.getBoolean(ytSubsMigrationKey, false)
+        if (!needRedesignMigration && !needYtSubsMigration) return
 
+        val defaultIds = DefaultSubscriptions.PREPOPULATED_SUBS.map { it.id }.toSet()
+        val removed = _removedSubIds.value
+        val currentSubs = _subscriptions.value.toMutableList()
+        var changed = false
+
+        for (i in currentSubs.indices) {
+            val sub = currentSubs[i]
+            val normalized = CustomSubData.normalizeScenarios(sub.targetScenarios)
+            if (normalized != sub.targetScenarios) {
+                currentSubs[i] = sub.copy(targetScenarios = normalized)
+                changed = true
+            }
+        }
+
+        if (needRedesignMigration) {
             for (defSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
                 if (removed.contains(defSub.id)) continue
                 val idx = currentSubs.indexOfFirst { it.id == defSub.id }
@@ -1863,12 +1878,17 @@ class DesktopAppState(
                     changed = true
                 }
             }
+        }
 
-            if (changed) {
-                _subscriptions.value = currentSubs
-                saveSubscriptionsToStorage(currentSubs)
-            }
+        if (changed) {
+            _subscriptions.value = currentSubs
+            saveSubscriptionsToStorage(currentSubs)
+        }
+        if (needRedesignMigration) {
             settingsRepo.setBoolean(migrationKey, true)
+        }
+        if (needYtSubsMigration) {
+            settingsRepo.setBoolean(ytSubsMigrationKey, true)
         }
     }
 

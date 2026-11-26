@@ -118,11 +118,5 @@
             android:layout_height="wrap_content"
             android:text="@string/scenario_chip_blacklist" />
 
-        <com.google.android.material.checkbox.MaterialCheckBox
-            android:id="@+id/cb_scenario_youtube"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/scenario_chip_youtube" />
-
     </LinearLayout>
 </ScrollView>

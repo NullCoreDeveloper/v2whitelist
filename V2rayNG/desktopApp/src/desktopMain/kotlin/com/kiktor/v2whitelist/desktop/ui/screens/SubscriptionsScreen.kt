@@ -344,16 +344,14 @@ private fun SubscriptionCard(
 
                     Spacer(Modifier.height(6.dp))
 
-                    // Режимы (категории): БС, ЧС, YouTube
+                    // Режимы (категории): БС, ЧС
+                    val normalizedScenarios = CustomSubData.normalizeScenarios(sub.targetScenarios)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) {
+                        if (normalizedScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) {
                             CategoryBadge(label = strings.scenarioWhitelistTitle, color = AccentMint)
                         }
-                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) {
+                        if (normalizedScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) {
                             CategoryBadge(label = strings.scenarioBlacklistTitle, color = AccentAmber)
-                        }
-                        if (sub.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE)) {
-                            CategoryBadge(label = strings.scenarioYoutubeSubtitle, color = AccentRose)
                         }
                     }
 
@@ -462,9 +460,9 @@ private fun SubscriptionEditDialog(
     var groupRegex by remember { mutableStateOf(initialData.groupRegex) }
     var sharePercentStr by remember { mutableStateOf(initialData.sharePercent?.toString() ?: "") }
 
-    var isWhitelist by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) }
-    var isBlacklist by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) }
-    var isYoutube by remember { mutableStateOf(initialData.targetScenarios.contains(CustomSubData.SCENARIO_YOUTUBE)) }
+    val initialScenarios = CustomSubData.normalizeScenarios(initialData.targetScenarios)
+    var isWhitelist by remember { mutableStateOf(initialScenarios.contains(CustomSubData.SCENARIO_WHITELIST)) }
+    var isBlacklist by remember { mutableStateOf(initialScenarios.contains(CustomSubData.SCENARIO_BLACKLIST)) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -571,11 +569,6 @@ private fun SubscriptionEditDialog(
                         Checkbox(checked = isBlacklist, onCheckedChange = { isBlacklist = it })
                         Text(strings.subCatBlacklist, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = isYoutube, onCheckedChange = { isYoutube = it })
-                        Text(strings.subCatYoutube, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -595,7 +588,6 @@ private fun SubscriptionEditDialog(
                             val newScenarios = mutableListOf<String>()
                             if (isWhitelist) newScenarios.add(CustomSubData.SCENARIO_WHITELIST)
                             if (isBlacklist) newScenarios.add(CustomSubData.SCENARIO_BLACKLIST)
-                            if (isYoutube) newScenarios.add(CustomSubData.SCENARIO_YOUTUBE)
 
                             val percent = sharePercentStr.trim().toIntOrNull()
 

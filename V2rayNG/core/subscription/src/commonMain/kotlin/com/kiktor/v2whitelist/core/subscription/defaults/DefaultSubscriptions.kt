@@ -46,7 +46,7 @@ object DefaultSubscriptions {
                 "https://cdn.jsdelivr.net/gh/flaafix/AetrisVPN@main/AetrisVPN.txt"
             ).joinToString("|"),
             enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
         // --- 4. CYBERPORTAL White Keys ---
@@ -126,7 +126,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/youtube"
             ).joinToString("|"),
             enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
         // --- 10. rjsxrd Bypass All ---
@@ -447,7 +447,7 @@ object DefaultSubscriptions {
                 "https://etoskam.ru/ytm"
             ).joinToString("|"),
             enabled = true,
-            targetScenarios = listOf(CustomSubData.SCENARIO_YOUTUBE, CustomSubData.SCENARIO_BLACKLIST)
+            targetScenarios = listOf(CustomSubData.SCENARIO_BLACKLIST)
         ),
 
         // --- 35. AirLinkVPN (Белые списки РКН) ---

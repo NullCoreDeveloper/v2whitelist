@@ -61,7 +61,6 @@ class CustomSubscriptionsActivity : BaseActivity() {
         val etSharePercent = dialogView.findViewById<EditText>(R.id.et_sub_share_percent)
         val cbWhitelist = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_whitelist)
         val cbBlacklist = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_blacklist)
-        val cbYoutube = dialogView.findViewById<com.google.android.material.checkbox.MaterialCheckBox>(R.id.cb_scenario_youtube)
 
         if (existingItem != null) {
             etName.setText(existingItem.name)
@@ -70,20 +69,19 @@ class CustomSubscriptionsActivity : BaseActivity() {
             etGroupRegex.setText(existingItem.groupRegex)
             etSharePercent.setText(existingItem.sharePercent?.toString() ?: "")
 
-            val scenarios = if (existingItem.targetScenarios.isNotEmpty()) {
+            val rawScenarios = if (existingItem.targetScenarios.isNotEmpty()) {
                 existingItem.targetScenarios
             } else {
                 val defaultMatch = com.kiktor.v2whitelist.handler.DefaultSubscriptions.PREPOPULATED_SUBS.find { it.id == existingItem.id }
                 defaultMatch?.targetScenarios ?: emptyList()
             }
+            val scenarios = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.normalizeScenarios(rawScenarios)
             cbWhitelist.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST)
             cbBlacklist.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST)
-            cbYoutube.isChecked = scenarios.contains(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE)
         } else {
             // Для новых подписок по умолчанию отмечаем БС и ЧС
             cbWhitelist.isChecked = true
             cbBlacklist.isChecked = true
-            cbYoutube.isChecked = false
         }
 
         val builder = AlertDialog.Builder(this)
@@ -133,7 +131,6 @@ class CustomSubscriptionsActivity : BaseActivity() {
                 val selectedScenarios = mutableListOf<String>()
                 if (cbWhitelist.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST)
                 if (cbBlacklist.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST)
-                if (cbYoutube.isChecked) selectedScenarios.add(com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE)
 
                 if (name.isEmpty()) {
                     toast(R.string.sub_setting_remarks)

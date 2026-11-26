@@ -224,6 +224,7 @@ object SubscriptionHelper {
                         sub.targetScenarios = defaultMatch.targetScenarios
                     }
                 }
+                sub.targetScenarios = CustomSubData.normalizeScenarios(sub.targetScenarios)
             }
             subs
         } catch (e: Exception) {
@@ -345,32 +346,55 @@ object SubscriptionHelper {
         }
 
         val migrationKey = "pref_mode_redesign_v1_migrated"
-        if (MmkvManager.decodeSettingsBool(migrationKey, false)) {
+        val ytSubsMigrationKey = "pref_subs_youtube_migrated_v1"
+        val needRedesignMigration = !MmkvManager.decodeSettingsBool(migrationKey, false)
+        val needYtSubsMigration = !MmkvManager.decodeSettingsBool(ytSubsMigrationKey, false)
+        if (!needRedesignMigration && !needYtSubsMigration) {
             return
         }
 
         MmkvManager.encodeSettings(AppConfig.PREF_ONBOARDING_PURPOSE_SHOWN, true)
 
         val removedIds = getRemovedSubIds()
-        val customSubs = loadCustomSubs().toMutableList()
+        val rawJson = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_SUB_URLS)
+        val customSubs = if (rawJson.isNullOrEmpty()) {
+            mutableListOf()
+        } else {
+            try {
+                (com.kiktor.v2whitelist.util.JsonUtil.fromJson(rawJson, Array<CustomSubData>::class.java)?.toMutableList()
+                    ?: mutableListOf())
+            } catch (_: Exception) {
+                mutableListOf()
+            }
+        }
         var customSubsChanged = false
 
-        for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
-            if (removedIds.contains(defaultSub.id)) continue
-            val existing = customSubs.find { it.id == defaultSub.id }
-            if (existing == null) {
-                customSubs.add(defaultSub.copy(enabled = true))
-                customSubsChanged = true
-            } else if (!existing.enabled) {
-                existing.enabled = true
+        for (sub in customSubs) {
+            val normalized = CustomSubData.normalizeScenarios(sub.targetScenarios)
+            if (normalized != sub.targetScenarios) {
+                sub.targetScenarios = normalized
                 customSubsChanged = true
             }
+        }
 
-            val guid = "custom_sub_${defaultSub.id}"
-            val storedSub = MmkvManager.decodeSubscription(guid)
-            if (storedSub != null && !storedSub.enabled) {
-                storedSub.enabled = true
-                MmkvManager.encodeSubscription(guid, storedSub)
+        if (needRedesignMigration) {
+            for (defaultSub in DefaultSubscriptions.PREPOPULATED_SUBS) {
+                if (removedIds.contains(defaultSub.id)) continue
+                val existing = customSubs.find { it.id == defaultSub.id }
+                if (existing == null) {
+                    customSubs.add(defaultSub.copy(enabled = true))
+                    customSubsChanged = true
+                } else if (!existing.enabled) {
+                    existing.enabled = true
+                    customSubsChanged = true
+                }
+
+                val guid = "custom_sub_${defaultSub.id}"
+                val storedSub = MmkvManager.decodeSubscription(guid)
+                if (storedSub != null && !storedSub.enabled) {
+                    storedSub.enabled = true
+                    MmkvManager.encodeSubscription(guid, storedSub)
+                }
             }
         }
 
@@ -381,7 +405,12 @@ object SubscriptionHelper {
             )
         }
 
-        MmkvManager.encodeSettings(migrationKey, true)
+        if (needRedesignMigration) {
+            MmkvManager.encodeSettings(migrationKey, true)
+        }
+        if (needYtSubsMigration) {
+            MmkvManager.encodeSettings(ytSubsMigrationKey, true)
+        }
     }
 
     /**

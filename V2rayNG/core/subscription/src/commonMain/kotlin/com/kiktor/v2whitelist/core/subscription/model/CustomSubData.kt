@@ -32,5 +32,13 @@ data class CustomSubData(
         const val SCENARIO_WHITELIST = "WHITELIST"
         const val SCENARIO_BLACKLIST = "BLACKLIST"
         const val SCENARIO_YOUTUBE = "YOUTUBE"
+
+        /**
+         * Мигрирует устаревший тег YOUTUBE в BLACKLIST и удаляет дубликаты.
+         */
+        fun normalizeScenarios(scenarios: List<String>): List<String> {
+            if (scenarios.isEmpty()) return scenarios
+            return scenarios.map { if (it == SCENARIO_YOUTUBE) SCENARIO_BLACKLIST else it }.distinct()
+        }
     }
 }

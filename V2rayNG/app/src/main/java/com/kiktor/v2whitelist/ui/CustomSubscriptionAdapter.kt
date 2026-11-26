@@ -78,7 +78,7 @@ class CustomSubscriptionAdapter(
         }
 
         val context = holder.itemView.context
-        val scenarios = item.targetScenarios
+        val scenarios = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.normalizeScenarios(item.targetScenarios)
         if (scenarios.isEmpty()) {
             holder.tvScenarios.text = context.getString(R.string.sub_scenario_universal)
         } else {
@@ -86,7 +86,6 @@ class CustomSubscriptionAdapter(
                 when (scenarioKey) {
                     com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_WHITELIST -> "🛡️ БС"
                     com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_BLACKLIST -> "🌐 ЧС"
-                    com.kiktor.v2whitelist.handler.SubscriptionHelper.SCENARIO_YOUTUBE -> "▶️ YouTube"
                     else -> scenarioKey
                 }
             }
