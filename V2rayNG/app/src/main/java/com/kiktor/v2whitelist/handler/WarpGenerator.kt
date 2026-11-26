@@ -43,11 +43,11 @@ object WarpGenerator {
             }
         } else if (socksPort > 0) {
             if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
-                Authenticator.setDefault(object : Authenticator() {
-                    override fun getPasswordAuthentication(): PasswordAuthentication? {
-                        return PasswordAuthentication(socksUser, socksPass.toCharArray())
-                    }
-                })
+                com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
+                    userProvider = { SettingsManager.getSocksUser() },
+                    passProvider = { SettingsManager.getSocksPass() },
+                    allowedPortsProvider = { setOf(socksPort) }
+                )
             }
             builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(AppConfig.LOOPBACK, socksPort)))
         }

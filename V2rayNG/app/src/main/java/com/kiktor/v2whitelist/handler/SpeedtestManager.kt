@@ -90,11 +90,11 @@ object SpeedtestManager {
             val socksUser = SettingsManager.getSocksUser()
             val socksPass = SettingsManager.getSocksPass()
             if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
-                java.net.Authenticator.setDefault(object : java.net.Authenticator() {
-                    override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
-                        return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
-                    }
-                })
+                com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
+                    userProvider = { SettingsManager.getSocksUser() },
+                    passProvider = { SettingsManager.getSocksPass() },
+                    allowedPortsProvider = { setOf(socksPort) }
+                )
             }
 
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress(AppConfig.LOOPBACK, socksPort))

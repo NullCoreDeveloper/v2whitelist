@@ -87,13 +87,22 @@ object XrayConfigGenerator {
 
         // HTTP / Mixed inbound на дополнительном порту
         if (options.enableHttpInbound && options.httpPort > 0) {
+            val httpSettings = if (!options.socksUsername.isNullOrBlank() && !options.socksPassword.isNullOrBlank()) {
+                InboundSettings(
+                    auth = "password",
+                    udp = false,
+                    accounts = listOf(SocksAccount(user = options.socksUsername, pass = options.socksPassword))
+                )
+            } else {
+                null
+            }
             inbounds.add(
                 XrayInbound(
                     tag = "http-in",
                     port = options.httpPort,
                     protocol = "mixed",
                     listen = options.listenAddress,
-                    settings = null,
+                    settings = httpSettings,
                     sniffing = if (options.sniffingEnabled) {
                         InboundSniffing(enabled = true, destOverride = listOf("http", "tls", "quic"), routeOnly = true)
                     } else null

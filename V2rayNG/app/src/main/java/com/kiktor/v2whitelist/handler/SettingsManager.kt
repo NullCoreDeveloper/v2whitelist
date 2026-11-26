@@ -240,13 +240,20 @@ object SettingsManager {
         return Utils.parseInt(MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PORT), AppConfig.PORT_SOCKS.toInt())
     }
 
+    private val secureRandom = java.security.SecureRandom()
+    private const val TOKEN_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+    private fun generateRandomToken(length: Int): String = buildString(length) {
+        repeat(length) { append(TOKEN_ALPHABET[secureRandom.nextInt(TOKEN_ALPHABET.length)]) }
+    }
+
     /**
      * Get the SOCKS username. Generates a random one if not set.
      */
     fun getSocksUser(): String {
         var user = MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_USER)
         if (user.isNullOrEmpty()) {
-            user = "v2w_" + kotlin.random.Random.nextInt(1000, 9999)
+            user = "v2w_" + generateRandomToken(10)
             MmkvManager.encodeSettings(AppConfig.PREF_SOCKS_USER, user)
         }
         return user
@@ -258,7 +265,7 @@ object SettingsManager {
     fun getSocksPass(): String {
         var pass = MmkvManager.decodeSettingsString(AppConfig.PREF_SOCKS_PASS)
         if (pass.isNullOrEmpty()) {
-            pass = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12)
+            pass = generateRandomToken(24)
             MmkvManager.encodeSettings(AppConfig.PREF_SOCKS_PASS, pass)
         }
         return pass

@@ -648,11 +648,12 @@ actual suspend fun rawServiceHttpCheck(
     socksPass: String?
 ): ServiceCheckResult = withContext(Dispatchers.IO) {
     if (!socksUser.isNullOrEmpty() && !socksPass.isNullOrEmpty()) {
-        java.net.Authenticator.setDefault(object : java.net.Authenticator() {
-            override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
-                return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
-            }
-        })
+        val ports = setOfNotNull(socksPort, httpPort).filter { it > 0 }.toSet()
+        com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
+            userProvider = { socksUser },
+            passProvider = { socksPass },
+            allowedPortsProvider = { ports }
+        )
     }
     val proxy = createProxy(socksPort, httpPort)
     if (!service.isCustom) {

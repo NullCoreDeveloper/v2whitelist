@@ -230,11 +230,16 @@ object HttpUtil {
                 val socksUser = com.kiktor.v2whitelist.handler.SettingsManager.getSocksUser()
                 val socksPass = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPass()
                 if (socksUser.isNotEmpty() && socksPass.isNotEmpty()) {
-                    java.net.Authenticator.setDefault(object : java.net.Authenticator() {
-                        override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
-                            return java.net.PasswordAuthentication(socksUser, socksPass.toCharArray())
+                    com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
+                        userProvider = { com.kiktor.v2whitelist.handler.SettingsManager.getSocksUser() },
+                        passProvider = { com.kiktor.v2whitelist.handler.SettingsManager.getSocksPass() },
+                        allowedPortsProvider = {
+                            setOf(
+                                com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort(),
+                                com.kiktor.v2whitelist.handler.SettingsManager.getHttpPort()
+                            )
                         }
-                    })
+                    )
                     if (proxyType == Proxy.Type.HTTP) {
                         conn.setRequestProperty(
                             "Proxy-Authorization",
