@@ -219,4 +219,16 @@ object CountryNames {
     fun getDisplayName(tag: String, isEn: Boolean): String {
         return getDisplayName(tag, if (isEn) "EN" else "RU")
     }
+
+    fun getCountryNameByCode(code: String, lang: String = "RU"): String {
+        val norm = code.trim().uppercase()
+        if (norm.isEmpty()) return ""
+        val dict = when (lang.uppercase()) {
+            "EN" -> codeToNameEn
+            "ZH", "ZH-CN", "ZH_CN" -> codeToNameZh
+            "FA" -> codeToNameFa
+            else -> codeToNameRu
+        }
+        return dict[norm] ?: norm
+    }
 }

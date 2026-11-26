@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
@@ -96,14 +97,24 @@ fun Sidebar(
             NavItem(
                 icon = Icons.Default.Home,
                 label = strings.menu,
-                badge = if (serverCount > 0) serverCount.toString() else null,
                 selected = currentTab == DesktopTab.MAIN,
                 onClick = { onTabSelected(DesktopTab.MAIN) }
             )
 
             Spacer(Modifier.height(8.dp))
 
-            // 2. Управление подписками
+            // 2. Список серверов
+            NavItem(
+                icon = Icons.Default.Dns,
+                label = strings.navServers,
+                badge = if (serverCount > 0) serverCount.toString() else null,
+                selected = currentTab == DesktopTab.SERVERS,
+                onClick = { onTabSelected(DesktopTab.SERVERS) }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // 3. Управление подписками
             NavItem(
                 icon = Icons.Default.CloudDownload,
                 label = strings.subscriptions,
