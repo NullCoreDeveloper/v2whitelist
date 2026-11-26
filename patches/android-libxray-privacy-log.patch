@@ -1,15 +1,15 @@
 --- a/libv2ray_main.go
 +++ b/libv2ray_main.go
-@@ -10,6 +10,7 @@
- 	"net/http"
+@@ -6,6 +6,7 @@
+ 	"log"
  	"os"
  	"path/filepath"
 +	"regexp"
  	"strconv"
  	"strings"
  	"sync"
-@@ -370,9 +371,25 @@
- 	return minDuration, nil
+@@ -187,9 +188,25 @@
+ 	return nil
  }
  
 +var (

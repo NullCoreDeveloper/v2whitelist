@@ -36,7 +36,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24.x'
+        go-version: '1.27.x'
 
     - name: Run Go Core Tests
       run: cd v2w-core && go test -count=1 ./...
@@ -108,7 +108,7 @@ jobs:
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
       with:
-        go-version: '1.26.x'
+        go-version: '1.27.x'
 
     - name: Build Unified libv2ray (Original Core + Scanner Core)
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
