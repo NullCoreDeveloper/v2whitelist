@@ -7,8 +7,15 @@ import (
 
 	"github.com/kiktor/v2w-core/common/errors"
 	"github.com/kiktor/v2w-core/common/protocol"
+	"github.com/kiktor/v2w-core/common/serial"
 	"github.com/kiktor/v2w-core/common/uuid"
 )
+
+func init() {
+	serial.RegisterCreator("xray.proxy.vmess.Account", func() interface{} {
+		return &Account{}
+	})
+}
 
 // MemoryAccount is an in-memory form of VMess account.
 type MemoryAccount struct {
