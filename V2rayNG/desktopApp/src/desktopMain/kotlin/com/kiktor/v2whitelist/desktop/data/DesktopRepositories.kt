@@ -237,19 +237,143 @@ internal object DesktopStorageManager {
     val serversFile: File get() = File(baseDir, "servers.json")
     val settingsFile: File get() = File(baseDir, "settings.json")
 
-    fun loadServers(): ServersStorage {
+    private val storageCryptoLock = Any()
+
+    @Volatile
+    private var activeKeyContext: DesktopStorageCrypto.DecryptedKeyContext? = null
+
+    fun isStorageEncryptedOnDisk(): Boolean {
+        val settingsEnc = runCatching {
+            settingsFile.isFile && DesktopStorageCrypto.isEncryptedContent(settingsFile.readText())
+        }.getOrDefault(false)
+        if (settingsEnc) return true
+        return runCatching {
+            serversFile.isFile && DesktopStorageCrypto.isEncryptedContent(serversFile.readText())
+        }.getOrDefault(false)
+    }
+
+    fun isEncryptionEnabled(): Boolean = activeKeyContext != null || isStorageEncryptedOnDisk()
+
+    fun currentArgon2Params(): Argon2Params {
+        activeKeyContext?.let { return it.params }
+        listOf(settingsFile, serversFile).forEach { file ->
+            if (file.isFile) {
+                val raw = runCatching { file.readText() }.getOrNull().orEmpty()
+                if (DesktopStorageCrypto.isEncryptedContent(raw)) {
+                    runCatching {
+                        val env = compactJson.decodeFromString<EncryptedEnvelope>(raw.trim())
+                        return Argon2Params(env.memoryKiB, env.iterations, env.parallelism).validated()
+                    }
+                }
+            }
+        }
+        return Argon2Params.BALANCED
+    }
+
+    fun unlockStorage(password: CharArray): Result<Unit> = synchronized(storageCryptoLock) {
+        return@synchronized runCatching {
+            var resolvedCtx: DesktopStorageCrypto.DecryptedKeyContext? = null
+            if (settingsFile.isFile) {
+                val rawSettings = settingsFile.readText()
+                if (DesktopStorageCrypto.isEncryptedContent(rawSettings)) {
+                    val (_, ctx) = DesktopStorageCrypto.decrypt(rawSettings, password, "settings.json")
+                    resolvedCtx = ctx
+                }
+            }
+            if (serversFile.isFile) {
+                val rawServers = serversFile.readText()
+                if (DesktopStorageCrypto.isEncryptedContent(rawServers)) {
+                    val existing = resolvedCtx
+                    if (existing != null) {
+                        val okWithSameKey = runCatching {
+                            DesktopStorageCrypto.decryptWithDerivedKey(rawServers, existing.derivedKey, "servers.json")
+                        }.isSuccess
+                        if (!okWithSameKey) {
+                            val (_, ctx2) = DesktopStorageCrypto.decrypt(rawServers, password, "servers.json")
+                            ctx2.wipe()
+                        }
+                    } else {
+                        val (_, ctx) = DesktopStorageCrypto.decrypt(rawServers, password, "servers.json")
+                        resolvedCtx = ctx
+                    }
+                }
+            }
+            activeKeyContext?.wipe()
+            activeKeyContext = resolvedCtx
+            Unit
+        }
+    }
+
+    fun enableOrUpdateEncryption(password: CharArray, params: Argon2Params): Result<Unit> = synchronized(storageCryptoLock) {
+        return@synchronized runCatching {
+            require(password.isNotEmpty()) { "Мастер-пароль не может быть пустым" }
+            val currentSettings = loadSettings()
+            val currentServers = loadServers()
+            val safeParams = params.validated()
+            val salt = DesktopStorageCrypto.generateSalt()
+            val key = DesktopStorageCrypto.deriveKey(password, salt, safeParams)
+            val newCtx = DesktopStorageCrypto.DecryptedKeyContext(key, salt, safeParams)
+            val oldCtx = activeKeyContext
+            activeKeyContext = newCtx
+            oldCtx?.wipe()
+            saveSettings(currentSettings)
+            saveServers(currentServers)
+            Unit
+        }
+    }
+
+    fun disableEncryption(): Result<Unit> = synchronized(storageCryptoLock) {
+        return@synchronized runCatching {
+            val currentSettings = loadSettings()
+            val currentServers = loadServers()
+            activeKeyContext?.wipe()
+            activeKeyContext = null
+            saveSettings(currentSettings)
+            saveServers(currentServers)
+            Unit
+        }
+    }
+
+    fun lockAndWipeMemory() {
+        synchronized(storageCryptoLock) {
+            activeKeyContext?.wipe()
+            activeKeyContext = null
+        }
+    }
+
+    private fun decodeStorageText(rawText: String, contextName: String): String {
+        if (!DesktopStorageCrypto.isEncryptedContent(rawText)) return rawText
+        val ctx = activeKeyContext
+            ?: throw IllegalStateException("Хранилище $contextName зашифровано и ещё не разблокировано")
+        return DesktopStorageCrypto.decryptWithDerivedKey(rawText, ctx.derivedKey, contextName)
+    }
+
+    private fun encodeStorageText(plainJson: String, contextName: String): String {
+        val ctx = activeKeyContext ?: return plainJson
+        return DesktopStorageCrypto.encryptWithDerivedKey(
+            plaintext = plainJson,
+            derivedKey = ctx.derivedKey,
+            salt = ctx.salt,
+            params = ctx.params,
+            contextName = contextName
+        )
+    }
+
+    fun loadServers(): ServersStorage = synchronized(storageCryptoLock) {
         val f = serversFile
         if (!f.exists()) return ServersStorage()
         return try {
-            compactJson.decodeFromString<ServersStorage>(f.readText())
+            val plain = decodeStorageText(f.readText(), "servers.json")
+            compactJson.decodeFromString<ServersStorage>(plain)
         } catch (e: Exception) {
             ServersStorage()
         }
     }
 
-    fun saveServers(storage: ServersStorage) {
+    fun saveServers(storage: ServersStorage) = synchronized(storageCryptoLock) {
         try {
-            val content = compactJson.encodeToString(storage)
+            val plainContent = compactJson.encodeToString(storage)
+            val content = encodeStorageText(plainContent, "servers.json")
             val parent = serversFile.parentFile ?: baseDir
             if (!parent.exists()) parent.mkdirs()
             applyPrivateDirPermissions(parent)
@@ -274,11 +398,12 @@ internal object DesktopStorageManager {
         } catch (_: Exception) {}
     }
 
-    fun loadSettings(): SettingsStorage {
+    fun loadSettings(): SettingsStorage = synchronized(storageCryptoLock) {
         val f = settingsFile
         if (!f.exists()) return SettingsStorage()
         return try {
-            json.decodeFromString<SettingsStorage>(f.readText())
+            val plain = decodeStorageText(f.readText(), "settings.json")
+            json.decodeFromString<SettingsStorage>(plain)
         } catch (e: Exception) {
             SettingsStorage()
         }
@@ -289,7 +414,10 @@ internal object DesktopStorageManager {
     fun saveSettings(storage: SettingsStorage) {
         synchronized(settingsFileLock) {
             val content = try {
-                json.encodeToString(storage)
+                val plainContent = json.encodeToString(storage)
+                synchronized(storageCryptoLock) {
+                    encodeStorageText(plainContent, "settings.json")
+                }
             } catch (e: Exception) {
                 System.err.println("[DesktopStorageManager] Ошибка сериализации настроек: ${e.message}")
                 return
@@ -339,6 +467,7 @@ internal object DesktopStorageManager {
     }
 
     fun clearDiskStorage() {
+        lockAndWipeMemory()
         try { serversFile.delete() } catch (_: Exception) {}
         try { settingsFile.delete() } catch (_: Exception) {}
         try { File(baseDir, "inspections.json").delete() } catch (_: Exception) {}

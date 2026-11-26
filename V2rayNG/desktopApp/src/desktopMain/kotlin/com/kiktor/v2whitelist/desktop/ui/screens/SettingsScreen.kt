@@ -29,6 +29,7 @@ import com.kiktor.v2whitelist.desktop.engine.AppSplitMode
 import com.kiktor.v2whitelist.desktop.engine.DesktopTunManager
 import com.kiktor.v2whitelist.desktop.engine.TunEnginePreference
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
+import com.kiktor.v2whitelist.desktop.ui.components.DesktopStorageEncryptionCard
 import com.kiktor.v2whitelist.desktop.ui.i18n.LocalAppStrings
 import com.kiktor.v2whitelist.desktop.ui.i18n.AppStrings
 import com.kiktor.v2whitelist.desktop.ui.theme.*
@@ -2202,6 +2203,11 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(14.dp))
+
+                // 12.1. Опциональное шифрование локального хранилища (Argon2id + AES-GCM)
+                DesktopStorageEncryptionCard()
 
                 Spacer(Modifier.height(14.dp))
 

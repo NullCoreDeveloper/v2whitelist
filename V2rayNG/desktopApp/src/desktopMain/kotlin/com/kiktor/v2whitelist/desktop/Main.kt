@@ -31,10 +31,12 @@ import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import com.kiktor.v2whitelist.desktop.engine.DesktopCoreState
 import com.kiktor.v2whitelist.desktop.state.DesktopAppState
 import com.kiktor.v2whitelist.desktop.state.DesktopTab
+import com.kiktor.v2whitelist.desktop.ui.components.DesktopStorageUnlockWindow
 import com.kiktor.v2whitelist.desktop.ui.components.Sidebar
 import com.kiktor.v2whitelist.desktop.ui.screens.AppearanceScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.GeekModeScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.MainScreen
+import com.kiktor.v2whitelist.desktop.ui.screens.ServerListScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SettingsScreen
 import com.kiktor.v2whitelist.desktop.ui.screens.SubscriptionsScreen
 import com.kiktor.v2whitelist.desktop.ui.i18n.I18n
@@ -132,6 +134,7 @@ fun App(state: DesktopAppState) {
                     Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                         when (currentTab) {
                             DesktopTab.MAIN -> MainScreen(state = state)
+                            DesktopTab.SERVERS -> ServerListScreen(state = state)
                             DesktopTab.SUBSCRIPTIONS -> SubscriptionsScreen(state = state)
                             DesktopTab.GEEK_MODE -> GeekModeScreen(state = state)
                             DesktopTab.APPEARANCE -> AppearanceScreen(state = state)
@@ -541,6 +544,17 @@ fun main() {
         })
     }
     application {
+        var storageUnlocked by remember { mutableStateOf(!DesktopStorageManager.isStorageEncryptedOnDisk()) }
+        if (!storageUnlocked) {
+            DesktopStorageUnlockWindow(
+                onUnlocked = { storageUnlocked = true },
+                onExit = {
+                    DesktopStorageManager.lockAndWipeMemory()
+                    exitApplication()
+                }
+            )
+            return@application
+        }
         val state = remember { DesktopAppState() }
         var isWindowVisible by remember { mutableStateOf(true) }
         var restoreWindowTrigger by remember { mutableIntStateOf(0) }
@@ -620,6 +634,7 @@ fun main() {
                 label = strings.trayExit,
                 onClick = {
                     state.shutdownOnExit()
+                    DesktopStorageManager.lockAndWipeMemory()
                     exitApplication()
                 }
             )
@@ -631,6 +646,7 @@ fun main() {
                     isWindowVisible = false
                 } else {
                     state.shutdownOnExit()
+                    DesktopStorageManager.lockAndWipeMemory()
                     exitApplication()
                 }
             },
