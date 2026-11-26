@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	core "github.com/kiktor/v2w-core"
 	"github.com/kiktor/v2w-core/common/log"
@@ -69,6 +71,36 @@ func loadInputConfigs(fromStdin bool, subURL string) (string, error) {
 	return string(data), nil
 }
 
+func syncIfFile(out io.Writer) {
+	if f, ok := out.(*os.File); ok {
+		_ = f.Sync()
+	}
+}
+
+func runFullScanMode(ctx context.Context, links []string, opts v2wscanner.ScanOptions, out io.Writer) {
+	v2wscanner.RunFullScanPipeline(
+		ctx,
+		links,
+		opts,
+		func(res v2wscanner.FullScanNodeResult) {
+			payload, err := json.Marshal(res)
+			if err != nil {
+				return
+			}
+			stdoutMu.Lock()
+			_, _ = fmt.Fprintf(out, "RESULT\t%s\n", payload)
+			syncIfFile(out)
+			stdoutMu.Unlock()
+		},
+		func(totalSuccess int64, totalFailed int64) {
+			stdoutMu.Lock()
+			_, _ = fmt.Fprintf(out, "COMPLETE\t%d\t%d\n", totalSuccess, totalFailed)
+			syncIfFile(out)
+			stdoutMu.Unlock()
+		},
+	)
+}
+
 func main() {
 	// Изолируем логи Xray в stderr, гарантируя чистый stdout для протокола сканирования.
 	log.RegisterHandler(log.NewLogger(log.CreateStderrLogWriter()))
@@ -76,9 +108,10 @@ func main() {
 	subURL := flag.String("sub", "https://raw.githack.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt", "URL to fetch VLESS subscription from or local file path")
 	fromStdin := flag.Bool("stdin", false, "Read configuration links directly from stdin")
 	streamMode := flag.Bool("stream", false, "Stream successful nodes line-by-line as they respond")
+	fullScan := flag.Bool("full-scan", false, "Run full server inspection pipeline and stream JSON-lines results")
 	firstOnly := flag.Bool("first", false, "Exit immediately upon finding the first working node (stateless fast mode)")
 	concurrency := flag.Int("concurrency", 35, "Maximum concurrent profile verification jobs")
-	tcpConcurrency := flag.Int("tcp-concurrency", 50, "Maximum concurrent TCP pre-check jobs")
+	tcpConcurrency := flag.Int("tcp-concurrency", 100, "Maximum concurrent TCP pre-check jobs")
 	timeoutSec := flag.Int("timeout", 6, "Per-node scan timeout in seconds")
 	fragTimeoutSec := flag.Int("frag-timeout", 4, "Timeout in seconds for TLS fragmentation retry")
 	destURL := flag.String("dest", "http://cp.cloudflare.com/generate_204", "Destination URL to test connectivity")
@@ -134,6 +167,16 @@ func main() {
 	opts.FirstOnly = *firstOnly
 	opts.StreamMode = *streamMode
 
+	sigCtx, stopSig := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSig()
+	ctx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
+
+	if *fullScan {
+		runFullScanMode(ctx, links, opts, os.Stdout)
+		return
+	}
+
 	checkMode := opts.EffectiveCheckMode()
 
 	var successCount int32
@@ -142,9 +185,6 @@ func main() {
 	var failCount int32
 	var successfulLinks []string
 	var linksMu sync.Mutex
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	v2wscanner.RunScanPipeline(ctx, links, opts, v2wscanner.ScanEventCallbacks{
 		OnSuccess: func(link string, delayMs int64, mode string, fragMode string) {
