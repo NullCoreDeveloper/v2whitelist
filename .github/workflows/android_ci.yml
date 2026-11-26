@@ -10,7 +10,51 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
+  security-tests:
+    name: Security Guard & Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Run Security Regression Guard
+      run: python3 tools/security_guard.py
+
+    - name: Verify Submodule Security Patches
+      run: |
+        git -C hev-socks5-tunnel apply --check ../patches/hev-socks5-tunnel-security.patch
+        git -C AndroidLibXrayLite apply --check ../patches/android-libxray-privacy-log.patch
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Run Go Core Tests
+      run: cd v2w-core && go test -count=1 ./...
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Run KMP, Desktop & Android Security Tests
+      working-directory: V2rayNG
+      run: |
+        chmod +x gradlew
+        ./gradlew :core:domain:testDebugUnitTest :core:config:testDebugUnitTest :core:subscription:testDebugUnitTest :desktopApp:desktopTest --console=plain
+        ./gradlew :app:testFdroidDebugUnitTest --tests "com.kiktor.v2whitelist.util.ZipUtilSecurityTest" --tests "com.kiktor.v2whitelist.handler.DeepLinkManagerSecurityTest" --tests "com.kiktor.v2whitelist.handler.ExternalControlAuthTest" --tests "com.kiktor.v2whitelist.util.LogSanitizerTest" --tests "com.kiktor.v2whitelist.handler.MmkvKeyManagerTest" --console=plain
+
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
@@ -19,6 +63,7 @@ jobs:
       with:
         submodules: recursive
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -58,7 +103,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: V2rayNG/app/libs/libv2ray.aar
-        key: ${{ runner.os }}-libv2ray-ci-v3-${{ hashFiles('AndroidLibXrayLite/**/*.go', 'v2w-core/**/*.go', 'AndroidLibXrayLite/go.sum', 'v2w-core/go.sum') }}
+        key: ${{ runner.os }}-libv2ray-ci-v4-${{ hashFiles('AndroidLibXrayLite/**/*.go', 'v2w-core/**/*.go', 'AndroidLibXrayLite/go.sum', 'v2w-core/go.sum', 'patches/android-libxray-privacy-log.patch') }}
     - name: Set up Go
       if: steps.cache-v2ray.outputs.cache-hit != 'true'
       uses: actions/setup-go@v5
@@ -90,7 +135,10 @@ jobs:
         sed -i '/zoneCache\.update/d'            "$ANET_DIR/interface_android.go" || true
         sed -i '/zoneCacheX\.update/d'           "$ANET_DIR/interface_android.go" || true
         
-        # Patch libv2ray_main.go to include V2W scanner bindings
+        # Patch libv2ray_main.go for log privacy and V2W scanner bindings
+        if ! grep -q "sanitizeCoreLogLine" AndroidLibXrayLite/libv2ray_main.go; then
+          git -C AndroidLibXrayLite apply ../patches/android-libxray-privacy-log.patch
+        fi
         if ! grep -q "RunV2WScanner" AndroidLibXrayLite/libv2ray_main.go; then
           sed -i '/mobasset "golang.org\/x\/mobile\/asset"/a \ \t"github.com/kiktor/v2w-core/v2wscanner"' AndroidLibXrayLite/libv2ray_main.go
           printf '\ntype V2WScanCallback interface {\n\tOnServerSuccess(configUrl string, delay int64)\n\tOnScanComplete(totalSuccess int64, totalFailed int64)\n}\n\nfunc RunV2WScanner(configs string, maxConcurrency int64, callback V2WScanCallback) {\n\tv2wscanner.RunV2WScanner(configs, maxConcurrency, callback)\n}\n\nfunc StopV2WScanner() {\n\tv2wscanner.StopV2WScanner()\n}\n\ntype V2WFullScanCallback interface {\n\tOnServerResult(resultJson string)\n\tOnScanComplete(totalSuccess int64, totalFailed int64)\n}\n\nfunc RunV2WFullScan(configs string, maxConcurrency int64, callback V2WFullScanCallback) {\n\tv2wscanner.RunV2WFullScan(configs, maxConcurrency, callback)\n}\n\nfunc StopV2WFullScan() {\n\tv2wscanner.StopV2WFullScan()\n}\n' >> AndroidLibXrayLite/libv2ray_main.go

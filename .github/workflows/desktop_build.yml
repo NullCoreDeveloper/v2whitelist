@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-desktop:
     name: Build Desktop (${{ matrix.os_name }})
@@ -45,6 +48,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve version from tag
         shell: bash
@@ -97,7 +101,7 @@ jobs:
           mkdir -p V2rayNG/desktopApp/assets
           
           XRAY_VER="v26.10.31"
-          curl -sSL -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${{ matrix.xray_asset }}"
+          curl -fsSL --proto '=https' --tlsv1.2 -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${{ matrix.xray_asset }}"
           unzip -q xray.zip -d xray_tmp
           
           # Копируем бинарник xray
@@ -115,7 +119,7 @@ jobs:
         shell: bash
         run: |
           TUN2SOCKS_VER="v2.5.2"
-          curl -sSL -o tun2socks.zip "https://github.com/xjasonlyu/tun2socks/releases/download/${TUN2SOCKS_VER}/${{ matrix.tun2socks_asset }}" || true
+          curl -fsSL --proto '=https' --tlsv1.2 -o tun2socks.zip "https://github.com/xjasonlyu/tun2socks/releases/download/${TUN2SOCKS_VER}/${{ matrix.tun2socks_asset }}" || true
           if [ -f tun2socks.zip ]; then
             unzip -q tun2socks.zip -d tun2socks_tmp || true
             find tun2socks_tmp -name "tun2socks*" -type f -exec cp {} V2rayNG/desktopApp/bin/tun2socks${{ matrix.binary_ext }} \; || true
@@ -124,7 +128,7 @@ jobs:
 
           if [ "${{ matrix.platform }}" == "windows" ]; then
             # Скачиваем Wintun драйвер для Windows TUN режима
-            curl -sSL -o wintun.zip "https://www.wintun.net/builds/wintun-0.14.1.zip"
+            curl -fsSL --proto '=https' --tlsv1.2 -o wintun.zip "https://www.wintun.net/builds/wintun-0.14.1.zip"
             unzip -q wintun.zip -d wintun_tmp
             cp wintun_tmp/wintun/bin/amd64/wintun.dll V2rayNG/desktopApp/bin/
             rm -rf wintun.zip wintun_tmp
@@ -209,11 +213,11 @@ jobs:
           cp V2rayNG/desktopApp/src/desktopMain/resources/icon.png "$BUILD_DIR/v2whitelist.png"
           ln -sf v2whitelist.png "$BUILD_DIR/.DirIcon"
           
-          curl -sSL -o /tmp/appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          curl -fsSL --proto '=https' --tlsv1.2 -o /tmp/appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
           chmod +x /tmp/appimagetool.AppImage
           cd /tmp && /tmp/appimagetool.AppImage --appimage-extract
           
-          curl -sSL -o /tmp/runtime-x86_64 "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
+          curl -fsSL --proto '=https' --tlsv1.2 -o /tmp/runtime-x86_64 "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"
           
           ARCH=x86_64 /tmp/squashfs-root/AppRun --no-appstream --runtime-file /tmp/runtime-x86_64 "$BUILD_DIR" "$GITHUB_WORKSPACE/V2rayNG/desktopApp/build/compose/binaries/main/v2whitelist-${VERSION}-linux-x86_64.AppImage"
           
@@ -278,10 +282,11 @@ jobs:
 
           cd release-desktop
           ls -la
+          rm -f sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+            sha256sum * > ../sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt && mv ../sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt . || true
           else
-            shasum -a 256 * > sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt || true
+            shasum -a 256 * > ../sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt && mv ../sha256sum-${{ matrix.platform }}-${{ matrix.arch }}.txt . || true
           fi
 
       - name: Upload Artifacts to GitHub Release
