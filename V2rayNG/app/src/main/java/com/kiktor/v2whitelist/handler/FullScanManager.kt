@@ -3,6 +3,8 @@ package com.kiktor.v2whitelist.handler
 import android.content.Context
 import android.net.Uri
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.core.model.EConfigType
+import com.kiktor.v2whitelist.core.model.PersonalServersConfig
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.inspection.FullScanNodeResultDto
 import com.kiktor.v2whitelist.core.model.inspection.ScanNetworkCondition
@@ -18,21 +20,35 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import libv2ray.CoreCallbackHandler
+import libv2ray.CoreController
 import libv2ray.Libv2ray
 import libv2ray.V2WFullScanCallback
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 
+enum class FullScanMode {
+    FULL,
+    VIP_PING,
+    VIP_FIND
+}
+
 data class FullScanUiState(
     val isScanning: Boolean = false,
+    val mode: FullScanMode = FullScanMode.FULL,
     val totalCount: Int = 0,
     val completedCount: Int = 0,
     val aliveCount: Int = 0,
@@ -54,44 +70,69 @@ object FullScanManager {
     private val lastUiEmitAtMs = AtomicLong(0L)
     private val pendingMmkvWrites = ConcurrentHashMap<String, ServerInspectionInfo>()
     private val pendingFragUpdates = ConcurrentHashMap<String, String>()
+    private val activeEndpointJobs = CopyOnWriteArrayList<Job>()
+    private val endpointSemaphore = Semaphore(4)
+
     @Volatile
     private var flushLoopJob: Job? = null
+
+    fun isEndpointCheckActive(): Boolean {
+        val personalConfig = PersonalServersManager.getConfig()
+        if (!personalConfig.exitNodeEnabled) return false
+        if (!MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)) return false
+        val url = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
+        return url.isNotEmpty()
+    }
+
+    private fun isServiceCheckEnabledForScan(endpointEffective: Boolean): Boolean {
+        if (endpointEffective) return false
+        return MmkvManager.decodeSettingsBool(AppConfig.PREF_FULL_SCAN_CHECK_SERVICES, false)
+    }
+
+    private fun shouldIgnoreEndpointForServer(guid: String): Boolean {
+        val profile = ServerListStore.getCachedProfile(guid)
+            ?: MmkvManager.decodeServerConfig(guid)
+            ?: return false
+        if (!PersonalServersConfig.isPersonalServer(profile.subscriptionId)) return false
+        return PersonalServersManager.getConfig().ignoreExitNodeForPersonal
+    }
 
     private fun buildFullScanOptionsHeader(
         tcpConcurrency: Int,
         verifyConcurrency: Int,
-        endpointUrl: String,
-        endpointEnabled: Boolean
+        checkServices: Boolean
     ): String {
-        val services = ServiceCheckManager.loadServices()
         val destUrl = SettingsManager.getDelayTestUrl()
             .trim()
             .takeIf { it.startsWith("http://") || it.startsWith("https://") }
             ?: AppConfig.DELAY_TEST_URL
 
         val servicesArray = JSONArray()
-        for (svc in services) {
-            servicesArray.put(
-                JSONObject().apply {
-                    put("id", svc.id)
-                    put("name", svc.name)
-                    put("url", svc.url)
-                    put("enabled", svc.enabled)
-                    put("isCustom", svc.isCustom)
-                }
-            )
+        if (checkServices) {
+            for (svc in ServiceCheckManager.loadServices()) {
+                servicesArray.put(
+                    JSONObject().apply {
+                        put("id", svc.id)
+                        put("name", svc.name)
+                        put("url", svc.url)
+                        put("enabled", svc.enabled)
+                        put("isCustom", svc.isCustom)
+                    }
+                )
+            }
         }
 
-        val effectiveEndpoint = if (endpointEnabled) endpointUrl.trim() else ""
+        // Важно: конечный узел (E2E) проверяем через реальный Xray в verifyEndpointViaXray(),
+        // а не через облегчённый net.Pipe в v2w-core, где сложные транспорты/Vision ложно падают.
         val root = JSONObject().apply {
             put("tcp_concurrency", tcpConcurrency)
             put("verify_concurrency", verifyConcurrency)
             put("timeout_sec", 4)
             put("frag_timeout_sec", 2)
             put("dest_url", destUrl)
-            put("endpoint_url", effectiveEndpoint)
-            put("endpoint_e2e", effectiveEndpoint.isNotEmpty())
-            put("service_check", effectiveEndpoint.isEmpty())
+            put("endpoint_url", "")
+            put("endpoint_e2e", false)
+            put("service_check", checkServices)
             put("services", servicesArray)
         }
         return "#v2w-opts:${root}"
@@ -101,11 +142,10 @@ object FullScanManager {
         guids: List<String>,
         tcpConcurrency: Int,
         verifyConcurrency: Int,
-        endpointUrl: String,
-        endpointEnabled: Boolean
+        checkServices: Boolean
     ): Triple<String, Map<String, String>, Map<String, String>> {
         val sb = StringBuilder()
-        sb.append(buildFullScanOptionsHeader(tcpConcurrency, verifyConcurrency, endpointUrl, endpointEnabled)).append("\n")
+        sb.append(buildFullScanOptionsHeader(tcpConcurrency, verifyConcurrency, checkServices)).append("\n")
 
         val exactMap = LinkedHashMap<String, String>(guids.size)
         val noFragmentMap = LinkedHashMap<String, String>(guids.size)
@@ -203,7 +243,88 @@ object FullScanManager {
         }
     }
 
+    private suspend fun verifyEndpointViaXray(context: Context, guid: String): Pair<Boolean, Long> {
+        var chainedController: CoreController? = null
+        return try {
+            val profile = ServerListStore.getCachedProfile(guid) ?: MmkvManager.decodeServerConfig(guid)
+            val isHysteria = profile?.configType == EConfigType.HYSTERIA2
+            val chainedPort = ServerSocket(0).use { it.localPort }
+            val chainedConfig = V2rayConfigManager.getV2rayConfig4Speedtest(
+                context,
+                guid,
+                chainedPort,
+                ignoreCustomEndpoint = false
+            )
+            if (!chainedConfig.status) {
+                return false to -1L
+            }
+
+            chainedController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                override fun startup(): Long = 0
+                override fun shutdown(): Long = 0
+                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+            })
+            chainedController.startLoop(chainedConfig.content, 0)
+            delay(if (isHysteria) 750L else 450L)
+
+            val (elapsed, _) = SpeedtestManager.testConnection(context, chainedPort, 7000)
+            (elapsed > 0L) to elapsed
+        } catch (e: Exception) {
+            GeekModeLogger.log("FullScan", "Xray endpoint E2E check error for $guid: ${e.message}")
+            false to -1L
+        } finally {
+            try {
+                chainedController?.stopLoop()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun startFullScan(context: Context, targetGuids: List<String>? = null): Boolean {
+        val mode = FullScanMode.FULL
+        return startScanInternal(
+            context = context,
+            targetGuids = targetGuids,
+            mode = mode,
+            stopAfterAliveCount = 0
+        )
+    }
+
+    fun pingVipNative(context: Context): Boolean {
+        val vipGuids = MmkvManager.getVipCache()
+        if (vipGuids.isEmpty()) return false
+        return startScanInternal(
+            context = context,
+            targetGuids = vipGuids,
+            mode = FullScanMode.VIP_PING,
+            stopAfterAliveCount = 0
+        )
+    }
+
+    fun findVipNative(context: Context): Boolean {
+        val allServers = MmkvManager.decodeServerList()
+        val currentVipSet = MmkvManager.getVipCache().toSet()
+        val filtered = SmartConnectManager.filterServers(allServers, null)
+            .map { it.first }
+            .filter { it !in currentVipSet }
+            .shuffled()
+        if (filtered.isEmpty()) return false
+
+        val vipLimit = MmkvManager.getVipCacheLimit()
+        val needed = (vipLimit - currentVipSet.size).coerceAtLeast(3)
+        return startScanInternal(
+            context = context,
+            targetGuids = filtered,
+            mode = FullScanMode.VIP_FIND,
+            stopAfterAliveCount = needed
+        )
+    }
+
+    private fun startScanInternal(
+        context: Context,
+        targetGuids: List<String>?,
+        mode: FullScanMode,
+        stopAfterAliveCount: Int
+    ): Boolean {
         if (_state.value.isScanning || SmartConnectManager.isScanning.get()) {
             return false
         }
@@ -212,9 +333,13 @@ object FullScanManager {
         val startedAt = System.currentTimeMillis()
         activeStartedAtMs.set(startedAt)
 
+        activeEndpointJobs.forEach { it.cancel() }
+        activeEndpointJobs.clear()
+
         _state.update {
             it.copy(
                 isScanning = true,
+                mode = mode,
                 totalCount = 0,
                 completedCount = 0,
                 aliveCount = 0,
@@ -236,27 +361,38 @@ object FullScanManager {
 
             if (sessionSeq.get() != sessionId) return@launch
 
-            val customEpEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-            val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
-            val endpointEffective = customEpEnabled && endpointUrl.isNotEmpty()
+            PersonalServersManager.sanitizeExitNode()
+            val endpointEffective = isEndpointCheckActive()
+            val checkServices = isServiceCheckEnabledForScan(endpointEffective)
 
             ServerListStore.ensureLoaded(appContext)
             ServerListStore.reloadBaseIfNeeded(appContext)
 
             val rawGuids = targetGuids ?: MmkvManager.decodeServerList()
-            val guids = if (targetGuids == null) {
-                pendingMmkvWrites.clear()
-                pendingFragUpdates.clear()
-                ServerListStore.clearInspectionsInMemory()
-                MmkvManager.clearAllServerInspections()
-                val vipSet = MmkvManager.getVipCache().toSet()
-                val vipGuids = rawGuids.filter { it in vipSet }
-                // Перемешиваем обычные сервера, чтобы пачки зависающих нод одной подписки
-                // не забивали одновременно все 35 verify-воркеров (устраняет просадку скорости).
-                val regularShuffled = rawGuids.filterNot { it in vipSet }.shuffled()
-                vipGuids + regularShuffled
-            } else {
-                rawGuids
+            pendingMmkvWrites.clear()
+            pendingFragUpdates.clear()
+
+            val guids: List<String> = when (mode) {
+                FullScanMode.FULL -> {
+                    ServerListStore.clearInspectionsAndPingsInMemory()
+                    MmkvManager.clearAllServerInspections()
+                    MmkvManager.clearAllTestDelayResults(rawGuids)
+                    val vipSet = MmkvManager.getVipCache().toSet()
+                    val vipGuids = rawGuids.filter { it in vipSet }
+                    // Перемешиваем обычные сервера, чтобы пачки зависающих нод одной подписки
+                    // не забивали одновременно все verify-воркеры.
+                    val regularShuffled = rawGuids.filterNot { it in vipSet }.shuffled()
+                    vipGuids + regularShuffled
+                }
+                FullScanMode.VIP_PING -> {
+                    ServerListStore.clearInspectionsAndPingsForGuids(rawGuids.toSet())
+                    for (g in rawGuids) {
+                        MmkvManager.removeServerInspection(g)
+                    }
+                    MmkvManager.clearAllTestDelayResults(rawGuids)
+                    rawGuids
+                }
+                FullScanMode.VIP_FIND -> rawGuids
             }
 
             val tcpConcurrency = MmkvManager.getV2wTcpConcurrency()
@@ -265,27 +401,29 @@ object FullScanManager {
                 guids = guids,
                 tcpConcurrency = tcpConcurrency,
                 verifyConcurrency = verifyConcurrency,
-                endpointUrl = endpointUrl,
-                endpointEnabled = endpointEffective
+                checkServices = checkServices
             )
 
             val totalCount = exactMap.size
             if (totalCount == 0) {
-                MmkvManager.encodeFullScanMeta(
-                    ScanSessionMeta(
-                        startedAtMs = startedAt,
-                        finishedAtMs = System.currentTimeMillis(),
-                        networkCondition = networkCondition,
-                        networkCheckEnabled = networkCheckEnabled,
-                        endpointEnabled = endpointEffective,
-                        totalScanned = 0,
-                        aliveCount = 0,
-                        failedCount = 0
+                if (mode == FullScanMode.FULL) {
+                    MmkvManager.encodeFullScanMeta(
+                        ScanSessionMeta(
+                            startedAtMs = startedAt,
+                            finishedAtMs = System.currentTimeMillis(),
+                            networkCondition = networkCondition,
+                            networkCheckEnabled = networkCheckEnabled,
+                            endpointEnabled = endpointEffective,
+                            totalScanned = 0,
+                            aliveCount = 0,
+                            failedCount = 0
+                        )
                     )
-                )
+                }
                 _state.update {
                     it.copy(
                         isScanning = false,
+                        mode = mode,
                         totalCount = 0,
                         completedCount = 0,
                         aliveCount = 0,
@@ -302,6 +440,7 @@ object FullScanManager {
             _state.update {
                 it.copy(
                     isScanning = true,
+                    mode = mode,
                     totalCount = totalCount,
                     completedCount = 0,
                     aliveCount = 0,
@@ -317,11 +456,12 @@ object FullScanManager {
             val completedCounter = AtomicInteger(0)
             val aliveCounter = AtomicInteger(0)
             val failedCounter = AtomicInteger(0)
+            val vipAddedCounter = AtomicInteger(0)
             val processedGuids = ConcurrentHashMap.newKeySet<String>()
 
             GeekModeLogger.log(
                 "FullScan",
-                "Starting full scan: total=$totalCount, condition=$networkCondition, endpoint=$endpointEffective"
+                "Starting $mode scan: total=$totalCount, tcp=$tcpConcurrency, verify=$verifyConcurrency, services=$checkServices, endpoint=$endpointEffective"
             )
 
             flushLoopJob?.cancel()
@@ -332,6 +472,14 @@ object FullScanManager {
                 }
             }
 
+            fun checkAndStopEarlyIfVipTargetReached() {
+                if (mode == FullScanMode.VIP_FIND && stopAfterAliveCount > 0 && vipAddedCounter.get() >= stopAfterAliveCount) {
+                    try {
+                        Libv2ray.stopV2WFullScan()
+                    } catch (_: Exception) {}
+                }
+            }
+
             val callback = object : V2WFullScanCallback {
                 override fun onServerResult(resultJson: String?) {
                     if (sessionSeq.get() != sessionId) return
@@ -339,19 +487,58 @@ object FullScanManager {
                     val guid = resolveGuid(dto.link, exactMap, fallbackMap) ?: return
                     if (!processedGuids.add(guid)) return
 
-                    val info = dto.toInspectionInfo(testedAtMs = System.currentTimeMillis())
-                    ServerListStore.putInspectionInMemory(guid, info)
-                    pendingMmkvWrites[guid] = info
-                    if (info.alive && (info.fragMode == "tcp" || info.fragMode == "record")) {
-                        pendingFragUpdates[guid] = info.fragMode
+                    // Пока E2E через Xray не завершён, не ставим ложный "не прошёл"
+                    val baseInfo = dto.toInspectionInfo(testedAtMs = System.currentTimeMillis()).let { rawInfo ->
+                        if (endpointEffective) rawInfo.copy(endpointPassed = null) else rawInfo
+                    }
+
+                    ServerListStore.putInspectionInMemory(guid, baseInfo)
+                    pendingMmkvWrites[guid] = baseInfo
+                    if (baseInfo.alive && (baseInfo.fragMode == "tcp" || baseInfo.fragMode == "record")) {
+                        pendingFragUpdates[guid] = baseInfo.fragMode
+                    }
+
+                    if (baseInfo.alive) {
+                        if (endpointEffective && !shouldIgnoreEndpointForServer(guid)) {
+                            val epJob = scope.launch {
+                                endpointSemaphore.withPermit {
+                                    if (sessionSeq.get() != sessionId || !isActive) return@withPermit
+                                    val (passed, e2eDelay) = verifyEndpointViaXray(appContext, guid)
+                                    if (sessionSeq.get() != sessionId) return@withPermit
+
+                                    val updated = baseInfo.copy(
+                                        endpointPassed = passed,
+                                        delayMs = if (passed && e2eDelay > 0L) e2eDelay else baseInfo.delayMs,
+                                        testedAtMs = System.currentTimeMillis()
+                                    )
+                                    ServerListStore.putInspectionInMemory(guid, updated)
+                                    pendingMmkvWrites[guid] = updated
+                                    if (mode == FullScanMode.VIP_FIND && passed) {
+                                        MmkvManager.addVipServer(guid)
+                                        ServerListStore.refreshVipFromMmkv()
+                                        vipAddedCounter.incrementAndGet()
+                                        checkAndStopEarlyIfVipTargetReached()
+                                    } else {
+                                        ServerListStore.bumpRevision()
+                                    }
+                                    _state.update { it.copy(revision = it.revision + 1) }
+                                }
+                            }
+                            activeEndpointJobs.add(epJob)
+                        } else if (mode == FullScanMode.VIP_FIND) {
+                            MmkvManager.addVipServer(guid)
+                            ServerListStore.refreshVipFromMmkv()
+                            vipAddedCounter.incrementAndGet()
+                            checkAndStopEarlyIfVipTargetReached()
+                        }
                     }
 
                     val done = completedCounter.incrementAndGet()
-                    val alive = if (info.alive) aliveCounter.incrementAndGet() else aliveCounter.get()
-                    val failed = if (!info.alive) failedCounter.incrementAndGet() else failedCounter.get()
+                    val alive = if (baseInfo.alive) aliveCounter.incrementAndGet() else aliveCounter.get()
+                    val failed = if (!baseInfo.alive) failedCounter.incrementAndGet() else failedCounter.get()
 
-                    // Живые сервера показываем почти сразу (120мс), мёртвые троттлим сильнее (500мс)
-                    val minEmitMs = if (info.alive) 120L else 500L
+                    // Живые показываем через 100мс, мёртвые помечаем сразу (через 250мс)
+                    val minEmitMs = if (baseInfo.alive) 100L else 250L
                     val now = System.currentTimeMillis()
                     val prev = lastUiEmitAtMs.get()
                     if (now - prev >= minEmitMs && lastUiEmitAtMs.compareAndSet(prev, now)) {
@@ -369,37 +556,49 @@ object FullScanManager {
 
                 override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
                     if (sessionSeq.get() != sessionId) return
-                    flushLoopJob?.cancel()
-                    flushPendingToMmkv()
-                    val finalAlive = aliveCounter.get()
-                    val finalFailed = failedCounter.get()
-                    val finalDone = completedCounter.get()
+                    scope.launch {
+                        val pendingEp = activeEndpointJobs.toList()
+                        if (pendingEp.isNotEmpty()) {
+                            pendingEp.joinAll()
+                        }
+                        if (sessionSeq.get() != sessionId) return@launch
 
-                    MmkvManager.encodeFullScanMeta(
-                        ScanSessionMeta(
-                            startedAtMs = startedAt,
-                            finishedAtMs = System.currentTimeMillis(),
-                            networkCondition = networkCondition,
-                            networkCheckEnabled = networkCheckEnabled,
-                            endpointEnabled = endpointEffective,
-                            totalScanned = finalDone,
-                            aliveCount = finalAlive,
-                            failedCount = finalFailed
+                        flushLoopJob?.cancel()
+                        flushPendingToMmkv()
+
+                        val finalAlive = aliveCounter.get()
+                        val finalFailed = failedCounter.get()
+                        val finalDone = completedCounter.get()
+
+                        if (mode == FullScanMode.FULL) {
+                            MmkvManager.encodeFullScanMeta(
+                                ScanSessionMeta(
+                                    startedAtMs = startedAt,
+                                    finishedAtMs = System.currentTimeMillis(),
+                                    networkCondition = networkCondition,
+                                    networkCheckEnabled = networkCheckEnabled,
+                                    endpointEnabled = endpointEffective,
+                                    totalScanned = finalDone,
+                                    aliveCount = finalAlive,
+                                    failedCount = finalFailed
+                                )
+                            )
+                        }
+                        GeekModeLogger.log(
+                            "FullScan",
+                            "Scan ($mode) complete: scanned=$finalDone, alive=$finalAlive, failed=$finalFailed"
                         )
-                    )
-                    GeekModeLogger.log(
-                        "FullScan",
-                        "Full scan complete: scanned=$finalDone, alive=$finalAlive, failed=$finalFailed"
-                    )
-                    ServerListStore.bumpRevision()
-                    _state.update {
-                        it.copy(
-                            isScanning = false,
-                            completedCount = finalDone,
-                            aliveCount = finalAlive,
-                            failedCount = finalFailed,
-                            revision = it.revision + 1
-                        )
+                        ServerListStore.bumpRevision()
+                        _state.update {
+                            it.copy(
+                                isScanning = false,
+                                mode = mode,
+                                completedCount = finalDone,
+                                aliveCount = finalAlive,
+                                failedCount = finalFailed,
+                                revision = it.revision + 1
+                            )
+                        }
                     }
                 }
             }
@@ -408,6 +607,8 @@ object FullScanManager {
                 Libv2ray.runV2WFullScan(payload, verifyConcurrency.toLong(), callback)
             } catch (e: Exception) {
                 flushLoopJob?.cancel()
+                activeEndpointJobs.forEach { it.cancel() }
+                activeEndpointJobs.clear()
                 flushPendingToMmkv()
                 GeekModeLogger.log("FullScan", "runV2WFullScan error: ${e.message}")
                 if (sessionSeq.get() == sessionId) {
@@ -423,13 +624,15 @@ object FullScanManager {
         if (!_state.value.isScanning) return
         sessionSeq.incrementAndGet()
         flushLoopJob?.cancel()
+        activeEndpointJobs.forEach { it.cancel() }
+        activeEndpointJobs.clear()
         try {
             Libv2ray.stopV2WFullScan()
         } catch (_: Exception) {}
         flushPendingToMmkv()
 
         val cur = _state.value
-        if (cur.completedCount > 0) {
+        if (cur.mode == FullScanMode.FULL && cur.completedCount > 0) {
             MmkvManager.encodeFullScanMeta(
                 ScanSessionMeta(
                     startedAtMs = activeStartedAtMs.get(),
@@ -443,7 +646,8 @@ object FullScanManager {
                 )
             )
         }
-        GeekModeLogger.log("FullScan", "Full scan stopped by user (${cur.completedCount}/${cur.totalCount})")
+        GeekModeLogger.log("FullScan", "Scan (${cur.mode}) stopped by user (${cur.completedCount}/${cur.totalCount})")
+        ServerListStore.bumpRevision()
         _state.update {
             it.copy(isScanning = false, revision = it.revision + 1)
         }
@@ -454,16 +658,16 @@ object FullScanManager {
             return@withContext null
         }
 
-        val customEpEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-        val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
-        val endpointEffective = customEpEnabled && endpointUrl.isNotEmpty()
+        val appContext = context.applicationContext
+        PersonalServersManager.sanitizeExitNode()
+        val endpointEffective = isEndpointCheckActive()
+        val checkServices = isServiceCheckEnabledForScan(endpointEffective)
 
         val (payload, exactMap, _) = buildPayloadAndLookup(
             guids = listOf(guid),
             tcpConcurrency = 1,
             verifyConcurrency = 1,
-            endpointUrl = endpointUrl,
-            endpointEnabled = endpointEffective
+            checkServices = checkServices
         )
         if (exactMap.isEmpty()) return@withContext null
 
@@ -478,8 +682,9 @@ object FullScanManager {
             val callback = object : V2WFullScanCallback {
                 override fun onServerResult(resultJson: String?) {
                     val dto = FullScanNodeResultDto.fromJson(resultJson) ?: return
-                    val info = dto.toInspectionInfo(testedAtMs = System.currentTimeMillis())
-                    resultRef.compareAndSet(null, info)
+                    val raw = dto.toInspectionInfo(testedAtMs = System.currentTimeMillis())
+                    val sanitized = if (endpointEffective) raw.copy(endpointPassed = null) else raw
+                    resultRef.compareAndSet(null, sanitized)
                 }
 
                 override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
@@ -498,8 +703,16 @@ object FullScanManager {
             }
         }
 
-        val info = resultRef.get()
+        var info = resultRef.get()
         if (info != null) {
+            if (info.alive && endpointEffective && !shouldIgnoreEndpointForServer(guid)) {
+                val (passed, e2eDelay) = verifyEndpointViaXray(appContext, guid)
+                info = info.copy(
+                    endpointPassed = passed,
+                    delayMs = if (passed && e2eDelay > 0L) e2eDelay else info.delayMs,
+                    testedAtMs = System.currentTimeMillis()
+                )
+            }
             applyInspectionResultSync(guid, info)
             _state.update { it.copy(revision = it.revision + 1) }
         }

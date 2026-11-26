@@ -113,6 +113,7 @@ class AngApplication : Application(), Configuration.Provider {
             SettingsManager.initRoutingRulesets(this)
             SettingsManager.migrateHysteria2PinSHA256()
             SettingsManager.migrateV2wCoreDefaults()
+            SettingsManager.migrateV2wTcpConcurrencyDefault()
             SettingsManager.migrateSpeedCheckTimeoutDefaults()
 
             es.dmoral.toasty.Toasty.Config.getInstance()

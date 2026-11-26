@@ -310,7 +310,7 @@
     <string name="title_pref_v2w_core_concurrency">Потоки проверки профилей v2w-core</string>
     <string name="summary_pref_v2w_core_concurrency">Максимум параллельных проверок профилей в v2w-core (по умолчанию: 35)</string>
     <string name="title_pref_v2w_tcp_concurrency">Потоки TCP pre-check</string>
-    <string name="summary_pref_v2w_tcp_concurrency">Максимум параллельных TCP pre-check сокетов до проверки профилей (по умолчанию: 50)</string>
+    <string name="summary_pref_v2w_tcp_concurrency">Максимум параллельных TCP pre-check сокетов до проверки профилей (по умолчанию: 100)</string>
     <string name="title_pref_v2w_full_verify_mode">Полная проверка в v2w-core</string>
     <string name="summary_pref_v2w_full_verify_mode">204, сервисы и конечный узел проверяются асинхронно в v2w-core; Xray замеряет только скорость</string>
     <string name="title_pref_v2w_core_fallback">Резервный классический сканер</string>
@@ -1061,4 +1061,10 @@
     <string name="server_list_no_vip">Список VIP пуст</string>
     <string name="server_list_loading">Загрузка списка серверов…</string>
     <string name="server_list_load_more">Показать ещё (осталось %1$d)</string>
+    <string name="server_list_switch_check_services">Проверять сервисы при сканировании</string>
+    <string name="server_list_switch_services_disabled_by_endpoint">Проверка сервисов отключена (активен конечный узел)</string>
+    <string name="server_list_smart_connect_busy">Идёт поиск сервера…</string>
+    <string name="server_list_btn_stop_vip">Остановить</string>
+    <string name="status_full_scan_running">Идёт полное сканирование серверов…</string>
+    <string name="status_full_scan_progress">Проверено %1$d/%2$d • рабочих: %3$d</string>
 </resources>

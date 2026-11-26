@@ -37,6 +37,9 @@ import com.kiktor.v2whitelist.enums.PermissionType
 import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.extension.toastError
 import com.kiktor.v2whitelist.handler.AngConfigManager
+import com.kiktor.v2whitelist.handler.FullScanManager
+import com.kiktor.v2whitelist.handler.FullScanMode
+import com.kiktor.v2whitelist.handler.FullScanUiState
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.NotificationManager
 import com.kiktor.v2whitelist.handler.PersonalServersManager
@@ -180,6 +183,7 @@ class MainActivity : HelperBaseActivity() {
         binding.btnUpdateSubQuick.setOnClickListener { handleUpdateSubscription() }
         binding.btnFilterQuick.setOnClickListener { startActivity(Intent(this, LocationFilterActivity::class.java)) }
         binding.btnShareQuick.setOnClickListener { handleShareApp() }
+        binding.btnOpenServerList.setOnClickListener { startActivity(Intent(this, ServerListActivity::class.java)) }
         findViewById<View>(R.id.layout_last_update)?.setOnClickListener {
             startActivity(Intent(this, CustomSubscriptionsActivity::class.java))
         }
@@ -411,6 +415,10 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleUpdateSubscription() {
+        if (FullScanManager.state.value.isScanning) {
+            toast(R.string.status_full_scan_running)
+            return
+        }
         if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
@@ -443,6 +451,10 @@ class MainActivity : HelperBaseActivity() {
     }
 
     fun handleUpdateSubscriptionViaYandex() {
+        if (FullScanManager.state.value.isScanning) {
+            toast(R.string.status_full_scan_running)
+            return
+        }
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)) {
             toast("Обновление через Яндекс недоступно: включено обновление только через VPN")
             return
@@ -525,6 +537,24 @@ class MainActivity : HelperBaseActivity() {
                 setConnectingState(status)
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var wasFullScanning = false
+                FullScanManager.state.collect { scan ->
+                    if (scan.isScanning) {
+                        wasFullScanning = true
+                        if (!SmartConnectManager.isScanning.get() && !isSubscriptionUpdating && !isTaskRunning) {
+                            applyFullScanUiState(scan)
+                        }
+                    } else if (wasFullScanning) {
+                        wasFullScanning = false
+                        if (!SmartConnectManager.isScanning.get() && !isSubscriptionUpdating && !isTaskRunning) {
+                            updateUIState(mainViewModel.isRunning.value == true)
+                        }
+                    }
+                }
+            }
+        }
         mainViewModel.updateListAction.observe(this) {
             updateSubscriptionStatusUI()
         }
@@ -538,6 +568,11 @@ class MainActivity : HelperBaseActivity() {
         if (isUpdateInteractionActive) return
         if (com.kiktor.v2whitelist.handler.MmkvManager.decodeSettingsBool(AppConfig.PREF_PREMIUM_HAPTIC, true)) {
             binding.btnBigConnect.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+        if (FullScanManager.state.value.isScanning) {
+            FullScanManager.stopFullScan()
+            updateUIState(mainViewModel.isRunning.value == true)
+            return
         }
         if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
@@ -621,6 +656,10 @@ class MainActivity : HelperBaseActivity() {
     }
 
     private fun handleSwitchServer() {
+        if (FullScanManager.state.value.isScanning) {
+            toast(R.string.status_full_scan_running)
+            return
+        }
         if (isTaskRunning || SmartConnectManager.isScanning.get()) {
             cancelActiveTask()
             return
@@ -767,9 +806,44 @@ class MainActivity : HelperBaseActivity() {
         }
     }
 
+    private fun applyFullScanUiState(scan: FullScanUiState) {
+        val orangeColor = ContextCompat.getColor(this, R.color.color_fab_active)
+        binding.btnBigConnect.isEnabled = true
+        binding.btnBigConnect.text = getString(R.string.btn_label_cancel)
+        binding.btnBigConnect.backgroundTintList = ColorStateList.valueOf(orangeColor)
+        binding.progressBar.isVisible = true
+        binding.progressBarCircular.isVisible = false
+        binding.pulseConnectingView.setColor(orangeColor)
+        binding.pulseConnectingView.startAnimation()
+        binding.ivStatusIcon.setColorFilter(orangeColor)
+        binding.tvServerName.isVisible = false
+        binding.tvConnectedServerBottom.isVisible = false
+        binding.btnSwitchServer.isVisible = false
+        binding.tvStatus.setTextColor(orangeColor)
+        binding.tvStatus.text = when (scan.mode) {
+            FullScanMode.VIP_FIND -> getString(R.string.server_list_finding_vip)
+            FullScanMode.VIP_PING -> getString(R.string.server_list_pinging_vip)
+            FullScanMode.FULL -> getString(R.string.status_full_scan_running)
+        }
+        binding.tvStatusDetail.text = if (scan.totalCount > 0) {
+            getString(
+                R.string.status_full_scan_progress,
+                scan.completedCount,
+                scan.totalCount,
+                scan.aliveCount
+            )
+        } else {
+            getString(R.string.connection_test_testing)
+        }
+    }
+
     private fun updateUIState(isRunning: Boolean) {
         if (SmartConnectManager.isScanning.get() || isSubscriptionUpdating) {
             setConnectingState(mainViewModel.uiStatus.value)
+            return
+        }
+        if (FullScanManager.state.value.isScanning) {
+            applyFullScanUiState(FullScanManager.state.value)
             return
         }
         PersonalServersManager.sanitizeExitNode()

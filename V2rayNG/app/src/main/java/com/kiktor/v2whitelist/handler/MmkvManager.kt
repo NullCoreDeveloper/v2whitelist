@@ -1268,8 +1268,8 @@ object MmkvManager {
     }
 
     fun getV2wTcpConcurrency(): Int {
-        val concStr = decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY, "50")
-        return concStr?.toIntOrNull()?.coerceIn(1, 200) ?: 50
+        val concStr = decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY, "100")
+        return concStr?.toIntOrNull()?.coerceIn(1, 200) ?: 100
     }
 
     fun isV2wFullVerifyMode(): Boolean {

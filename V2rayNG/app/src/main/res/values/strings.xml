@@ -334,7 +334,7 @@
     <string name="title_pref_v2w_core_concurrency">v2w-core profile check concurrency</string>
     <string name="summary_pref_v2w_core_concurrency">Maximum number of concurrent profile checks (Default: 35)</string>
     <string name="title_pref_v2w_tcp_concurrency">TCP pre-check concurrency</string>
-    <string name="summary_pref_v2w_tcp_concurrency">Maximum concurrent TCP pre-check sockets before profile verification (Default: 50)</string>
+    <string name="summary_pref_v2w_tcp_concurrency">Maximum concurrent TCP pre-check sockets before profile verification (Default: 100)</string>
     <string name="title_pref_v2w_full_verify_mode">Full verification in v2w-core</string>
     <string name="summary_pref_v2w_full_verify_mode">Run 204, service &amp; exit-node checks asynchronously in v2w-core; Xray only measures speed</string>
     <string name="title_pref_v2w_core_fallback">Fallback to classic scanner</string>
@@ -1068,4 +1068,10 @@
     <string name="server_list_no_vip">VIP list is empty</string>
     <string name="server_list_loading">Loading server list…</string>
     <string name="server_list_load_more">Show more (%1$d remaining)</string>
+    <string name="server_list_switch_check_services">Check services during scan</string>
+    <string name="server_list_switch_services_disabled_by_endpoint">Service check disabled (exit node active)</string>
+    <string name="server_list_smart_connect_busy">Server search in progress…</string>
+    <string name="server_list_btn_stop_vip">Stop</string>
+    <string name="status_full_scan_running">Full server scan in progress…</string>
+    <string name="status_full_scan_progress">Checked %1$d/%2$d • working: %3$d</string>
 </resources>

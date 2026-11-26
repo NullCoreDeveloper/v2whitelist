@@ -180,6 +180,40 @@ object ServerListStore {
         bumpRevision()
     }
 
+    fun clearInspectionsAndPingsInMemory() {
+        inspections.clear()
+        val oldList = baseListRef.get()
+        if (oldList.isNotEmpty()) {
+            val cleared = oldList.map { item ->
+                val updated = if (item.fallbackPingMs != 0L) item.copy(fallbackPingMs = 0L) else item
+                baseByGuid[updated.guid] = updated
+                updated
+            }
+            baseListRef.set(cleared)
+        }
+        bumpRevision()
+    }
+
+    fun clearInspectionsAndPingsForGuids(targetGuids: Set<String>) {
+        if (targetGuids.isEmpty()) return
+        for (g in targetGuids) {
+            inspections.remove(g)
+            baseByGuid[g]?.let { prev ->
+                if (prev.fallbackPingMs != 0L) {
+                    baseByGuid[g] = prev.copy(fallbackPingMs = 0L)
+                }
+            }
+        }
+        val oldList = baseListRef.get()
+        if (oldList.isNotEmpty()) {
+            val cleared = oldList.map { item ->
+                if (item.guid in targetGuids && item.fallbackPingMs != 0L) item.copy(fallbackPingMs = 0L) else item
+            }
+            baseListRef.set(cleared)
+        }
+        bumpRevision()
+    }
+
     fun refreshVipFromMmkv() {
         refreshVipInternal()
         bumpRevision()

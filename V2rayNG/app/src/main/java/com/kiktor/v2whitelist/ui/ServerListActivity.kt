@@ -38,6 +38,7 @@ import com.kiktor.v2whitelist.core.model.inspection.ScanNetworkCondition
 import com.kiktor.v2whitelist.core.model.inspection.countryCodeToFlagEmoji
 import com.kiktor.v2whitelist.extension.toast
 import com.kiktor.v2whitelist.handler.FullScanManager
+import com.kiktor.v2whitelist.handler.FullScanMode
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
 import com.kiktor.v2whitelist.util.Utils
@@ -61,6 +62,7 @@ class ServerListActivity : BaseActivity() {
     private lateinit var btnFilters: MaterialButton
     private lateinit var btnFindMoreVip: MaterialButton
     private lateinit var btnPingVip: MaterialButton
+    private lateinit var switchScanServices: com.google.android.material.materialswitch.MaterialSwitch
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvServers: RecyclerView
     private lateinit var layoutEmpty: LinearLayout
@@ -131,6 +133,7 @@ class ServerListActivity : BaseActivity() {
         btnFilters = findViewById(R.id.btn_filters)
         btnFindMoreVip = findViewById(R.id.btn_find_more_vip)
         btnPingVip = findViewById(R.id.btn_ping_vip)
+        switchScanServices = findViewById(R.id.switch_scan_services)
         etSearch = findViewById(R.id.et_search)
         rvServers = findViewById(R.id.rv_servers)
         layoutEmpty = findViewById(R.id.layout_empty)
@@ -177,16 +180,34 @@ class ServerListActivity : BaseActivity() {
         }
 
         btnFindMoreVip.setOnClickListener {
-            viewModel.findMoreVipServers()
-            toast(R.string.server_list_finding_vip)
+            val scan = latestState.scanState
+            if (scan.isScanning && scan.mode == FullScanMode.VIP_FIND) {
+                viewModel.findMoreVipServers()
+            } else {
+                val started = viewModel.findMoreVipServers()
+                if (!started) {
+                    toast(R.string.server_list_scan_busy)
+                }
+            }
         }
 
         btnPingVip.setOnClickListener {
-            if (latestState.viewResult.stats.vipCount == 0) {
+            val scan = latestState.scanState
+            if (scan.isScanning && scan.mode == FullScanMode.VIP_PING) {
+                viewModel.pingVipServers()
+            } else if (latestState.viewResult.stats.vipCount == 0) {
                 toast(R.string.server_list_no_vip)
             } else {
-                viewModel.pingVipServers()
-                toast(R.string.server_list_pinging_vip)
+                val started = viewModel.pingVipServers()
+                if (!started) {
+                    toast(R.string.server_list_scan_busy)
+                }
+            }
+        }
+
+        switchScanServices.setOnCheckedChangeListener { buttonView, isChecked ->
+            if (buttonView.isPressed) {
+                viewModel.setScanCheckServicesEnabled(isChecked)
             }
         }
 
@@ -226,9 +247,20 @@ class ServerListActivity : BaseActivity() {
         )
 
         val scan = state.scanState
-        if (scan.isScanning) {
-            btnFullScan.text = getString(R.string.server_list_btn_stop_scan)
-            btnFullScan.setIconResource(R.drawable.ic_stop_24dp)
+        val smartScanning = state.isSmartConnectScanning
+
+        if (smartScanning) {
+            btnFullScan.isEnabled = false
+            btnFullScan.text = getString(R.string.server_list_smart_connect_busy)
+            btnFullScan.setIconResource(R.drawable.ic_check_update_24dp)
+            progressFullScan.visibility = View.VISIBLE
+            progressFullScan.isIndeterminate = true
+            tvScanMeta.text = getString(R.string.server_list_smart_connect_busy)
+            btnFindMoreVip.isEnabled = false
+            btnFindMoreVip.text = getString(R.string.geek_mode_btn_find_vip)
+            btnPingVip.isEnabled = false
+            btnPingVip.text = getString(R.string.geek_mode_btn_ping_vip)
+        } else if (scan.isScanning) {
             progressFullScan.visibility = View.VISIBLE
             if (scan.totalCount > 0) {
                 progressFullScan.isIndeterminate = false
@@ -243,11 +275,39 @@ class ServerListActivity : BaseActivity() {
                 scan.totalCount,
                 scan.aliveCount
             )
+
+            btnFullScan.isEnabled = scan.mode == FullScanMode.FULL
+            if (scan.mode == FullScanMode.FULL) {
+                btnFullScan.text = getString(R.string.server_list_btn_stop_scan)
+                btnFullScan.setIconResource(R.drawable.ic_stop_24dp)
+            } else {
+                btnFullScan.text = getString(R.string.server_list_btn_full_scan)
+                btnFullScan.setIconResource(R.drawable.ic_check_update_24dp)
+            }
+
+            btnFindMoreVip.isEnabled = scan.mode == FullScanMode.VIP_FIND
+            btnFindMoreVip.text = if (scan.mode == FullScanMode.VIP_FIND) {
+                getString(R.string.server_list_btn_stop_vip)
+            } else {
+                getString(R.string.geek_mode_btn_find_vip)
+            }
+
+            btnPingVip.isEnabled = scan.mode == FullScanMode.VIP_PING
+            btnPingVip.text = if (scan.mode == FullScanMode.VIP_PING) {
+                getString(R.string.server_list_btn_stop_vip)
+            } else {
+                getString(R.string.geek_mode_btn_ping_vip)
+            }
         } else {
+            btnFullScan.isEnabled = true
             btnFullScan.text = getString(R.string.server_list_btn_full_scan)
             btnFullScan.setIconResource(R.drawable.ic_check_update_24dp)
             progressFullScan.visibility = View.GONE
             tvScanMeta.text = formatScanMetaText(state)
+            btnFindMoreVip.isEnabled = true
+            btnFindMoreVip.text = getString(R.string.geek_mode_btn_find_vip)
+            btnPingVip.isEnabled = true
+            btnPingVip.text = getString(R.string.geek_mode_btn_ping_vip)
         }
 
         val activeFilters = state.filter.activeFilterCount(state.endpointEnabled)
@@ -257,19 +317,15 @@ class ServerListActivity : BaseActivity() {
             getString(R.string.server_list_btn_filters)
         }
 
-        btnFindMoreVip.isEnabled = !state.isFindingVip
-        btnFindMoreVip.text = if (state.isFindingVip) {
-            getString(R.string.server_list_finding_vip)
-        } else {
-            getString(R.string.geek_mode_btn_find_vip)
+        switchScanServices.isEnabled = !scan.isScanning && !smartScanning && !state.endpointEnabled
+        val targetChecked = !state.endpointEnabled && state.scanCheckServicesEnabled
+        if (switchScanServices.isChecked != targetChecked) {
+            switchScanServices.isChecked = targetChecked
         }
-
-        btnPingVip.isEnabled = !state.isPingingVip
-        btnPingVip.text = if (state.isPingingVip) {
-            getString(R.string.server_list_pinging_vip)
-        } else {
-            getString(R.string.geek_mode_btn_ping_vip)
-        }
+        switchScanServices.text = getString(
+            if (state.endpointEnabled) R.string.server_list_switch_services_disabled_by_endpoint
+            else R.string.server_list_switch_check_services
+        )
 
         val rows = mutableListOf<ServerListRow>()
         val vipList = state.viewResult.vipServers

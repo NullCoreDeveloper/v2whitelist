@@ -582,6 +582,17 @@ object SettingsManager {
         }
     }
 
+    fun migrateV2wTcpConcurrencyDefault() {
+        val migrationKey = "v2w_tcp_concurrency_100_migrated"
+        if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            val currentVal = MmkvManager.decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY)
+            if (currentVal == null || currentVal == "50") {
+                MmkvManager.encodeSettings(AppConfig.PREF_V2W_TCP_CONCURRENCY, "100")
+            }
+            MmkvManager.encodeSettings(migrationKey, true)
+        }
+    }
+
     fun migrateSpeedCheckTimeoutDefaults() {
         val migrationKey = "speed_check_timeout_3s_migrated"
         if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {

@@ -23,6 +23,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -43,6 +46,8 @@ import libv2ray.CoreController
 
 class ScanningStateHolder {
     private val activeInProcess = AtomicBoolean(false)
+    private val _flow = MutableStateFlow(false)
+    val flow: StateFlow<Boolean> = _flow.asStateFlow()
 
     fun get(): Boolean {
         if (activeInProcess.get()) return true
@@ -63,6 +68,7 @@ class ScanningStateHolder {
     }
     fun set(value: Boolean) {
         activeInProcess.set(value)
+        _flow.value = value
         MmkvManager.encodeSettings(AppConfig.PREF_IS_SCANNING, value)
         if (value) {
             MmkvManager.encodeSettings("pref_scanning_start_time", System.currentTimeMillis())

@@ -13,9 +13,7 @@ import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
 import com.kiktor.v2whitelist.handler.FullScanManager
 import com.kiktor.v2whitelist.handler.FullScanUiState
-import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.handler.MmkvManager
-import com.kiktor.v2whitelist.handler.NodeTesterManager
 import com.kiktor.v2whitelist.handler.ServerListStore
 import com.kiktor.v2whitelist.handler.SettingsManager
 import com.kiktor.v2whitelist.handler.SmartConnectManager
@@ -74,8 +72,8 @@ data class ServerListScreenState(
     val isVpnRunning: Boolean = false,
     val speedTestStates: Map<String, SpeedTestRowState> = emptyMap(),
     val reinspectingGuids: Set<String> = emptySet(),
-    val isFindingVip: Boolean = false,
-    val isPingingVip: Boolean = false,
+    val isSmartConnectScanning: Boolean = false,
+    val scanCheckServicesEnabled: Boolean = false,
     val totalRegularMatching: Int = 0,
     val hasMoreRegular: Boolean = false,
     val fallbackFlags: Map<String, String> = emptyMap()
@@ -96,15 +94,18 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
     private val expandedGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val speedTestStatesFlow = MutableStateFlow<Map<String, SpeedTestRowState>>(emptyMap())
     private val reinspectingGuidsFlow = MutableStateFlow<Set<String>>(emptySet())
-    private val isFindingVipFlow = MutableStateFlow(false)
-    private val isPingingVipFlow = MutableStateFlow(false)
+    private val scanCheckServicesFlow = MutableStateFlow(
+        MmkvManager.decodeSettingsBool(AppConfig.PREF_FULL_SCAN_CHECK_SERVICES, false)
+    )
     private val visibleRegularLimitFlow = MutableStateFlow(DEFAULT_PAGE_SIZE)
 
     private val computedFlow = MutableStateFlow(ComputedState())
     private val _uiState = MutableStateFlow(
         ServerListScreenState(
             isLoading = !ServerListStore.isLoaded.value,
-            scanState = FullScanManager.state.value
+            scanState = FullScanManager.state.value,
+            isSmartConnectScanning = SmartConnectManager.isScanning.get(),
+            scanCheckServicesEnabled = scanCheckServicesFlow.value
         )
     )
     val uiState: StateFlow<ServerListScreenState> = _uiState.asStateFlow()
@@ -134,8 +135,8 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         val expanded: Set<String>,
         val speeds: Map<String, SpeedTestRowState>,
         val reinspecting: Set<String>,
-        val isFindingVip: Boolean,
-        val isPingingVip: Boolean
+        val isSmartConnectScanning: Boolean,
+        val scanCheckServices: Boolean
     )
 
     init {
@@ -174,9 +175,7 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
                 val snapshot = ServerListStore.snapshot()
                 val lastMeta = MmkvManager.decodeFullScanMeta()
                 val networkCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_NETWORK_CHECK_ENABLED, true)
-                val customEpEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
-                val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL).orEmpty().trim()
-                val endpointEnabled = customEpEnabled && endpointUrl.isNotEmpty()
+                val endpointEnabled = FullScanManager.isEndpointCheckActive()
 
                 val viewResult = ServerListEngine.buildView(
                     entries = snapshot.entries,
@@ -216,10 +215,10 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
             }
             val fullOverlay = combine(
                 baseOverlay,
-                isFindingVipFlow,
-                isPingingVipFlow
-            ) { (expanded, speeds, reinspecting), findingVip, pingingVip ->
-                RowOverlayState(expanded, speeds, reinspecting, findingVip, pingingVip)
+                SmartConnectManager.isScanning.flow,
+                scanCheckServicesFlow
+            ) { (expanded, speeds, reinspecting), smartScanning, scanServices ->
+                RowOverlayState(expanded, speeds, reinspecting, smartScanning, scanServices)
             }
 
             combine(
@@ -249,8 +248,8 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
                     isVpnRunning = computed.isVpnRunning,
                     speedTestStates = overlay.speeds,
                     reinspectingGuids = overlay.reinspecting,
-                    isFindingVip = overlay.isFindingVip,
-                    isPingingVip = overlay.isPingingVip,
+                    isSmartConnectScanning = overlay.isSmartConnectScanning,
+                    scanCheckServicesEnabled = overlay.scanCheckServices,
                     totalRegularMatching = totalRegular,
                     hasMoreRegular = totalRegular > slicedRegular.size,
                     fallbackFlags = computed.flagsByGuid
@@ -302,6 +301,12 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         effectiveFilterFlow.value = ServerListFilter()
     }
 
+    fun setScanCheckServicesEnabled(enabled: Boolean) {
+        if (scanCheckServicesFlow.value == enabled) return
+        scanCheckServicesFlow.value = enabled
+        MmkvManager.encodeSettings(AppConfig.PREF_FULL_SCAN_CHECK_SERVICES, enabled)
+    }
+
     fun startOrStopFullScan(): Boolean {
         if (FullScanManager.state.value.isScanning) {
             FullScanManager.stopFullScan()
@@ -310,50 +315,20 @@ class ServerListViewModel(application: Application) : AndroidViewModel(applicati
         return FullScanManager.startFullScan(getApplication())
     }
 
-    fun findMoreVipServers() {
-        if (isFindingVipFlow.value) return
-        isFindingVipFlow.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                GeekModeLogger.log("ServerList", "Searching for additional VIP servers...")
-                SmartConnectManager.findMoreVipServers(getApplication())
-            } finally {
-                isFindingVipFlow.value = false
-                ServerListStore.refreshVipFromMmkv()
-            }
+    fun findMoreVipServers(): Boolean {
+        if (FullScanManager.state.value.isScanning) {
+            FullScanManager.stopFullScan()
+            return true
         }
+        return FullScanManager.findVipNative(getApplication())
     }
 
-    fun pingVipServers() {
-        if (isPingingVipFlow.value) return
-        val guids = MmkvManager.getVipCache()
-        if (guids.isEmpty()) return
-        isPingingVipFlow.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                GeekModeLogger.log("ServerList", "Pinging ${guids.size} VIP server(s) via isolated cores...")
-                for (guid in guids) {
-                    val name = ServerListStore.getCachedProfile(guid)?.remarks
-                        ?: MmkvManager.decodeServerConfig(guid)?.remarks
-                        ?: guid
-                    GeekModeLogger.log("ServerList", "Testing VIP [$name]...")
-                    NodeTesterManager.verifyProfile(getApplication(), guid)
-                    val updatedDelay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis ?: -1L
-                    val existingInsp = ServerListStore.snapshot().entries.firstOrNull { it.guid == guid }?.inspection
-                    if (existingInsp != null) {
-                        ServerListStore.putInspectionInMemory(
-                            guid,
-                            existingInsp.copy(alive = updatedDelay > 0, delayMs = updatedDelay)
-                        )
-                    }
-                    ServerListStore.bumpRevision()
-                }
-                GeekModeLogger.log("ServerList", "VIP ping complete")
-            } finally {
-                isPingingVipFlow.value = false
-                ServerListStore.reloadBaseIfNeeded(getApplication(), force = true)
-            }
+    fun pingVipServers(): Boolean {
+        if (FullScanManager.state.value.isScanning) {
+            FullScanManager.stopFullScan()
+            return true
         }
+        return FullScanManager.pingVipNative(getApplication())
     }
 
     fun toggleVip(guid: String) {
