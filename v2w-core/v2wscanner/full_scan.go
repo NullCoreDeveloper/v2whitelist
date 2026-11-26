@@ -213,7 +213,11 @@ func InspectNode(
 			if perSvcTimeout < 4500*time.Millisecond {
 				perSvcTimeout = 4500 * time.Millisecond
 			}
-			allSvcCtx, cancelSvc := context.WithTimeout(stageCtx, perSvcTimeout+2*time.Second)
+			batches := (len(enabledServices) + 3) / 4
+			if batches < 1 {
+				batches = 1
+			}
+			allSvcCtx, cancelSvc := context.WithTimeout(stageCtx, time.Duration(batches)*perSvcTimeout+2*time.Second)
 			result.Services = scanner.CheckServicesAll(
 				allSvcCtx,
 				handler,
@@ -344,6 +348,9 @@ func RunFullScanPipeline(
 
 	var verifyWg sync.WaitGroup
 	verifyWorkers := opts.VerifyConcurrency
+	if len(enabledServices) > 0 && verifyWorkers > 12 {
+		verifyWorkers = 12
+	}
 	if verifyWorkers > len(links) {
 		verifyWorkers = len(links)
 	}

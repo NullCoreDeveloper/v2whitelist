@@ -197,7 +197,9 @@ object SpeedtestManager {
 
                 when {
                     code == 204 || (code == 200 && conn.contentLengthLong == 0L) -> {
-                        return@withContext Pair(measured, context.getString(R.string.connection_test_available, measured))
+                        val warmed = measureWarmConnectionOnce(url, port, minOf(timeoutMs, 3500))
+                        val finalMs = if (warmed > 0L) warmed else measured
+                        return@withContext Pair(finalMs, context.getString(R.string.connection_test_available, finalMs))
                     }
                     else -> {
                         lastErrorResult = context.getString(R.string.connection_test_error_status_code, code)
@@ -217,6 +219,37 @@ object SpeedtestManager {
         }
 
         return@withContext Pair(-1L, lastErrorResult)
+    }
+
+    private suspend fun measureWarmConnectionOnce(url: String, port: Int, timeoutMs: Int): Long = kotlinx.coroutines.coroutineScope {
+        val conn = HttpUtil.createProxyConnection(
+            url,
+            port,
+            timeoutMs,
+            timeoutMs,
+            proxyType = Proxy.Type.SOCKS
+        ) ?: return@coroutineScope -1L
+
+        val job = launch {
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } finally {
+                Thread { try { conn.disconnect() } catch (_: Exception) {} }.start()
+            }
+        }
+
+        return@coroutineScope try {
+            val start = SystemClock.elapsedRealtime()
+            val code = conn.responseCode
+            val measured = SystemClock.elapsedRealtime() - start
+            if (code == 204 || (code == 200 && conn.contentLengthLong == 0L)) measured else -1L
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            -1L
+        } finally {
+            job.cancel()
+            conn.disconnect()
+        }
     }
 
     fun getRemoteIPInfo(overrideSocksPort: Int? = null): String? {

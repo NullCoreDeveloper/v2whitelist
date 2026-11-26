@@ -156,12 +156,26 @@ func (s *Scanner) CheckServicesAll(
 	}
 
 	results := make([]SingleServiceResult, len(enabled))
+	sem := make(chan struct{}, 4)
 	var wg sync.WaitGroup
 
 	for i, svc := range enabled {
 		wg.Add(1)
 		go func(idx int, item ServiceCheckSpec) {
 			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				results[idx] = SingleServiceResult{
+					ID:        item.ID,
+					Name:      item.Name,
+					Success:   false,
+					LatencyMs: -1,
+					Error:     ctx.Err().Error(),
+				}
+				return
+			}
 			if ctx.Err() != nil {
 				results[idx] = SingleServiceResult{
 					ID:        item.ID,

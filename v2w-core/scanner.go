@@ -7,9 +7,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/kiktor/v2w-core/common/buf"
@@ -163,7 +165,27 @@ func (s *Scanner) ProbeHTTP(
 	}
 	httpDone := make(chan httpOutcome, 1)
 	go func() {
-		req, reqErr := http.NewRequestWithContext(probeCtx, http.MethodGet, rawURL, nil)
+		var tlsDoneAt atomic.Int64
+		var wroteReqAt atomic.Int64
+		var firstByteAt atomic.Int64
+
+		trace := &httptrace.ClientTrace{
+			TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+				if err == nil {
+					tlsDoneAt.Store(time.Now().UnixNano())
+				}
+			},
+			WroteRequest: func(info httptrace.WroteRequestInfo) {
+				if info.Err == nil {
+					wroteReqAt.Store(time.Now().UnixNano())
+				}
+			},
+			GotFirstResponseByte: func() {
+				firstByteAt.Store(time.Now().UnixNano())
+			},
+		}
+
+		req, reqErr := http.NewRequestWithContext(httptrace.WithClientTrace(probeCtx, trace), http.MethodGet, rawURL, nil)
 		if reqErr != nil {
 			httpDone <- httpOutcome{err: fmt.Errorf("req build: %w", reqErr)}
 			return
@@ -196,12 +218,29 @@ func (s *Scanner) ProbeHTTP(
 			}
 			bodyStr = string(b)
 		}
+
+		fb := firstByteAt.Load()
+		wr := wroteReqAt.Load()
+		td := tlsDoneAt.Load()
+		var latency time.Duration
+		switch {
+		case fb > 0 && wr > 0 && fb >= wr:
+			latency = time.Duration(fb - wr)
+		case fb > 0 && td > 0 && fb >= td:
+			latency = time.Duration(fb - td)
+		default:
+			latency = time.Since(start)
+		}
+		if latency < time.Millisecond {
+			latency = time.Millisecond
+		}
+
 		httpDone <- httpOutcome{
 			res: &HTTPProbeResult{
 				StatusCode: resp.StatusCode,
 				Location:   resp.Header.Get("Location"),
 				Body:       bodyStr,
-				Latency:    time.Since(start),
+				Latency:    latency,
 			},
 		}
 	}()
