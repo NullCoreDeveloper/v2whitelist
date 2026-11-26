@@ -237,7 +237,8 @@ object HttpUtil {
                         allowedPortsProvider = {
                             setOf(
                                 com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort(),
-                                com.kiktor.v2whitelist.handler.SettingsManager.getHttpPort()
+                                com.kiktor.v2whitelist.handler.SettingsManager.getHttpPort(),
+                                port
                             )
                         }
                     )

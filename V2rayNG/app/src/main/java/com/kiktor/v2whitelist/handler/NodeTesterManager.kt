@@ -199,6 +199,7 @@ object NodeTesterManager {
             GeekModeLogger.log("NodeTester", "verifyProfile: failed to allocate port for $guid")
             return false
         }
+        com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.allowPort(port)
 
         val customEndpointEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_CUSTOM_ENDPOINT_ENABLED, false)
         val endpointUrl = MmkvManager.decodeSettingsString(AppConfig.PREF_CUSTOM_ENDPOINT_URL)
@@ -213,6 +214,7 @@ object NodeTesterManager {
         // Получаем конфиг с реальным SOCKS inbound на выделенном порту
         val configResult = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, port, effectiveIgnoreCustomEndpoint)
         if (!configResult.status) {
+            com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.disallowPort(port)
             GeekModeLogger.log("NodeTester", "verifyProfile: failed to create speedtest config for $guid")
             return false
         }
@@ -223,6 +225,7 @@ object NodeTesterManager {
 
         var coreController: CoreController? = null
         var chainedController: CoreController? = null
+        var chainedPort = 0
         return try {
             // Запускаем отдельный экземпляр ядра V2Ray
             coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
@@ -292,12 +295,13 @@ object NodeTesterManager {
                             context.getString(R.string.status_verifying_endpoint))
                     }
 
-                    val chainedPort = try {
+                    chainedPort = try {
                         ServerSocket(0).use { it.localPort }
                     } catch (e: Exception) {
                         GeekModeLogger.log("NodeTester", "verifyProfile: failed to allocate chained port for $guid")
                         return false
                     }
+                    com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.allowPort(chainedPort)
 
                     val chainedConfig = V2rayConfigManager.getV2rayConfig4Speedtest(context, guid, chainedPort, ignoreCustomEndpoint = false)
                     if (!chainedConfig.status) {
@@ -401,6 +405,10 @@ object NodeTesterManager {
             GeekModeLogger.log("NodeTester", "verifyProfile: exception for $guid: ${e.message}")
             false
         } finally {
+            com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.disallowPort(port)
+            if (chainedPort > 0) {
+                com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.disallowPort(chainedPort)
+            }
             // Обязательно останавливаем ядро чтобы освободить порт и ресурсы
             try {
                 coreController?.stopLoop()

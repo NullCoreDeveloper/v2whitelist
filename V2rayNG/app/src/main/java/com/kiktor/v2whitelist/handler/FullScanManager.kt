@@ -248,10 +248,12 @@ object FullScanManager {
 
     private suspend fun verifyEndpointViaXray(context: Context, guid: String): Pair<Boolean, Long> {
         var chainedController: CoreController? = null
+        var chainedPort = 0
         return try {
             val profile = ServerListStore.getCachedProfile(guid) ?: MmkvManager.decodeServerConfig(guid)
             val isHysteria = profile?.configType == EConfigType.HYSTERIA2
-            val chainedPort = ServerSocket(0).use { it.localPort }
+            chainedPort = ServerSocket(0).use { it.localPort }
+            com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.allowPort(chainedPort)
             val chainedConfig = V2rayConfigManager.getV2rayConfig4Speedtest(
                 context,
                 guid,
@@ -276,6 +278,9 @@ object FullScanManager {
             GeekModeLogger.log("FullScan", "Xray endpoint E2E check error for $guid: ${e.message}")
             false to -1L
         } finally {
+            if (chainedPort > 0) {
+                com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.disallowPort(chainedPort)
+            }
             try {
                 chainedController?.stopLoop()
             } catch (_: Exception) {}
