@@ -17,7 +17,7 @@ import kotlin.coroutines.resumeWithException
 
 object V2WScannerEngine {
 
-    private data class V2WScanCandidate(
+    internal data class V2WScanCandidate(
         val guid: String,
         val profile: ProfileItem,
         val delay: Long,
@@ -36,7 +36,7 @@ object V2WScannerEngine {
         }
     }
 
-    private fun buildV2wOptionsHeader(
+    internal fun buildV2wOptionsHeader(
         tcpConcurrency: Int,
         verifyConcurrency: Int
     ): String {
@@ -80,6 +80,95 @@ object V2WScannerEngine {
         return "#v2w-opts:${root}"
     }
 
+    internal fun buildScanPayloadAndMap(
+        servers: List<Pair<String, ProfileItem>>,
+        fullVerifyMode: Boolean,
+        tcpConcurrency: Int,
+        verifyConcurrency: Int
+    ): Pair<String, Map<String, Pair<String, ProfileItem>>> {
+        val sb = java.lang.StringBuilder()
+        if (fullVerifyMode) {
+            sb.append(buildV2wOptionsHeader(tcpConcurrency, verifyConcurrency)).append("\n")
+        }
+        val urlToGuid = mutableMapOf<String, Pair<String, ProfileItem>>()
+        for (server in servers) {
+            val cachedProfile = ServerListStore.getCachedProfile(server.first)
+            val url = if (cachedProfile != null) {
+                AngConfigManager.shareConfig(cachedProfile)
+            } else {
+                AngConfigManager.shareConfig(server.first)
+            }
+            if (url.isNotEmpty()) {
+                sb.append(url).append("\n")
+                urlToGuid[url] = server
+            }
+        }
+        return sb.toString() to urlToGuid
+    }
+
+    internal fun resolveAndTagScanResult(
+        configUrl: String,
+        delay: Long,
+        fullVerifyMode: Boolean,
+        urlToGuid: Map<String, Pair<String, ProfileItem>>,
+        servers: List<Pair<String, ProfileItem>>
+    ): V2WScanCandidate? {
+        val cleanUrl = configUrl.trim()
+        if (cleanUrl.isEmpty()) return null
+        val checkedByV2W = fullVerifyMode && Regex("""[?&]v2w_checked=[^&#]+""").containsMatchIn(cleanUrl)
+        val cleanWithoutChecked = stripQueryParam(cleanUrl, "v2w_checked")
+        val isFragTcp = cleanWithoutChecked.contains("v2w_fragment=tcp") || cleanWithoutChecked.contains("⚡[FRAG:TCP]") || cleanWithoutChecked.contains("[FRAG:TCP]")
+        val isFragRecord = cleanWithoutChecked.contains("v2w_fragment=record") || cleanWithoutChecked.contains("⚡[FRAG:RECORD]") || cleanWithoutChecked.contains("[FRAG:RECORD]")
+
+        // Ищем сопоставление: точное, без параметров v2w_checked/v2w_fragment и без хэша remarks
+        var item = urlToGuid[cleanWithoutChecked]
+        if (item == null) {
+            val baseWithoutFragParam = stripQueryParam(cleanWithoutChecked, "v2w_fragment")
+            item = urlToGuid[baseWithoutFragParam]
+                ?: urlToGuid[baseWithoutFragParam.substringBefore('#')]
+                ?: urlToGuid[cleanWithoutChecked.substringBefore('#')]
+        }
+        if (item == null) {
+            try {
+                val uri = android.net.Uri.parse(cleanWithoutChecked)
+                val host = uri.host?.lowercase()
+                val port = uri.port.toString()
+                if (!host.isNullOrEmpty() && port != "-1") {
+                    item = servers.find {
+                        it.second.server?.lowercase() == host && it.second.serverPort == port
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (item == null) return null
+
+        val profile = item.second
+        if (isFragTcp) {
+            profile.fragmentEnabled = true
+            profile.fragmentPackets = "1-3"
+            profile.fragmentLength = "50-100"
+            profile.fragmentInterval = "10-20"
+            if (!profile.remarks.contains("[FRAG:")) {
+                profile.remarks = "${profile.remarks} ⚡[FRAG:TCP]"
+            }
+            MmkvManager.encodeServerConfig(item.first, profile)
+            ServerListStore.updateProfileInMemory(item.first, profile)
+        } else if (isFragRecord) {
+            profile.fragmentEnabled = true
+            profile.fragmentPackets = "tlshello"
+            profile.fragmentLength = "50-100"
+            profile.fragmentInterval = "10-20"
+            if (!profile.remarks.contains("[FRAG:")) {
+                profile.remarks = "${profile.remarks} ⚡[FRAG:RECORD]"
+            }
+            MmkvManager.encodeServerConfig(item.first, profile)
+            ServerListStore.updateProfileInMemory(item.first, profile)
+        }
+
+        return V2WScanCandidate(item.first, profile, delay, checkedByV2W)
+    }
+
     suspend fun runV2WCoreScan(
         context: Context,
         servers: List<Pair<String, ProfileItem>>,
@@ -98,18 +187,12 @@ object V2WScannerEngine {
             sendStatus(context.getString(R.string.v2w_core_init))
         }
 
-        val sb = java.lang.StringBuilder()
-        if (fullVerifyMode) {
-            sb.append(buildV2wOptionsHeader(tcpConcurrency, concurrency)).append("\n")
-        }
-        val urlToGuid = mutableMapOf<String, Pair<String, ProfileItem>>()
-        for (server in servers) {
-            val url = AngConfigManager.shareConfig(server.first)
-            if (url.isNotEmpty()) {
-                sb.append(url).append("\n")
-                urlToGuid[url] = server
-            }
-        }
+        val (payload, urlToGuid) = buildScanPayloadAndMap(
+            servers = servers,
+            fullVerifyMode = fullVerifyMode,
+            tcpConcurrency = tcpConcurrency,
+            verifyConcurrency = concurrency
+        )
 
         if (urlToGuid.isEmpty()) return@coroutineScope false
 
@@ -121,57 +204,16 @@ object V2WScannerEngine {
                 if (cont?.isActive != true) return // Жесткий игнор после отмены
                 
                 if (configUrl != null) {
-                    val cleanUrl = configUrl.trim()
-                    val checkedByV2W = fullVerifyMode && Regex("""[?&]v2w_checked=[^&#]+""").containsMatchIn(cleanUrl)
-                    val cleanWithoutChecked = stripQueryParam(cleanUrl, "v2w_checked")
-                    val isFragTcp = cleanWithoutChecked.contains("v2w_fragment=tcp") || cleanWithoutChecked.contains("⚡[FRAG:TCP]") || cleanWithoutChecked.contains("[FRAG:TCP]")
-                    val isFragRecord = cleanWithoutChecked.contains("v2w_fragment=record") || cleanWithoutChecked.contains("⚡[FRAG:RECORD]") || cleanWithoutChecked.contains("[FRAG:RECORD]")
-
-                    // Ищем сопоставление: точное, без параметров v2w_checked/v2w_fragment и без хэша remarks
-                    var item = urlToGuid[cleanWithoutChecked]
-                    if (item == null) {
-                        val baseWithoutFragParam = stripQueryParam(cleanWithoutChecked, "v2w_fragment")
-                        item = urlToGuid[baseWithoutFragParam]
-                            ?: urlToGuid[baseWithoutFragParam.substringBefore('#')]
-                            ?: urlToGuid[cleanWithoutChecked.substringBefore('#')]
-                    }
-                    if (item == null) {
-                        try {
-                            val uri = android.net.Uri.parse(cleanWithoutChecked)
-                            val host = uri.host?.lowercase()
-                            val port = uri.port.toString()
-                            if (!host.isNullOrEmpty() && port != "-1") {
-                                item = servers.find {
-                                    it.second.server?.lowercase() == host && it.second.serverPort == port
-                                }
-                            }
-                        } catch (_: Exception) {}
-                    }
-
-                    if (item != null) {
-                        val profile = item.second
-                        if (isFragTcp) {
-                            profile.fragmentEnabled = true
-                            profile.fragmentPackets = "1-3"
-                            profile.fragmentLength = "50-100"
-                            profile.fragmentInterval = "10-20"
-                            if (!profile.remarks.contains("[FRAG:")) {
-                                profile.remarks = "${profile.remarks} ⚡[FRAG:TCP]"
-                            }
-                            MmkvManager.encodeServerConfig(item.first, profile)
-                        } else if (isFragRecord) {
-                            profile.fragmentEnabled = true
-                            profile.fragmentPackets = "tlshello"
-                            profile.fragmentLength = "50-100"
-                            profile.fragmentInterval = "10-20"
-                            if (!profile.remarks.contains("[FRAG:")) {
-                                profile.remarks = "${profile.remarks} ⚡[FRAG:RECORD]"
-                            }
-                            MmkvManager.encodeServerConfig(item.first, profile)
-                        }
-
-                        GeekModeLogger.log("v2w-core", "Node responded: ${profile.remarks} (${delay}ms, v2wChecked=$checkedByV2W)")
-                        channel.trySend(V2WScanCandidate(item.first, profile, delay, checkedByV2W))
+                    val candidate = resolveAndTagScanResult(
+                        configUrl = configUrl,
+                        delay = delay,
+                        fullVerifyMode = fullVerifyMode,
+                        urlToGuid = urlToGuid,
+                        servers = servers
+                    )
+                    if (candidate != null) {
+                        GeekModeLogger.log("v2w-core", "Node responded: ${candidate.profile.remarks} (${delay}ms, v2wChecked=${candidate.checkedByV2W})")
+                        channel.trySend(candidate)
                     }
                 }
             }
@@ -202,7 +244,7 @@ object V2WScannerEngine {
                             
                             kotlin.concurrent.thread {
                                 try {
-                                    Libv2ray.runV2WScanner(sb.toString(), concurrency.toLong(), callback)
+                                    Libv2ray.runV2WScanner(payload, concurrency.toLong(), callback)
                                 } catch (e: Exception) {
                                     if (cont.isActive) {
                                         cont.resumeWithException(e)

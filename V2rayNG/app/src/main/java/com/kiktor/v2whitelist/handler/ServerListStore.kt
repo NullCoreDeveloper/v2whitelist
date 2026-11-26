@@ -185,6 +185,30 @@ object ServerListStore {
 
     fun getCachedFingerprint(guid: String): String? = baseByGuid[guid]?.fingerprint
 
+    fun getCachedInspection(guid: String): ServerInspectionInfo? {
+        val cacheKey = baseByGuid[guid]?.fingerprint ?: guid
+        return inspections[cacheKey]
+            ?.takeUnless { ServerInspectionCachePolicy.isExpired(it.testedAtMs, System.currentTimeMillis()) }
+    }
+
+    fun getCachedPingMs(guid: String): Long = baseByGuid[guid]?.fallbackPingMs ?: 0L
+
+    fun updatePingInMemory(guid: String, delayMs: Long) {
+        if (delayMs <= 0L) return
+        val prev = baseByGuid[guid] ?: return
+        if (prev.fallbackPingMs != delayMs) {
+            baseByGuid[guid] = prev.copy(fallbackPingMs = delayMs)
+        }
+        val cacheKey = prev.fingerprint
+        inspections[cacheKey]?.let { existing ->
+            inspections[cacheKey] = existing.copy(
+                alive = true,
+                delayMs = delayMs,
+                testedAtMs = System.currentTimeMillis()
+            )
+        }
+    }
+
     fun putInspectionInMemory(guid: String, info: ServerInspectionInfo) {
         val base = baseByGuid[guid]
         val cacheKey = base?.fingerprint ?: guid

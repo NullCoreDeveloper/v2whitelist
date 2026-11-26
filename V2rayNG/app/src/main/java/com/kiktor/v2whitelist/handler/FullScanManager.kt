@@ -10,10 +10,13 @@ import com.kiktor.v2whitelist.core.model.inspection.FullScanNodeResultDto
 import com.kiktor.v2whitelist.core.model.inspection.ScanNetworkCondition
 import com.kiktor.v2whitelist.core.model.inspection.ScanSessionMeta
 import com.kiktor.v2whitelist.core.model.inspection.ServerInspectionInfo
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +33,7 @@ import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
 import libv2ray.V2WFullScanCallback
+import libv2ray.V2WScanCallback
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.ServerSocket
@@ -39,6 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 enum class FullScanMode {
     FULL,
@@ -76,6 +81,9 @@ object FullScanManager {
 
     @Volatile
     private var flushLoopJob: Job? = null
+
+    @Volatile
+    private var vipFindJob: Job? = null
 
     fun isEndpointCheckActive(): Boolean {
         val personalConfig = PersonalServersManager.getConfig()
@@ -309,22 +317,238 @@ object FullScanManager {
     }
 
     fun findVipNative(context: Context): Boolean {
-        val allServers = MmkvManager.decodeServerList()
-        val currentVipSet = MmkvManager.getVipCache().toSet()
-        val filtered = SmartConnectManager.filterServers(allServers, null)
-            .map { it.first }
-            .filter { it !in currentVipSet }
-            .shuffled()
-        if (filtered.isEmpty()) return false
+        if (_state.value.isScanning || SmartConnectManager.isScanning.get()) {
+            return false
+        }
 
-        val vipLimit = MmkvManager.getVipCacheLimit()
-        val needed = (vipLimit - currentVipSet.size).coerceAtLeast(3)
-        return startScanInternal(
-            context = context,
-            targetGuids = filtered,
-            mode = FullScanMode.VIP_FIND,
-            stopAfterAliveCount = needed
-        )
+        val sessionId = sessionSeq.incrementAndGet()
+        activeStartedAtMs.set(System.currentTimeMillis())
+
+        activeEndpointJobs.forEach { it.cancel() }
+        activeEndpointJobs.clear()
+
+        _state.update {
+            it.copy(
+                isScanning = true,
+                mode = FullScanMode.VIP_FIND,
+                totalCount = 0,
+                completedCount = 0,
+                aliveCount = 0,
+                failedCount = 0,
+                revision = it.revision + 1
+            )
+        }
+
+        val appContext = context.applicationContext
+        vipFindJob?.cancel()
+        vipFindJob = scope.launch {
+            var vipAdded = 0
+            var vipFailed = 0
+            try {
+                ServerListStore.ensureLoaded(appContext)
+                ServerListStore.reloadBaseIfNeeded(appContext)
+                if (sessionSeq.get() != sessionId) return@launch
+
+                val currentVipSet = MmkvManager.getVipCache().toSet()
+                val vipLimit = MmkvManager.getVipCacheLimit()
+                val needed = if (currentVipSet.size < vipLimit) (vipLimit - currentVipSet.size) else 3
+
+                val allServers = MmkvManager.decodeServerList()
+                val filteredPairs = SmartConnectManager.filterServers(allServers, null)
+                    .filter { it.first !in currentVipSet }
+
+                if (filteredPairs.isEmpty()) {
+                    return@launch
+                }
+
+                val knownAlive = ArrayList<Pair<String, ProfileItem>>()
+                val unknown = ArrayList<Pair<String, ProfileItem>>()
+                val knownDead = ArrayList<Pair<String, ProfileItem>>()
+                for (pair in filteredPairs) {
+                    val guid = pair.first
+                    val insp = ServerListStore.getCachedInspection(guid)
+                    val ping = ServerListStore.getCachedPingMs(guid)
+                    when {
+                        insp?.alive == true || ping > 0L -> knownAlive.add(pair)
+                        insp == null && ping == 0L -> unknown.add(pair)
+                        else -> knownDead.add(pair)
+                    }
+                }
+                val prioritized = knownAlive.shuffled() + unknown.shuffled() + knownDead.shuffled()
+
+                val verifyConcurrency = MmkvManager.getV2wCoreConcurrency()
+                val tcpConcurrency = MmkvManager.getV2wTcpConcurrency()
+                val fullVerifyMode = MmkvManager.isV2wFullVerifyMode()
+                val profileCheckEnabled = MmkvManager.decodeSettingsBool(AppConfig.PREF_PROFILE_CHECK_ENABLED, true)
+                val endpointEffective = isEndpointCheckActive()
+
+                val (payload, urlToGuid) = V2WScannerEngine.buildScanPayloadAndMap(
+                    servers = prioritized,
+                    fullVerifyMode = fullVerifyMode,
+                    tcpConcurrency = tcpConcurrency,
+                    verifyConcurrency = verifyConcurrency
+                )
+                if (urlToGuid.isEmpty()) {
+                    return@launch
+                }
+
+                _state.update {
+                    it.copy(
+                        isScanning = true,
+                        mode = FullScanMode.VIP_FIND,
+                        totalCount = needed,
+                        completedCount = 0,
+                        aliveCount = 0,
+                        failedCount = 0,
+                        endpointEnabled = endpointEffective,
+                        revision = it.revision + 1
+                    )
+                }
+
+                GeekModeLogger.log(
+                    "FullScan",
+                    "Starting VIP_FIND via v2w-core scanner: candidates=${prioritized.size} (alive=${knownAlive.size}, unknown=${unknown.size}, dead=${knownDead.size}), target=$needed, fullVerify=$fullVerifyMode"
+                )
+
+                val channel = Channel<V2WScannerEngine.V2WScanCandidate>(Channel.UNLIMITED)
+                val scanContinuation = AtomicReference<CancellableContinuation<Unit>?>(null)
+                val seenGuids = ConcurrentHashMap.newKeySet<String>()
+
+                val callback = object : V2WScanCallback {
+                    override fun onServerSuccess(configUrl: String?, delay: Long) {
+                        if (sessionSeq.get() != sessionId) return
+                        val cont = scanContinuation.get()
+                        if (cont?.isActive != true) return
+                        if (configUrl == null) return
+
+                        val candidate = V2WScannerEngine.resolveAndTagScanResult(
+                            configUrl = configUrl,
+                            delay = delay,
+                            fullVerifyMode = fullVerifyMode,
+                            urlToGuid = urlToGuid,
+                            servers = prioritized
+                        )
+                        if (candidate != null && seenGuids.add(candidate.guid)) {
+                            GeekModeLogger.log("FullScan", "VIP candidate responded: ${candidate.profile.remarks} (${delay}ms, v2wChecked=${candidate.checkedByV2W})")
+                            channel.trySend(candidate)
+                        }
+                    }
+
+                    override fun onScanComplete(totalSuccess: Long, totalFailed: Long) {
+                        if (sessionSeq.get() != sessionId) return
+                        val cont = scanContinuation.get()
+                        if (cont?.isActive == true) {
+                            cont.resume(Unit) { }
+                        }
+                    }
+                }
+
+                coroutineScope {
+                    val scannerJob = launch(Dispatchers.IO) {
+                        try {
+                            suspendCancellableCoroutine<Unit> { cont ->
+                                scanContinuation.set(cont)
+                                cont.invokeOnCancellation {
+                                    try {
+                                        Libv2ray.stopV2WScanner()
+                                    } catch (_: Exception) {}
+                                }
+                                kotlin.concurrent.thread {
+                                    try {
+                                        Libv2ray.runV2WScanner(payload, verifyConcurrency.toLong(), callback)
+                                    } catch (e: Exception) {
+                                        if (cont.isActive) {
+                                            cont.resumeWithException(e)
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            GeekModeLogger.log("FullScan", "VIP_FIND scanner error: ${e.message}")
+                        } finally {
+                            channel.close()
+                        }
+                    }
+
+                    for (candidate in channel) {
+                        if (!isActive || sessionSeq.get() != sessionId || vipAdded >= needed) break
+
+                        val passed = if (profileCheckEnabled) {
+                            NodeTesterManager.verifyProfile(
+                                context = appContext,
+                                guid = candidate.guid,
+                                showStatus = false,
+                                speedOnlyMode = candidate.checkedByV2W,
+                                preMeasuredLatencyMs = candidate.delay
+                            )
+                        } else {
+                            true
+                        }
+
+                        if (!isActive || sessionSeq.get() != sessionId) break
+
+                        if (passed) {
+                            MmkvManager.addVipServer(candidate.guid)
+                            val finalDelay = MmkvManager.decodeServerAffiliationInfo(candidate.guid)
+                                ?.testDelayMillis
+                                ?.takeIf { it > 0L }
+                                ?: candidate.delay
+                            if (finalDelay > 0L) {
+                                ServerListStore.updatePingInMemory(candidate.guid, finalDelay)
+                            }
+                            ServerListStore.refreshVipFromMmkv()
+                            vipAdded++
+                            GeekModeLogger.log("FullScan", "VIP_FIND added ${candidate.profile.remarks} ($vipAdded/$needed, delay=${finalDelay}ms)")
+                            _state.update {
+                                it.copy(
+                                    completedCount = vipAdded,
+                                    aliveCount = vipAdded,
+                                    failedCount = vipFailed,
+                                    revision = it.revision + 1
+                                )
+                            }
+                            if (vipAdded >= needed) {
+                                scannerJob.cancel()
+                                break
+                            }
+                        } else {
+                            vipFailed++
+                            _state.update {
+                                it.copy(
+                                    failedCount = vipFailed,
+                                    revision = it.revision + 1
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    GeekModeLogger.log("FullScan", "VIP_FIND error: ${e.message}")
+                }
+            } finally {
+                try {
+                    Libv2ray.stopV2WScanner()
+                } catch (_: Exception) {}
+                ServerListStore.refreshVipFromMmkv()
+                ServerListStore.bumpRevision()
+                if (sessionSeq.get() == sessionId) {
+                    GeekModeLogger.log("FullScan", "VIP_FIND complete: added=$vipAdded, rejected=$vipFailed")
+                    _state.update {
+                        it.copy(
+                            isScanning = false,
+                            mode = FullScanMode.VIP_FIND,
+                            completedCount = vipAdded,
+                            aliveCount = vipAdded,
+                            failedCount = vipFailed,
+                            revision = it.revision + 1
+                        )
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private fun startScanInternal(
@@ -640,16 +864,22 @@ object FullScanManager {
 
     fun stopFullScan() {
         if (!_state.value.isScanning) return
+        val cur = _state.value
         sessionSeq.incrementAndGet()
+        vipFindJob?.cancel()
+        vipFindJob = null
         flushLoopJob?.cancel()
         activeEndpointJobs.forEach { it.cancel() }
         activeEndpointJobs.clear()
         try {
-            Libv2ray.stopV2WFullScan()
+            if (cur.mode == FullScanMode.VIP_FIND) {
+                Libv2ray.stopV2WScanner()
+            } else {
+                Libv2ray.stopV2WFullScan()
+            }
         } catch (_: Exception) {}
         flushPendingToMmkv()
 
-        val cur = _state.value
         if (cur.mode == FullScanMode.FULL && cur.completedCount > 0) {
             MmkvManager.encodeFullScanMeta(
                 ScanSessionMeta(
