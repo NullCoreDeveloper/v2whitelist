@@ -309,7 +309,9 @@ class V2RayVpnService : VpnService(), ServiceControl {
             }
             mInterface = vpnInterface
             isRunning = true
-            Log.i(AppConfig.TAG, "configureVpnService: VPN interface established, fd=${vpnInterface.fd}")
+            val isLockdown = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) isLockdownEnabled else false
+            MmkvManager.encodeSettings(AppConfig.PREF_VPN_LOCKDOWN_ACTIVE, isLockdown)
+            Log.i(AppConfig.TAG, "configureVpnService: VPN interface established, fd=${vpnInterface.fd}, lockdown=$isLockdown")
             return true
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "configureVpnService: Failed to establish VPN interface", e)
@@ -520,6 +522,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
     private fun stopAllService(isForced: Boolean = true) {
         Log.i(AppConfig.TAG, "V2RayVpnService: stopAllService(isForced=$isForced)")
         isRunning = false
+        MmkvManager.encodeSettings(AppConfig.PREF_VPN_LOCKDOWN_ACTIVE, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 connectivity.unregisterNetworkCallback(defaultNetworkCallback)

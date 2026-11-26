@@ -1,6 +1,7 @@
 package com.kiktor.v2whitelist.receiver
 
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
@@ -8,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.handler.ExternalControlAuth
 import com.kiktor.v2whitelist.handler.FullScanManager
 import com.kiktor.v2whitelist.handler.GeekModeLogger
 import com.kiktor.v2whitelist.handler.MmkvManager
@@ -44,6 +46,18 @@ class TaskerReceiver : BroadcastReceiver() {
                 return
             }
 
+            val expectedComponent = ComponentName(appContext, TaskerReceiver::class.java)
+            if (intent?.component != null && intent.component != expectedComponent) {
+                GeekModeLogger.log("ExternalControl", "Rejected intent with unexpected component: ${intent.component}")
+                return
+            }
+
+            val token = extractToken(intent)
+            if (!ExternalControlAuth.verify(appContext, token)) {
+                GeekModeLogger.log("ExternalControl", "Rejected external intent (${intent?.action}): missing or invalid auth token")
+                return
+            }
+
             val cmd = resolveCommand(intent) ?: return
             GeekModeLogger.log("ExternalControl", "Received command: $cmd (action=${intent?.action})")
 
@@ -56,6 +70,15 @@ class TaskerReceiver : BroadcastReceiver() {
             }
         } catch (e: Exception) {
             Log.e(AppConfig.TAG, "Error processing external control broadcast", e)
+        }
+    }
+
+    private fun extractToken(intent: Intent?): String? {
+        if (intent == null) return null
+        return if (intent.action == "com.twofortyfouram.locale.intent.action.FIRE_SETTING") {
+            intent.getBundleExtra(AppConfig.TASKER_EXTRA_BUNDLE)?.getString(AppConfig.TASKER_EXTRA_BUNDLE_TOKEN)
+        } else {
+            intent.getStringExtra(AppConfig.EXTRA_EXTERNAL_TOKEN)
         }
     }
 
@@ -115,6 +138,10 @@ class TaskerReceiver : BroadcastReceiver() {
     }
 
     private fun performDisconnect(appContext: Context) {
+        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_VPN_LOCKDOWN_ACTIVE, false)) {
+            GeekModeLogger.log("ExternalControl", "Blocked external disconnect while Android Lockdown VPN is active")
+            return
+        }
         FullScanManager.stopFullScan()
         SmartConnectManager.isScanning.set(false)
         NotificationManager.cancelScanningNotification(appContext)
@@ -123,7 +150,13 @@ class TaskerReceiver : BroadcastReceiver() {
 
     private fun handleToggle(appContext: Context) {
         when {
-            V2RayServiceManager.isRunning() -> performDisconnect(appContext)
+            V2RayServiceManager.isRunning() -> {
+                if (MmkvManager.decodeSettingsBool(AppConfig.PREF_VPN_LOCKDOWN_ACTIVE, false)) {
+                    GeekModeLogger.log("ExternalControl", "Blocked external toggle-off while Android Lockdown VPN is active")
+                    return
+                }
+                performDisconnect(appContext)
+            }
             SmartConnectManager.isScanning.get() -> {
                 SmartConnectManager.isScanning.set(false)
                 NotificationManager.cancelScanningNotification(appContext)

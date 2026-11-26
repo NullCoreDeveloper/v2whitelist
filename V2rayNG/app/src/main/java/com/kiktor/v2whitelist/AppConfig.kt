@@ -223,6 +223,9 @@ object AppConfig {
 
     /** External automation actions (MacroDroid / Automate / Tasker). */
     const val PREF_EXTERNAL_CONTROL_ENABLED = "pref_external_control_enabled"
+    const val PREF_VPN_LOCKDOWN_ACTIVE = "pref_vpn_lockdown_active"
+    const val EXTRA_EXTERNAL_TOKEN = "extra_external_token"
+    const val TASKER_EXTRA_BUNDLE_TOKEN = "tasker_extra_bundle_token"
     const val ACTION_EXTERNAL_CONNECT = "$ANG_PACKAGE.action.CONNECT"
     const val ACTION_EXTERNAL_DISCONNECT = "$ANG_PACKAGE.action.DISCONNECT"
     const val ACTION_EXTERNAL_TOGGLE = "$ANG_PACKAGE.action.TOGGLE"

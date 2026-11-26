@@ -427,25 +427,41 @@ class SettingsActivity : BaseActivity(), PreferenceFragmentCompat.OnPreferenceSt
 
             // Внешнее управление (Tasker / MacroDroid)
             findPreference<androidx.preference.Preference>("pref_external_control_help")?.setOnPreferenceClickListener {
-                val pkg = requireContext().packageName
+                val ctx = requireContext()
+                val pkg = ctx.packageName
+                val hasToken = com.kiktor.v2whitelist.handler.ExternalControlAuth.hasToken(ctx)
+                val tokenStatus = if (hasToken) {
+                    "Токен авторизации уже создан (при перевыпуске старые триггеры потребуют обновления)."
+                } else {
+                    "Токен ещё не создан. Создаётся автоматически при сохранении действия Tasker или кнопкой ниже."
+                }
                 val commandsText = buildString {
                     appendLine("Package: $pkg")
                     appendLine("Receiver: com.kiktor.v2whitelist.receiver.TaskerReceiver")
+                    appendLine("Extra token key: ${AppConfig.EXTRA_EXTERNAL_TOKEN}")
                     appendLine()
                     appendLine("Actions:")
                     appendLine("• ${AppConfig.ACTION_EXTERNAL_CONNECT}")
                     appendLine("• ${AppConfig.ACTION_EXTERNAL_DISCONNECT}")
                     appendLine("• ${AppConfig.ACTION_EXTERNAL_TOGGLE}")
-                    append("• ${AppConfig.ACTION_EXTERNAL_SWITCH_SERVER}")
+                    appendLine("• ${AppConfig.ACTION_EXTERNAL_SWITCH_SERVER}")
+                    appendLine()
+                    append(tokenStatus)
                 }
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                     .setTitle(R.string.external_control_dialog_title)
                     .setMessage(commandsText)
                     .setPositiveButton(android.R.string.ok, null)
+                    .setNegativeButton("Выпустить токен") { _, _ ->
+                        val newToken = com.kiktor.v2whitelist.handler.ExternalControlAuth.issue(ctx)
+                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("v2whitelist_external_token", newToken))
+                        ctx.toast(R.string.external_control_copied)
+                    }
                     .setNeutralButton(R.string.external_control_copy_all) { _, _ ->
-                        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("v2whitelist_intents", commandsText))
-                        requireContext().toast(R.string.external_control_copied)
+                        ctx.toast(R.string.external_control_copied)
                     }
                     .show()
                 true

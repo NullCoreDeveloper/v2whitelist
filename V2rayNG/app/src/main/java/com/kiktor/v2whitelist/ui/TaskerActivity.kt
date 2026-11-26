@@ -11,6 +11,7 @@ import android.widget.RadioGroup
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.R
 import com.kiktor.v2whitelist.databinding.ActivityTaskerBinding
+import com.kiktor.v2whitelist.handler.ExternalControlAuth
 import com.kiktor.v2whitelist.handler.MmkvManager
 import com.kiktor.v2whitelist.handler.PersonalServersManager
 
@@ -156,6 +157,15 @@ class TaskerActivity : BaseActivity() {
                 }
             }
         }
+
+        val incomingBundle = intent?.getBundleExtra(AppConfig.TASKER_EXTRA_BUNDLE)
+        val existingToken = incomingBundle?.getString(AppConfig.TASKER_EXTRA_BUNDLE_TOKEN)
+        val authToken = if (ExternalControlAuth.verify(this, existingToken)) {
+            existingToken!!
+        } else {
+            ExternalControlAuth.issue(this)
+        }
+        extraBundle.putString(AppConfig.TASKER_EXTRA_BUNDLE_TOKEN, authToken)
 
         val resultIntent = Intent().apply {
             putExtra(AppConfig.TASKER_EXTRA_BUNDLE, extraBundle)
