@@ -1,6 +1,7 @@
 package com.kiktor.v2whitelist.desktop.engine
 
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
+import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import kotlinx.coroutines.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -150,6 +151,26 @@ object DesktopTunManager {
     private const val DEFAULT_TUN_IP = "198.18.0.2"
     private const val DEFAULT_TUN_GW = "198.18.0.1"
     private const val DEFAULT_TUN_MASK = "255.255.0.0"
+
+    private fun loadIpcToken(): String? {
+        val candidates = buildList {
+            if (isWindows) {
+                val progData = System.getenv("ProgramData")?.takeIf { it.isNotBlank() } ?: "C:\\ProgramData"
+                add(File(progData, "v2whitelist\\ipc.token"))
+            } else {
+                System.getenv("XDG_RUNTIME_DIR")?.takeIf { it.isNotBlank() }?.let {
+                    add(File(it, "v2whitelist/ipc.token"))
+                }
+            }
+        }
+        for (file in candidates) {
+            if (file.isFile) {
+                val token = runCatching { file.readText(Charsets.UTF_8).trim() }.getOrNull()
+                if (!token.isNullOrBlank()) return token
+            }
+        }
+        return null
+    }
 
     private val osName = System.getProperty("os.name")?.lowercase().orEmpty()
     val isWindows = osName.contains("windows")
@@ -352,10 +373,12 @@ object DesktopTunManager {
                 )
             )
 
-            val request = HttpRequest.newBuilder()
+            val requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/tun/start"))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(25))
+            loadIpcToken()?.let { requestBuilder.header("X-V2W-Token", it) }
+            val request = requestBuilder
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build()
 
@@ -382,10 +405,12 @@ object DesktopTunManager {
             val client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(1000))
                 .build()
-            val request = HttpRequest.newBuilder()
+            val requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/service/shutdown"))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(4))
+            loadIpcToken()?.let { requestBuilder.header("X-V2W-Token", it) }
+            val request = requestBuilder
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
@@ -404,10 +429,12 @@ object DesktopTunManager {
             val client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(1000))
                 .build()
-            val request = HttpRequest.newBuilder()
+            val requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create("$SERVICE_IPC_URL/tun/stop"))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(4))
+            loadIpcToken()?.let { requestBuilder.header("X-V2W-Token", it) }
+            val request = requestBuilder
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build()
             val response = client.send(request, HttpResponse.BodyHandlers.ofString())
@@ -729,16 +756,16 @@ object DesktopTunManager {
         val useSudo = !sudoPassword.isNullOrBlank() && isLinux
         val effectiveBinary = if (isLinux && (DesktopBinaryResolver.isTemporaryMountPath(binary.absolutePath) || useSudo)) {
             val tmpName = if (useV2wTun) "v2w-tun" else "v2w-tun2socks"
-            val extracted = File("/tmp/$tmpName")
+            val extracted = File(DesktopStorageManager.runtimeDir, tmpName)
             try {
                 if (!extracted.exists() || extracted.length() != binary.length()) {
                     binary.copyTo(extracted, overwrite = true)
-                    extracted.setReadable(true, false)
-                    extracted.setExecutable(true, false)
+                    DesktopStorageManager.applyPrivateFilePermissions(extracted)
+                    extracted.setExecutable(true, true)
                 }
                 extracted
             } catch (e: Exception) {
-                GeekModeLogger.log("TUN", "Копирование $tmpName в /tmp не удалось: ${e.message}")
+                GeekModeLogger.log("TUN", "Копирование $tmpName в runtimeDir не удалось: ${e.message}")
                 binary
             }
         } else {
@@ -749,6 +776,7 @@ object DesktopTunManager {
         if (useSudo) {
             tunArgs.addAll(listOf("sudo", "-S"))
         }
+        var stdinConfigPayload: String? = null
         if (useV2wTun) {
             val cfgDto = V2wTunRouterConfigDto(
                 deviceName = deviceName,
@@ -765,12 +793,19 @@ object DesktopTunManager {
                     proxyApps = appSplitConfig.proxyApps
                 )
             )
-            val cfgFile = File.createTempFile("v2w_tun_", ".json").apply {
-                deleteOnExit()
-                writeText(jsonCodec.encodeToString(cfgDto))
+            val cfgJson = jsonCodec.encodeToString(cfgDto)
+            if (!useSudo) {
+                stdinConfigPayload = cfgJson
+                tunArgs.addAll(listOf(effectiveBinary.absolutePath, "-config", "-"))
+            } else {
+                val cfgFile = File.createTempFile("v2w_tun_", ".json", DesktopStorageManager.runtimeDir).apply {
+                    deleteOnExit()
+                    writeText(cfgJson)
+                    DesktopStorageManager.applyPrivateFilePermissions(this)
+                }
+                v2wTunConfigFile = cfgFile
+                tunArgs.addAll(listOf(effectiveBinary.absolutePath, "-config", cfgFile.absolutePath))
             }
-            v2wTunConfigFile = cfgFile
-            tunArgs.addAll(listOf(effectiveBinary.absolutePath, "-config", cfgFile.absolutePath))
         } else {
             tunArgs.addAll(listOf(
                 effectiveBinary.absolutePath,
@@ -790,6 +825,13 @@ object DesktopTunManager {
                 try {
                     proc.outputStream.bufferedWriter().use { writer ->
                         writer.write("$sudoPassword\n")
+                        writer.flush()
+                    }
+                } catch (_: Exception) {}
+            } else if (stdinConfigPayload != null) {
+                try {
+                    proc.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                        writer.write(stdinConfigPayload)
                         writer.flush()
                     }
                 } catch (_: Exception) {}
@@ -1170,10 +1212,13 @@ object DesktopTunManager {
         serverIp: String?,
         gateway: String
     ): Boolean {
-        val pidFile = "/tmp/v2w-tun-mac.pid"
-        val devFile = "/tmp/v2w-tun-mac.dev"
-        val logFile = "/tmp/v2w-tun-mac.log"
-        val scriptFile = File("/tmp/v2w-tun-mac-start.sh")
+        val runtimeDir = DesktopStorageManager.runtimeDir
+        val pidFile = shQuote(File(runtimeDir, "v2w-tun-mac.pid").absolutePath)
+        val devFile = shQuote(File(runtimeDir, "v2w-tun-mac.dev").absolutePath)
+        val logFile = shQuote(File(runtimeDir, "v2w-tun-mac.log").absolutePath)
+        val logFileObj = File(runtimeDir, "v2w-tun-mac.log")
+        val devFileObj = File(runtimeDir, "v2w-tun-mac.dev")
+        val scriptFile = File(runtimeDir, "v2w-tun-mac-start.sh")
         val logTag = if (useV2wTun) "v2w-tun" else "tun2socks"
 
         val launchLine = if (useV2wTun) {
@@ -1192,9 +1237,10 @@ object DesktopTunManager {
                     proxyApps = appSplitConfig.proxyApps
                 )
             )
-            val cfgFile = File.createTempFile("v2w_tun_", ".json").apply {
+            val cfgFile = File.createTempFile("v2w_tun_", ".json", runtimeDir).apply {
                 deleteOnExit()
                 writeText(jsonCodec.encodeToString(cfgDto))
+                DesktopStorageManager.applyPrivateFilePermissions(this)
             }
             v2wTunConfigFile = cfgFile
             "${shQuote(binary.absolutePath)} -config ${shQuote(cfgFile.absolutePath)}"
@@ -1257,12 +1303,13 @@ object DesktopTunManager {
 
         return try {
             scriptFile.writeText(scriptContent)
-            scriptFile.setExecutable(true, false)
+            DesktopStorageManager.applyPrivateFilePermissions(scriptFile)
+            scriptFile.setExecutable(true, true)
             GeekModeLogger.log("TUN", "macOS: Запрос системных прав для запуска $logTag...")
             val (code, out) = runMacOsascript("/bin/sh ${shQuote(scriptFile.absolutePath)}")
             runCatching { scriptFile.delete() }
             if (code != 0) {
-                val tail = runCatching { File(logFile).takeIf { it.exists() }?.readLines()?.takeLast(5)?.joinToString(" | ") }.getOrNull().orEmpty()
+                val tail = runCatching { logFileObj.takeIf { it.exists() }?.readLines()?.takeLast(5)?.joinToString(" | ") }.getOrNull().orEmpty()
                 lastStartFailureReason = if (out.contains("User canceled", ignoreCase = true) || out.contains("-128")) {
                     TunStartFailureReason.PRIVILEGE_REQUIRED
                 } else {
@@ -1272,7 +1319,7 @@ object DesktopTunManager {
                 return false
             }
 
-            val devName = runCatching { File(devFile).takeIf { it.exists() }?.readText()?.trim() }.getOrNull()?.takeIf { it.isNotBlank() } ?: "utun"
+            val devName = runCatching { devFileObj.takeIf { it.exists() }?.readText()?.trim() }.getOrNull()?.takeIf { it.isNotBlank() } ?: "utun"
             activeMacDevice = devName
             macPrivilegedActive = true
             if (serverIp != null && serverIp != "127.0.0.1" && !serverIp.startsWith("192.168.") && !serverIp.startsWith("10.")) {
@@ -1282,7 +1329,7 @@ object DesktopTunManager {
             logJob?.cancel()
             logJob = scope.launch(Dispatchers.IO) {
                 try {
-                    val lf = File(logFile)
+                    val lf = logFileObj
                     var offset = 0L
                     while (isActive && macPrivilegedActive) {
                         if (lf.exists() && lf.length() > offset) {
@@ -1314,9 +1361,10 @@ object DesktopTunManager {
     }
 
     private fun stopMacTunWithOsascript() {
-        val pidFile = "/tmp/v2w-tun-mac.pid"
-        val devFile = "/tmp/v2w-tun-mac.dev"
-        val logFile = "/tmp/v2w-tun-mac.log"
+        val runtimeDir = DesktopStorageManager.runtimeDir
+        val pidFile = shQuote(File(runtimeDir, "v2w-tun-mac.pid").absolutePath)
+        val devFile = shQuote(File(runtimeDir, "v2w-tun-mac.dev").absolutePath)
+        val logFile = shQuote(File(runtimeDir, "v2w-tun-mac.log").absolutePath)
         val hostDel = configuredRoute?.let { "route -n delete -host ${shQuote(it.ip)} >/dev/null 2>&1 || true" } ?: ""
         configuredRoute = null
         val cmd = """

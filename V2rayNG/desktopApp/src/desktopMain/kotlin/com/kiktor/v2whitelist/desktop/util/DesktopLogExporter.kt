@@ -33,8 +33,11 @@ object DesktopLogExporter {
     fun initFileLogging(logsDir: File) {
         try {
             if (!logsDir.exists()) logsDir.mkdirs()
+            DesktopStorageManager.applyPrivateDirPermissions(logsDir)
             val mainFile = File(logsDir, "probel-app.log")
             val oldFile = File(logsDir, "probel-app.prev.log")
+            if (mainFile.exists()) DesktopStorageManager.applyPrivateFilePermissions(mainFile)
+            if (oldFile.exists()) DesktopStorageManager.applyPrivateFilePermissions(oldFile)
             synchronized(fileLock) {
                 activeLogFile = mainFile
                 prevLogFile = oldFile

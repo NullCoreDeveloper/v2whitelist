@@ -6,6 +6,7 @@ import com.kiktor.v2whitelist.core.model.AppScenario
 import com.kiktor.v2whitelist.core.model.EConfigType
 import com.kiktor.v2whitelist.core.model.ProfileItem
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
+import com.kiktor.v2whitelist.desktop.data.DesktopStorageManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,11 +50,13 @@ class XrayDesktopRunner(
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     private var process: Process? = null
-    private var tempConfigFile: File? = null
     private var logJob: Job? = null
     private var currentSudoPassword: String? = null
     var isLaunchedWithSudo: Boolean = false
         private set
+
+    private val xrayPidFile: File
+        get() = File(DesktopStorageManager.runtimeDir, "xray.pid")
 
     /**
      * Поиск исполняемого файла Xray через кроссплатформенный резолвер.
@@ -168,16 +171,8 @@ class XrayDesktopRunner(
             )
             val jsonConfig = XrayConfigGenerator.generateJson(profile, options)
 
-            // Запись во временный файл
-            val tempFile = File.createTempFile("v2w_xray_config_", ".json").apply {
-                deleteOnExit()
-                writeText(jsonConfig)
-            }
-            tempConfigFile = tempFile
-
-            GeekModeLogger.log("DesktopRunner", "Конфигурация создана: ${tempFile.absolutePath}")
-            GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c ${tempFile.absolutePath}")
-            val pb = ProcessBuilder(binary.absolutePath, "run", "-c", tempFile.absolutePath).redirectErrorStream(true)
+            GeekModeLogger.log("DesktopRunner", "Запуск ядра: ${binary.absolutePath} run -c stdin:")
+            val pb = ProcessBuilder(binary.absolutePath, "run", "-c", "stdin:").redirectErrorStream(true)
             pb.directory(binary.parentFile)
 
             // Настройка расположения геофайлов geosite.dat и geoip.dat
@@ -190,6 +185,14 @@ class XrayDesktopRunner(
 
             val proc = pb.start()
             process = proc
+            runCatching {
+                xrayPidFile.writeText(proc.pid().toString())
+                DesktopStorageManager.applyPrivateFilePermissions(xrayPidFile)
+            }
+            proc.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write(jsonConfig)
+                writer.flush()
+            }
 
             val startupLogBuffer = java.util.concurrent.CopyOnWriteArrayList<String>()
 
@@ -303,29 +306,37 @@ class XrayDesktopRunner(
 
     private fun killExistingZombieProcesses(sudoPassword: String? = null) {
         try {
-            val pb = ProcessBuilder("pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_")
-            pb.start().waitFor(500, TimeUnit.MILLISECONDS)
-        } catch (_: Exception) {}
-
-        if (!sudoPassword.isNullOrBlank()) {
-            try {
-                val killPb = ProcessBuilder("sudo", "-S", "pkill", "-9", "-f", "xray.*run.*-c.*/tmp/v2w_")
-                val killProc = killPb.start()
-                killProc.outputStream.bufferedWriter().use { writer ->
-                    writer.write("$sudoPassword\n")
-                    writer.flush()
+            val pidText = if (xrayPidFile.exists()) xrayPidFile.readText().trim() else ""
+            val pid = pidText.toLongOrNull()
+            if (pid != null && pid > 0L) {
+                ProcessHandle.of(pid).ifPresent { handle ->
+                    val cmd = handle.info().command().orElse("")
+                    if (cmd.contains("xray", ignoreCase = true) || cmd.isBlank()) {
+                        if (!handle.destroy()) {
+                            handle.destroyForcibly()
+                        }
+                    }
                 }
-                killProc.waitFor(500, TimeUnit.MILLISECONDS)
-            } catch (_: Exception) {}
-        }
+                if (!sudoPassword.isNullOrBlank()) {
+                    try {
+                        val killPb = ProcessBuilder("sudo", "-S", "kill", "-9", pid.toString())
+                        val killProc = killPb.start()
+                        killProc.outputStream.bufferedWriter().use { writer ->
+                            writer.write("$sudoPassword\n")
+                            writer.flush()
+                        }
+                        killProc.waitFor(500, TimeUnit.MILLISECONDS)
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun cleanup() {
         process = null
         try {
-            tempConfigFile?.delete()
+            if (xrayPidFile.exists()) xrayPidFile.delete()
         } catch (_: Exception) {}
-        tempConfigFile = null
         isLaunchedWithSudo = false
     }
 }

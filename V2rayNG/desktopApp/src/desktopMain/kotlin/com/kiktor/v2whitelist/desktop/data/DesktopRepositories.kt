@@ -14,6 +14,8 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.PosixFilePermission
+import java.util.EnumSet
 
 @Serializable
 internal data class ServersStorage(
@@ -112,6 +114,7 @@ internal object DesktopStorageManager {
             else -> File(userHome, ".config/v2whitelist")
         }
         if (!standardDir.exists()) standardDir.mkdirs()
+        applyPrivateDirPermissions(standardDir)
         standardDir
     }
 
@@ -140,11 +143,60 @@ internal object DesktopStorageManager {
                     try { dataDir.mkdirs() } catch (_: Exception) {}
                 }
                 if (dataDir.isDirectory && dataDir.canWrite()) {
+                    applyPrivateDirPermissions(dataDir)
                     return@lazy dataDir
                 }
             }
         }
         standardConfigDir
+    }
+
+    val runtimeDir: File
+        get() {
+            val dir = File(baseDir, "runtime")
+            if (!dir.exists()) dir.mkdirs()
+            applyPrivateDirPermissions(dir)
+            return dir
+        }
+
+    fun applyPrivateDirPermissions(dir: File) {
+        if (!dir.exists()) return
+        runCatching {
+            if (!isWindows) {
+                Files.setPosixFilePermissions(
+                    dir.toPath(),
+                    EnumSet.of(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                        PosixFilePermission.OWNER_EXECUTE
+                    )
+                )
+            } else {
+                dir.setReadable(true, true)
+                dir.setWritable(true, true)
+                dir.setExecutable(true, true)
+            }
+        }
+    }
+
+    fun applyPrivateFilePermissions(file: File) {
+        if (!file.exists()) return
+        runCatching {
+            if (!isWindows) {
+                Files.setPosixFilePermissions(
+                    file.toPath(),
+                    EnumSet.of(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE
+                    )
+                )
+            } else {
+                file.setReadable(false, false)
+                file.setReadable(true, true)
+                file.setWritable(false, false)
+                file.setWritable(true, true)
+            }
+        }
     }
 
     private var lockFileChannel: java.nio.channels.FileChannel? = null
@@ -198,7 +250,27 @@ internal object DesktopStorageManager {
     fun saveServers(storage: ServersStorage) {
         try {
             val content = compactJson.encodeToString(storage)
-            serversFile.writeText(content)
+            val parent = serversFile.parentFile ?: baseDir
+            if (!parent.exists()) parent.mkdirs()
+            applyPrivateDirPermissions(parent)
+            val tempFile = File(parent, "${serversFile.name}.tmp")
+            tempFile.writeText(content)
+            applyPrivateFilePermissions(tempFile)
+            try {
+                Files.move(
+                    tempFile.toPath(),
+                    serversFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: Exception) {
+                Files.move(
+                    tempFile.toPath(),
+                    serversFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            }
+            applyPrivateFilePermissions(serversFile)
         } catch (_: Exception) {}
     }
 
@@ -224,11 +296,13 @@ internal object DesktopStorageManager {
             }
             val parent = settingsFile.parentFile ?: baseDir
             if (!parent.exists()) parent.mkdirs()
+            applyPrivateDirPermissions(parent)
             val tempFile = File(parent, "${settingsFile.name}.tmp")
             var lastError: Exception? = null
             for (attempt in 0 until 4) {
                 try {
                     tempFile.writeText(content)
+                    applyPrivateFilePermissions(tempFile)
                     try {
                         Files.move(
                             tempFile.toPath(),
@@ -243,6 +317,7 @@ internal object DesktopStorageManager {
                             StandardCopyOption.REPLACE_EXISTING
                         )
                     }
+                    applyPrivateFilePermissions(settingsFile)
                     return
                 } catch (e: Exception) {
                     lastError = e
@@ -254,6 +329,7 @@ internal object DesktopStorageManager {
             // Резервная прямая запись, если переименование файла заблокировано
             try {
                 settingsFile.writeText(content)
+                applyPrivateFilePermissions(settingsFile)
             } catch (e: Exception) {
                 System.err.println("[DesktopStorageManager] Не удалось сохранить settings.json: ${lastError?.message ?: e.message}")
             } finally {
