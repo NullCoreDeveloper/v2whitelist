@@ -1,6 +1,11 @@
 package com.kiktor.v2whitelist.core.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 
 const val TAG_PROXY = "proxy"
 const val TAG_DIRECT = "direct"
@@ -80,6 +85,27 @@ data class ProfileItem(
     var fragmentInterval: String? = null,   // "10-20"
 ) {
     companion object {
+        private val extraJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        val AEAD_SS_METHODS = setOf(
+            "aes-128-gcm",
+            "aead_aes_128_gcm",
+            "aes-192-gcm",
+            "aes-256-gcm",
+            "aead_aes_256_gcm",
+            "chacha20-poly1305",
+            "aead_chacha20_poly1305",
+            "chacha20-ietf-poly1305",
+            "xchacha20-poly1305",
+            "aead_xchacha20_poly1305",
+            "xchacha20-ietf-poly1305"
+        )
+
+        fun isSupportedAeadShadowsocks(method: String?): Boolean {
+            val normalized = method?.trim()?.lowercase().orEmpty()
+            return normalized in AEAD_SS_METHODS || normalized.startsWith("2022-blake3-")
+        }
+
         fun create(configType: EConfigType): ProfileItem {
             return ProfileItem(configType = configType)
         }
@@ -89,19 +115,81 @@ data class ProfileItem(
         return mutableListOf(TAG_PROXY, TAG_DIRECT, TAG_BLOCKED)
     }
 
-    fun isSecure(): Boolean {
-        if (insecure == true) return false
+    /**
+     * Возвращает причину, по которой профиль считается небезопасным, или null если замечаний нет.
+     */
+    fun securityIssueReason(): String? {
+        val hasPinnedCert = !pinnedCA256.isNullOrBlank() || !pinSHA256.isNullOrBlank()
+        if (insecure == true && !hasPinnedCert) {
+            return "Отключена проверка TLS-сертификата"
+        }
 
-        val sec = security?.lowercase() ?: ""
+        val sec = security?.trim()?.lowercase().orEmpty()
         val hasTls = sec == "tls" || sec == "reality" || sec == "xtls"
 
-        return when (configType) {
-            EConfigType.VLESS, EConfigType.VMESS -> hasTls
-            EConfigType.SHADOWSOCKS -> true
-            EConfigType.TROJAN, EConfigType.HYSTERIA2, EConfigType.WIREGUARD -> true
-            else -> true
+        when (configType) {
+            EConfigType.VLESS -> {
+                val enc = method?.trim()?.lowercase().orEmpty()
+                val hasVlessEncryption = enc.isNotEmpty() && enc != "none"
+                if (!hasTls && !hasVlessEncryption) {
+                    return "Отсутствует TLS/Reality шифрование"
+                }
+            }
+            EConfigType.VMESS -> {
+                val scy = method?.trim()?.lowercase().orEmpty()
+                if (!hasTls) {
+                    return if (scy in setOf("none", "zero")) {
+                        "Отключено шифрование VMess"
+                    } else {
+                        "Отсутствует TLS/Reality шифрование"
+                    }
+                }
+            }
+            EConfigType.TROJAN, EConfigType.HYSTERIA2 -> {
+                if (sec == "none") {
+                    return "Отключено TLS-шифрование"
+                }
+            }
+            EConfigType.SHADOWSOCKS -> {
+                val m = method?.trim()?.lowercase().orEmpty()
+                if (m.isEmpty() || m in setOf("none", "plain", "table")) {
+                    return "Отключено шифрование Shadowsocks"
+                }
+                if (!isSupportedAeadShadowsocks(m)) {
+                    return "Устаревший не-AEAD шифр Shadowsocks"
+                }
+            }
+            else -> Unit
         }
+
+        val net = network?.trim()?.lowercase().orEmpty()
+        if ((net == "xhttp" || net == "splithttp") && !xhttpExtra.isNullOrBlank()) {
+            xhttpDownloadSecurityIssue()?.let { return it }
+        }
+
+        return null
     }
+
+    private fun xhttpDownloadSecurityIssue(): String? {
+        val raw = xhttpExtra?.trim()?.takeIf { it.isNotEmpty() && it.length <= 64 * 1024 } ?: return null
+        val root = runCatching { extraJson.parseToJsonElement(raw) }.getOrNull() as? JsonObject ?: return null
+        val download = root["downloadSettings"] as? JsonObject ?: return null
+        val tls = download["tlsSettings"] as? JsonObject
+        val pinned = (tls?.get("pinnedPeerCertSha256") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        val allowInsecure = (tls?.get("allowInsecure") as? JsonPrimitive)?.let {
+            it.booleanOrNull == true || it.contentOrNull == "1"
+        } == true
+        if (allowInsecure && pinned == null) {
+            return "Отключена проверка TLS-сертификата в xhttp downloadSettings"
+        }
+        val dlSec = (download["security"] as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase().orEmpty()
+        if (dlSec.isEmpty() || dlSec == "none") {
+            return "Отсутствует TLS в xhttp downloadSettings"
+        }
+        return null
+    }
+
+    fun isSecure(): Boolean = securityIssueReason() == null
 
     fun getServerAddressAndPort(): String {
         if (server.isNullOrEmpty() && configType == EConfigType.CUSTOM) {

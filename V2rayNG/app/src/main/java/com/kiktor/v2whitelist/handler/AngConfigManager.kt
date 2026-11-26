@@ -10,6 +10,8 @@ import kotlinx.coroutines.sync.withPermit
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.AppConfig.HY2
 import com.kiktor.v2whitelist.R
+import com.kiktor.v2whitelist.core.config.security.ParseGuard
+import com.kiktor.v2whitelist.core.config.security.XrayConfigSanitizer
 import com.kiktor.v2whitelist.enums.EConfigType
 import com.kiktor.v2whitelist.dto.ProfileItem
 import com.kiktor.v2whitelist.dto.SubscriptionCache
@@ -468,13 +470,18 @@ object AngConfigManager {
      * @return The number of configurations parsed.
      */
     private fun parseCustomConfigServer(server: String?, subid: String): Int {
-        if (server == null) {
+        if (server == null || server.length > ParseGuard.MAX_SUBSCRIPTION_CHARS) {
             return 0
         }
         if (server.contains("inbounds")
             && server.contains("outbounds")
             && server.contains("routing")
         ) {
+            if (!ParseGuard.checkJsonBudget(server)) {
+                Log.w(AppConfig.TAG, "Rejected custom config server exceeding JSON parsing budget")
+                return 0
+            }
+            val stripAllowInsecure = !MmkvManager.decodeSettingsBool(AppConfig.PREF_ALLOW_INSECURE, false)
             try {
                 val serverList: Array<Any> =
                     JsonUtil.fromJson(server, Array<Any>::class.java) ?: arrayOf()
@@ -482,11 +489,13 @@ object AngConfigManager {
                 if (serverList.isNotEmpty()) {
                     var count = 0
                     for (srv in serverList.reversed()) {
-                        val config = CustomFmt.parse(JsonUtil.toJson(srv)) ?: continue
+                        val rawItem = JsonUtil.toJson(srv)
+                        val safeItem = XrayConfigSanitizer.sanitizeJson(rawItem, stripAllowInsecure) ?: continue
+                        val config = CustomFmt.parse(safeItem) ?: continue
                         config.subscriptionId = subid
                         config.description = generateDescription(config)
                         val key = MmkvManager.encodeServerConfig("", config)
-                        MmkvManager.encodeServerRaw(key, JsonUtil.toJsonPretty(srv) ?: "")
+                        MmkvManager.encodeServerRaw(key, safeItem)
                         count += 1
                     }
                     return count
@@ -497,11 +506,12 @@ object AngConfigManager {
 
             try {
                 // For compatibility
-                val config = CustomFmt.parse(server) ?: return 0
+                val safeServer = XrayConfigSanitizer.sanitizeJson(server, stripAllowInsecure) ?: return 0
+                val config = CustomFmt.parse(safeServer) ?: return 0
                 config.subscriptionId = subid
                 config.description = generateDescription(config)
                 val key = MmkvManager.encodeServerConfig("", config)
-                MmkvManager.encodeServerRaw(key, server)
+                MmkvManager.encodeServerRaw(key, safeServer)
                 return 1
             } catch (e: Exception) {
                 Log.e(AppConfig.TAG, "Failed to parse custom config server as single config", e)

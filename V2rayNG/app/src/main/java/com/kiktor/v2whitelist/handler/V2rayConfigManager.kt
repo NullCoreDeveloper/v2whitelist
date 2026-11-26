@@ -5,6 +5,7 @@ import android.text.TextUtils
 import android.util.Log
 import com.google.gson.JsonArray
 import com.kiktor.v2whitelist.AppConfig
+import com.kiktor.v2whitelist.core.config.security.XrayConfigSanitizer
 import com.kiktor.v2whitelist.dto.ConfigResult
 import com.kiktor.v2whitelist.enums.EConfigType
 import com.kiktor.v2whitelist.enums.NetworkType
@@ -89,7 +90,9 @@ object V2rayConfigManager {
      * @return A ConfigResult object containing the result of the configuration retrieval.
      */
     private fun getV2rayCustomConfig(context: Context, guid: String, config: ProfileItem, port: Int = 0): ConfigResult {
-        val raw = MmkvManager.decodeServerRaw(guid) ?: return ConfigResult(false)
+        val rawStored = MmkvManager.decodeServerRaw(guid) ?: return ConfigResult(false)
+        val stripAllowInsecure = !MmkvManager.decodeSettingsBool(AppConfig.PREF_ALLOW_INSECURE, false)
+        val raw = XrayConfigSanitizer.sanitizeJson(rawStored, stripAllowInsecure) ?: rawStored
         
         // If it's for speedtest (port > 0), we need to inject our SOCKS inbound
         if (port > 0) {
