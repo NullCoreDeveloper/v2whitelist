@@ -18,6 +18,7 @@ import (
 	"github.com/kiktor/v2w-core/common/session"
 	"github.com/kiktor/v2w-core/proxy/hysteria"
 	"github.com/kiktor/v2w-core/proxy/shadowsocks"
+	"github.com/kiktor/v2w-core/proxy/shadowsocks_2022"
 	"github.com/kiktor/v2w-core/proxy/trojan"
 	vless_outbound "github.com/kiktor/v2w-core/proxy/vless/outbound"
 	vmess_outbound "github.com/kiktor/v2w-core/proxy/vmess/outbound"
@@ -188,6 +189,8 @@ func BuildProxyHandler(config any, stream *internet.MemoryStreamConfig) (core.Pr
 		return trojan.NewClient(context.Background(), cfg)
 	case *shadowsocks.ClientConfig:
 		return shadowsocks.NewClient(context.Background(), cfg)
+	case *shadowsocks_2022.ClientConfig:
+		return shadowsocks_2022.NewClient(context.Background(), cfg)
 	default:
 		return nil, fmt.Errorf("unsupported proxy config type %T", config)
 	}

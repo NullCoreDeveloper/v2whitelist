@@ -18,6 +18,7 @@ import (
 	"github.com/kiktor/v2w-core/proxy/hysteria"
 	"github.com/kiktor/v2w-core/proxy/hysteria/account"
 	"github.com/kiktor/v2w-core/proxy/shadowsocks"
+	"github.com/kiktor/v2w-core/proxy/shadowsocks_2022"
 	"github.com/kiktor/v2w-core/proxy/trojan"
 	"github.com/kiktor/v2w-core/proxy/vless"
 	vless_outbound "github.com/kiktor/v2w-core/proxy/vless/outbound"
@@ -211,11 +212,6 @@ func parseShadowsocksURL(rawURL string) (any, *internet.MemoryStreamConfig, net.
 		return nil, nil, net.Destination{}, fmt.Errorf("invalid port: %s", portStr)
 	}
 
-	cipherType := shadowsocks.CipherTypeFromString(method)
-	if cipherType == shadowsocks.CipherType_UNKNOWN {
-		return nil, nil, net.Destination{}, fmt.Errorf("unsupported shadowsocks cipher: %s", method)
-	}
-
 	dest := net.TCPDestination(net.ParseAddress(hostStr), net.Port(port))
 
 	streamSettings := &internet.MemoryStreamConfig{
@@ -225,6 +221,21 @@ func parseShadowsocksURL(rawURL string) (any, *internet.MemoryStreamConfig, net.
 		SocketSettings: &internet.SocketConfig{
 			DomainStrategy: internet.DomainStrategy_USE_IP4,
 		},
+	}
+
+	if shadowsocks_2022.IsMethodSupported(method) {
+		config := &shadowsocks_2022.ClientConfig{
+			Address: net.NewIPOrDomain(net.ParseAddress(hostStr)),
+			Port:    uint32(port),
+			Method:  strings.ToLower(strings.TrimSpace(method)),
+			Key:     password,
+		}
+		return config, streamSettings, dest, nil
+	}
+
+	cipherType := shadowsocks.CipherTypeFromString(method)
+	if cipherType == shadowsocks.CipherType_UNKNOWN {
+		return nil, nil, net.Destination{}, fmt.Errorf("unsupported shadowsocks cipher: %s", method)
 	}
 
 	account := &shadowsocks.Account{

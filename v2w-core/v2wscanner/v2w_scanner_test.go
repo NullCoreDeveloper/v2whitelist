@@ -356,3 +356,33 @@ func TestParseNodeURLXHTTPExtra(t *testing.T) {
 		t.Fatalf("expected Xmux.MaxConnections=1..1, got %+v", shCfg.Xmux)
 	}
 }
+
+func TestBuildProxyHandlerVMessAndSS2022(t *testing.T) {
+	vmessJSON := `{"v":"2","ps":"VMessTest","add":"1.2.3.4","port":"443","id":"11111111-1111-1111-1111-111111111111","aid":"0","net":"ws","type":"none","host":"cdn.example.com","path":"/","tls":"tls"}`
+	vmessLink := "vmess://" + base64.StdEncoding.EncodeToString([]byte(vmessJSON)) + "#VM"
+	cfg, stream, _, err := ParseNodeURL(vmessLink)
+	if err != nil {
+		t.Fatalf("ParseNodeURL failed for vmess: %v", err)
+	}
+	handler, err := BuildProxyHandler(cfg, stream)
+	if err != nil || handler == nil {
+		t.Fatalf("BuildProxyHandler failed for vmess: %v", err)
+	}
+
+	key32 := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	key16 := base64.StdEncoding.EncodeToString(make([]byte, 16))
+	ssCases := []string{
+		"ss://" + base64.RawURLEncoding.EncodeToString([]byte("2022-blake3-chacha20-poly1305:"+key32)) + "@1.2.3.4:8388#SS22ChaCha",
+		"ss://" + base64.RawURLEncoding.EncodeToString([]byte("2022-blake3-aes-128-gcm:"+key16)) + "@1.2.3.4:8388#SS22AES128",
+	}
+	for _, link := range ssCases {
+		scfg, sstream, _, serr := ParseNodeURL(link)
+		if serr != nil {
+			t.Fatalf("ParseNodeURL failed for %s: %v", link, serr)
+		}
+		shandler, herr := BuildProxyHandler(scfg, sstream)
+		if herr != nil || shandler == nil {
+			t.Fatalf("BuildProxyHandler failed for %s: %v", link, herr)
+		}
+	}
+}
