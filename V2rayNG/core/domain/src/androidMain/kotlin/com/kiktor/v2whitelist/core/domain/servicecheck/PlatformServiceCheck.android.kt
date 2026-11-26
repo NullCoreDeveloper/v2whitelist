@@ -310,6 +310,7 @@ internal fun checkGeminiUrl(
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                 setRequestProperty("Accept-Encoding", "gzip")
+                setRequestProperty("Cookie", "SOCS=CAESHAgBEhJnd3NfMjAyMzA4MTAtMF9SQzIaAmVuIAEaBgiAo_CmBg")
             }
             conn.connect()
             code = conn.responseCode
