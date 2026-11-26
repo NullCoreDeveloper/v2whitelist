@@ -83,6 +83,94 @@ func (s *Scanner) ProbeHTTP(
 	headers map[string]string,
 	maxBodyBytes int64,
 ) (*HTTPProbeResult, error) {
+	return s.probeHTTPInternal(ctx, handler, dialer, rawURL, headers, maxBodyBytes, false, nil)
+}
+
+// ProbeHTTPWarm выполняет HTTP/HTTPS пробу и при поддержке keep-alive делает
+// короткий прогретый второй запрос по тому же соединению, возвращая минимальный TTFB.
+func (s *Scanner) ProbeHTTPWarm(
+	ctx context.Context,
+	handler ProxyHandler,
+	dialer internet.Dialer,
+	rawURL string,
+	headers map[string]string,
+	maxBodyBytes int64,
+) (*HTTPProbeResult, error) {
+	return s.probeHTTPInternal(ctx, handler, dialer, rawURL, headers, maxBodyBytes, true, nil)
+}
+
+// ProbeHTTPStream выполняет HTTP/HTTPS пробу с потоковым чтением тела ответа и ранней
+// остановкой, как только предикат shouldStop вернёт true для накопленного окна текста.
+func (s *Scanner) ProbeHTTPStream(
+	ctx context.Context,
+	handler ProxyHandler,
+	dialer internet.Dialer,
+	rawURL string,
+	headers map[string]string,
+	maxBodyBytes int64,
+	shouldStop func(window string) bool,
+) (*HTTPProbeResult, error) {
+	return s.probeHTTPInternal(ctx, handler, dialer, rawURL, headers, maxBodyBytes, false, shouldStop)
+}
+
+func applyProbeHeaders(req *http.Request, headers map[string]string, closeConn bool) {
+	if closeConn {
+		req.Header.Set("Connection", "close")
+	}
+	if _, ok := headers["User-Agent"]; !ok {
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	}
+	if _, ok := headers["Accept"]; !ok {
+		req.Header.Set("Accept", "*/*")
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+}
+
+func readStreamWithStop(body io.Reader, maxBodyBytes int64, shouldStop func(window string) bool) (string, error) {
+	const chunkSize = 8192
+	const maxWindow = 32768
+	var reader io.Reader = body
+	if maxBodyBytes > 0 {
+		reader = io.LimitReader(body, maxBodyBytes)
+	}
+	buf := make([]byte, chunkSize)
+	var out strings.Builder
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			out.Write(buf[:n])
+			if shouldStop != nil {
+				full := out.String()
+				window := full
+				if len(window) > maxWindow {
+					window = window[len(window)-maxWindow:]
+				}
+				if shouldStop(window) {
+					return full, nil
+				}
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				return out.String(), nil
+			}
+			return out.String(), err
+		}
+	}
+}
+
+func (s *Scanner) probeHTTPInternal(
+	ctx context.Context,
+	handler ProxyHandler,
+	dialer internet.Dialer,
+	rawURL string,
+	headers map[string]string,
+	maxBodyBytes int64,
+	warmPing bool,
+	shouldStop func(window string) bool,
+) (*HTTPProbeResult, error) {
 	if handler == nil {
 		return nil, fmt.Errorf("nil proxy handler")
 	}
@@ -132,14 +220,24 @@ func (s *Scanner) ProbeHTTP(
 		_ = clientConn.Close()
 	}()
 
+	var dialed atomic.Bool
 	tr := &http.Transport{
-		DisableKeepAlives: true,
+		DisableKeepAlives:   !warmPing,
+		MaxIdleConns:        1,
+		MaxIdleConnsPerHost: 1,
+		MaxConnsPerHost:     1,
 		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			if !dialed.CompareAndSwap(false, true) {
+				return nil, fmt.Errorf("single-conn exhausted")
+			}
 			return clientConn, nil
 		},
 	}
 	if portNum == 443 || strings.EqualFold(parsed.Scheme, "https") {
 		tr.DialTLSContext = func(tlsCtx context.Context, _, _ string) (net.Conn, error) {
+			if !dialed.CompareAndSwap(false, true) {
+				return nil, fmt.Errorf("single-conn exhausted")
+			}
 			tConn := tls.Client(clientConn, &tls.Config{
 				InsecureSkipVerify: true,
 				ServerName:         host,
@@ -151,6 +249,7 @@ func (s *Scanner) ProbeHTTP(
 			return tConn, nil
 		}
 	}
+	defer tr.CloseIdleConnections()
 
 	client := &http.Client{
 		Transport: tr,
@@ -190,33 +289,37 @@ func (s *Scanner) ProbeHTTP(
 			httpDone <- httpOutcome{err: fmt.Errorf("req build: %w", reqErr)}
 			return
 		}
-		req.Header.Set("Connection", "close")
-		if _, ok := headers["User-Agent"]; !ok {
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-		}
-		if _, ok := headers["Accept"]; !ok {
-			req.Header.Set("Accept", "*/*")
-		}
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
+		applyProbeHeaders(req, headers, !warmPing)
 
 		resp, doErr := client.Do(req)
 		if doErr != nil {
 			httpDone <- httpOutcome{err: fmt.Errorf("http: %w", doErr)}
 			return
 		}
-		defer resp.Body.Close()
 
 		var bodyStr string
-		if maxBodyBytes > 0 {
+		if shouldStop != nil {
+			var readErr error
+			bodyStr, readErr = readStreamWithStop(resp.Body, maxBodyBytes, shouldStop)
+			_ = resp.Body.Close()
+			if readErr != nil {
+				httpDone <- httpOutcome{err: fmt.Errorf("body read: %w", readErr)}
+				return
+			}
+		} else if maxBodyBytes > 0 {
 			limited := io.LimitReader(resp.Body, maxBodyBytes)
 			b, readErr := io.ReadAll(limited)
+			_ = resp.Body.Close()
 			if readErr != nil {
 				httpDone <- httpOutcome{err: fmt.Errorf("body read: %w", readErr)}
 				return
 			}
 			bodyStr = string(b)
+		} else {
+			if warmPing && !resp.Close {
+				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			}
+			_ = resp.Body.Close()
 		}
 
 		fb := firstByteAt.Load()
@@ -231,6 +334,64 @@ func (s *Scanner) ProbeHTTP(
 		default:
 			latency = time.Since(start)
 		}
+
+		// Прогретый второй запрос по тому же keep-alive соединению убирает холодный
+		// TLS/Reality handshake и slow-start выброс на первом пакете.
+		if warmPing && resp.StatusCode >= 200 && resp.StatusCode < 400 && !resp.Close && probeCtx.Err() == nil {
+			warmTimeout := 1500 * time.Millisecond
+			if deadline, hasDeadline := probeCtx.Deadline(); hasDeadline {
+				rem := time.Until(deadline)
+				if rem < 250*time.Millisecond {
+					warmTimeout = 0
+				} else if rem < warmTimeout {
+					warmTimeout = rem
+				}
+			}
+			if warmTimeout > 0 {
+				warmCtx, warmCancel := context.WithTimeout(probeCtx, warmTimeout)
+				var reused atomic.Bool
+				var wroteReqAt2 atomic.Int64
+				var firstByteAt2 atomic.Int64
+				trace2 := &httptrace.ClientTrace{
+					GotConn: func(info httptrace.GotConnInfo) {
+						reused.Store(info.Reused)
+					},
+					WroteRequest: func(info httptrace.WroteRequestInfo) {
+						if info.Err == nil {
+							wroteReqAt2.Store(time.Now().UnixNano())
+						}
+					},
+					GotFirstResponseByte: func() {
+						firstByteAt2.Store(time.Now().UnixNano())
+					},
+				}
+				req2, reqErr2 := http.NewRequestWithContext(httptrace.WithClientTrace(warmCtx, trace2), http.MethodGet, rawURL, nil)
+				if reqErr2 == nil {
+					applyProbeHeaders(req2, headers, false)
+					start2 := time.Now()
+					resp2, doErr2 := client.Do(req2)
+					if doErr2 == nil {
+						_, _ = io.Copy(io.Discard, io.LimitReader(resp2.Body, 4096))
+						_ = resp2.Body.Close()
+						if resp2.StatusCode >= 200 && resp2.StatusCode < 400 && reused.Load() {
+							fb2 := firstByteAt2.Load()
+							wr2 := wroteReqAt2.Load()
+							var warmLat time.Duration
+							if fb2 > 0 && wr2 > 0 && fb2 >= wr2 {
+								warmLat = time.Duration(fb2 - wr2)
+							} else {
+								warmLat = time.Since(start2)
+							}
+							if warmLat > 0 && (latency <= 0 || warmLat < latency) {
+								latency = warmLat
+							}
+						}
+					}
+				}
+				warmCancel()
+			}
+		}
+
 		if latency < time.Millisecond {
 			latency = time.Millisecond
 		}
@@ -288,7 +449,7 @@ func (s *Scanner) TestNode(ctx context.Context, handler ProxyHandler, dialer int
 	testCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	res, err := s.ProbeHTTP(testCtx, handler, dialer, targetURL, nil, 0)
+	res, err := s.ProbeHTTPWarm(testCtx, handler, dialer, targetURL, nil, 0)
 	if err != nil {
 		return ScanResult{Error: err}
 	}

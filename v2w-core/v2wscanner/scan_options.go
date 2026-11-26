@@ -253,7 +253,7 @@ func shouldRetryWithFragment(err error, cand parsedCandidate) bool {
 }
 
 // RunScanPipeline запускает двухступенчатый асинхронный пайплайн:
-// 1) Пул быстрого TCP pre-check (по умолчанию 50 воркеров).
+// 1) Пул быстрого TCP pre-check (по умолчанию 100 воркеров).
 // 2) Пул проверки профилей (по умолчанию 35 воркеров): Exit Node E2E > Сервисы > HTTP 204 (+ TLS-фрагментация).
 func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb ScanEventCallbacks) {
 	opts.normalize()
@@ -297,7 +297,7 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 		fragRevived  int64
 	)
 
-	// Этап 1: Фиксированный пул TCP pre-check (50 потоков по умолчанию)
+	// Этап 1: Фиксированный пул TCP pre-check (100 потоков по умолчанию)
 	rawChan := make(chan string, len(links))
 	for _, l := range links {
 		rawChan <- l
@@ -370,7 +370,11 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 			if res.Error != nil {
 				return 0, res.Error
 			}
-			return time.Since(startT).Milliseconds(), nil
+			ms := res.Latency.Milliseconds()
+			if ms <= 0 {
+				ms = time.Since(startT).Milliseconds()
+			}
+			return ms, nil
 
 		case "services":
 			avgLat, err := coreScanner.CheckServicesParallel(baseCtx, outerHandler, outerDialer, enabledServices, serviceCheckTimeout(opts.TimeoutSec))
@@ -388,7 +392,11 @@ func RunScanPipeline(ctx context.Context, links []string, opts ScanOptions, cb S
 			if res.Error != nil {
 				return 0, res.Error
 			}
-			return time.Since(startT).Milliseconds(), nil
+			ms := res.Latency.Milliseconds()
+			if ms <= 0 {
+				ms = time.Since(startT).Milliseconds()
+			}
+			return ms, nil
 		}
 	}
 

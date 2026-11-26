@@ -54,6 +54,7 @@ var (
 	geminiHeaders         = map[string]string{
 		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 		"Accept-Language": "en-US,en;q=0.9",
+		"Cookie":          "SOCS=CAESHAgBEhJnd3NfMjAyMzA4MTAtMF9SQzIaAmVuIAEaBgiAo_CmBg",
 	}
 	whatsappHeaders = map[string]string{
 		"User-Agent":     "WhatsApp/2.24.1.6 A",
@@ -275,7 +276,7 @@ func extractCFLoc(body string) string {
 
 // ProbeExitIP проверяет живость прокси и определяет реальный выходной IP и страну через cloudflare cdn-cgi/trace.
 func (s *Scanner) ProbeExitIP(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (*ExitIPInfo, error) {
-	res, err := s.ProbeHTTP(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
+	res, err := s.ProbeHTTPWarm(ctx, handler, dialer, "https://www.cloudflare.com/cdn-cgi/trace", nil, 2048)
 	if err != nil || res == nil {
 		if err != nil {
 			return nil, err
@@ -407,12 +408,33 @@ func resolveGeminiRedirect(baseRaw, location string) (string, error) {
 	return resolved.String(), nil
 }
 
+func geminiBodyHasResult(window string) bool {
+	lower := strings.ToLower(window)
+	if strings.Contains(lower, "not supported in your country") ||
+		strings.Contains(lower, "isn't supported in your country") ||
+		strings.Contains(lower, "is not available in your country") ||
+		strings.Contains(lower, "isn't available in your country") ||
+		strings.Contains(lower, "not available in your region") ||
+		strings.Contains(lower, "isn't available in your region") ||
+		strings.Contains(lower, "unusual traffic") ||
+		strings.Contains(lower, "/sorry/") {
+		return true
+	}
+	if geminiMarkerRegex.MatchString(window) {
+		return true
+	}
+	if sm := geminiStatusCodeRegex.FindStringSubmatch(window); len(sm) >= 2 && sm[1] != "200" {
+		return true
+	}
+	return false
+}
+
 func (s *Scanner) checkGeminiLite(ctx context.Context, handler ProxyHandler, dialer internet.Dialer) (time.Duration, error) {
 	targetURL := "https://gemini.google.com/app"
 	var res *HTTPProbeResult
 	for hop := 0; hop < 3; hop++ {
 		var err error
-		res, err = s.ProbeHTTP(ctx, handler, dialer, targetURL, geminiHeaders, geminiMaxBodyBytes)
+		res, err = s.ProbeHTTPStream(ctx, handler, dialer, targetURL, geminiHeaders, geminiMaxBodyBytes, geminiBodyHasResult)
 		if err != nil || res == nil {
 			return 0, err
 		}

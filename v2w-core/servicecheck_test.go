@@ -463,3 +463,152 @@ func TestCheckServicesAllNoFailFastAndKnownLoc(t *testing.T) {
 		}
 	})
 }
+
+type testKeepAliveHandler struct {
+	calls        int32
+	requests     int32
+	firstDelay   time.Duration
+	secondDelay  time.Duration
+	closeOnFirst bool
+}
+
+func (m *testKeepAliveHandler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target xnet.Destination) error {
+	atomic.AddInt32(&m.calls, 1)
+	conn := &linkConn{link: link}
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+	for {
+		req, err := http.ReadRequest(reader)
+		if err != nil {
+			return nil
+		}
+		_ = req.Body.Close()
+		n := atomic.AddInt32(&m.requests, 1)
+		if n == 1 && m.firstDelay > 0 {
+			time.Sleep(m.firstDelay)
+		} else if n >= 2 && m.secondDelay > 0 {
+			time.Sleep(m.secondDelay)
+		}
+		body := "ok"
+		connHeader := "keep-alive"
+		if m.closeOnFirst {
+			connHeader = "close"
+		}
+		resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: %s\r\n\r\n%s", len(body), connHeader, body)
+		if _, wErr := conn.Write([]byte(resp)); wErr != nil {
+			return wErr
+		}
+		if m.closeOnFirst {
+			return nil
+		}
+	}
+}
+
+func TestProbeHTTPWarmKeepAliveAndFallback(t *testing.T) {
+	scanner := NewScanner()
+
+	t.Run("reuses keep-alive connection and picks faster warm RTT", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		handler := &testKeepAliveHandler{
+			firstDelay:  80 * time.Millisecond,
+			secondDelay: 5 * time.Millisecond,
+		}
+		res, err := scanner.ProbeHTTPWarm(ctx, handler, &testMockDialer{}, "http://example.org/generate_204", nil, 0)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if atomic.LoadInt32(&handler.calls) != 1 {
+			t.Fatalf("expected single underlying connection (calls=1), got %d", handler.calls)
+		}
+		if atomic.LoadInt32(&handler.requests) != 2 {
+			t.Fatalf("expected 2 requests on keep-alive connection, got %d", handler.requests)
+		}
+		if res.Latency >= 50*time.Millisecond {
+			t.Fatalf("expected warm RTT < 50ms, got %v", res.Latency)
+		}
+	})
+
+	t.Run("falls back to first latency when server sends Connection close", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		handler := &testKeepAliveHandler{
+			firstDelay:   25 * time.Millisecond,
+			closeOnFirst: true,
+		}
+		res, err := scanner.ProbeHTTPWarm(ctx, handler, &testMockDialer{}, "http://example.org/generate_204", nil, 0)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if atomic.LoadInt32(&handler.requests) != 1 {
+			t.Fatalf("expected 1 request when Connection: close, got %d", handler.requests)
+		}
+		if res.Latency < 15*time.Millisecond {
+			t.Fatalf("expected first request latency >= 15ms, got %v", res.Latency)
+		}
+	})
+}
+
+type testGeminiCookieAndEarlyStopHandler struct {
+	tlsCfg      *tls.Config
+	gotCookie   string
+	tailWritten int64
+}
+
+func (m *testGeminiCookieAndEarlyStopHandler) Process(ctx context.Context, link *transport.Link, dialer internet.Dialer, target xnet.Destination) error {
+	var conn net.Conn = &linkConn{link: link}
+	if m.tlsCfg != nil && target.Port == 443 {
+		tConn := tls.Server(conn, m.tlsCfg)
+		if err := tConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
+			return err
+		}
+		conn = tConn
+	}
+	defer conn.Close()
+
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		return err
+	}
+	m.gotCookie = req.Header.Get("Cookie")
+	marker := `,2,1,200,"NLD",null`
+	tailSize := 1_500_000
+	totalLen := len(marker) + tailSize
+	header := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", totalLen, marker)
+	if _, err := conn.Write([]byte(header)); err != nil {
+		return err
+	}
+	chunk := make([]byte, 32*1024)
+	for written := 0; written < tailSize; {
+		n, wErr := conn.Write(chunk)
+		atomic.AddInt64(&m.tailWritten, int64(n))
+		if wErr != nil {
+			return nil
+		}
+		written += n
+	}
+	return nil
+}
+
+func TestCheckGeminiLiteSendsSOCSCookieAndStopsEarly(t *testing.T) {
+	scanner := NewScanner()
+	tlsCfg := mustSelfSignedTLSConfig(t)
+	handler := &testGeminiCookieAndEarlyStopHandler{tlsCfg: tlsCfg}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, err := scanner.checkGeminiLite(ctx, handler, &testMockDialer{}); err != nil {
+		t.Fatalf("expected gemini check to succeed, got %v", err)
+	}
+	if !strings.Contains(handler.gotCookie, "SOCS=") {
+		t.Fatalf("expected SOCS cookie in request, got %q", handler.gotCookie)
+	}
+	if written := atomic.LoadInt64(&handler.tailWritten); written >= 1_400_000 {
+		t.Fatalf("expected early stream stop before reading full 1.5MB tail, wrote %d bytes", written)
+	}
+}
