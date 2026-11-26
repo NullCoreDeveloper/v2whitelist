@@ -38,7 +38,7 @@
             android:key="pref_filter_insecure_profiles"
             android:title="@string/title_pref_filter_insecure_profiles"
             android:summary="@string/summary_pref_filter_insecure_profiles"
-            android:defaultValue="false" />
+            android:defaultValue="true" />
 
         <EditTextPreference
             android:inputType="number"

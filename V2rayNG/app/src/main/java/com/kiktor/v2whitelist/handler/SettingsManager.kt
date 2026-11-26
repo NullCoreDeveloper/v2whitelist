@@ -531,6 +531,8 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_ENABLED, true)
         ensureDefaultValue(AppConfig.PREF_V2W_FULL_VERIFY_MODE, true)
         ensureDefaultValue(AppConfig.PREF_V2W_CORE_FALLBACK, true)
+        ensureDefaultValue(AppConfig.PREF_V2W_TCP_CONCURRENCY, "100")
+        ensureDefaultValue(AppConfig.PREF_FILTER_INSECURE_PROFILES, true)
         ensureDefaultValue(AppConfig.PREF_HIDE_TUNNEL, true)
         ensureDefaultValue(AppConfig.PREF_LOCAL_DNS_ENABLED, true)
         sanitizeSpeedCheckSettings()
@@ -567,6 +569,12 @@ object SettingsManager {
         if (vipLimit == null || vipLimit <= 0 || vipLimit > 100) {
             MmkvManager.encodeSettings(AppConfig.PREF_VIP_CACHE_LIMIT, "5")
         }
+
+        // 5. Потоки TCP pre-check (дефолт: 100, если не задано или некорректно)
+        val tcpConc = MmkvManager.decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY)?.toIntOrNull()
+        if (tcpConc == null || tcpConc <= 0 || tcpConc > 200) {
+            MmkvManager.encodeSettings(AppConfig.PREF_V2W_TCP_CONCURRENCY, "100")
+        }
     }
 
     private fun ensureDefaultValue(key: String, default: String) {
@@ -594,9 +602,17 @@ object SettingsManager {
         val migrationKey = "v2w_tcp_concurrency_100_migrated"
         if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {
             val currentVal = MmkvManager.decodeSettingsString(AppConfig.PREF_V2W_TCP_CONCURRENCY)
-            if (currentVal == null || currentVal == "50") {
+            if (currentVal.isNullOrBlank() || currentVal == "50") {
                 MmkvManager.encodeSettings(AppConfig.PREF_V2W_TCP_CONCURRENCY, "100")
             }
+            MmkvManager.encodeSettings(migrationKey, true)
+        }
+    }
+
+    fun migrateFilterInsecureProfilesDefault() {
+        val migrationKey = "filter_insecure_profiles_default_true_migrated"
+        if (!MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            MmkvManager.encodeSettings(AppConfig.PREF_FILTER_INSECURE_PROFILES, true)
             MmkvManager.encodeSettings(migrationKey, true)
         }
     }

@@ -134,7 +134,7 @@ object SmartConnectManager {
             ?: com.kiktor.v2whitelist.ui.LocationFilterActivity.getDefaultFilterSet()
             
         val groupRegexMap = com.kiktor.v2whitelist.ui.LocationFilterActivity.getGroupRegexMap()
-        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
+        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, true)
 
         val scenario = SubscriptionHelper.getCurrentScenario()
 

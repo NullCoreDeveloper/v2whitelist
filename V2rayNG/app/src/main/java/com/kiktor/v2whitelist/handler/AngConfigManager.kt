@@ -240,7 +240,7 @@ object AngConfigManager {
         val subItem = MmkvManager.decodeSubscription(subid)
         val lines = servers.lines().distinct().reversed()
         val newConfigs = mutableListOf<ProfileItem>()
-        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, false)
+        val filterInsecure = MmkvManager.decodeSettingsBool(AppConfig.PREF_FILTER_INSECURE_PROFILES, true)
 
         for (line in lines) {
             val config = try {

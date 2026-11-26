@@ -115,6 +115,7 @@ class AngApplication : Application(), Configuration.Provider {
             SettingsManager.migrateHysteria2PinSHA256()
             SettingsManager.migrateV2wCoreDefaults()
             SettingsManager.migrateV2wTcpConcurrencyDefault()
+            SettingsManager.migrateFilterInsecureProfilesDefault()
             SettingsManager.migrateSpeedCheckTimeoutDefaults()
 
             es.dmoral.toasty.Toasty.Config.getInstance()
