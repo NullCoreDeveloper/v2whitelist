@@ -144,8 +144,8 @@ func UClient(c net.Conn, config *Config, ctx context.Context, dest net.Destinati
 		hello.SessionId = make([]byte, 32)
 		copy(hello.Raw[39:], hello.SessionId) // zero out SessionId in hello.Raw for AEAD signature
 		hello.SessionId[0] = 26               // core.Version_x
-		hello.SessionId[1] = 7                // core.Version_y
-		hello.SessionId[2] = 28               // core.Version_z
+		hello.SessionId[1] = 11               // core.Version_y
+		hello.SessionId[2] = 8                // core.Version_z
 		hello.SessionId[3] = 0                // reserved
 		binary.BigEndian.PutUint32(hello.SessionId[4:], uint32(time.Now().Unix()))
 		copy(hello.SessionId[8:], config.ShortId)
