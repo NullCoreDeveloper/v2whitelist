@@ -14,18 +14,31 @@ import com.kiktor.v2whitelist.util.MessageUtil
 import com.kiktor.v2whitelist.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import libv2ray.CoreCallbackHandler
+import libv2ray.CoreController
+import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
 import com.kiktor.v2whitelist.core.model.ProfileItem
 
 typealias CustomSubData = com.kiktor.v2whitelist.core.subscription.model.CustomSubData
+
+data class SubscriptionProxySession(
+    val socksPort: Int,
+    val httpPort: Int,
+    val allowDirectViaSystemVpn: Boolean,
+    val ephemeralActive: Boolean = false
+)
 
 object SubscriptionHelper {
 
@@ -34,6 +47,129 @@ object SubscriptionHelper {
     const val SCENARIO_WHITELIST = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_WHITELIST
     const val SCENARIO_BLACKLIST = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_BLACKLIST
     const val SCENARIO_YOUTUBE = com.kiktor.v2whitelist.core.subscription.model.CustomSubData.SCENARIO_YOUTUBE
+
+    private val updateMutex = Mutex()
+
+    internal fun shouldAllowDirect(onlyViaVpn: Boolean, allowDirectViaSystemVpn: Boolean): Boolean =
+        !onlyViaVpn || allowDirectViaSystemVpn
+
+    internal fun canProceedOnlyViaVpn(
+        isVpnActive: Boolean,
+        socksPort: Int,
+        allowDirectViaSystemVpn: Boolean
+    ): Boolean = isVpnActive && (socksPort > 0 || allowDirectViaSystemVpn)
+
+    internal fun shouldUseEphemeralProxy(
+        isVpnRunning: Boolean,
+        isVpnMode: Boolean,
+        isUsingHevTun: Boolean,
+        isHideTunnelEnabled: Boolean
+    ): Boolean = isVpnRunning && isVpnMode && !isUsingHevTun && isHideTunnelEnabled
+
+    /**
+     * Подготавливает прокси-сессию для загрузки подписок.
+     * Если активен встроенный VPN в режиме hideTunnel (локальные порты отключены),
+     * поднимает временный Xray-инстанс на эфемерном SOCKS-порту и гасит его в finally.
+     */
+    suspend fun <T> withSubscriptionProxy(
+        context: Context,
+        isStartup: Boolean = false,
+        block: suspend (SubscriptionProxySession) -> T
+    ): T {
+        val isVpnRunning = V2RayServiceManager.isRunning()
+        val useEphemeral = shouldUseEphemeralProxy(
+            isVpnRunning = isVpnRunning,
+            isVpnMode = SettingsManager.isVpnMode(),
+            isUsingHevTun = SettingsManager.isUsingHevTun(),
+            isHideTunnelEnabled = SettingsManager.isHideTunnelEnabled()
+        )
+
+        if (useEphemeral) {
+            val serverGuid = MmkvManager.getSelectServer()
+            if (!serverGuid.isNullOrEmpty() && MmkvManager.decodeServerConfig(serverGuid) != null) {
+                val ephemeralPort = try {
+                    ServerSocket(0).use { it.localPort }
+                } catch (e: Exception) {
+                    Log.w(AppConfig.TAG, "withSubscriptionProxy: failed to allocate ephemeral port: ${e.message}")
+                    0
+                }
+                if (ephemeralPort > 0) {
+                    val config = V2rayConfigManager.getV2rayConfig4Speedtest(
+                        context,
+                        serverGuid,
+                        ephemeralPort,
+                        ignoreCustomEndpoint = false
+                    )
+                    if (config.status) {
+                        var coreController: CoreController? = null
+                        return try {
+                            coreController = V2RayNativeManager.newCoreController(object : CoreCallbackHandler {
+                                override fun startup(): Long = 0
+                                override fun shutdown(): Long = 0
+                                override fun onEmitStatus(p0: Long, p1: String?): Long = 0
+                            })
+                            coreController.startLoop(config.content, 0)
+
+                            var ready = false
+                            for (i in 0 until 15) {
+                                if (SmartConnectManager.isProxyRunning(ephemeralPort)) {
+                                    ready = true
+                                    break
+                                }
+                                delay(100L)
+                            }
+                            if (ready) {
+                                Log.i(AppConfig.TAG, "withSubscriptionProxy: started ephemeral SOCKS proxy on port $ephemeralPort")
+                                block(
+                                    SubscriptionProxySession(
+                                        socksPort = ephemeralPort,
+                                        httpPort = 0,
+                                        allowDirectViaSystemVpn = false,
+                                        ephemeralActive = true
+                                    )
+                                )
+                            } else {
+                                Log.w(AppConfig.TAG, "withSubscriptionProxy: ephemeral SOCKS proxy failed to start on port $ephemeralPort")
+                                block(SubscriptionProxySession(0, 0, allowDirectViaSystemVpn = false))
+                            }
+                        } catch (e: Exception) {
+                            Log.w(AppConfig.TAG, "withSubscriptionProxy: ephemeral proxy error: ${e.message}")
+                            block(SubscriptionProxySession(0, 0, allowDirectViaSystemVpn = false))
+                        } finally {
+                            withContext(NonCancellable) {
+                                try {
+                                    coreController?.stopLoop()
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+                    } else {
+                        Log.w(AppConfig.TAG, "withSubscriptionProxy: failed to build speedtest config for $serverGuid")
+                        return block(SubscriptionProxySession(0, 0, allowDirectViaSystemVpn = false))
+                    }
+                }
+            }
+            Log.w(AppConfig.TAG, "withSubscriptionProxy: no valid selected server for ephemeral proxy")
+            return block(SubscriptionProxySession(0, 0, allowDirectViaSystemVpn = false))
+        }
+
+        val candidateSocksPort = SettingsManager.getSocksPort()
+        var socksPort = 0
+        val waitLoops = if (isStartup) 8 else 2
+        for (i in 0 until waitLoops) {
+            if (SmartConnectManager.isProxyRunning(candidateSocksPort)) {
+                socksPort = candidateSocksPort
+                break
+            }
+            if (i < waitLoops - 1) delay(500)
+        }
+        if (socksPort == 0 && V2RayServiceManager.isRunning()) {
+            socksPort = candidateSocksPort
+        }
+        val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
+        val allowDirectViaSystemVpn = !V2RayServiceManager.isRunning() && NetworkManager.isSystemVpnTransport(context)
+        return block(SubscriptionProxySession(socksPort, httpPort, allowDirectViaSystemVpn))
+    }
 
     /**
      * Pre-populates the zieng2/wl subscription with mirrors on first launch,
@@ -433,252 +569,265 @@ object SubscriptionHelper {
         sequential: Boolean = false,
         silent: Boolean = false
     ) = withContext(Dispatchers.IO) {
-        // ══════════════════════════════════════════════════════════════════════
-        // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
-        // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
-        // Поэтому нужно запомнить identity серверов (server+port+remarks),
-        // чтобы потом найти их новые GUID-ы и ремаппить кэши.
-        // ══════════════════════════════════════════════════════════════════════
-        data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
-
-        val lastServerGuid = MmkvManager.getValidLastServer()
-        val lastServerIdentity = lastServerGuid?.let { guid ->
-            MmkvManager.decodeServerConfig(guid)?.let { p ->
-                ServerIdentity(p.server, p.serverPort, p.remarks)
-            }
-        }
-
-        val vipGuids = MmkvManager.getVipCache()
-        val vipRecords = vipGuids.mapNotNull { guid ->
-            MmkvManager.decodeServerConfig(guid)?.let { p ->
-                val netKey = "${p.configType.name}:${p.server.orEmpty().trim().lowercase()}:${p.serverPort.orEmpty().trim()}:${p.password.orEmpty().trim()}"
-                Triple(guid, "${p.server}|${p.serverPort}|${p.remarks}", netKey)
-            }
-        }
-
-        if (vipRecords.isNotEmpty()) {
-            Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipRecords.size} серверов")
-        }
-
-        val candidateSocksPort = SettingsManager.getSocksPort()
-        var socksPort = 0
-        var vpnStarted = false
-        
-        // Ожидаем запуска прокси (дольше при старте приложения, так как он может запускаться SmartConnect'ом)
-        val waitLoops = if (isStartup) 8 else 2
-        for (i in 0 until waitLoops) {
-            if (SmartConnectManager.isProxyRunning(candidateSocksPort)) {
-                socksPort = candidateSocksPort
-                vpnStarted = true
-                break
-            }
-            if (i < waitLoops - 1) delay(500)
-        }
-        if (socksPort == 0 && V2RayServiceManager.isRunning()) {
-            socksPort = candidateSocksPort
-            vpnStarted = true
-        }
-        
-        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
-
-        // Если обнаружен висящий tun-интерфейс, но сервис не работает и системного VPN нет — это зомби!
-        if (NetworkManager.hasTunInterface() && !V2RayServiceManager.isRunning() && !NetworkManager.isSystemVpnTransport(context)) {
-            Log.w(AppConfig.TAG, "updateSubscription: Detected lingering zombie TUN interface before update, cleaning up...")
-            V2RayServiceManager.forceCleanupZombieVpn(context)
-        }
-
-        val isVpnActive = NetworkManager.isVpnActive(context)
-        Log.i(AppConfig.TAG, "updateSubscription: isVpnActive=$isVpnActive, VPN=$vpnStarted, socksPort=$socksPort, sequential=$sequential, onlyViaVpn=$onlyViaVpn")
-
-        if (onlyViaVpn) {
-            val hasSystemVpn = NetworkManager.isSystemVpnTransport(context)
-            val hasActiveProxy = socksPort > 0 && SmartConnectManager.isProxyRunning(socksPort)
-            val isVpnRunning = V2RayServiceManager.isRunning()
-
-            // Для обновления только через VPN обязательно требуется реально активный VPN и рабочий прокси/транспорт
-            if (!isVpnActive || (!hasActiveProxy && !hasSystemVpn && !isVpnRunning)) {
-                Log.w(AppConfig.TAG, "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled but no active VPN connection or working proxy found (isVpnActive=$isVpnActive, socksPort=$socksPort, hasSystemVpn=$hasSystemVpn)")
-                if (!sequential) {
-                    withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        android.widget.Toast.makeText(context, "Обновление прервано: требуется активное VPN-соединение", android.widget.Toast.LENGTH_LONG).show()
-                    }
-                }
+        if (silent) {
+            if (!updateMutex.tryLock()) {
+                Log.i(AppConfig.TAG, "updateSubscription: skipped (another update already in progress)")
                 return@withContext
             }
+        } else {
+            updateMutex.lock()
         }
+        try {
+            // ══════════════════════════════════════════════════════════════════════
+            // СНИМОК КЭШЕЙ ПЕРЕД ОБНОВЛЕНИЕМ
+            // parseBatchConfig() удаляет ВСЕ старые серверы и создаёт НОВЫЕ GUID-ы.
+            // Поэтому нужно запомнить identity серверов (server+port+remarks),
+            // чтобы потом найти их новые GUID-ы и ремаппить кэши.
+            // ══════════════════════════════════════════════════════════════════════
+            data class ServerIdentity(val server: String?, val port: String?, val remarks: String)
 
-        val updateViaYandexOnBs = !onlyViaVpn && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
-        val isBs = NetworkManager.checkInternetStatus() == 1
-
-        // Яндекс-обход работает ТОЛЬКО если:
-        // 1. Включен в настройках (updateViaYandexOnBs == true)
-        // 2. Пользователь под БС (isBs == true)
-        // 3. VPN ВЫКЛЮЧЕН (нет ни tun интерфейса, ни запущенного ядра/VPN транспорта: !isVpnActive)
-        // Если же VPN включен (или есть tun) — обновление всегда идет стандартно через VPN!
-        if (updateViaYandexOnBs && isBs && !isVpnActive) {
-            Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy (sequential=$sequential)")
-            val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false, sequential = sequential)
-            Log.i(AppConfig.TAG, "updateSubscription: Yandex Translate update finished, total configs: $count")
-            return@withContext
-        }
-
-        // Ensure base subscriptions are initialized if this is the first launch
-        checkAndSetupSubscription(context)
-
-        // Обновляем кастомные подписки
-        val customSubs = loadCustomSubs()
-        val enabledCustomSubs = customSubs.filter { it.enabled }
-        val allSubscriptions = MmkvManager.decodeSubscriptions()
-        val regularSubs = allSubscriptions.filter {
-            !it.guid.startsWith("custom_sub_") &&
-                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
-                it.subscription.enabled
-        }
-        val totalSubs = enabledCustomSubs.size + regularSubs.size
-        val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 20)
-        val semaphore = Semaphore(concurrency)
-        val startedCount = AtomicInteger(0)
-        val finishedCount = AtomicInteger(0)
-
-        data class SubTask(val name: String, val updateAction: suspend () -> Int)
-        val taskList = mutableListOf<SubTask>()
-
-        for (sub in enabledCustomSubs) {
-            val subId = "custom_sub_${sub.id}"
-            val existing = allSubscriptions.find { it.guid == subId }
-            taskList.add(SubTask(sub.name) {
-                val cache = if (existing != null) {
-                    existing.subscription.enabled = true
-                    existing.subscription.filter = sub.filter
-                    existing.subscription.sharePercent = sub.sharePercent
-                    MmkvManager.encodeSubscription(subId, existing.subscription)
-                    Log.d(AppConfig.TAG, "Updating custom subscription: ${sub.name}")
-                    existing
-                } else {
-                    val subItem = SubscriptionItem().apply {
-                        remarks = sub.name
-                        url = sub.url
-                        filter = sub.filter
-                        sharePercent = sub.sharePercent
-                        enabled = true
-                    }
-                    MmkvManager.encodeSubscription(subId, subItem)
-                    SubscriptionCache(subId, subItem)
-                }
-                AngConfigManager.updateConfigViaSub(cache, socksPort, sequential, deduplicate = false)
-            })
-        }
-
-        // Обновляем обычные подписки (добавленные пользователем вручную)
-        for (sub in regularSubs) {
-            taskList.add(SubTask(sub.subscription.remarks) {
-                Log.d(AppConfig.TAG, "Updating regular subscription: ${sub.subscription.remarks}")
-                AngConfigManager.updateConfigViaSub(sub, socksPort, sequential, deduplicate = false)
-            })
-        }
-
-        coroutineScope {
-            taskList.map { task ->
-                async(Dispatchers.IO) {
-                    semaphore.withPermit {
-                        val currentStarted = startedCount.incrementAndGet()
-                        val prefix = "[$currentStarted/$totalSubs]"
-                        if (!silent && !SmartConnectManager.isScanning.get()) {
-                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${task.name}")
-                        }
-                        val count = task.updateAction()
-                        val done = finishedCount.incrementAndGet()
-                        if (count > 0 && !silent && !SmartConnectManager.isScanning.get()) {
-                            MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "[$done/$totalSubs] ${task.name}: +$count")
-                        }
-                    }
-                }
-            }.awaitAll()
-        }
-
-        // Один проход дедупликации по итогам обновления всех подписок (вместо прохода после каждой подписки)
-        synchronized(AngConfigManager::class.java) {
-            MmkvManager.removeDuplicateServer()
-        }
-
-        // ══════════════════════════════════════════════════════════════════════
-        // РЕМАППИНГ КЭШЕЙ ПОСЛЕ ОБНОВЛЕНИЯ
-        // Строим индекс identity → newGuid для быстрого поиска.
-        // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
-        // ══════════════════════════════════════════════════════════════════════
-        if (lastServerIdentity != null || vipRecords.isNotEmpty()) {
-            val updatedServers = MmkvManager.decodeServerList()
-            val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
-            val networkIndex = mutableMapOf<String, String>()  // "type:server:port:password" → newGuid
-            for (guid in updatedServers) {
-                val profile = MmkvManager.decodeServerConfig(guid) ?: continue
-                val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
-                val netKey = "${profile.configType.name}:${profile.server.orEmpty().trim().lowercase()}:${profile.serverPort.orEmpty().trim()}:${profile.password.orEmpty().trim()}"
-                identityIndex.putIfAbsent(key, guid)
-                networkIndex.putIfAbsent(netKey, guid)
-            }
-
-            // ── Ремаппим LastServerCache ──
-            if (lastServerIdentity != null) {
-                val key = "${lastServerIdentity.server}|${lastServerIdentity.port}|${lastServerIdentity.remarks}"
-                val newGuid = identityIndex[key]
-                if (newGuid != null) {
-                    MmkvManager.remapLastConnectedServer(newGuid)
-                    Log.i(AppConfig.TAG, "updateSubscription: LastServerCache ремаппирован → ${lastServerIdentity.remarks}")
-                } else {
-                    MmkvManager.clearLastConnectedServer()
-                    Log.w(AppConfig.TAG, "updateSubscription: LastServerCache сервер исчез после обновления, кэш сброшен")
+            val lastServerGuid = MmkvManager.getValidLastServer()
+            val lastServerIdentity = lastServerGuid?.let { guid ->
+                MmkvManager.decodeServerConfig(guid)?.let { p ->
+                    ServerIdentity(p.server, p.serverPort, p.remarks)
                 }
             }
 
-            // ── Ремаппим VIP-кэш ──
+            val vipGuids = MmkvManager.getVipCache()
+            val vipRecords = vipGuids.mapNotNull { guid ->
+                MmkvManager.decodeServerConfig(guid)?.let { p ->
+                    val netKey = "${p.configType.name}:${p.server.orEmpty().trim().lowercase()}:${p.serverPort.orEmpty().trim()}:${p.password.orEmpty().trim()}"
+                    Triple(guid, "${p.server}|${p.serverPort}|${p.remarks}", netKey)
+                }
+            }
+
             if (vipRecords.isNotEmpty()) {
-                val updatedSet = updatedServers.toSet()
-                val remapped = mutableListOf<String>()
-                for ((oldGuid, exactKey, netKey) in vipRecords) {
-                    if (updatedSet.contains(oldGuid)) {
-                        remapped.add(oldGuid)
-                        continue
-                    }
-                    val byExact = identityIndex[exactKey]
-                    if (byExact != null) {
-                        remapped.add(byExact)
-                        continue
-                    }
-                    val byNet = networkIndex[netKey]
-                    if (byNet != null) {
-                        remapped.add(byNet)
-                    }
-                }
-                if (remapped.isNotEmpty()) {
-                    MmkvManager.replaceVipCache(remapped.distinct())
-                    Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipRecords.size} серверов сохранено")
-                }
+                Log.i(AppConfig.TAG, "updateSubscription: снимок VIP-кэша: ${vipRecords.size} серверов")
             }
-        }
 
-        // ── Контрольная проверка ошибок обновления подписок ──
-        // Если какие-то подписки помечены как ошибочные, но интернет ограничен
-        // (нет доступа одновременно к ya.ru и google.com), подавляем ошибки,
-        // чтобы не тревожить пользователя ложными алертами при изоляции сети.
-        val allSubs = MmkvManager.decodeSubscriptions()
-        val failedSubs = allSubs.filter {
-            it.subscription.enabled &&
-                !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
-                it.subscription.lastUpdateFailed
-        }
-        if (failedSubs.isNotEmpty()) {
-            val shouldReport = NetworkManager.shouldReportSubscriptionFailure()
-            if (!shouldReport) {
-                Log.i(AppConfig.TAG, "updateSubscription: suppression of failure alert (only local or no internet access)")
-                for (sub in failedSubs) {
-                    sub.subscription.lastUpdateFailed = false
-                    MmkvManager.encodeSubscription(sub.guid, sub.subscription)
+            val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+
+            // Если обнаружен висящий tun-интерфейс, но сервис не работает и системного VPN нет — это зомби!
+            if (NetworkManager.hasTunInterface() && !V2RayServiceManager.isRunning() && !NetworkManager.isSystemVpnTransport(context)) {
+                Log.w(AppConfig.TAG, "updateSubscription: Detected lingering zombie TUN interface before update, cleaning up...")
+                V2RayServiceManager.forceCleanupZombieVpn(context)
+            }
+
+            val updated = withSubscriptionProxy(context, isStartup) { proxy ->
+                val isVpnActive = NetworkManager.isVpnActive(context)
+                Log.i(
+                    AppConfig.TAG,
+                    "updateSubscription: isVpnActive=$isVpnActive, socksPort=${proxy.socksPort}, httpPort=${proxy.httpPort}, ephemeral=${proxy.ephemeralActive}, allowDirectViaSystemVpn=${proxy.allowDirectViaSystemVpn}, sequential=$sequential, onlyViaVpn=$onlyViaVpn"
+                )
+
+                if (onlyViaVpn && !canProceedOnlyViaVpn(isVpnActive, proxy.socksPort, proxy.allowDirectViaSystemVpn)) {
+                    Log.w(
+                        AppConfig.TAG,
+                        "updateSubscription aborted: PREF_UPDATE_SUB_ONLY_VIA_VPN is enabled but no active VPN route available (isVpnActive=$isVpnActive, socksPort=${proxy.socksPort}, allowDirectViaSystemVpn=${proxy.allowDirectViaSystemVpn}, ephemeral=${proxy.ephemeralActive})"
+                    )
+                    if (!sequential) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Обновление прервано: требуется активное VPN-соединение", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    return@withSubscriptionProxy false
+                }
+
+                val updateViaYandexOnBs = !onlyViaVpn && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)
+                val isBs = NetworkManager.checkInternetStatus() == 1
+
+                // Яндекс-обход работает ТОЛЬКО если:
+                // 1. Включен в настройках (updateViaYandexOnBs == true)
+                // 2. Пользователь под БС (isBs == true)
+                // 3. VPN ВЫКЛЮЧЕН (нет ни tun интерфейса, ни запущенного ядра/VPN транспорта: !isVpnActive)
+                // Если же VPN включен (или есть tun) — обновление всегда идет стандартно через VPN!
+                if (updateViaYandexOnBs && isBs && !isVpnActive) {
+                    Log.i(AppConfig.TAG, "updateSubscription: Whitelist (БС) mode active and VPN is off, updating via Yandex Translate proxy (sequential=$sequential)")
+                    val count = YandexTranslateUpdater.updateAllViaYandex(context, isDebug = false, sequential = sequential)
+                    Log.i(AppConfig.TAG, "updateSubscription: Yandex Translate update finished, total configs: $count")
+                    return@withSubscriptionProxy false
+                }
+
+                // Ensure base subscriptions are initialized if this is the first launch
+                checkAndSetupSubscription(context)
+
+                // Обновляем кастомные подписки
+                val customSubs = loadCustomSubs()
+                val enabledCustomSubs = customSubs.filter { it.enabled }
+                val allSubscriptions = MmkvManager.decodeSubscriptions()
+                val regularSubs = allSubscriptions.filter {
+                    !it.guid.startsWith("custom_sub_") &&
+                        !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                        it.subscription.enabled
+                }
+                val totalSubs = enabledCustomSubs.size + regularSubs.size
+                val concurrency = if (sequential) 1 else MmkvManager.getSubConcurrency().coerceIn(1, 20)
+                val semaphore = Semaphore(concurrency)
+                val startedCount = AtomicInteger(0)
+                val finishedCount = AtomicInteger(0)
+
+                data class SubTask(val name: String, val updateAction: suspend () -> Int)
+                val taskList = mutableListOf<SubTask>()
+
+                for (sub in enabledCustomSubs) {
+                    val subId = "custom_sub_${sub.id}"
+                    val existing = allSubscriptions.find { it.guid == subId }
+                    taskList.add(SubTask(sub.name) {
+                        val cache = if (existing != null) {
+                            existing.subscription.enabled = true
+                            existing.subscription.filter = sub.filter
+                            existing.subscription.sharePercent = sub.sharePercent
+                            MmkvManager.encodeSubscription(subId, existing.subscription)
+                            Log.d(AppConfig.TAG, "Updating custom subscription: ${sub.name}")
+                            existing
+                        } else {
+                            val subItem = SubscriptionItem().apply {
+                                remarks = sub.name
+                                url = sub.url
+                                filter = sub.filter
+                                sharePercent = sub.sharePercent
+                                enabled = true
+                            }
+                            MmkvManager.encodeSubscription(subId, subItem)
+                            SubscriptionCache(subId, subItem)
+                        }
+                        AngConfigManager.updateConfigViaSub(
+                            cache,
+                            socksPort = proxy.socksPort,
+                            sequential = sequential,
+                            deduplicate = false,
+                            httpPort = proxy.httpPort,
+                            allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+                        )
+                    })
+                }
+
+                // Обновляем обычные подписки (добавленные пользователем вручную)
+                for (sub in regularSubs) {
+                    taskList.add(SubTask(sub.subscription.remarks) {
+                        Log.d(AppConfig.TAG, "Updating regular subscription: ${sub.subscription.remarks}")
+                        AngConfigManager.updateConfigViaSub(
+                            sub,
+                            socksPort = proxy.socksPort,
+                            sequential = sequential,
+                            deduplicate = false,
+                            httpPort = proxy.httpPort,
+                            allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+                        )
+                    })
+                }
+
+                coroutineScope {
+                    taskList.map { task ->
+                        async(Dispatchers.IO) {
+                            semaphore.withPermit {
+                                val currentStarted = startedCount.incrementAndGet()
+                                val prefix = "[$currentStarted/$totalSubs]"
+                                if (!silent && !SmartConnectManager.isScanning.get()) {
+                                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "$prefix: ${task.name}")
+                                }
+                                val count = task.updateAction()
+                                val done = finishedCount.incrementAndGet()
+                                if (count > 0 && !silent && !SmartConnectManager.isScanning.get()) {
+                                    MessageUtil.sendMsg2UI(context, AppConfig.MSG_UI_STATUS_UPDATE, "[$done/$totalSubs] ${task.name}: +$count")
+                                }
+                            }
+                        }
+                    }.awaitAll()
+                }
+                true
+            }
+
+            if (!updated) {
+                return@withContext
+            }
+
+            // Один проход дедупликации по итогам обновления всех подписок (вместо прохода после каждой подписки)
+            synchronized(AngConfigManager::class.java) {
+                MmkvManager.removeDuplicateServer()
+            }
+
+            // ══════════════════════════════════════════════════════════════════════
+            // РЕМАППИНГ КЭШЕЙ ПОСЛЕ ОБНОВЛЕНИЯ
+            // Строим индекс identity → newGuid для быстрого поиска.
+            // MMKV — memory-mapped, декодинг 300+ профилей занимает ~20мс.
+            // ══════════════════════════════════════════════════════════════════════
+            if (lastServerIdentity != null || vipRecords.isNotEmpty()) {
+                val updatedServers = MmkvManager.decodeServerList()
+                val identityIndex = mutableMapOf<String, String>() // "server|port|remarks" → newGuid
+                val networkIndex = mutableMapOf<String, String>()  // "type:server:port:password" → newGuid
+                for (guid in updatedServers) {
+                    val profile = MmkvManager.decodeServerConfig(guid) ?: continue
+                    val key = "${profile.server}|${profile.serverPort}|${profile.remarks}"
+                    val netKey = "${profile.configType.name}:${profile.server.orEmpty().trim().lowercase()}:${profile.serverPort.orEmpty().trim()}:${profile.password.orEmpty().trim()}"
+                    identityIndex.putIfAbsent(key, guid)
+                    networkIndex.putIfAbsent(netKey, guid)
+                }
+
+                // ── Ремаппим LastServerCache ──
+                if (lastServerIdentity != null) {
+                    val key = "${lastServerIdentity.server}|${lastServerIdentity.port}|${lastServerIdentity.remarks}"
+                    val newGuid = identityIndex[key]
+                    if (newGuid != null) {
+                        MmkvManager.remapLastConnectedServer(newGuid)
+                        Log.i(AppConfig.TAG, "updateSubscription: LastServerCache ремаппирован → ${lastServerIdentity.remarks}")
+                    } else {
+                        MmkvManager.clearLastConnectedServer()
+                        Log.w(AppConfig.TAG, "updateSubscription: LastServerCache сервер исчез после обновления, кэш сброшен")
+                    }
+                }
+
+                // ── Ремаппим VIP-кэш ──
+                if (vipRecords.isNotEmpty()) {
+                    val updatedSet = updatedServers.toSet()
+                    val remapped = mutableListOf<String>()
+                    for ((oldGuid, exactKey, netKey) in vipRecords) {
+                        if (updatedSet.contains(oldGuid)) {
+                            remapped.add(oldGuid)
+                            continue
+                        }
+                        val byExact = identityIndex[exactKey]
+                        if (byExact != null) {
+                            remapped.add(byExact)
+                            continue
+                        }
+                        val byNet = networkIndex[netKey]
+                        if (byNet != null) {
+                            remapped.add(byNet)
+                        }
+                    }
+                    if (remapped.isNotEmpty()) {
+                        MmkvManager.replaceVipCache(remapped.distinct())
+                        Log.i(AppConfig.TAG, "updateSubscription: VIP-кэш ремаппирован: ${remapped.size}/${vipRecords.size} серверов сохранено")
+                    }
                 }
             }
+
+            // ── Контрольная проверка ошибок обновления подписок ──
+            // Если какие-то подписки помечены как ошибочные, но интернет ограничен
+            // (нет доступа одновременно к ya.ru и google.com), подавляем ошибки,
+            // чтобы не тревожить пользователя ложными алертами при изоляции сети.
+            val allSubs = MmkvManager.decodeSubscriptions()
+            val failedSubs = allSubs.filter {
+                it.subscription.enabled &&
+                    !com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(it.guid) &&
+                    it.subscription.lastUpdateFailed
+            }
+            if (failedSubs.isNotEmpty()) {
+                val shouldReport = NetworkManager.shouldReportSubscriptionFailure()
+                if (!shouldReport) {
+                    Log.i(AppConfig.TAG, "updateSubscription: suppression of failure alert (only local or no internet access)")
+                    for (sub in failedSubs) {
+                        sub.subscription.lastUpdateFailed = false
+                        MmkvManager.encodeSubscription(sub.guid, sub.subscription)
+                    }
+                }
+            }
+
+            MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
+        } finally {
+            updateMutex.unlock()
         }
-        
-        MessageUtil.sendMsg2UI(context, AppConfig.MSG_STATE_RELOAD_SERVER_LIST, "")
     }
 
     fun getSubscriptionName(subId: String?): String? {

@@ -619,7 +619,14 @@ object AngConfigManager {
      *                   Если false — параллельная гонка зеркал (для UI, когда пользователь ждёт).
      * @return The number of configurations updated.
      */
-    fun updateConfigViaSub(it: SubscriptionCache, socksPort: Int = 0, sequential: Boolean = false, deduplicate: Boolean = true): Int {
+    fun updateConfigViaSub(
+        it: SubscriptionCache,
+        socksPort: Int = 0,
+        sequential: Boolean = false,
+        deduplicate: Boolean = true,
+        httpPort: Int = if (socksPort > 0) SettingsManager.getHttpPort() else 0,
+        allowDirectViaSystemVpn: Boolean = false
+    ): Int {
         try {
             if (TextUtils.isEmpty(it.guid) || TextUtils.isEmpty(it.subscription.remarks) || TextUtils.isEmpty(it.subscription.url)) {
                 return 0
@@ -633,9 +640,9 @@ object AngConfigManager {
             
             Log.i(AppConfig.TAG, "Updating sub '${it.subscription.remarks}' via ${urls.size} mirrors (sequential=$sequential)")
             val userAgent = it.subscription.userAgent
-            val httpPort = if (socksPort > 0) SettingsManager.getHttpPort() else 0
             var configText = ""
             val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+            val allowDirect = SubscriptionHelper.shouldAllowDirect(onlyViaVpn, allowDirectViaSystemVpn)
 
             if (sequential) {
                 // ── Последовательный режим (фоновый воркер) ──────────────────────────────
@@ -666,8 +673,8 @@ object AngConfigManager {
                                     Log.d(AppConfig.TAG, "Sequential HTTP ($httpPort) failed for $singleUrl: ${e.message}")
                                 }
                             }
-                            // 3. Direct (только если не включено обновление исключительно через VPN)
-                            if (result.isEmpty() && !onlyViaVpn) {
+                            // 3. Direct (только если не включено обновление исключительно через VPN или активен сторонний системный VPN)
+                            if (result.isEmpty() && allowDirect) {
                                 try {
                                     result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 6000)
                                 } catch (e: Exception) {
@@ -720,13 +727,13 @@ object AngConfigManager {
                                 }
 
                                 // Если через прокси не удалось или VPN не включен (socksPort == 0) — пробуем напрямую
-                                if (result.isEmpty() && !onlyViaVpn) {
+                                if (result.isEmpty() && allowDirect) {
                                     try {
                                         result = HttpUtil.getUrlContentWithUserAgent(urlFixed, userAgent, 7000)
                                     } catch (e: Exception) {
                                         Log.d(AppConfig.TAG, "Parallel direct failed for $singleUrl: ${e.message}")
                                     }
-                                    if (result.isEmpty() && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)) {
+                                    if (result.isEmpty() && !onlyViaVpn && MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_VIA_YANDEX_ON_BS, false)) {
                                         try { result = YandexTranslateUpdater.fetchContentViaYandex(singleUrl, 8000).orEmpty() } catch (_: Exception) {}
                                     }
                                 }

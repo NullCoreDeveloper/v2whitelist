@@ -2,6 +2,7 @@ package com.kiktor.v2whitelist.handler
 
 import android.content.Context
 import android.util.Log
+import com.kiktor.v2whitelist.AngApplication
 import com.kiktor.v2whitelist.AppConfig
 import com.kiktor.v2whitelist.core.config.UniversalConfigParser
 import com.kiktor.v2whitelist.core.model.NetworkBindingRule
@@ -312,14 +313,42 @@ object PersonalServersManager {
         }
     }
 
+    private fun fetchPersonalSubscriptionWithProxy(
+        subId: String,
+        proxy: SubscriptionProxySession,
+        onlyViaVpn: Boolean,
+        isVpnActive: Boolean
+    ): Int {
+        if (onlyViaVpn && !SubscriptionHelper.canProceedOnlyViaVpn(
+                isVpnActive = isVpnActive,
+                socksPort = proxy.socksPort,
+                allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+            )
+        ) {
+            Log.w(AppConfig.TAG, "PersonalServersManager: skipped sub $subId (only-via-VPN enabled, no active VPN route)")
+            return 0
+        }
+        val subItem = MmkvManager.decodeSubscription(subId) ?: return 0
+        val cache = SubscriptionCache(subId, subItem)
+        return AngConfigManager.updateConfigViaSub(
+            cache,
+            socksPort = proxy.socksPort,
+            sequential = false,
+            httpPort = proxy.httpPort,
+            allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+        )
+    }
+
     /**
      * Загружает и обновляет серверы для конкретной доверенной подписки.
      */
     suspend fun fetchSubscription(subId: String): Int = withContext(Dispatchers.IO) {
-        val subItem = MmkvManager.decodeSubscription(subId) ?: return@withContext 0
-        val cache = SubscriptionCache(subId, subItem)
-        val socksPort = if (V2RayServiceManager.isRunning()) SettingsManager.getSocksPort() else 0
-        AngConfigManager.updateConfigViaSub(cache, socksPort = socksPort, sequential = false)
+        val context = AngApplication.application
+        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+        SubscriptionHelper.withSubscriptionProxy(context, isStartup = false) { proxy ->
+            val isVpnActive = NetworkManager.isVpnActive(context)
+            fetchPersonalSubscriptionWithProxy(subId, proxy, onlyViaVpn, isVpnActive)
+        }
     }
 
     /**
@@ -336,11 +365,17 @@ object PersonalServersManager {
      */
     suspend fun updateAllPersonalSubscriptions(): Int = withContext(Dispatchers.IO) {
         val subs = getPersonalSubscriptions()
-        var total = 0
-        for (sub in subs) {
-            total += fetchSubscription(sub.guid)
+        if (subs.isEmpty()) return@withContext 0
+        val context = AngApplication.application
+        val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+        SubscriptionHelper.withSubscriptionProxy(context, isStartup = false) { proxy ->
+            val isVpnActive = NetworkManager.isVpnActive(context)
+            var total = 0
+            for (sub in subs) {
+                total += fetchPersonalSubscriptionWithProxy(sub.guid, proxy, onlyViaVpn, isVpnActive)
+            }
+            total
         }
-        total
     }
 
     /**

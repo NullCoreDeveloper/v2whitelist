@@ -359,9 +359,27 @@ class CustomSubscriptionsActivity : BaseActivity() {
                         com.kiktor.v2whitelist.dto.SubscriptionCache(subId, subItem)
                     }
 
-                    val candidateSocksPort = com.kiktor.v2whitelist.handler.SettingsManager.getSocksPort()
-                    val socksPort = if (com.kiktor.v2whitelist.handler.V2RayServiceManager.isRunning()) candidateSocksPort else 0
-                    com.kiktor.v2whitelist.handler.AngConfigManager.updateConfigViaSub(cache, socksPort = socksPort, sequential = false)
+                    val appContext = applicationContext
+                    val onlyViaVpn = MmkvManager.decodeSettingsBool(AppConfig.PREF_UPDATE_SUB_ONLY_VIA_VPN, false)
+                    com.kiktor.v2whitelist.handler.SubscriptionHelper.withSubscriptionProxy(appContext, isStartup = false) { proxy ->
+                        val isVpnActive = com.kiktor.v2whitelist.handler.NetworkManager.isVpnActive(appContext)
+                        if (onlyViaVpn && !com.kiktor.v2whitelist.handler.SubscriptionHelper.canProceedOnlyViaVpn(
+                                isVpnActive = isVpnActive,
+                                socksPort = proxy.socksPort,
+                                allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+                            )
+                        ) {
+                            0
+                        } else {
+                            com.kiktor.v2whitelist.handler.AngConfigManager.updateConfigViaSub(
+                                cache,
+                                socksPort = proxy.socksPort,
+                                sequential = false,
+                                httpPort = proxy.httpPort,
+                                allowDirectViaSystemVpn = proxy.allowDirectViaSystemVpn
+                            )
+                        }
+                    }
                 } catch (e: Exception) {
                     0
                 }
