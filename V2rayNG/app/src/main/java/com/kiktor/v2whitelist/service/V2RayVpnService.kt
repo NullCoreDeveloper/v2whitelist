@@ -414,7 +414,7 @@ class V2RayVpnService : VpnService(), ServiceControl {
             skipCustomPerApp = true
         }
 
-        val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)
+        val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)?.toMutableSet()
         if (!skipCustomPerApp && apps.isNullOrEmpty()) {
             builder.addDisallowedApplication(selfPackageName)
             skipCustomPerApp = true
@@ -426,17 +426,21 @@ class V2RayVpnService : VpnService(), ServiceControl {
             // Handle the VPN service's own package according to the mode
             if (bypassApps) apps?.add(selfPackageName) else apps?.remove(selfPackageName)
 
-            apps?.forEach {
-                try {
-                    if (bypassApps) {
-                        // In bypass mode, disallow the selected apps
-                        builder.addDisallowedApplication(it)
-                    } else {
-                        // In proxy mode, only allow the selected apps
-                        builder.addAllowedApplication(it)
+            if (!bypassApps && apps.isNullOrEmpty()) {
+                builder.addDisallowedApplication(selfPackageName)
+            } else {
+                apps?.forEach {
+                    try {
+                        if (bypassApps) {
+                            // In bypass mode, disallow the selected apps
+                            builder.addDisallowedApplication(it)
+                        } else {
+                            // In proxy mode, only allow the selected apps
+                            builder.addAllowedApplication(it)
+                        }
+                    } catch (e: PackageManager.NameNotFoundException) {
+                        Log.e(AppConfig.TAG, "Failed to configure app in VPN: ${e.localizedMessage}", e)
                     }
-                } catch (e: PackageManager.NameNotFoundException) {
-                    Log.e(AppConfig.TAG, "Failed to configure app in VPN: ${e.localizedMessage}", e)
                 }
             }
         }

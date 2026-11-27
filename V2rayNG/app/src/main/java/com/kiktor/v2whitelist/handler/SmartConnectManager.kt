@@ -607,6 +607,14 @@ object SmartConnectManager {
             val currentProfile = currentGuid?.let { MmkvManager.decodeServerConfig(it) }
             val isCurrentPersonal = currentProfile != null && com.kiktor.v2whitelist.core.model.PersonalServersConfig.isPersonalServer(currentProfile.subscriptionId)
 
+            // Останавливаем активный VPN перед поиском следующего сервера, чтобы трафик сканирования
+            // не уходил в текущий туннель и не блокировался мёртвым/перегруженным соединением.
+            if (V2RayServiceManager.isRunning()) {
+                GeekModeLogger.log("SmartConnect", "switchServer: stopping active VPN before scanning to prevent routing scan traffic through VPN")
+                V2RayServiceManager.stopVService(context.applicationContext)
+                delay(300L)
+            }
+
             // ── Учет правил сети и приоритета серверов при смене сервера ────────────────
             val personalConfig = PersonalServersManager.getConfig()
             val isWifi = NetworkManager.isWifiActive(context)
