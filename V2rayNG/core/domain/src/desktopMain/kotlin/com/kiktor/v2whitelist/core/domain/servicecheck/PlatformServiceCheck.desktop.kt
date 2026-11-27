@@ -36,11 +36,19 @@ private data class RawProbeResult(
     val errorMessage: String? = null
 )
 
-private fun createProxy(socksPort: Int?, httpPort: Int?): Proxy {
-    return when {
-        httpPort != null && httpPort > 0 -> Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
-        socksPort != null && socksPort > 0 -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-        else -> Proxy.NO_PROXY
+private fun createProxy(socksPort: Int?, httpPort: Int?, preferSocks: Boolean = false): Proxy {
+    return if (preferSocks) {
+        when {
+            socksPort != null && socksPort > 0 -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            httpPort != null && httpPort > 0 -> Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+            else -> Proxy.NO_PROXY
+        }
+    } else {
+        when {
+            httpPort != null && httpPort > 0 -> Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+            socksPort != null && socksPort > 0 -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            else -> Proxy.NO_PROXY
+        }
     }
 }
 
@@ -648,7 +656,8 @@ actual suspend fun rawServiceHttpCheck(
     socksUser: String?,
     socksPass: String?
 ): ServiceCheckResult = withContext(Dispatchers.IO) {
-    if (!socksUser.isNullOrEmpty() && !socksPass.isNullOrEmpty()) {
+    val hasAuth = !socksUser.isNullOrEmpty() && !socksPass.isNullOrEmpty()
+    if (hasAuth) {
         val ports = setOfNotNull(socksPort, httpPort).filter { it > 0 }.toSet()
         com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
             userProvider = { socksUser },
@@ -656,7 +665,7 @@ actual suspend fun rawServiceHttpCheck(
             allowedPortsProvider = { ports }
         )
     }
-    val proxy = createProxy(socksPort, httpPort)
+    val proxy = createProxy(socksPort, httpPort, preferSocks = hasAuth)
     if (!service.isCustom) {
         when (service.id.lowercase()) {
             "claude" -> checkClaudeSmart(service, proxy, timeoutMs)

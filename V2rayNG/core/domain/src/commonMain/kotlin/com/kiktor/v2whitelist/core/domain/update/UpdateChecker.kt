@@ -153,7 +153,8 @@ object UpdateChecker {
         currentVersion: String,
         targetPlatform: TargetPlatform,
         includePreRelease: Boolean = false,
-        client: HttpClient? = null
+        client: HttpClient? = null,
+        customFetcher: (suspend (String) -> Pair<Int, String>?)? = null
     ): CheckUpdateResult {
         val targetUrl = if (includePreRelease) {
             apiUrl
@@ -161,29 +162,42 @@ object UpdateChecker {
             "${apiUrl.trimEnd('/')}/latest"
         }
 
-        val internalClient = client ?: HttpClient(CIO) {
-            install(HttpTimeout) {
-                requestTimeoutMillis = 6000L
-                connectTimeoutMillis = 6000L
-                socketTimeoutMillis = 6000L
+        val internalClient = if (customFetcher == null) {
+            client ?: HttpClient(CIO) {
+                install(HttpTimeout) {
+                    requestTimeoutMillis = 6000L
+                    connectTimeoutMillis = 6000L
+                    socketTimeoutMillis = 6000L
+                }
             }
+        } else {
+            null
         }
 
-        val closeClientOnFinish = client == null
+        val closeClientOnFinish = client == null && internalClient != null
 
         return try {
-            val response = internalClient.get(targetUrl) {
-                header(HttpHeaders.UserAgent, "v2whitelist-updater")
+            val (statusCode, responseBody) = if (customFetcher != null) {
+                customFetcher(targetUrl) ?: return CheckUpdateResult(
+                    hasUpdate = false,
+                    error = "Proxy request failed"
+                )
+            } else {
+                val response = internalClient!!.get(targetUrl) {
+                    header(HttpHeaders.UserAgent, "v2whitelist-updater")
+                }
+                val code = response.status.value
+                val body = if (response.status.isSuccess()) response.bodyAsText() else ""
+                code to body
             }
 
-            if (!response.status.isSuccess()) {
+            if (statusCode !in 200..299) {
                 return CheckUpdateResult(
                     hasUpdate = false,
-                    error = "HTTP error: ${response.status.value}"
+                    error = "HTTP error: $statusCode"
                 )
             }
 
-            val responseBody = response.bodyAsText()
             if (responseBody.length > MAX_RELEASE_JSON_BYTES) {
                 return CheckUpdateResult(
                     hasUpdate = false,
@@ -237,7 +251,7 @@ object UpdateChecker {
             )
         } finally {
             if (closeClientOnFinish) {
-                internalClient.close()
+                internalClient?.close()
             }
         }
     }

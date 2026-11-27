@@ -532,6 +532,7 @@ class DesktopAppState(
         com.kiktor.v2whitelist.desktop.util.DesktopLogExporter.initFileLogging(
             java.io.File(DesktopStorageManager.baseDir, "logs")
         )
+        syncLoopbackProxyAuthenticator()
         GeekModeLogger.log("DesktopApp", "v2whitelist Desktop инициализирован по спецификации UI ПроБел.")
 
         smartConnectManager.onStageChanged = { _, text ->
@@ -1515,9 +1516,19 @@ class DesktopAppState(
 
                                 GeekModeLogger.log("Subscriptions", "Загрузка: ${sub.name} (зеркал: ${mirrors.size})")
 
+                                val creds = activeProxyCredentials()
                                 var result = if (useYandex) {
                                     fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
                                         .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
+                                } else if (coreState.value == DesktopCoreState.RUNNING && creds != null) {
+                                    com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.fetchParallelWithMeta(
+                                        urls = mirrors,
+                                        userAgent = ua,
+                                        socksPort = socksPort.value,
+                                        proxyUser = creds.first,
+                                        proxyPass = creds.second,
+                                        timeoutMs = 12000L
+                                    )
                                 } else {
                                     SubscriptionFetcher.fetchParallelWithMeta(
                                         urls = mirrors,
@@ -1659,9 +1670,19 @@ class DesktopAppState(
                     return@launch
                 }
 
+                val creds = activeProxyCredentials()
                 var result = if (useYandex) {
                     fetchViaYandexFirstMirror(mirrors, ua, timeoutMs = 12000L)
                         .map { com.kiktor.v2whitelist.core.subscription.network.SubscriptionFetchResult(it) }
+                } else if (coreState.value == DesktopCoreState.RUNNING && creds != null) {
+                    com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.fetchParallelWithMeta(
+                        urls = mirrors,
+                        userAgent = ua,
+                        socksPort = socksPort.value,
+                        proxyUser = creds.first,
+                        proxyPass = creds.second,
+                        timeoutMs = 12000L
+                    )
                 } else {
                     SubscriptionFetcher.fetchParallelWithMeta(
                         urls = mirrors,
@@ -2214,6 +2235,7 @@ class DesktopAppState(
                 }
                 val activeSocksPort = if (coreState.value == DesktopCoreState.RUNNING) socksPort.value else null
                 val activeHttpPort = if (coreState.value == DesktopCoreState.RUNNING) httpPort.value else null
+                val creds = if (coreState.value == DesktopCoreState.RUNNING) activeProxyCredentials() else null
                 if (activeHttpPort != null || activeSocksPort != null) {
                     GeekModeLogger.log("GeekMode", "Проверка сервисов через прокси (HTTP: $activeHttpPort, SOCKS: $activeSocksPort)...")
                 } else {
@@ -2223,7 +2245,9 @@ class DesktopAppState(
                     services = enabled,
                     socksPort = activeSocksPort,
                     httpPort = activeHttpPort,
-                    timeoutMs = 6000L
+                    timeoutMs = 6000L,
+                    socksUser = creds?.first,
+                    socksPass = creds?.second
                 )
                 serviceCheckResults.value = results
                 for (res in results) {
@@ -2364,6 +2388,7 @@ class DesktopAppState(
             val tunBindInterface = if (routingMode.value != "PROXY" && DesktopTunManager.isWindows)
                 DesktopTunManager.detectPhysicalInterfaceNameForBind() else null
             if (tunBindInterface != null) GeekModeLogger.log("TUN", "Xray привязан к интерфейсу: $tunBindInterface")
+            syncLoopbackProxyAuthenticator()
             val started = xrayRunner.start(
                 profile = profile,
                 scenario = _scenario.value,
@@ -2565,6 +2590,25 @@ class DesktopAppState(
         return false
     }
 
+    internal fun activeProxyCredentials(): Pair<String, String>? {
+        if (routingMode.value != "PROXY") return null
+        val user = localProxyLogin.value
+        val pass = localProxyPassword.value
+        return if (user.isNotBlank() && pass.isNotBlank()) user to pass else null
+    }
+
+    internal fun syncLoopbackProxyAuthenticator() {
+        if (activeProxyCredentials() != null) {
+            com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthenticator.install(
+                userProvider = { activeProxyCredentials()?.first.orEmpty() },
+                passProvider = { activeProxyCredentials()?.second.orEmpty() },
+                allowedPortsProvider = {
+                    setOf(socksPort.value, httpPort.value).filter { it > 0 }.toSet()
+                }
+            )
+        }
+    }
+
     private fun testTunnelConnectivity(port: Int = socksPort.value): Boolean {
         val customUrl = V2WCoreScanner.resolveGenerate204DestUrl(connectionCheckServiceUrl.value)
         val checkUrls = listOfNotNull(
@@ -2573,15 +2617,8 @@ class DesktopAppState(
             "https://www.google.com/generate_204"
         ).distinct()
 
-        val hasProxyAuth = routingMode.value == "PROXY" &&
-            port == socksPort.value &&
-            (localProxyLogin.value.isNotBlank() || localProxyPassword.value.isNotBlank())
-        val activeHttpPort = if (httpPort.value > 0 && httpPort.value != port) httpPort.value else port + 1
-        val proxy = if (hasProxyAuth) {
-            java.net.Proxy(java.net.Proxy.Type.HTTP, java.net.InetSocketAddress("127.0.0.1", activeHttpPort))
-        } else {
-            java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", port))
-        }
+        syncLoopbackProxyAuthenticator()
+        val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", port))
 
         for (checkUrl in checkUrls) {
             var conn: java.net.HttpURLConnection? = null
@@ -2592,11 +2629,6 @@ class DesktopAppState(
                     readTimeout = 4000
                     instanceFollowRedirects = false
                     requestMethod = "GET"
-                    if (hasProxyAuth) {
-                        val creds = "${localProxyLogin.value}:${localProxyPassword.value}"
-                        val encoded = java.util.Base64.getEncoder().encodeToString(creds.toByteArray(Charsets.UTF_8))
-                        setRequestProperty("Proxy-Authorization", "Basic $encoded")
-                    }
                 }
                 val code = conn.responseCode
                 if (code in 200..399) return true
@@ -2672,33 +2704,62 @@ class DesktopAppState(
         return epUrl
     }
 
+    private fun applyExitIpBody(text: String, isRunning: Boolean) {
+        val ipMatch = Regex("\"ip\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+        val country = Regex("\"(?:country_name|country)\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+        if (ipMatch != null) {
+            val full = "$ipMatch (${country ?: "Online"})"
+            exitIp.value = full
+            exitIpError.value = null
+            publicIpInfo.value = full
+            GeekModeLogger.log("GeekMode", "Exit IP определён: $full")
+        } else if (isRunning) {
+            exitIp.value = null
+            exitIpError.value = "Некорректный ответ IP API"
+        }
+    }
+
     fun fetchExitIp() {
         scope.launch {
             val isRunning = coreState.value == DesktopCoreState.RUNNING
-            val proxyP = if (isRunning) httpPort.value else 0
+            val creds = if (isRunning) activeProxyCredentials() else null
             exitIpError.value = null
+            val checkUrl = connectionCheckServiceUrl.value.trim().ifBlank { "https://api.myip.la/en?json" }
+            if (isRunning && creds != null) {
+                try {
+                    val (code, text) = com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.getText(
+                        url = checkUrl,
+                        socksPort = socksPort.value,
+                        proxyUser = creds.first,
+                        proxyPass = creds.second,
+                        timeoutMs = 5000L
+                    ).getOrThrow()
+                    if (code in 200..299) {
+                        applyExitIpBody(text, isRunning = true)
+                    } else {
+                        exitIp.value = null
+                        exitIpError.value = "HTTP $code через туннель"
+                    }
+                } catch (e: Exception) {
+                    val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "Unknown error"
+                    GeekModeLogger.log("GeekMode", "Не удалось определить Exit IP: $detail")
+                    exitIp.value = null
+                    val hasEndpoint = useCustomEndpoint.value && customEndpointUrl.value.isNotBlank()
+                    exitIpError.value = if (hasEndpoint) "Нет ответа через конечный узел" else "Нет ответа через туннель"
+                }
+                return@launch
+            }
+
+            val proxyP = if (isRunning) httpPort.value else 0
             val client = SubscriptionFetcher.createHttpClient(
                 httpProxyHost = "127.0.0.1",
                 httpProxyPort = proxyP,
                 timeoutMs = 5000L
             )
             try {
-                val checkUrl = connectionCheckServiceUrl.value.trim().ifBlank { "https://api.myip.la/en?json" }
                 val resp = client.get(checkUrl)
                 if (resp.status.value in 200..299) {
-                    val text = resp.bodyAsText()
-                    val ipMatch = Regex("\"ip\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
-                    val country = Regex("\"(?:country_name|country)\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
-                    if (ipMatch != null) {
-                        val full = "$ipMatch (${country ?: "Online"})"
-                        exitIp.value = full
-                        exitIpError.value = null
-                        publicIpInfo.value = full
-                        GeekModeLogger.log("GeekMode", "Exit IP определён: $full")
-                    } else if (isRunning) {
-                        exitIp.value = null
-                        exitIpError.value = "Некорректный ответ IP API"
-                    }
+                    applyExitIpBody(resp.bodyAsText(), isRunning)
                 } else if (isRunning) {
                     exitIp.value = null
                     exitIpError.value = "HTTP ${resp.status.value} через туннель"
@@ -2724,20 +2785,41 @@ class DesktopAppState(
             isForcePinging.value = true
             GeekModeLogger.log("GeekMode", "Force Ping: проверка ${profile.remarks}...")
             val ping = if (coreState.value == DesktopCoreState.RUNNING) {
-                val activeHttpPort = if (httpPort.value > 0 && httpPort.value != socksPort.value) httpPort.value else socksPort.value + 1
-                var delayMs = NodePingTester.testHttpProxyDelay(
-                    proxyPort = activeHttpPort,
-                    testUrl = "https://www.google.com/generate_204",
-                    timeoutMs = 4500L
-                )
-                if (delayMs <= 0L) {
-                    delayMs = NodePingTester.testHttpProxyDelay(
-                        proxyPort = activeHttpPort,
-                        testUrl = "https://cp.cloudflare.com/generate_204",
+                val creds = activeProxyCredentials()
+                if (creds != null) {
+                    var delayMs = com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.testDelay(
+                        socksPort = socksPort.value,
+                        proxyUser = creds.first,
+                        proxyPass = creds.second,
+                        testUrl = "https://www.google.com/generate_204",
                         timeoutMs = 4500L
                     )
+                    if (delayMs <= 0L) {
+                        delayMs = com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.testDelay(
+                            socksPort = socksPort.value,
+                            proxyUser = creds.first,
+                            proxyPass = creds.second,
+                            testUrl = "https://cp.cloudflare.com/generate_204",
+                            timeoutMs = 4500L
+                        )
+                    }
+                    delayMs
+                } else {
+                    val activeHttpPort = if (httpPort.value > 0 && httpPort.value != socksPort.value) httpPort.value else socksPort.value + 1
+                    var delayMs = NodePingTester.testHttpProxyDelay(
+                        proxyPort = activeHttpPort,
+                        testUrl = "https://www.google.com/generate_204",
+                        timeoutMs = 4500L
+                    )
+                    if (delayMs <= 0L) {
+                        delayMs = NodePingTester.testHttpProxyDelay(
+                            proxyPort = activeHttpPort,
+                            testUrl = "https://cp.cloudflare.com/generate_204",
+                            timeoutMs = 4500L
+                        )
+                    }
+                    delayMs
                 }
-                delayMs
             } else {
                 val xrayPath = settingsRepo.getString("xray_path").takeIf { it.isNotBlank() && java.io.File(it).exists() }
                 val verifyRes = DesktopProfileVerifier.verifyProfile(
@@ -3217,6 +3299,7 @@ class DesktopAppState(
 
         restartPeriodicSubscriptionUpdates()
         restartPeriodicAppUpdateCheck()
+        syncLoopbackProxyAuthenticator()
         settingsRevision.value++
 
         GeekModeLogger.log("Settings", "Настройки успешно сохранены.")
@@ -3424,7 +3507,12 @@ class DesktopAppState(
         }
         scope.launch(Dispatchers.IO) {
             val proxyPort = if (coreState.value == DesktopCoreState.RUNNING && httpPort.value > 0) httpPort.value else null
-            val res = com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.updateNow(proxyPort)
+            val creds = if (coreState.value == DesktopCoreState.RUNNING) activeProxyCredentials() else null
+            val res = com.kiktor.v2whitelist.desktop.engine.DesktopGeoAssetsUpdater.updateNow(
+                httpProxyPort = proxyPort,
+                proxyUser = creds?.first,
+                proxyPass = creds?.second
+            )
             res.updatedAtMs?.let { ts ->
                 geoAssetsLastUpdatedMs.value = ts
                 settingsRepo.setString("pref_geo_assets_last_update_ms", ts.toString())
@@ -3536,25 +3624,48 @@ class DesktopAppState(
                 // Если ядро запущено, сначала пробуем через локальный HTTP-прокси (на случай блокировок GitHub API),
                 // при ошибке или при выключенном VPN выполняем прямой запрос
                 if (coreState.value == DesktopCoreState.RUNNING) {
-                    val proxyPort = httpPort.value
-                    if (proxyPort in 1..65535) {
-                        val proxyClient = SubscriptionFetcher.createHttpClient(
-                            httpProxyPort = proxyPort,
-                            timeoutMs = 10000L
-                        )
-                        try {
-                            val proxyRes = UpdateChecker.checkForUpdate(
-                                apiUrl = GITHUB_REPO_API,
-                                currentVersion = APP_VERSION,
-                                targetPlatform = platform,
-                                includePreRelease = receiveBetaUpdates.value,
-                                client = proxyClient
-                            )
-                            if (proxyRes.hasUpdate || proxyRes.error == null) {
-                                result = proxyRes
+                    val creds = activeProxyCredentials()
+                    if (creds != null && socksPort.value in 1..65535) {
+                        val proxyRes = UpdateChecker.checkForUpdate(
+                            apiUrl = GITHUB_REPO_API,
+                            currentVersion = APP_VERSION,
+                            targetPlatform = platform,
+                            includePreRelease = receiveBetaUpdates.value,
+                            customFetcher = { targetUrl ->
+                                com.kiktor.v2whitelist.desktop.engine.DesktopProxyHttpClient.getText(
+                                    url = targetUrl,
+                                    socksPort = socksPort.value,
+                                    proxyUser = creds.first,
+                                    proxyPass = creds.second,
+                                    timeoutMs = 10000L,
+                                    headers = mapOf("User-Agent" to "v2whitelist-updater")
+                                ).getOrNull()
                             }
-                        } finally {
-                            proxyClient.close()
+                        )
+                        if (proxyRes.hasUpdate || proxyRes.error == null) {
+                            result = proxyRes
+                        }
+                    } else {
+                        val proxyPort = httpPort.value
+                        if (proxyPort in 1..65535) {
+                            val proxyClient = SubscriptionFetcher.createHttpClient(
+                                httpProxyPort = proxyPort,
+                                timeoutMs = 10000L
+                            )
+                            try {
+                                val proxyRes = UpdateChecker.checkForUpdate(
+                                    apiUrl = GITHUB_REPO_API,
+                                    currentVersion = APP_VERSION,
+                                    targetPlatform = platform,
+                                    includePreRelease = receiveBetaUpdates.value,
+                                    client = proxyClient
+                                )
+                                if (proxyRes.hasUpdate || proxyRes.error == null) {
+                                    result = proxyRes
+                                }
+                            } finally {
+                                proxyClient.close()
+                            }
                         }
                     }
                 }
@@ -3887,6 +3998,7 @@ class DesktopAppState(
         )
 
         loadSubscriptions()
+        syncLoopbackProxyAuthenticator()
         settingsRevision.value++
         restartPeriodicSubscriptionUpdates()
         restartPeriodicAppUpdateCheck()

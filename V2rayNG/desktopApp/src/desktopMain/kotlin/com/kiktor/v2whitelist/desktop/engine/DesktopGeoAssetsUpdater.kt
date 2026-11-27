@@ -1,9 +1,12 @@
 package com.kiktor.v2whitelist.desktop.engine
 
+import com.kiktor.v2whitelist.core.domain.security.LoopbackProxyAuthPolicy
 import com.kiktor.v2whitelist.core.model.logger.GeekModeLogger
 import java.io.File
 import java.io.FileOutputStream
+import java.net.Authenticator
 import java.net.InetSocketAddress
+import java.net.PasswordAuthentication
 import java.net.ProxySelector
 import java.net.URI
 import java.net.http.HttpClient
@@ -63,7 +66,11 @@ object DesktopGeoAssetsUpdater {
         return !(header.startsWith("<!doctype") || header.startsWith("<html"))
     }
 
-    fun updateNow(httpProxyPort: Int? = null): GeoAssetsUpdateResult {
+    fun updateNow(
+        httpProxyPort: Int? = null,
+        proxyUser: String? = null,
+        proxyPass: String? = null
+    ): GeoAssetsUpdateResult {
         val targetDir = DesktopBinaryResolver.getUserAssetsDir()
         if (!targetDir.exists() && !targetDir.mkdirs()) {
             return GeoAssetsUpdateResult(
@@ -81,7 +88,7 @@ object DesktopGeoAssetsUpdater {
                 add(null)
             }
             val downloaded = portsToTry.any { proxyPort ->
-                downloadSingleFile(url, File(targetDir, fileName), proxyPort)
+                downloadSingleFile(url, File(targetDir, fileName), proxyPort, proxyUser, proxyPass)
             }
             if (downloaded) {
                 updated.add(fileName)
@@ -109,7 +116,13 @@ object DesktopGeoAssetsUpdater {
         }
     }
 
-    private fun downloadSingleFile(url: String, target: File, httpProxyPort: Int?): Boolean {
+    private fun downloadSingleFile(
+        url: String,
+        target: File,
+        httpProxyPort: Int?,
+        proxyUser: String?,
+        proxyPass: String?
+    ): Boolean {
         val tempFile = File(target.parentFile, "${target.name}.tmp")
         return try {
             val builder = HttpClient.newBuilder()
@@ -117,6 +130,20 @@ object DesktopGeoAssetsUpdater {
                 .followRedirects(HttpClient.Redirect.NORMAL)
             if (httpProxyPort != null && httpProxyPort > 0) {
                 builder.proxy(ProxySelector.of(InetSocketAddress("127.0.0.1", httpProxyPort)))
+                if (!proxyUser.isNullOrEmpty() && !proxyPass.isNullOrEmpty()) {
+                    builder.authenticator(object : Authenticator() {
+                        override fun getPasswordAuthentication(): PasswordAuthentication? {
+                            val allowed = requestorType == RequestorType.PROXY && LoopbackProxyAuthPolicy.shouldAuthenticate(
+                                protocol = requestingProtocol,
+                                host = requestingHost,
+                                siteIsLoopback = requestingSite?.isLoopbackAddress == true,
+                                port = requestingPort,
+                                allowedPorts = setOf(httpProxyPort)
+                            )
+                            return if (allowed) PasswordAuthentication(proxyUser, proxyPass.toCharArray()) else null
+                        }
+                    })
+                }
             }
             val client = builder.build()
             val request = HttpRequest.newBuilder()

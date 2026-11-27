@@ -520,6 +520,8 @@ fun AppUpdateDialog(state: DesktopAppState, update: CheckUpdateResult) {
 }
 
 fun main() {
+    System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "")
+    System.setProperty("jdk.http.auth.proxying.disabledSchemes", "")
     val osNameLower = System.getProperty("os.name")?.lowercase().orEmpty()
     when {
         osNameLower.contains("linux") -> {

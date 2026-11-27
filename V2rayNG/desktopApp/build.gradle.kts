@@ -90,6 +90,8 @@ compose.desktop {
         jvmArgs += buildList {
             add("-Dfile.encoding=UTF-8")
             add("-Dstdout.encoding=UTF-8")
+            add("-Djdk.http.auth.tunneling.disabledSchemes=")
+            add("-Djdk.http.auth.proxying.disabledSchemes=")
             if (hostOs.isLinux) {
                 add("-Djdk.gtk.version=3")
                 add("-Djdk.lang.Process.launchMechanism=vfork")
